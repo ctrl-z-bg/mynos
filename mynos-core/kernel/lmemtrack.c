@@ -22,6 +22,7 @@
 
 #include "global.h"
 #include "dynalloc.h"
+#include "video.h"
 
 #define myalloc(sz) kmalloc(sz)
 #define myfree(ptr) kfree(ptr)
@@ -127,10 +128,70 @@ int freeArea(pdListEl **pdListBgn, int fromPage, int npages)
     prev->end = fromPage+npages - 1;
   } else if ( (fromPage + npages) == runner->bgn ) { /* sticks to runner */
     runner->bgn = fromPage;
-  } else { /* must create another block */
+  } else if ( prev->end < (fromPage - 1) ) {
+    /* must create another block */
     pdListEl *newBlock =
       newPdListEl(fromPage, fromPage+npages-1, runner, prev);
     prev->next = runner->prev  = newBlock;
+  } else /* error!! */
+    return NOTALLOCATED;
+  
+  return 0;
+}
+
+pdListEl *copyList(pdListEl *pdListBgn)
+{
+  pdListEl *ret = NULL;
+  pdListEl *run = NULL;
+  pdListEl *prev = NULL;
+
+  while ( pdListBgn ) {
+    run = newPdListEl(pdListBgn->bgn, pdListBgn->end, NULL, prev);
+    if ( prev )
+      prev->next = run;
+    else
+      ret = run;
+    prev = run;
+    pdListBgn = pdListBgn->next;
   }
+
+  return ret;
+}
+
+int forceAllocation(pdListEl **pdListBgn, int fromPage, int npages)
+{
+  /* we must find the first block whose 'bgn' is after fromPage+npages */
+  pdListEl *runner = *pdListBgn;
+
+  if ( fromPage < MINPAGES )
+    KPANIC("lmemtrack.c: cannot allocate under 1GB (LA)");
+
+  if ( !pdListBgn ) {
+    if ( fromPage == MINPAGES ) {
+      *pdListBgn = newPdListEl(fromPage+npages, MAXPAGES, NULL, NULL);
+    } else {
+      pdListEl *newEl;
+      *pdListBgn = newPdListEl(MINPAGES, fromPage-1, NULL, NULL);
+      newEl = newPdListEl(fromPage+npages, MAXPAGES, NULL, *pdListBgn);
+      (*pdListBgn)->next = newEl;
+    }
+    return 0;
+  }
+  
+  while ( runner && (runner->bgn <= fromPage) )
+    runner = runner->next;
+
+  if ( !runner || !(runner->end >= (fromPage+npages-1)) )
+    KPANIC("lmemtrack.c: Block not found");
+  
+  if ( runner->bgn == fromPage ) {
+    runner->bgn = fromPage+npages;
+  } else { /* create a new block */
+    pdListEl *newEl = newPdListEl(runner->bgn, fromPage-1,
+				  runner, runner->prev);
+    runner->bgn = fromPage+npages;
+    runner->prev = newEl;
+  }
+  
   return 0;
 }

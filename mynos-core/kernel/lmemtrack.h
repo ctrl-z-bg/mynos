@@ -27,3 +27,5 @@ typedef struct _pdListEl {
 
 int allocArea(pdListEl **pdListBgn, int nPages);
 int freeArea(pdListEl **pdListBgn, int fromPage, int nPages);
+int forceAllocation(pdListEl **pdListBgn, int fromPage, int npages);
+pdListEl *copyList(pdListEl *pdListBgn);
