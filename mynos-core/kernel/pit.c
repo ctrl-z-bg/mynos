@@ -28,8 +28,8 @@ void init_pit(float freq, unsigned char channel) {
 
   temp = PIT_INPUT_Hz/freq;
   outportb(PIT_CONTROL_WORD, (channel*0x40) + PIT_CW_RW_BOTH + PIT_CW_MODE3);
-  outportb((0x40+channel), temp);
-  outportb((0x40+channel), (temp>>8));
+  outportb((0x40+channel), (unsigned char)temp);
+  outportb((0x40+channel), (unsigned char)(temp>>8));
 }
 
 /* we can't use ISR_WRAPPER(pit) because it send EOI to pic, but we have to

@@ -26,8 +26,11 @@ all:
 	done
 
 bootfloppy:
-	mformat a:
-	mcopy kernel/kernel.elf a:
+	/sbin/mkfs.msdos floppyb
+	mount -o loop -t msdos floppyb /mnt/floppy
+	cp kernel/kernel.elf /mnt/floppy/
+	cp test /mnt/floppy
+	umount /mnt/floppy
 
 clean:
 	rm -f *~
