@@ -24,7 +24,7 @@
 #include "kutils.h"
 
 tss_t processTable[20];
-uint32_t numProcess = 0;
+uint32_t numProcess = 1;
 
 tss_t * spawnProcess(tss_t * tss) {
   uint32_t * newPD;
@@ -75,6 +75,8 @@ tss_t * spawnProcess(tss_t * tss) {
   tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(newPD);
   tss->io_bitmap_offset = 0;
   tss->eip = (uint32_t)0;//(1024*1024*1024);
+
+  tss->tssd_gdt_selector = 88;
 
   tss->cs = 0x8 * 100 + 3;
   tss->ds = 0x8 * 101 + 3;

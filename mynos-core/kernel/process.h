@@ -23,6 +23,9 @@
 
 #include "tss.h"
 
+extern tss_t processTable[];
+extern uint32_t numProcess;
+
 tss_t * spawnProcess(tss_t * tss);
 
 #endif

@@ -43,23 +43,24 @@ void __print_free_phy_pages() {
   printk(" pagine fisiche non allocate)\n\n");
 }
 
-tss_t idle_tss;
-tss_t procA_tss;
-char * tssd_addr = (char*)(10*8);
+extern tss_t processTable[20];
+extern uint32_t numProcess;
+char * idle_tssd_selector = (char*)(10*8);
 
 void tsksw() {
   /* set a tss for the outcoming process */
-  idle_tss.pgdir = (uint32_t**)0x100000;
-  idle_tss.io_bitmap_offset = 0;
-  idle_tss.ldt = 0;
+  processTable[0].pgdir = (uint32_t**)0x100000;
+  processTable[0].io_bitmap_offset = 0;
+  processTable[0].ldt = 0;
 
   /* set the tssd in the gdt, for the incoming and the outcoming processes */
-  gdt_set_entry(10, LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)&idle_tss),
+  gdt_set_entry(10, LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)&(processTable[0])),
 		sizeof(tss_t), D_TSS);
+  processTable[0].tssd_gdt_selector = 80;
 
   /* load the task register with the relative address in the gdt of the
      current process's tssd */
-  __asm__ volatile ("ltrw (tssd_addr)\n");
+  __asm__ volatile ("ltrw (idle_tssd_selector)\n");
 
 }
 
@@ -113,7 +114,7 @@ void mynos_main() {
   
 
   tsksw();
-  spawnProcess(&procA_tss);
+  spawnProcess(&(processTable[numProcess++]));
   enable_irq(0);
 
   while(1) {

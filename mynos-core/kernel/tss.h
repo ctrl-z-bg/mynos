@@ -54,6 +54,15 @@ typedef struct {
   uint32_t io_bitmap_offset;
   
   /* End of i386 TSS.  */
+
+
+  /*************************/
+  /* MyNOS specific fields */
+  /*************************/
+
+  /* selector of the task's tssd */
+  ushort16_t tssd_gdt_selector;
+
 } tss_t;
 
 #endif
