@@ -18,12 +18,10 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "global.h"
 #include "mem.h"
 #include "gdt.h"
 #include "video.h"
 #include "kutils.h"
-#include "macro_gdt.h"
 
 byte_t * __memory_bitmap;
 uint32_t __memory_bitmap_size;
@@ -166,3 +164,12 @@ uint32_t __pg_free_pages_from_page(uint32_t first_page, uint32_t npages,
   *new_pts_required = new_pts;
   return (page - first_page);
 }
+
+void SEG_createStandardDescriptor(uint32_t * address,
+				  uint32_t base, uint32_t limit, 
+				  ushort16_t control) {
+  union DT_entry newdesc = stnd_desc(base, limit, control);
+
+  kmemcpy((void *)address, (const void *)&newdesc, sizeof(union DT_entry));
+}
+

@@ -188,4 +188,10 @@ uint32_t __pg_find_a_free_physical_page();
 uint32_t __pg_free_pages_from_page(uint32_t first_page, uint32_t npages,
 	 			   uint32_t * new_pts_required);
 
+/* segments stuff */
+/******************/
+void SEG_createStandardDescriptor(uint32_t * address,
+				  uint32_t base, uint32_t limit, 
+				  ushort16_t control);
+
 #endif
