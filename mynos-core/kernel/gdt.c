@@ -41,8 +41,6 @@ struct loadgdt_st
 	union DT_entry *idt __attribute__ ((packed));
 } loadgdt = { (INITIAL_SEGMENTS * sizeof(union DT_entry) - 1), GDT };
 
-struct loadgdt_st  temp;
-
 void _init_gdt() {
   union DT_entry * gdt_addr;
 
