@@ -77,5 +77,4 @@ void serial_handler(void) {
     }
   } while (c & 1);
   outportb(0x20, 0x20);
-  outportb(PORT1, 'M');
 }
