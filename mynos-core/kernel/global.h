@@ -30,7 +30,7 @@
 
 #define __MEMORY_BITMAP_PHY_ADDRESS 0x32000    /* 200KB */
 
-#define LAST_PAGE_DIR_VALID_INDEX 1023
+#define LAST_PDPT_INDEX 1023
 
 #define KPANIC(MSG) {printk(MSG); while(1){}}
 

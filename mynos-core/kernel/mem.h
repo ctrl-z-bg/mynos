@@ -69,13 +69,13 @@
 /* return a linear address to access the entry ENTRY in the 
    current page directory */
 #define __GET_PAGE_DIR_ENTRY(ENTRY) \
-                     __MEM_LINEAR_ADDRESS(LAST_PAGE_DIR_VALID_INDEX - 1,\
+                     __MEM_LINEAR_ADDRESS(LAST_PDPT_INDEX - 1,\
                                            1023, (ENTRY)*4)
 
 /* return a linear address to access the entry ENTRY in the 
    page table TABLE */
 #define __GET_PAGE_TABLE_ENTRY(TABLE, ENTRY) \
-                     __MEM_LINEAR_ADDRESS(LAST_PAGE_DIR_VALID_INDEX,\
+                     __MEM_LINEAR_ADDRESS(LAST_PDPT_INDEX,\
                                           (TABLE), (ENTRY)*4)
 
 /* true if the entry ENTRY, in the page directory, points to a present
@@ -113,7 +113,7 @@
                      {\
                       uint32_t * pun  = (uint32_t*)__GET_PAGE_DIR_ENTRY(ENTRY);\
                       uint32_t * pun2 = (uint32_t*)__GET_PAGE_TABLE_ENTRY(\
-                                                LAST_PAGE_DIR_VALID_INDEX,\
+                                                LAST_PDPT_INDEX,\
                                                 ENTRY);\
                       *pun = (PAGE_TAB_PHY_ADDRESS) | \
                              PF_USER | PF_READWRITE |PF_PRESENT;\
