@@ -217,7 +217,7 @@ void keyb_handler(void)
 	else if((control_keys & CK_SHIFT) && (led_status & LED_NUM_LOCK)) key_ascii = scan2ascii_table[key][7];
 	else if(led_status & LED_CAPS_LOCK) key_ascii = scan2ascii_table[key][5];
 	else if(led_status & LED_NUM_LOCK) key_ascii = scan2ascii_table[key][4];
-	else if(control_keys == 0) {key_ascii = scan2ascii_table[key][0];print_ulong(key);printk(" "); print_ulong_hex(key_ascii); printk("   ADASDASDAS\n");}
+	else if(control_keys == 0) key_ascii = scan2ascii_table[key][0];
 
 	if(key_ascii != 0)
 	{

@@ -88,8 +88,8 @@ void mynos_main() {
   }
 
   {
-    //    while (1)
-    //    print_char(getch());
+    while (1)
+      print_char(getch());
   }
 
   KPANIC("\nEND OF KERNEL DEMO");
@@ -113,3 +113,4 @@ void cpuSpeed() {
 #endif
 
 }
+
