@@ -30,4 +30,9 @@ int mynos_recv(int sender, void * buf, unsigned int maxsize,
 int mynos_recvAll(int * sender, void * buf, unsigned int maxsize,
 		  unsigned int flags);
 
+int mynos_P(int sem);
+int mynos_tryP(int sem);
+int mynos_V(int sem);
+int mynos_initSem(unsigned int n);
+int mynos_freeSem(int sem);
 #endif
