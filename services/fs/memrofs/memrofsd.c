@@ -163,6 +163,10 @@ int main() {
     open_response_t open_response;
     read_response_t read_response;
     int serviced;
+    int i;
+    /* wait a bit to let the father's init */
+    for (i = 0; i < 100000; i++);
+
     if ((serviced = mynos_clientRegister("memrofs")) == -1) {
       puts("MEMROFS service unavailable");
       exit(-1);
