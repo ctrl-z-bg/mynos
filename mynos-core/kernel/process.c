@@ -29,6 +29,9 @@ tss_t processTable[MAXPROCESSES];
 uint32_t numProcess = 1;
 uint32_t currProcess = 0;  /* the first process is the idle process */
 
+extern uint32_t test_start;
+extern uint32_t test_len;
+
 tss_t * spawnProcess(tss_t * tss) {
   uint32_t * newPD;
   uint32_t * lastPT;
@@ -59,7 +62,7 @@ tss_t * spawnProcess(tss_t * tss) {
   if ((currPF = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
 
   ///////////////
-  kmemcpy((void*)currPF, (void*)0x208000, 4096);
+  kmemcpy((void*)currPF, (void*)test_start, test_len);
   /////////////////
 
   currPT[0] = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_USER | PF_PRESENT |

@@ -96,6 +96,9 @@ _start:
 ;
 multiboot_entry:
 
+	;; save multiboot information pointer on stack
+	push ebx
+
 ;;; now we calculate the amount of RAM you have by a read-back test
 ;;; the result, in eax, is in MB
 	mov	ebx, 0x1FFFFC	; last DWORD of the second MB
@@ -184,20 +187,27 @@ multiboot_entry:
 	sub	eax, FOUR_K
 	dec	eax
 
+	;; restore multiboot information pointer in ebx
+	;; EBX MUST NOT CHANGE BEFORE THE CALL TO mynos_main!!!!!!!!
+	pop ebx
+
 	;; linear address of stack is the page before the page dir linear page
   	mov	esp, eax
   	mov	ebp, esp
 	
 	;; move the page dir physical address in cr3
-	mov	ebx, KERNEL_PAGE_DIR
-	mov	cr3, ebx
+	mov	ecx, KERNEL_PAGE_DIR
+	mov	cr3, ecx
 
 	;; enable PG in cr0
   	mov	eax, cr0
   	or	eax, 0x80000000
   	mov	cr0, eax
 ;;; END OF PAGING CODE
-	
+
+	;; save multiboot information pointer for main
+	push ebx
+		
 ;;; jump to main!!!
 	call	mynos_main
 

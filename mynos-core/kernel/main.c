@@ -36,6 +36,8 @@
 #include "delay.h"
 #include "keyboard.h"
 
+#include "multiboot.h"
+
 void __print_free_phy_pages() {
   printk("(adesso ci sono ");
   print_uint(__number_of_free_physical_pages);
@@ -69,7 +71,12 @@ void tsksw() {
 
 }
 
-void mynos_main() {
+uint32_t test_start;
+uint32_t test_len;
+
+void mynos_main(multiboot_info_t *boot_info) {
+  module_t * module;
+
   __asm__("cli");
 
   clear_screen();
@@ -97,6 +104,11 @@ void mynos_main() {
   init_pit(PIT_FREQ, 0);
   set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT));
   printk("done.\n");
+
+  /* prepare the test program information */
+  module = boot_info->mods_addr;
+  test_start = module->mod_start;
+  test_len = module->mod_end - module->mod_start;
 
   tsksw();
 

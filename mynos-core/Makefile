@@ -20,12 +20,17 @@ DIRS = boot kernel
 
 .PHONY  : all clean bootfloppy depend
 
-all:
+all: test
 	for i in $(DIRS) ; do \
 		make -C $$i;\
 	done
 
+test: test.c
+	gcc -c test.c
+	ld test.o -o test --oformat binary -Ttext 0x0
+
 bootfloppy:
+	dd if=/dev/zero of=floppyb bs=1024 count=221
 	/sbin/mkfs.msdos floppyb
 	mount -o loop -t msdos floppyb /mnt/floppy
 	cp kernel/kernel.elf /mnt/floppy/
@@ -33,7 +38,7 @@ bootfloppy:
 	umount /mnt/floppy
 
 clean:
-	rm -f *~
+	rm -f *~ *.o test
 	for i in $(DIRS) ; do \
 		make -C $$i clean;\
 	done

@@ -11,7 +11,7 @@ vgaromimage: /usr/bochs/latest/VGABIOS-elpin-2.40
 
 # what disk images will be used 
 #floppya: 1_44=/dev/fd0, status=inserted
-floppya: 1_44=floppya, status=inserted
+floppya: 1_44=grub_mynos_floppya, status=inserted
 floppyb: 1_44=floppyb, status=inserted
 newharddrivesupport: enabled=1
 
