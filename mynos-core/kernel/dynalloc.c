@@ -85,7 +85,7 @@ _findFreeBlock(unsigned int sz)
 	if ( _GET_PAGE_ADDRESS(ret + osz - 1) == _GET_PAGE_BLOCK(runner) )
 	  /* end within an allocated page */
 	  npages--;
-	__OS_askPagesFrom(paddr, npages, 0, 0);
+	__OS_askPagesFrom(paddr, npages, 1, 0);
 	_insertBlock(ret + _SIZE_SZ, sz, old, runner);
 	return(ret + _SIZE_SZ);
       }
@@ -115,7 +115,7 @@ _findFreeBlock(unsigned int sz)
 void *
 _createNewBlock(unsigned int npages, unsigned int sz)
 {
-  void *addr = __OS_askPages(npages, NULL, NULL);
+  void *addr = __OS_askPages(npages, 1, 0);
   /* now, find the first block successive to address */
   void *old = NULL;
   void *runner = _heap;
