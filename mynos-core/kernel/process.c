@@ -60,7 +60,7 @@ tss_t * spawnProcess(tss_t * tss) {
   newPD[_asm_last_kernel_page_dir_entry_used + 1] = 
     LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_USER | PF_READWRITE | PF_PRESENT;
 
-  if ((currPF = (uint32_t*)__OS_askPages(1, 1)) == NULL) return NULL;
+  if ((currPF = (uint32_t*)__OS_askPages(2, 1)) == NULL) return NULL;
 
   ///////////////
   kmemcpy((void*)currPF, (void*)test_start, test_len);
@@ -68,14 +68,22 @@ tss_t * spawnProcess(tss_t * tss) {
 
   currPT[0] = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_USER | PF_PRESENT |
     PF_READWRITE;
+  currPT[1] = LINEAR_TO_PHYSICAL_ADDRESS(currPF+1024) | PF_USER 
+    | PF_PRESENT | PF_READWRITE;
 
-  /* alloc a second page (allocated only logically) */
+  /* alloc a third page (allocated only logically) */
   if ((currPF = (uint32_t*)__OS_askPages(1, 0)) == NULL) return NULL;
-  currPT[1] = PF_USER | PF_LOGICAL_PRESENT | PF_READWRITE;
+  currPT[2] = PF_USER | PF_LOGICAL_PRESENT | PF_READWRITE;
 
 
   newPD[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
   newPD[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(lastButOnePT) | PF_USER | PF_READWRITE | PF_PRESENT;
+
+  /* copy the first shared entries in the PTs images */
+  /* to add to CVS!!! */
+  for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
+    lastPT[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
+
   
   lastPT[_asm_last_kernel_page_dir_entry_used + 1] = 
     LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
