@@ -25,7 +25,7 @@ OFILES  =       $(SRC:%.c=%.o)
 
 DEPEND = Makefile.depend
 
-CFLAGS = -I../../mynos-lib/include
+CFLAGS = -Wall -I../../mynos-lib/include
 LDFLAGS = -L../../mynos-lib/lib/ -lmynos -static -Xlinker -Ttext -Xlinker 0x40000000
 
 all: keyboardd

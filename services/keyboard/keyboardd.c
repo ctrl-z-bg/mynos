@@ -21,6 +21,9 @@
 #include <mynos.h>
 #include <stdlib.h>
 
+#include <stdio.h>
+#include <unistd.h>
+
 #define LED_NUM_LOCK		2
 #define LED_SCROLL_LOCK		1
 #define LED_CAPS_LOCK		4
@@ -235,10 +238,10 @@ void keyb_handler(void)
 		if(key_ascii <= 0xFF)
 		{
 		  char c = (char)key_ascii;
+
 		  keyboard_buffer[keyboard_buffer_size] = key_ascii;
 		  keyboard_buffer_size++;
 		  write(1, &c, 1);
-		  outportb(0x3F8, 'R');
 		  outportb(0x3F8, c);
 		}
 		else

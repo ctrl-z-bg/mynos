@@ -23,6 +23,10 @@
 #include <unistd.h>
 #include "memrofs.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 char * MAGIC = ".RAMDISK";
 
 filedescriptor_t filedesc[MAXOPENFILES];
@@ -71,7 +75,6 @@ void memrofs_open(pid_t client, char *fname) {
 }
 
 void memrofs_close(pid_t client, int fd) {
-  pid_t owner = 0;
   status_t status;
   if ( fd > MAXOPENFILES ) 
     status = STATUS_TOO_MANY;

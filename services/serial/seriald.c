@@ -21,13 +21,12 @@
 #include <mynos.h>
 #include <stdlib.h>
 
+#include <stdio.h>
+#include <unistd.h>
+
 #define PORT1 0x3F8
 
 static int bufferin = 0;
-
-static int bufferout = 0;
-
-static char ch;
 
 static char buffer[1025];
 
@@ -91,7 +90,7 @@ void _serial_handler(void) {
   char asd;
   int n = 1;
   int i = 1;
-  char x, y;
+  //char x, y;
   static char left = 1;  // pressed is zero
   static char right = 1;
 
