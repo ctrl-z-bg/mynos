@@ -46,7 +46,7 @@ int mynos_driverRegister(char * name, unsigned int irq,
 int mynos_serviceRegister(char * name);
 int mynos_clientRegister(char * name);
 
-void outportb(unsigned int port,unsigned char value);
-unsigned char inportb(unsigned int port);
+void outportb(unsigned short port,unsigned char value);
+unsigned char inportb(unsigned short port);
 
 #endif

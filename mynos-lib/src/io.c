@@ -20,12 +20,12 @@
 
 #include "../include/mynos.h"
 
-void outportb(unsigned int port,unsigned char value)
+void outportb(unsigned short port,unsigned char value)
 {
    __asm__ volatile ("outb %%al,%%dx"::"d" (port), "a" (value));
 }
 
-unsigned char inportb(unsigned int port)
+unsigned char inportb(unsigned short port)
 {
    unsigned char ret;
 
