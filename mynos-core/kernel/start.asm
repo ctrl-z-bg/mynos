@@ -41,7 +41,7 @@ extern mynos_main		; the real main is not in this file
 ;;; some statically allocated page frames
 %define KERNEL_STACK_PAGE		0x104000
 
-%define KERNEL_FIRST_FREE_PHY_PAGE	0x300000; 0x105000 ELF
+%define KERNEL_FIRST_FREE_PHY_PAGE	0x400000; 0x105000 ELF
 
 ;;; flags in page table entries
 %define FLAG_PAGE_PRESENT		0x1
@@ -155,7 +155,7 @@ multiboot_entry:
 	
 	;; set the first 1024 entry of the first page table
 	;; to map the first 4MB of physical ram
-	mov	ecx, 768	; ELF
+	mov	ecx, 1024	; ELF
 	mov	eax, 0x1
 	mov	edi, KERNEL_FIRST_PAGE_TABLE
 .load_pt:	

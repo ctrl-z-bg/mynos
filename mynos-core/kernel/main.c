@@ -77,11 +77,19 @@ void tsksw() {
 
 }
 
+#define MAXMODULES 10
+typedef struct {
+  uint32_t start;
+  uint32_t len;
+} modinfo_t;
+
 uint32_t test_start;
 uint32_t test_len;
 
 void mynos_main(multiboot_info_t *boot_info) {
   module_t * module;
+  modinfo_t modinfo[MAXMODULES];
+  int i;
 
   __asm__("cli");
 
@@ -111,10 +119,17 @@ void mynos_main(multiboot_info_t *boot_info) {
   set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT));
   printk("done.\n");
 
-  /* prepare the test program information */
+  /* prepare the modules informations */
   module = (module_t *)boot_info->mods_addr;
-  test_start = module->mod_start;
-  test_len = module->mod_end - module->mod_start;
+  for (i = 0; i < boot_info->mods_count; i++) {
+    //module = (module_t*)((uint32_t*)(boot_info->mods_addr) + i);
+    modinfo[i].start = module[i].mod_start;
+    modinfo[i].len = module[i].mod_end - module[i].mod_start;
+  }
+
+  /* prepare the test program information */
+  test_start = modinfo[0].start;
+  test_len = modinfo[0].len;
 
 #ifdef TRY_VGA
   init_graph_vga(320, 200, 1);
