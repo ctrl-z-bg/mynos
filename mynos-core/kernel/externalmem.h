@@ -23,11 +23,12 @@
 
 #include "global.h"
 
-/* check if the PT exists, otherwise allocate a fresh one */
-int __OS_setExternalProcessPage(pid_t pid, uint32_t table, 
-				uint32_t entry, uint32_t phyPage,
-				uint32_t flags);
+#define MODE_SHARED 0x1
 
-int __OS_setExternalPT(pid_t pid, uint32_t table, uint32_t phyPage);
+/* map npages of the current process to process pid 
+   it returns the first linear page allocated for pid
+*/
+int32_t __OS_mapPagesTo(pid_t pid, uint32_t lpage,
+			uint32_t npages, uint32_t mode);
 
 #endif

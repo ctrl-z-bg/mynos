@@ -32,6 +32,9 @@ uint32_t __memory_bitmap_size;
 uint32_t __number_of_free_physical_pages;
 uint32_t __total_phy_pages;
 
+static void __cowManager(uint32_t * pte, uint32_t addr);
+static void __allocateOnUse(uint32_t * pte, uint32_t addr);
+
 void init_memory() {
   uint32_t i;
   uint32_t * tmp;
@@ -299,23 +302,22 @@ __asm__ (\
 	 "   iret                         \n"\
 	 );
 
-/* the copy-on-write code */
-void __mem_cowManager(uint32_t * pte, uint32_t addr) {
-#ifdef DEBUG
-  printk("There are ");
-  print_ulong(pmem_countref((*pte)>>12));
-  printk(" references\n");
-#endif
-  
-  /* if I'm the last referencing process then the page is mine! */
-  if (pmem_countref((*pte)>>12) == 1) {
-#ifdef DEBUG
-    printk("So now it's mine!\n");
-#endif
-    *pte = *pte & ~PF_COW;
-    *pte |= PF_READWRITE;
-    INVALIDATE_THE_CACHE(addr);
-  } else { // else...
+/* exported functions for special cases (cow, alloc-on-write) */
+
+void __mem_cowManager(uint32_t addr) {
+  uint32_t * pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), 
+						     __ADDRESS_PT_INDEX(addr));
+  __cowManager(pte, addr);
+}
+
+void __mem_allocateOnUse(uint32_t addr) {
+  uint32_t * pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), 
+						     __ADDRESS_PT_INDEX(addr));
+  __allocateOnUse(pte, addr);
+}
+
+
+uint32_t __mem_copyPageToCOWSpace(uint32_t addr) {
     void * dest;
     void * orig;
     
@@ -336,20 +338,43 @@ void __mem_cowManager(uint32_t * pte, uint32_t addr) {
     dest = (void*)__COW_PAGE;
     orig = (void*)(addr & 0xFFFFF000);
     kmemcpy(dest, orig, PAGE_SIZE);
+    
+    return LINEAR_TO_PHYSICAL_ADDRESS(dest);
+}
+
+
+/* the copy-on-write code */
+static void __cowManager(uint32_t * pte, uint32_t addr) {
+#ifdef DEBUG
+  printk("There are ");
+  print_ulong(pmem_countref((*pte)>>12));
+  printk(" references\n");
+#endif
+  
+  /* if I'm the last referencing process then the page is mine! */
+  if (pmem_countref((*pte)>>12) == 1) {
+#ifdef DEBUG
+    printk("So now it's mine!\n");
+#endif
+    *pte = *pte & ~PF_COW;
+    *pte |= PF_READWRITE;
+    INVALIDATE_THE_CACHE(addr);
+  } else { // else...
+    uint32_t paddr = __mem_copyPageToCOWSpace(addr);
 
     /* unset the faulting page, the new page was already set by
        __SET_PAGE_TABLE_ENTRY_AND_ALLOC */
     pmem_unset((*pte)>>12);
 
     /* bind the linear page to the new physical one */
-    *pte = LINEAR_TO_PHYSICAL_ADDRESS(dest) | (*pte & 0xFFF);
+    *pte = paddr | (*pte & 0xFFF);
     *pte = *pte & ~PF_COW;
     *pte |= PF_READWRITE;
     INVALIDATE_THE_CACHE(addr);
   }
 }
 
-void __mem_allocateOnUse(uint32_t * pte, uint32_t addr) {
+static void __allocateOnUse(uint32_t * pte, uint32_t addr) {
   uint32_t new_phy_page;
   uint32_t flags;
   
@@ -409,8 +434,8 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
        PF_PRESENT) == 0)
     KPANIC("page fault (?)");
 
-  pte = (int*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), 
-				     __ADDRESS_PT_INDEX(addr));
+  pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), 
+					  __ADDRESS_PT_INDEX(addr));
 #ifdef DEBUG
   if ((*pte) & PF_LOGICAL_PRESENT)
     printk("but the page is tagged as allocated\n");
@@ -425,9 +450,9 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
     KPANIC("full memory!");
 
   if ((*pte) & PF_LOGICAL_PRESENT) { /* ALLOCATE ON USE */
-    __mem_allocateOnUse(pte, addr);
+    __allocateOnUse(pte, addr);
   } else if ((*pte) & PF_COW) {      /* COPY ON WRITE */
-    __mem_cowManager(pte, addr);
+    __cowManager(pte, addr);
   } else KPANIC("MEMORY ERROR: NOT COW OR LOGICAL");
 }
 

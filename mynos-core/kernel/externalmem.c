@@ -23,6 +23,21 @@
 #include "mem.h"
 #include "video.h"
 
+// set a new PT for another process given the physical address for new PT
+static int32_t __setExternalPT(pid_t pid, uint32_t table, 
+			       uint32_t phyPage);
+
+// map a new physical page to another process linear space
+static int32_t __setExternalProcessPage(pid_t pid, uint32_t table, 
+					uint32_t entry, uint32_t phyPage,
+					uint32_t flags);
+
+// map a linear page of mine to a linear page of pid
+static int32_t __mapPageTo(pid_t pid,
+			   uint32_t lpagesender,
+			   uint32_t lpagereceiver,
+			   uint32_t mode);
+
 /* map a physical page to the externalVMPage (see mem.h) */
 static void __mapPageToAppPage(uint32_t phyPage) {
   *(__EXTERNAL_VMSPACE_PAGE_ENTRY) = (phyPage<<12) | 0x1;
@@ -40,7 +55,7 @@ static void __mapProcessPD(pid_t pid) {
 }
 
 /* return != 0 if the PT is not present */
-static int __mapProcessPT(pid_t pid, uint32_t table) {
+static int32_t __mapProcessPT(pid_t pid, uint32_t table) {
   uint32_t phyPageAddress;
   uint32_t * pd;
 
@@ -60,16 +75,18 @@ static int __mapProcessPT(pid_t pid, uint32_t table) {
   return 0;
 }
 
-int __OS_setExternalProcessPage(pid_t pid, uint32_t table, 
-				uint32_t entry, uint32_t phyPage,
-				uint32_t flags) {
+
+/* check if the PT exists, otherwise allocate a fresh one */
+static int32_t __setExternalProcessPage(pid_t pid, uint32_t table, 
+					uint32_t entry, uint32_t phyPage,
+					uint32_t flags) {
   uint32_t * pt;
 
   // if PT does not exist than allocate a fresh one!
   if (__mapProcessPT(pid, table) != 0) {
     uint32_t * newPT = (uint32_t*)__OS_askPages(1, 1, 0);
     INIT_PAGE_TABLE(newPT);
-    __OS_setExternalPT(pid, table, 
+    __setExternalPT(pid, table, 
 		       (LINEAR_TO_PHYSICAL_ADDRESS(newPT)>>12));
     __OS_releasePages(newPT, 1, 0, 0);
     if (__mapProcessPT(pid, table) != 0)
@@ -82,8 +99,8 @@ int __OS_setExternalProcessPage(pid_t pid, uint32_t table,
   return 0;
 }
 
-int __OS_setExternalPT(pid_t pid, uint32_t table, 
-		       uint32_t phyPage) {
+static int32_t __setExternalPT(pid_t pid, uint32_t table, 
+			       uint32_t phyPage) {
   uint32_t * pd;
 
   // set the PD entry
@@ -93,10 +110,118 @@ int __OS_setExternalPT(pid_t pid, uint32_t table,
   pd[table] = (phyPage<<12) | PF_READWRITE | PF_USER | PF_PRESENT;
 
   // set the PD mirror entry
-  __OS_setExternalProcessPage(pid, LAST_PDPT_INDEX, table, phyPage,
+  __setExternalProcessPage(pid, LAST_PDPT_INDEX, table, phyPage,
 			      PF_READWRITE | PF_USER | PF_PRESENT);
 
   return 0;
 }
 
+static int32_t __mapPageTo(pid_t pid,
+			   uint32_t lpagesender,
+			   uint32_t lpagereceiver,
+			   uint32_t mode) {
+  uint32_t * pte;
+  uint32_t laddrsender;
+  uint32_t laddrreceiver;
+  uint32_t ppage;
+  uint32_t flags;
+
+  // my page data
+  laddrsender = lpagesender << 12;
+  laddrreceiver = lpagereceiver << 12;
+
+  pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(laddrsender), 
+					  __ADDRESS_PT_INDEX(laddrsender));
+  
+  if (!(mode & MODE_SHARED)) { // the page should not be shared
+    if (*pte & PF_SHARED) {
+      ppage = (__mem_copyPageToCOWSpace(laddrsender) >> 12);
+
+      flags = PF_USER | PF_PRESENT | PF_READWRITE;
+
+      __setExternalProcessPage(pid,
+			       __ADDRESS_PD_INDEX(laddrreceiver),
+			       __ADDRESS_PT_INDEX(laddrreceiver),
+			       ppage,
+			       flags);
+    } else {
+      // not really allocated: copy as is
+      if (*pte & PF_LOGICAL_PRESENT) {
+	__setExternalProcessPage(pid,
+				 __ADDRESS_PD_INDEX(laddrreceiver),
+				 __ADDRESS_PT_INDEX(laddrreceiver),
+				 ppage,
+				 PF_USER | PF_READWRITE | PF_LOGICAL_PRESENT);
+	return 0;
+      }
+
+      // set this page as cow if...
+      if (*pte & PF_READWRITE) {
+	*pte |= PF_COW;
+	*pte = *pte & ~PF_READWRITE;  // to have the fault on write!
+	INVALIDATE_THE_CACHE(laddrsender);
+      }
+      ppage = (*pte)>>12;
+      pmem_set(ppage);
+      
+      // I could just copy the flags between descriptors, but
+      // I would copy processor flags too
+      flags = *pte & 0xFFF;
+      
+      __setExternalProcessPage(pid,
+			       __ADDRESS_PD_INDEX(laddrreceiver),
+			       __ADDRESS_PT_INDEX(laddrreceiver),
+			       ppage,
+			       flags);
+    
+    }
+  } else { // shared
+    if (*pte & PF_LOGICAL_PRESENT) // not really allocated
+      __mem_allocateOnUse(laddrsender); // allocate it
+    
+    // a page cannot be cow and shared at the same time
+    if (*pte & PF_COW)
+      __mem_cowManager(laddrsender);
+    
+    // reload the page data after the changes
+    pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(laddrsender), 
+					    __ADDRESS_PT_INDEX(laddrsender));
+
+    // set my page as shared if it's not already and it's not read-only
+    if (!(*pte & PF_SHARED) && (*pte & PF_READWRITE)) {
+      *pte |= PF_SHARED;
+      INVALIDATE_THE_CACHE(laddrsender);
+    }
+      
+    ppage = (*pte)>>12;
+    pmem_set(ppage);
+
+    // set the flags
+    flags = *pte & 0xFFF;
+    
+    __setExternalProcessPage(pid,
+			     __ADDRESS_PD_INDEX(laddrreceiver),
+			     __ADDRESS_PT_INDEX(laddrreceiver),
+			     ppage,
+			     flags);
+  }
+
+  return 0;
+}
+
+int32_t __OS_mapPagesTo(pid_t pid, uint32_t lpage,
+			uint32_t npages, uint32_t mode) {
+  uint32_t newLPage;
+  uint32_t i;
+  // TODO: check area to be sent
+
+  // alloc a new area in the receiver linear space
+  newLPage = __lmt_allocArea(&(processTable[pid].lmemmap),
+			     npages);
+
+  for (i = 0; i < npages; i++)
+    __mapPageTo(pid, lpage + i, newLPage + i, mode);
+
+  return newLPage;
+}
 

@@ -279,13 +279,26 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   printk("\n-----------------------\n");
 
-  /* testing the external mem  */
-  //print_uint_hex(__MEM_LINEAR_ADDRESS(512,1000,0));
-  //__OS_setExternalPT(1, 512, 4001);
-  //__OS_setExternalProcessPage(1, 512, 1000, 4000, 
-  //		      PF_READWRITE | PF_USER | PF_PRESENT);
 
+#if 0
+  /* testing the external mem  */
+  {
+    uint32_t * a = __OS_askPages(1, 0, PF_READWRITE | PF_USER);
+    *a = 56;
+    __OS_mapPagesTo(1, ((uint32_t)a)>>12, 1, 0);
+    //__OS_mapPagesTo(1, ((uint32_t)a)>>12, 1, 0);
+
+    enable_irq(0);
+    
+    while(1) {
+      int i;
+      for (i = 0; i < 300000; i++);
+      print_uint(*a);printk("\n");
+    }
+  }
+#else
   enable_irq(0);
+#endif
 
 #ifdef RAMDISK
   if (ramdisk_present) {

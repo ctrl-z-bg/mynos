@@ -231,7 +231,9 @@ void _page_fault_handler_TRAP();  /* the wrapper... */
 void _page_fault_handler(uint32_t addr, uint32_t errcode); /* ... and the 
 							      real handler */
 /* special cases */
-void __mem_cowManager(uint32_t * pte, uint32_t addr);
-void __mem_allocateOnUse(uint32_t * pte, uint32_t addr);
+// it returns the new copy physical address
+uint32_t __mem_copyPageToCOWSpace(uint32_t addr);
+void __mem_cowManager(uint32_t addr);
+void __mem_allocateOnUse(uint32_t addr);
 
 #endif
