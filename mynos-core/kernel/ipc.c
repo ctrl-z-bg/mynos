@@ -25,6 +25,7 @@
 #include "process.h"
 #include "video.h"
 #include "mem.h"
+#include "sem.h"
 
 #define MAXCHANNELS 20
 
@@ -197,6 +198,7 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
       (rtss->isWaitingSender == 0)) {
     (rtss->channels).sender = currProcess;  // It was me who woke the recv
     rtss->isWaitingSender = -1;             // let's wake up the recv
+    privV(dest);
   }
 
   /* create the channel... */
@@ -225,6 +227,9 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
 
   // UNLOCK rec list
   if (!(flags & IPC_FLAGS_NOBLOCK))
+    privP();
+
+#if 0
     {   // tasksw to idle process
       struct {long a ,b;} tmp = {0, 0};
       
@@ -232,6 +237,7 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
       tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
       __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
     }
+#endif
   
   return size;
 }
@@ -264,6 +270,8 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
 	return -1;
       }
       rtss->isWaitingSender = sender;
+      // UNLOCK rec list
+      privP();
     } else { // c is not null
       msgsize = c->msgsize;
       /* the msg is longer than we expected */
@@ -279,10 +287,11 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
 	// LOCK sender list
 	stss->isWaitingReceiver = -1;
 	// UNLOCK sender list
+	privV(sender);
       }
     }  
     
-    // UNLOCK rec list
+#if 0
     {   // tasksw to idle process
       struct {long a ,b;} tmp = {0, 0};
       
@@ -290,6 +299,8 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
       tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
       __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
     }
+#endif
+
   }     // while (!done)
 
   return msgsize;
@@ -325,6 +336,8 @@ int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
 	return -1;
       }
       rtss->isWaitingSender = 0;
+      // UNLOCK rec list
+      privP();
     } else { // c is not null
       msgsize = c->msgsize;
       /* the msg is longer than we expected */
@@ -341,10 +354,11 @@ int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
 	// LOCK sender list
 	stss->isWaitingReceiver = -1;
 	// UNLOCK sender list
+	privV(*sender);
       }
     }  
     
-    // UNLOCK rec list
+#if 0
     {   // tasksw to idle process
       struct {long a ,b;} tmp = {0, 0};
       
@@ -352,6 +366,8 @@ int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
       tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
       __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
     }
+#endif
+
   }     // while (!done)
 
   return msgsize;

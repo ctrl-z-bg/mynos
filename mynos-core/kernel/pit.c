@@ -66,8 +66,6 @@ void pit_handler() {
       currProcess = (currProcess + 1) % numProcess;
     }
     while ((!processTable[currProcess].isAlive) ||
-	   (processTable[currProcess].isWaitingReceiver != -1) ||
-	   (processTable[currProcess].isWaitingSender != -1) ||
 	   (processTable[currProcess].isWaitingOnP != -1) );
     tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
   }
