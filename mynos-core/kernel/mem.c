@@ -49,15 +49,16 @@ void init_memory() {
 
 }
 
-/* TEMP!!! Start Search from 0x0 */
 void * __OS_askPages(unsigned int npages) {
-  uint32_t page_addr;
+  static uint32_t page_addr = 0;
   uint32_t last_page = __LAST_LINEAR_PAGE;
   uint32_t not_used;
 
-  for (page_addr = 0x0; page_addr <= last_page; page_addr++)
+  for (; page_addr <= last_page; page_addr++)
     if (__pg_free_pages_from_page(page_addr, npages, &not_used) == npages)
       return __OS_askPagesFrom((void *)(page_addr<<12), npages);
+
+  page_addr = 0x0;
 
   return (void*)0;
 }

@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "global.h"
 #include "mem.h"
 #include "gdt.h"
 #include "tss.h"
@@ -45,7 +46,7 @@ tss_t * spawnProcess(tss_t * tss) {
   if ((newPD = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
   kbzero(newPD, PAGE_SIZE);
 
-  for (i = 0; i <= 255/*_asm_last_page_dir_entry_used*/; i++)
+  for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
     newPD[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
 
   if ((lastPT = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
@@ -56,7 +57,7 @@ tss_t * spawnProcess(tss_t * tss) {
 
   if ((currPT = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
   kbzero(currPT, PAGE_SIZE);
-  newPD[256]=//_asm_last_page_dir_entry_used + 1] = 
+  newPD[_asm_last_kernel_page_dir_entry_used + 1] = 
     LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_USER | PF_READWRITE | PF_PRESENT;
 
   if ((currPF = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
@@ -124,8 +125,8 @@ tss_t * spawnProcess(tss_t * tss) {
 
   tss->eflags = 0x200;
   tss->esp = tss->ebp =
-    (uint32_t)((_asm_last_page_dir_entry_used)*0x400000 - 4100);
-  tss->esp0 = tss->esp - numProcess*100;//1000;
+    (uint32_t)((uint32_t)LAST_PAGE_DIR_VALID_INDEX*0x400000 - 4100);
+  tss->esp0 = tss->esp - numProcess*100;
   tss->esp1 = tss->esp - 1000;
   tss->esp2 = tss->esp - 1000;
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;

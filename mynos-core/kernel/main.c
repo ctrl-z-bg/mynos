@@ -106,15 +106,24 @@ void mynos_main(multiboot_info_t *boot_info) {
   printk("done.\n");
 
   /* prepare the test program information */
-  module = boot_info->mods_addr;
+  module = (module_t *)boot_info->mods_addr;
   test_start = module->mod_start;
   test_len = module->mod_end - module->mod_start;
 
   tsksw();
 
+/*   { */
+/*     int a; */
+/*     asm("pushl %eax"); */
+/*     asm("movl $62, %eax"); */
+/*     asm("movl %%eax, %0": "=r"(a)); */
+/*     print_ulong(a); */
+/*     asm("popl %eax"); */
+/*   } */
+
   /* Let's create some task! :) */
   {
-    uint32_t i, ntask = 3;
+    uint32_t i, ntask = 20;
     for (i = 0; i < ntask; i++)
       spawnProcess(&(processTable[numProcess++]));
   }
@@ -124,7 +133,7 @@ void mynos_main(multiboot_info_t *boot_info) {
   enable_irq(0);
 
   while(1) {
-    asm("int $0x50\n");
+    //    asm("int $0x50\n");
   }
 
   KPANIC("\nEND OF KERNEL DEMO");

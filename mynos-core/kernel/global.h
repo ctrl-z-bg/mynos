@@ -25,6 +25,8 @@
 
 #define __MEMORY_BITMAP_PHY_ADDRESS 0x32000    /* 200KB */
 
+#define LAST_PAGE_DIR_VALID_INDEX 1023
+
 #define KPANIC(MSG) {printk(MSG); while(1){}}
 
 typedef char           byte_t;
@@ -37,9 +39,10 @@ typedef short          short16_t;
 
 typedef unsigned int   __kernel_size_t;
 typedef __kernel_size_t size_t;
+typedef size_t ssize_t;
 
 extern int _asm_global_mem_size;
-extern int _asm_last_page_dir_entry_used;
+extern int _asm_last_kernel_page_dir_entry_used;
 extern int _asm_first_free_physical_page_address;
 
 #endif

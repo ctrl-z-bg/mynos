@@ -25,9 +25,15 @@ all: test
 		make -C $$i;\
 	done
 
-test: test.c
+test: test.c write.c
 	gcc -c test.c
-	ld test.o -o test --oformat binary -Ttext 0x0
+	gcc -c write.c
+#	ld test.o write.o -o test --oformat binary -Ttext 0x40000000
+
+	ld test.o \
+	  /home/zava/tmp/dietlibc-0.17/bin-i386/libm.a \
+	  /home/zava/tmp/dietlibc-0.17/bin-i386/dietlibc.a \
+	  -static -o test --oformat binary -Ttext 0x40000000
 
 bootfloppy:
 	dd if=/dev/zero of=floppyb bs=1024 count=221

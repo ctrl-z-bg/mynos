@@ -24,8 +24,11 @@ extern mynos_main		; the real main is not in this file
 
 ;;; the bottom of each process linear memory will be aliased with
 ;;; kernel linear memory. This is the last index used in page directory
-%define	KLAST_PAGE_DIR_ENTRY_USED	1023 ;255	; 255 = 1GB
-	
+%define	KLAST_PAGE_DIR_ENTRY_USED	255	; 255 = 1GB
+
+;;; this is the last valid index for page directory
+%define	KLAST_PAGE_DIR_INDEX		1023
+		
 ;;; last linear page frame will be mapped here
 %define KERNEL_PAGE_DIR			0x100000
 
@@ -130,8 +133,8 @@ multiboot_entry:
 
 	;; let's bind the page directory with the page tables
 	NEW_ENTRY_IN_PAGE_DIR 0, KERNEL_FIRST_PAGE_TABLE
-  	NEW_ENTRY_IN_PAGE_DIR (KLAST_PAGE_DIR_ENTRY_USED-1), KERNEL_LAST_BUT_ONE_PAGE_TABLE
-	NEW_ENTRY_IN_PAGE_DIR KLAST_PAGE_DIR_ENTRY_USED, KERNEL_LAST_PAGE_TABLE
+  	NEW_ENTRY_IN_PAGE_DIR (KLAST_PAGE_DIR_INDEX-1), KERNEL_LAST_BUT_ONE_PAGE_TABLE
+	NEW_ENTRY_IN_PAGE_DIR KLAST_PAGE_DIR_INDEX, KERNEL_LAST_PAGE_TABLE
 
 	;; we want to have the page directory and the page tables to be
 	;; mapped in our linear space:
@@ -153,13 +156,13 @@ multiboot_entry:
 	mov	[eax], ebx
 	
 	;; ...then the last but one page table...
-	mov	eax, PTABLE_ENTRY(KERNEL_LAST_PAGE_TABLE, (KLAST_PAGE_DIR_ENTRY_USED - 1))
+	mov	eax, PTABLE_ENTRY(KERNEL_LAST_PAGE_TABLE, (KLAST_PAGE_DIR_INDEX - 1))
 	mov	ebx, KERNEL_LAST_BUT_ONE_PAGE_TABLE
 	or	ebx, FLAG_PAGE_PRESENT
 	mov	[eax], ebx
 	
 	;; ...and finally the last page table
-	mov	eax, PTABLE_ENTRY(KERNEL_LAST_PAGE_TABLE, KLAST_PAGE_DIR_ENTRY_USED)
+	mov	eax, PTABLE_ENTRY(KERNEL_LAST_PAGE_TABLE, KLAST_PAGE_DIR_INDEX)
 	mov	ebx, KERNEL_LAST_PAGE_TABLE
 	or	ebx, FLAG_PAGE_PRESENT
 	mov	[eax], ebx
@@ -181,7 +184,7 @@ multiboot_entry:
 	or	ebx, FLAG_PAGE_PRESENT
 	mov	[eax], ebx
 
-	mov	eax, KLAST_PAGE_DIR_ENTRY_USED
+	mov	eax, KLAST_PAGE_DIR_INDEX
 	mov	ebx, 0x400000	; 4MB
 	mul	ebx
 	sub	eax, FOUR_K
@@ -232,10 +235,10 @@ clear_page_table:
 
 ;;; amount of ram
 global				_asm_global_mem_size
-_asm_global_mem_size:		dd	0
+_asm_global_mem_size:			dd	0
 
-global				_asm_last_page_dir_entry_used
-_asm_last_page_dir_entry_used:	dd	KLAST_PAGE_DIR_ENTRY_USED
+global				_asm_last_kernel_page_dir_entry_used
+_asm_last_kernel_page_dir_entry_used:	dd	KLAST_PAGE_DIR_ENTRY_USED
 
 global				_asm_first_free_physical_page_address
 _asm_first_free_physical_page_address:	dd	KERNEL_FIRST_FREE_PHY_PAGE
