@@ -30,7 +30,7 @@
 
 void sendTo1_handler() {
   int a = 4;
-  if (__OS_ipc_send(1, (char *)&a, 4, IPC_FLAGS_NOBLOCK) < 0)
+  if (__OS_ipc_send(1, (char *)&a, 4, 0*IPC_FLAGS_NOBLOCK) < 0)
     printk("spedizione impossibile");
   else
     printk("spedito");

@@ -158,16 +158,6 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
 
   // LOCK rec list
 
-#if 0
-  if ((flags & IPC_FLAGS_NOBLOCK) &&
-      (rtss->isWaitingSender != currProcess) &&
-      (rtss->isWaitingSender != 0)) {
-    /* the receiver is not ready and I am not blocking, so return err */
-    // UNLOCK rec list
-    return -1;
-  }
-#endif
-
   /* the receiver is waiting for me or anyone */
   if ((rtss->isWaitingSender == currProcess) ||
       (rtss->isWaitingSender == 0)) {
@@ -236,8 +226,8 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
       }
       rtss->isWaitingSender = sender;
     } else { // c is not null
-      /* the msg is smaller than we thinked */
-      if (__OS_ipc_readFromChannel(c, buf, size, NULL) != size) {
+      /* the msg is longer than we expected */
+      if (__OS_ipc_readFromChannel(c, buf, size, NULL) < 0) {
 	__OS_ipc_destroyChannelIntoList(list, c);
 	// UNLOCK rec list
 	return -1;
