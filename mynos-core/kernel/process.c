@@ -78,7 +78,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   uint32_t * stackFrame; 
   uint32_t * pun;
   uint32_t i;
-  ushort16_t tssd_gdt_sel, code_gdt_sel, data_gdt_sel;
+  ushort16_t code_gdt_sel, data_gdt_sel;
   tss_t * tss;
   uint32_t npages_for_process;
 
@@ -269,17 +269,11 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   /* map the page directory in the process linear space */
   lastButOnePT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(newPD) | PF_PRESENT;
 
-  tssd_gdt_sel = gdt_get_free_index();
-
   /* allocate a new tss */
   desc->tss = (tss_t*)kmalloc(sizeof(tss_t));
 
   tss = desc->tss;
 
-  gdt_set_entry(tssd_gdt_sel, 
-		(uint32_t)tss,
-		sizeof(tss_t), D_TSS);
-    printk("GDT TSS entry....\n");
   /* set the new process tss */
   tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(newPD);
   tss->io_bitmap_offset = sizeof(tss_t)<<16;
@@ -295,8 +289,6 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   tss->fs = GDT_USER_DATA_SEL + 3;
   tss->gs = GDT_USER_DATA_SEL + 3;
   tss->ss = GDT_USER_DATA_SEL + 3;
-
-  desc->tssd_gdt_selector = tssd_gdt_sel << 3;
 
   tss->ldt = 0;
 

@@ -36,7 +36,7 @@ $(MODULE_NAME): $(OFILES)
 	$(CC) -c $(CFLAGS) $<
 
 clean:
-	rm -f *.o *.bin *~
+	rm -f *.o *.bin *~ Makefile.depend
 
 depend:
 	$(RM) $(DEPEND)

@@ -26,7 +26,6 @@
 #include "softtaskswitch.h"
 
 void sched() {
-  struct {long a ,b;} tmp = {0, 0};
   uint32_t oldProcess = currProcess;
 
   do {
@@ -34,8 +33,6 @@ void sched() {
   }
   while ((!processTable[currProcess].isAlive) ||
 	 (processTable[currProcess].isWaitingOnP != -1) );
-  tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
-
 
   if (currProcess != oldProcess)
     switchTo(oldProcess, currProcess);

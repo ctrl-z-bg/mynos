@@ -63,7 +63,7 @@ ushort16_t * idle_tssd_selector;
 tss_t THEtss;
 
 void tsksw() {
-  ushort16_t gdt_index;
+  ushort16_t gdt_index, tssd_gdt_selector;
 
   /* allocate a new tss */
   processTable[0].tss = (tss_t*)kmalloc(sizeof(tss_t));
@@ -86,7 +86,7 @@ void tsksw() {
   processTable[0].isWaitingOnP = -1;
 
   gdt_index = gdt_get_free_index();
-  processTable[0].tssd_gdt_selector = (uint32_t)gdt_index << 3;
+  tssd_gdt_selector = (uint32_t)gdt_index << 3;
 
   kmemcpy(&THEtss, processTable[0].tss, sizeof(tss_t));
 
@@ -97,7 +97,7 @@ void tsksw() {
 
   /* load the task register with the relative address in the gdt of the
      current process's tssd */
-  idle_tssd_selector = (ushort16_t*)((uint32_t)processTable[0].tssd_gdt_selector);
+  idle_tssd_selector = (ushort16_t*)((uint32_t)tssd_gdt_selector);
   __asm__ volatile ("ltrw (idle_tssd_selector)\n");
 
 }

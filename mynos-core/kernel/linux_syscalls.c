@@ -292,7 +292,6 @@ int _linux_syscall_fork() {
   uint32_t *lastPT;
   pid_t new_pid;
   int ret;
-  ushort16_t tssd_gdt_sel;
   tss_t * new_pid_tss;
 
   if ((pdc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
@@ -341,12 +340,6 @@ int _linux_syscall_fork() {
   processTable[currProcess].isForking = new_pid;
   /* (see below for the child's isForking) */
 
-  // set the tssd for the new process
-  tssd_gdt_sel = gdt_get_free_index();
-  gdt_set_entry(tssd_gdt_sel, 
-		(uint32_t)new_pid_tss,
-		sizeof(tss_t), D_TSS);
-
   /* copy the forking process state to the new one */
     
   /* copy the whole structure */
@@ -360,7 +353,6 @@ int _linux_syscall_fork() {
 	  (void*)processTable[currProcess].tss,
 	  sizeof(tss_t));
   
-  processTable[new_pid].tssd_gdt_selector = tssd_gdt_sel << 3;
   processTable[new_pid].tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
   
   processTable[new_pid].pid = new_pid;
