@@ -64,7 +64,7 @@ depend:
 	  make -C $$i depend;\
 	done
 	$(RM) $(DEPEND)
-	$(CC) -M $(SRCSC) >> $(DEPEND)
+	$(CC) $(CFLAGS) -M $(SRCSC) >> $(DEPEND)
 
 DEPEND = Makefile.depend
 

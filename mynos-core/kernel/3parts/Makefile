@@ -40,7 +40,7 @@ clean:
 
 depend:
 	$(RM) $(DEPEND)
-	$(CC) -M $(SRCS) >> $(DEPEND)
+	$(CC) $(CFLAGS) -M $(SRCS) >> $(DEPEND)
 
 DEPEND = Makefile.depend
 

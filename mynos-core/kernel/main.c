@@ -33,9 +33,9 @@
 
 #include "kutils.h"
 
-#include "3parts/delay.h"
-#include "3parts/fdc.h"
-#include "3parts/keyboard.h"
+#include "delay.h"
+#include "fdc.h"
+#include "keyboard.h"
 
 void __print_free_phy_pages() {
   printk("(adesso ci sono ");

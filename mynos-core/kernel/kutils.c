@@ -58,7 +58,7 @@ int katoi(const char* s) {
 }
 
 #include "video.h"
-#include "3parts/keyboard.h"
+#include "keyboard.h"
 void kreadStr(char * s, uint32_t bufsize) {
   int i = 0;
 
