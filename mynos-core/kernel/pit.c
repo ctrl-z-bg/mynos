@@ -32,7 +32,16 @@ void init_pit(float freq, unsigned char channel) {
   outportb((0x40+channel), (temp>>8));
 }
 
-ISR_WRAPPER(pit);
+//ISR_WRAPPER(pit);
+
+void pit_ISR();
+
+__asm__ (\
+	 ".globl pit_ISR         \n"\
+	 "pit_ISR:               \n"\
+	 "   call pit_handler    \n"     /* call the ISR handler */\
+	 "   iret                \n"\
+	 );
 
 void pit_handler() {
   static int count = 1;
