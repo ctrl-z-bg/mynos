@@ -52,8 +52,10 @@ static int __mapProcessPT(pid_t pid, uint32_t table) {
 
   pd = __EXTERNAL_VMSPACE_PAGE;
 
+  // check if the PT is present
+  if (!(pd[table] & PF_PRESENT)) return -1;
+
   phyPageAddress = pd[table] & 0xFFFFF000;
-  if (!phyPageAddress) return -1;
   __mapPageToAppPage(phyPageAddress >> 12);
   return 0;
 }
@@ -63,7 +65,16 @@ int __OS_setExternalProcessPage(pid_t pid, uint32_t table,
 				uint32_t flags) {
   uint32_t * pt;
 
-  __mapProcessPT(pid, table);
+  // if PT does not exist than allocate a fresh one!
+  if (__mapProcessPT(pid, table) != 0) {
+    uint32_t * newPT = (uint32_t*)__OS_askPages(1, 1, 0);
+    INIT_PAGE_TABLE(newPT);
+    __OS_setExternalPT(pid, table, 
+		       (LINEAR_TO_PHYSICAL_ADDRESS(newPT)>>12));
+    __OS_releasePages(newPT, 1, 0, 0);
+    if (__mapProcessPT(pid, table) != 0)
+      KPANIC("problem in __OS_setExternalProcessPage");
+  }
 
   pt = __EXTERNAL_VMSPACE_PAGE;
   pt[entry] = (phyPage<<12) | flags;

@@ -23,7 +23,7 @@
 
 #include "global.h"
 
-/* returned value != 0 if the targed address is already allocated */
+/* check if the PT exists, otherwise allocate a fresh one */
 int __OS_setExternalProcessPage(pid_t pid, uint32_t table, 
 				uint32_t entry, uint32_t phyPage,
 				uint32_t flags);
