@@ -81,8 +81,11 @@ void tsksw() {
 
 }
 
-uint32_t * test_start;
-uint32_t test_len;
+#ifdef RAMDISK
+void * ramdisk;
+uint32_t ramdisk_len;
+uint32_t ramdisk_present = 0;
+#endif
 
 modinfo_t bytecode;
 
@@ -125,13 +128,29 @@ void mynos_main(multiboot_info_t *boot_info) {
     //module = (module_t*)((uint32_t*)(boot_info->mods_addr) + i);
     modinfo[i].start = (uint32_t*)module[i].mod_start;
     modinfo[i].len = module[i].mod_end - module[i].mod_start;
+#ifdef RAMDISK
+    if (!kmemcmp((uint32_t*)modinfo[i].start, ".RAMDISK", 8)) {
+      ramdisk = (void *)modinfo[i].start;
+      ramdisk_len = modinfo[i].len;
+      printk("RAMDISK found (module ");
+      print_uint(i);
+      printk(")\n");
+      ramdisk_present = 1;
+    }
+#endif
   }
 
+#ifdef RAMDISK
+  if (!ramdisk_present)
+    printk("No RAMDISK found\n");
+#endif
+
   /* prepare the test program information */
-  test_start = modinfo[0].start;
-  test_len = modinfo[0].len;
+  //test_start = modinfo[0].start;
+  //test_len = modinfo[0].len;
   bytecode.start = modinfo[1].start;
   bytecode.len = modinfo[1].len;
+
 
 #ifdef TRY_VGA
   init_graph_vga(320, 200, 1);
@@ -165,7 +184,9 @@ void mynos_main(multiboot_info_t *boot_info) {
   {
     uint32_t i, ntask = 1;
     for (i = 0; i < ntask; i++)
-      if(!spawnProcess(&(processTable[numProcess++]))) {
+      if(!spawnProcess(&(processTable[numProcess++]), 
+		       modinfo[0].start,
+		       modinfo[0].len)) {
 	KPANIC("FULL MEMORY");
       } else {
 	processTable[numProcess - 1].pid = numProcess - 1;
@@ -180,7 +201,7 @@ void mynos_main(multiboot_info_t *boot_info) {
   enable_irq(0);
 
 #ifdef RAMDISK
-  {
+  if (ramdisk_present) {
     uint32_t ramdisk = 0x40400000;
     __OS_ipc_send(1, (char*)&ramdisk, sizeof(uint32_t), 1);
   }

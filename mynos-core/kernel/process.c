@@ -31,11 +31,15 @@ tss_t processTable[MAXPROCESSES];
 uint32_t numProcess = 1;
 uint32_t currProcess = 0;  /* the first process is the idle process */
 
-extern uint32_t * test_start;
-extern uint32_t test_len;
 extern modinfo_t bytecode;
 
-tss_t * spawnProcess(tss_t * tss) {
+#ifdef RAMDISK
+extern void * ramdisk;
+extern uint32_t ramdisk_len;
+extern uint32_t ramdisk_present;
+#endif
+
+tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   uint32_t * newPD;
   uint32_t * lastPT;
   uint32_t * lastButOnePT;
@@ -222,18 +226,18 @@ tss_t * spawnProcess(tss_t * tss) {
   // end IPC
 
 #ifdef RAMDISK
-  /////////////////////////////////////////////////// RAMDISK
-  if ((currPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
-  kbzero(currPT, PAGE_SIZE);
-  newPD[_asm_last_kernel_page_dir_entry_used + 2] = 
-    LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_USER | PF_READWRITE | PF_PRESENT;
-
-  for (i = 0; i < ((bytecode.len - 1) / PAGE_SIZE + 1); i++)
-    currPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(bytecode.start +(1024*i)) 
-      | PF_USER | PF_PRESENT | PF_READWRITE;
-  lastPT[_asm_last_kernel_page_dir_entry_used + 2] = 
-    LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
-  /////////////////////////////////////////////////// RAMDISK
+  if (ramdisk_present) {
+    if ((currPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
+    kbzero(currPT, PAGE_SIZE);
+    newPD[_asm_last_kernel_page_dir_entry_used + 2] = 
+      LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_USER | PF_READWRITE | PF_PRESENT;
+    
+    for (i = 0; i < ((ramdisk_len - 1) / PAGE_SIZE + 1); i++)
+      currPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(ramdisk + (PAGE_SIZE * i))
+	| PF_USER | PF_PRESENT | PF_READWRITE;
+    lastPT[_asm_last_kernel_page_dir_entry_used + 2] = 
+      LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
+  }
 #endif
 
   printk("SET TSS entry....\n");

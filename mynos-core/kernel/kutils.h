@@ -26,6 +26,7 @@ void * kmemcpy(void * dst, const void * src, size_t count);
 void * kmemset(void * dst, int s, size_t count);
 void kbzero(void * s, size_t n);
 int katoi(const char* s);
+int kmemcmp(const void *dst, const void *src, size_t count);
 
 /* from gazos */
 void kgets(char *string);

@@ -25,7 +25,7 @@
 
 //#define TRY_VGA
 #define DEBUG
-//#define RAMDISK
+#define RAMDISK
 
 #define __MEMORY_BITMAP_PHY_ADDRESS 0x32000    /* 200KB */
 

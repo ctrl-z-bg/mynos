@@ -29,7 +29,7 @@ extern tss_t processTable[];
 extern uint32_t numProcess;
 extern uint32_t currProcess;
 
-tss_t * spawnProcess(tss_t * tss);
+tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len);
 void killProcess();
 
 #endif

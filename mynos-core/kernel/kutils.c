@@ -57,6 +57,19 @@ int katoi(const char* s) {
   return sign==-1?-v:v;
 }
 
+int kmemcmp(const void *dst, const void *src, size_t count) {
+  register int r;
+  register const char *d=dst;
+  register const char *s=src;
+  while (count--) {
+    if ((r=(*d - *s)))
+      return r;
+    ++d;
+    ++s;
+  }
+  return 0;
+}
+
 #include "video.h"
 #include "keyboard.h"
 void kgets(char *string)
