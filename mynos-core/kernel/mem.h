@@ -132,11 +132,11 @@
 #define __IS_PAGE_FREE(ENTRY) (!__IS_PAGE_PRESENT(ENTRY))
 
 
-/* shortcut to change the external PD mapping */
-#define __EXTERNAL_PD_TABLE (_asm_last_kernel_page_dir_entry_used - 1)
-#define __EXTERNAL_PD_ENTRY (LAST_PDPT_INDEX)
-#define __EXTERNAL_PD_PAGE_ENTRY ((uint32_t*)(__GET_PAGE_TABLE_ENTRY(__EXTERNAL_PD_TABLE, __EXTERNAL_PD_ENTRY)))
-#define __EXTERNAL_PD_PAGE ((uint32_t*)(__MEM_LINEAR_ADDRESS(__EXTERNAL_PD_TABLE, __EXTERNAL_PD_ENTRY, 0)))
+/* shortcut to change the external process VM mapping */
+#define __EXTERNAL_VMSPACE_TABLE (_asm_last_kernel_page_dir_entry_used - 1)
+#define __EXTERNAL_VMSPACE_ENTRY (LAST_PDPT_INDEX)
+#define __EXTERNAL_VMSPACE_PAGE_ENTRY ((uint32_t*)(__GET_PAGE_TABLE_ENTRY(__EXTERNAL_VMSPACE_TABLE, __EXTERNAL_VMSPACE_ENTRY)))
+#define __EXTERNAL_VMSPACE_PAGE ((uint32_t*)(__MEM_LINEAR_ADDRESS(__EXTERNAL_VMSPACE_TABLE, __EXTERNAL_VMSPACE_ENTRY, 0)))
 
 /* shortcut to change the cow page */
 #define __COW_TABLE (_asm_last_kernel_page_dir_entry_used - 1)

@@ -77,7 +77,7 @@ void init_memory() {
       - last but one entry: to map the new page for a copy-on-write
                           option
   */
-  tmp = __EXTERNAL_PD_PAGE_ENTRY;
+  tmp = __EXTERNAL_VMSPACE_PAGE_ENTRY;
   *tmp = 0x1; // tagged as allocated
   tmp = __COW_PAGE_ENTRY;
   *tmp = 0x1; // tagged as allocated
@@ -316,7 +316,8 @@ static void __cowManager(uint32_t * pte, uint32_t addr) {
     orig = (void*)(addr & 0xFFFFF000);
     kmemcpy(dest, orig, PAGE_SIZE);
 
-    /* unset the faulting page */
+    /* unset the faulting page, the new page was already set by
+       __SET_PAGE_TABLE_ENTRY_AND_ALLOC */
     pmem_unset((*pte)>>12);
 
     /* bind the linear page to the new physical one */
