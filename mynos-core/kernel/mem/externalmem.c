@@ -22,6 +22,7 @@
 #include "process.h"
 #include "mem.h"
 #include "video.h"
+#include "mynos.h"
 
 // set a new PT for another process given the physical address for new PT
 static int32_t __setExternalPT(pid_t pid, uint32_t table, 
@@ -47,10 +48,10 @@ static void __mapPageToAppPage(uint32_t phyPage) {
 static void __mapProcessPD(pid_t pid) {
   uint32_t phyPageAddress;
 
-  if (!processTable[pid].isAlive)
+  if (!processTable[pid] || !processTable[pid]->isAlive)
     KPANIC("Try to alloc a inexistent process PD!!!");
 
-  phyPageAddress = (uint32_t)(processTable[pid].tss->pgdir);
+  phyPageAddress = (uint32_t)((processTable[pid]->tss)->pgdir);
   __mapPageToAppPage(phyPageAddress >> 12);
 }
 
@@ -59,7 +60,7 @@ static int32_t __mapProcessPT(pid_t pid, uint32_t table) {
   uint32_t phyPageAddress;
   uint32_t * pd;
 
-  if (!processTable[pid].isAlive)
+  if (!processTable[pid] || !processTable[pid]->isAlive)
     KPANIC("Try to alloc a inexistent process PT!!!");
 
   /* map the process PD */
@@ -133,7 +134,7 @@ static int32_t __mapPageTo(pid_t pid,
   pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(laddrsender), 
 					  __ADDRESS_PT_INDEX(laddrsender));
   
-  if (!(mode & MODE_SHARED)) { // the page should not be shared
+  if (!(mode & MYNOS_IPC_SHARED)) { // the page should not be shared
     if (*pte & PF_SHARED) {
       ppage = (__mem_copyPageToCOWSpace(laddrsender) >> 12);
 
@@ -213,10 +214,10 @@ int32_t __OS_mapPagesTo(pid_t pid, uint32_t lpage,
 			uint32_t npages, uint32_t mode) {
   uint32_t newLPage;
   uint32_t i;
-  // TODO: check area to be sent
+  // the area should be checked before this function
 
   // alloc a new area in the receiver linear space
-  newLPage = __lmt_allocArea(&(processTable[pid].lmemmap),
+  newLPage = __lmt_allocArea(&(processTable[pid]->lmemmap),
 			     npages);
 
   for (i = 0; i < npages; i++)

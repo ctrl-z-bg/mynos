@@ -115,6 +115,20 @@ void pmem_unset(uint32_t page) {
     KPANIC("pmem_unset: PHYSICAL MEMORY INCONSISTENT!!!");
 
   pmemdes.page[page].countref--;
+
+#ifdef DEBUG
+  printk("\nphysical mem: unsetting ppage ");
+  print_uint(page);
+  printk("\n");
+  if (pmemdes.page[page].countref == 0)
+    printk("and I can free it\n");
+  else {
+    printk("but I can't free it: still ");
+    print_uint(pmemdes.page[page].countref);
+    printk(" references\n");
+  }
+#endif
+
   if (pmemdes.page[page].countref == 0)
     __RESET_MEMORY_BITMAP_PAGE_BIT(page);
 }

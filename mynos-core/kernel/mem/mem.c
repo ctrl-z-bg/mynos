@@ -35,6 +35,8 @@ uint32_t __total_phy_pages;
 static void __cowManager(uint32_t * pte, uint32_t addr);
 static void __allocateOnUse(uint32_t * pte, uint32_t addr);
 
+extern uint32_t currProcess;
+
 void init_memory() {
   uint32_t i;
   uint32_t * tmp;
@@ -96,6 +98,7 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
   uint32_t last_page;
   uint32_t not_used;
 
+#ifndef NEWMEM
   if ((flags & PF_USER) || (flags & PF_SUPERVISOR_IN_USER_SPACE)) {
     page_addr = ((_asm_last_kernel_page_dir_entry_used+1) * FOURMB)>>12;
     last_page = __LAST_LINEAR_PAGE;
@@ -105,18 +108,21 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
     last_page = ((_asm_last_kernel_page_dir_entry_used+1) * FOURMB - 
 		 PAGE_SIZE) >> 12;
   }
-
+#else
   // TO TEST THE LINEAR SPACE MAP!!!
-#ifdef NEWMEM
   if ((flags & PF_USER) || (flags & PF_SUPERVISOR_IN_USER_SPACE)) {
-    uint32_t start = __lmt_allocArea(&(processTable[currProcess].lmemmap), 
+    uint32_t start = __lmt_allocArea(&(processTable[currProcess]->lmemmap), 
 				     npages);
+    flags &= (~PF_SUPERVISOR_IN_USER_SPACE); // remove, if present
     //printk("====   "); print_uint_hex(start);
     return __OS_askPagesFrom((void *)(start<<12), npages, alloc_now,
 			     flags);
   }
 #endif
 
+  page_addr = 0;
+  last_page = ((_asm_last_kernel_page_dir_entry_used+1) * FOURMB - 
+	       PAGE_SIZE) >> 12;
   for (; page_addr <= last_page; page_addr++) {
     if (__pg_free_pages_from_page(page_addr, npages, &not_used) == npages)
       return __OS_askPagesFrom((void *)(page_addr<<12), npages, alloc_now,
@@ -188,7 +194,7 @@ void * __OS_releasePages(void *pageaddr, unsigned int npages,
 
 #ifdef NEWMEM
   if ((addr >> 12) >= USERMINPAGE) // if it's user space
-    if (__lmt_freeArea(&(processTable[currProcess].lmemmap),
+    if (__lmt_freeArea(&(processTable[currProcess]->lmemmap),
 		       (addr >> 12),
 		       npages) != 0)
       printk("Problems releasing pages\n");
@@ -212,7 +218,10 @@ void * __OS_releasePages(void *pageaddr, unsigned int npages,
       return NULL;
     
 #ifdef DEBUG
-    printk(__FUNCTION__": releasing page ");
+    printk(__FUNCTION__);
+    printk("(process ");
+    print_uint(currProcess);
+    printk("): releasing page ");
     print_uint_hex(addr);
 #endif    
     /* free the physical page only if the page is really allocated */
@@ -395,7 +404,7 @@ static void __allocateOnUse(uint32_t * pte, uint32_t addr) {
 #endif
 }
 
-extern uint32_t currProcess;
+//#define DEBUG
 void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   uint32_t * pte;
 

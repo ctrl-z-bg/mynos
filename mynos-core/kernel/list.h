@@ -18,17 +18,29 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#ifndef __EXTERNALMEM_H__
-#define __EXTERNALMEM_H__
-
+#ifndef _LIST_H 
+#define _LIST_H
 #include "global.h"
 
-#define MODE_SHARED 0x1
+typedef struct list_elem_s {
+  void * elem;
+  struct list_elem_s * prev;
+  struct list_elem_s * next;
+} list_elem_t;
 
-/* map npages of the current process to process pid 
-   it returns the first linear page allocated for pid
-*/
-int32_t __OS_mapPagesTo(pid_t pid, uint32_t lpage,
-			uint32_t npages, uint32_t mode);
+typedef struct _process_queue_t {
+  list_elem_t * head;
+  list_elem_t * tail;
+  uint32_t nelem;
+} list_t;
+
+void listInit(list_t * q);
+int listEmpty(list_t * q);
+void * listExtract(list_t *q);
+void * listExtractElem(list_t *q, void * p, int (*eq)(void*, void*));
+int listInsert(list_t *q, void * p);
+// it returns the old first element (now the last one)
+void * listShiftQueue(list_t * q);
+uint32_t listNElem(list_t * q);
 
 #endif
