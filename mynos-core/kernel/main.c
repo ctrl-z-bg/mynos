@@ -34,7 +34,6 @@
 #include "kutils.h"
 
 #include "delay.h"
-#include "fdc.h"
 #include "keyboard.h"
 
 void __print_free_phy_pages() {
@@ -77,7 +76,7 @@ void mynos_main() {
 
   init_memory();
 
-  printk("Initializing the 8259 Programmable Interrupt Controllers... ");
+  printk("Initializing the 8259 Programmable Interrupt Controller... ");
   init_pics();
   printk("done.\n");
 
@@ -99,26 +98,6 @@ void mynos_main() {
   set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT));
   printk("done.\n");
 
-  InitKeyboard();
-
-  init_floppy();
-
-  {
-    char * buffer = (char*)50000;
-    char asd[10];
-    uint32_t sector;
-
-    clearKeyboardBuffer();
-    printk("logical sector for test program [500]: ");
-    kgets(asd);
-    sector = (asd[0]?((ulong32_t)katoi(asd)):500);
-    if(read_block(sector, (unsigned char *) buffer, 1)==FALSE)
-      {
-	printk("Kernel Panic: FDC not responding\n");
-	printk("Press any key to try again\n");
-      }
-  }
-
   tsksw();
 
   /* Let's create some task! :) */
@@ -128,15 +107,12 @@ void mynos_main() {
       spawnProcess(&(processTable[numProcess++]));
   }
 
+  InitKeyboard();
+
   enable_irq(0);
 
   while(1) {
     asm("int $0x50\n");
-  }
-
-  {
-    while (1)
-      print_char(getch());
   }
 
   KPANIC("\nEND OF KERNEL DEMO");

@@ -59,7 +59,7 @@ tss_t * spawnProcess(tss_t * tss) {
   if ((currPF = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
 
   ///////////////
-  kmemcpy((void*)currPF, (void*)50000, 4096);
+  kmemcpy((void*)currPF, (void*)0x208000/*50000*/, 0xc/*4096*/);
   /////////////////
 
   currPT[0] = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_USER | PF_PRESENT |
@@ -94,15 +94,31 @@ tss_t * spawnProcess(tss_t * tss) {
   tss->io_bitmap_offset = 0;
   tss->eip = (uint32_t)0x40000000;
 
-  tss->tssd_gdt_selector = tssd_gdt_sel << 3;
-
+#define LDT
+#ifdef LDT
+  tss->cs = 0x8 * 1 + 7;
+  tss->ds = 0x8 * 2 + 7;
+  tss->es = 0x8 * 2 + 7;
+  tss->fs = 0x8 * 2 + 7;
+  tss->gs = 0x8 * 2 + 7;
+  tss->ss = 0x8 * 2 + 7;
+#else
   tss->cs = (((uint32_t)code_gdt_sel)<<3) + 3;
   tss->ds = (((uint32_t)data_gdt_sel)<<3) + 3;
   tss->es = (((uint32_t)data_gdt_sel)<<3) + 3;
   tss->fs = (((uint32_t)data_gdt_sel)<<3) + 3;
   tss->gs = (((uint32_t)data_gdt_sel)<<3) + 3;
   tss->ss = (((uint32_t)data_gdt_sel)<<3) + 3;
+#endif
+
+  tss->tssd_gdt_selector = tssd_gdt_sel << 3;
+
+#ifdef LDT
+  tss->ldt = 102 * 0x8;
+#else
   tss->ldt = 0;
+#endif
+
   tss->eflags = 0x200;
   tss->esp = tss->ebp =
     (uint32_t)((_asm_last_page_dir_entry_used)*0x400000 - 4100);
@@ -110,6 +126,20 @@ tss_t * spawnProcess(tss_t * tss) {
   tss->esp1 = tss->esp - 1000;
   tss->esp2 = tss->esp - 1000;
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
+
+#ifdef LDT
+{
+  union DT_entry * ldt;
+  /* CREATE LDT */
+  if ((ldt = (union DT_entry*)__OS_askPages(1)) == NULL) return NULL;
+
+  gdt_set_entry(102, (uint32_t)ldt,
+		4096, (D_LDT + D_BIG + D_DPL3));
+
+  SEG_createStandardDescriptor((uint32_t*)(ldt+1), 0x00000000, 0xFFFFF, (D_CODE + D_BIG + D_BIG_LIM + D_DPL3));
+  SEG_createStandardDescriptor((uint32_t*)(ldt+2), 0x00000000, 0xFFFFF, (D_DATA + D_WRITE + D_BIG + D_BIG_LIM+ D_DPL3));
+}
+#endif
 
   return NULL;
 }
