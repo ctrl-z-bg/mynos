@@ -23,8 +23,9 @@
 
 #include "global.h"
 
-void __OS_setExternalProcessPage(pid_t pid, uint32_t table, 
-				 uint32_t entry, uint32_t phyPage);
+/* returned value != 0 if the targed address is already allocated */
+int __OS_setExternalProcessPage(pid_t pid, uint32_t table, 
+				uint32_t entry, uint32_t phyPage);
 
 
 #endif

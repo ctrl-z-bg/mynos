@@ -25,10 +25,13 @@ static void __mapProcessPD(pid_t pid) {
   //processTable[pid].tss->pgdir;
 }
 
-void __OS_setExternalProcessPage(pid_t pid, uint32_t table, 
-				 uint32_t entry, uint32_t phyPage) {
+int __OS_setExternalProcessPage(pid_t pid, uint32_t table, 
+				uint32_t entry, uint32_t phyPage) {
   __mapProcessPD(pid);
 
+
+
+  return 0;
 }
 
 
