@@ -23,7 +23,7 @@
 #include "tss.h"
 #include "softtaskswitch.h"
 
-#include "mem.h"
+#include "mem/mem.h"
 
 static tss_t * prev, * next;
 static tss_t * tss;

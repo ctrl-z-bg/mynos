@@ -23,7 +23,7 @@
 #include "sem.h"
 #include "irq.h"
 #include "kutils.h"
-#include "dynalloc.h"
+#include "mem/dynalloc.h"
 #include "process.h"
 #include "services.h"
 
@@ -67,7 +67,7 @@ static void insertInProcList(uint32_t idx, pid_t pid) {
 static int insertInClientProcList(uint32_t entry) {
   servicesTable_t * table;
   int idx = 0;
-  table = (processTable[currProcess].processData)->servicesTable;
+  table = (processTable[currProcess]->processData)->servicesTable;
   while (table[idx])
     idx++;
   table[idx] = entry;

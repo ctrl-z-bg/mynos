@@ -19,10 +19,12 @@
 */
 
 #include "stats.h"
+#include "mem/mem.h"
 
 void __OS_fillStats(mynos_stats_t * st) {
   st->numProcesses = numProcesses;
   st->numThreads = numThreads;
   st->pid = currProcess;
-  st->ppid = processTable[currProcess].ppid;
+  st->ppid = processTable[currProcess]->ppid;
+  st->freeppages = __number_of_free_physical_pages;
 }

@@ -21,6 +21,13 @@
 #ifndef __SCHED_H__
 #define __SCHED_H__
 
+#include "procqueue.h"
+
+void initScheduler();
+void readyQueueInsert(tss_t * t);
+tss_t * readyQueueNext();
+tss_t * readyQueueExtractThread(tss_t * t);
+uint32_t readyQueueNElem();
 void sched();
 
 #endif

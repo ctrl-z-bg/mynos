@@ -33,8 +33,8 @@
 #define PDPT_ENTRIES (1024)
 #define LAST_PDPT_INDEX (1023)
 
-#define USERMINPAGE (0x40001)
-#define USERMAXPAGE (0x100000)
+#define USERMINPAGE (0x40000)
+#define USERMAXPAGE (0xFFFFF)
 
 #define KPANIC(MSG) {printk(MSG); while(1){}}
 

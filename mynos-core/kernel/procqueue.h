@@ -18,28 +18,23 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#ifndef _SCHED_H 
-#define _SCHED_H
-#include "process.h"
-#include "global.h"
-#include "procqueue.h"
+#ifndef _PROCQUEUE_H 
+#define _PROCQUEUE_H
 #include "tss.h"
+#include "global.h"
+#include "process.h"
+#include "tss.h"
+#include "list.h"
 
-typedef struct _process_queue_t {
-  tss_t * queue[MAXPROCESSES+1];
-  uint32_t len;
-  uint32_t pres;
-  uint32_t head;
-  uint32_t tail;
-} process_queue_t;
+typedef list_t process_queue_t;
 
-#define pqEmpty(q) ( ((q)->tail) == ((q)->head) )
-#define pqFull(q)  ( ((q)->pres) == ((q)->len - 1) )
-#define pqInit(q)  { (q)->tail = (q)->head; \
-                     (q)->pres = 0; \
-                     (q)->len = MAXPROCESSES + 1; }
-
+void pqInit(process_queue_t * q);
+int pqEmpty(process_queue_t * q);
 tss_t * pqExtract(process_queue_t *q);
+tss_t * pqExtractThread(process_queue_t *q, tss_t * p);
 int pqInsert(process_queue_t *q, tss_t * p);
+// it returns the old first element (now the last one)
+tss_t * pqShiftQueue(process_queue_t * q);
+uint32_t pqNElem(process_queue_t * q);
 
 #endif

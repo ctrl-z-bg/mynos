@@ -20,7 +20,7 @@
 
 #include "global.h"
 #include "sem.h"
-#include "dynalloc.h"
+#include "mem/dynalloc.h"
 #include "kutils.h"
 #include "tss.h"
 #include "process.h"
@@ -188,10 +188,8 @@ int __OS_sem_P(int semid) {
     
     if ( !semaphores.list[i].value ) {
 	/* Add in semaphore queue */
-	/* currProcess is not in ReadyQueue, I do not need to remove it
-	   from there */
       // TODO THREADS (once it was processTable[currProcess])
-	currThread->isWaitingOnP = 1;
+      readyQueueExtractThread(currThread);
 
 	pqInsert(semaphores.list[i].queue, currThread);
 
@@ -275,9 +273,7 @@ int __OS_sem_V(int semid) {
 #endif
 
 	/* Wake me up before you go go... */
-	/* pqInsert(ReadyQueue, p); */
-	// TODO THREAD
-	p->isWaitingOnP = -1;
+	if (p) readyQueueInsert(p);
     } else __unlock(sm);
 
     return(0);

@@ -54,7 +54,7 @@ void irq4_handler() {
 /* the init function */
 void __OS_initExternalIRQs() {
   set_vector(irq1_TRAP, M_VEC+1, D_PRESENT + D_INT); /* IRQ1 Handler */
-  set_vector(irq3_TRAP, M_VEC+3, D_PRESENT + D_INT); /* IRQ4 Handler */
+  set_vector(irq3_TRAP, M_VEC+3, D_PRESENT + D_INT); /* IRQ3 Handler */
   set_vector(irq4_TRAP, M_VEC+4, D_PRESENT + D_INT); /* IRQ4 Handler */
 }
 

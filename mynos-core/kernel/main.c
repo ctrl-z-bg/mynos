@@ -23,15 +23,16 @@
 #include "main.h"
 #include "gdt.h"
 #include "io.h"
-#include "mem.h"
+#include "mem/mem.h"
 #include "pic.h"
 #include "pit.h"
 #include "idt.h"
 
 #include "tss.h"
 #include "process.h"
+#include "sched.h"
 
-#include "dynalloc.h"
+#include "mem/dynalloc.h"
 
 #include "sem.h"
 
@@ -39,13 +40,15 @@
 
 #include "services.h"
 
-#include "delay.h"
+#include "3parts/delay.h"
 
 #include "multiboot.h"
 
 #ifdef TRY_VGA
 #include "vga.h"
 #endif
+
+#include "ipc/ipc.h"
 
 void __print_free_phy_pages() {
   printk("(adesso ci sono ");
@@ -55,7 +58,7 @@ void __print_free_phy_pages() {
 
 extern void softReset();
 
-extern process_descriptor_t processTable[20];
+extern process_descriptor_t * processTable[];
 extern uint32_t numProcess;
 ushort16_t * idle_tssd_selector;
 
@@ -65,37 +68,41 @@ void tsksw() {
   ushort16_t gdt_index, tssd_gdt_selector;
 
   /* allocate a new tss */
-  processTable[0].tss = (tss_t*)kmalloc(sizeof(tss_t));
+  processTable[0] = 
+    (process_descriptor_t*)kmalloc(sizeof(process_descriptor_t));
+  processTable[0]->tss = (tss_t*)kmalloc(sizeof(tss_t));
 
   /* set a tss for the outcoming process */
-  processTable[0].tss->pgdir = (uint32_t**)0x100000;
-  processTable[0].tss->io_bitmap_offset = sizeof(tss_t)<<16;
-  processTable[0].tss->ldt = 0;
-  processTable[0].isAlive = 1;
-  processTable[0].tss->justForked = 0;
+  processTable[0]->tss->pgdir = (uint32_t**)0x100000;
+  processTable[0]->tss->io_bitmap_offset = sizeof(tss_t)<<16;
+  processTable[0]->tss->ldt = 0;
+  processTable[0]->isAlive = 1;
+  processTable[0]->tss->justForked = 0;
 
-  processTable[0].numThreads = 1;
-  processTable[0].tss->prev = processTable[0].tss->prev = NULL;
-  processTable[0].tss->threadID = 0;
+  processTable[0]->numThreads = 1;
+  processTable[0]->lastThread = 0;
+  (processTable[0]->tss)->prev = (processTable[0]->tss)->prev = NULL;
+  processTable[0]->pid = 0;
+  processTable[0]->tss->pid = 0;
+  processTable[0]->tss->threadID = 0;
 
-  processTable[0].tss->timeToWake = 0;
+  processTable[0]->tss->timeToWake = 0;
 
-  processTable[0].tss->cs = GDT_OS_CODE_SEL;
-  processTable[0].tss->ss0 = GDT_OS_DATA_SEL;
+  processTable[0]->tss->cs = GDT_OS_CODE_SEL;
+  processTable[0]->tss->ss0 = GDT_OS_DATA_SEL;
 
-  currThread = processTable[0].tss;
+  currThread = processTable[0]->tss;
 
-  // IPC
-  processTable[0].isWaitingSender = -1;
-  processTable[0].isWaitingReceiver = -1;
+  // insert the thread into readyQueue
+  readyQueueInsert(currThread);
 
   //SEM
-  processTable[0].tss->isWaitingOnP = -1;
+  processTable[0]->tss->privSem = __OS_sem_allocateSemaphore(0);
 
   gdt_index = gdt_get_free_index();
   tssd_gdt_selector = (uint32_t)gdt_index << 3;
 
-  kmemcpy(&THEtss, processTable[0].tss, sizeof(tss_t));
+  kmemcpy(&THEtss, processTable[0]->tss, sizeof(tss_t));
 
   /* set the tssd in the gdt, for the incoming and the outcoming processes */
   gdt_set_entry(gdt_index,
@@ -155,6 +162,9 @@ void mynos_main(multiboot_info_t *boot_info) {
   clear_screen();
 
   init_memory();
+
+  initProcessTable();
+  initScheduler();
 
   printk("Initializing the 8259 Programmable Interrupt Controller... ");
   init_pics();
@@ -221,7 +231,7 @@ void mynos_main(multiboot_info_t *boot_info) {
     int i;
     
     for (i = 0; i < MAXPROCESSES; i++)
-      processTable[i].isAlive = 0;
+      processTable[i]->isAlive = 0;
   }
 
   /* to try the releasePages */
@@ -265,17 +275,22 @@ void mynos_main(multiboot_info_t *boot_info) {
       modinfo[i].len = module[i].mod_end - module[i].mod_start;
       if ((*((char*)modinfo[i].start) == 0x7F) &&
 	  !kmemcmp((char*)modinfo[i].start + 1, "ELF", 3)) {
-	if(!spawnProcess(&(processTable[numProcess++]), 
-			 modinfo[i].start,
-			 modinfo[i].len)) {
-	  KPANIC("FULL MEMORY");
-	} else {
-	  processTable[numProcess - 1].pid = numProcess - 1;
-	  processTable[numProcess - 1].ppid = 0;
-	}
+	process_descriptor_t * newdes;
+	int newpid = numProcess;
+	numProcess++;
+	newdes = processTable[newpid] = 
+	  (process_descriptor_t*)kmalloc(sizeof(process_descriptor_t));
+	processTable[newpid]->pid = newpid;
+	processTable[newpid]->ppid = 0;
+	spawnProcess(newdes, 
+		     modinfo[i].start,
+		     modinfo[i].len);
+	processTable[newpid]->tss->pid = newpid;
       }
     }
   }
+
+  initIPC();
 
   printk("\n-----------------------\n");
 

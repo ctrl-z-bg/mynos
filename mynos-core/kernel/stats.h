@@ -22,13 +22,7 @@
 #define __STATS_H__
 
 #include "process.h"
-
-typedef struct {
-  uint32_t numProcesses;
-  uint32_t numThreads;
-  uint32_t pid;
-  uint32_t ppid;
-} mynos_stats_t;
+#include "mynos.h"
 
 void __OS_fillStats(mynos_stats_t * st);
 

@@ -20,9 +20,12 @@
 RELPATH    = kernel
 include ../CommonHeader
 
-SUBDIRS	= 3parts
+SUBDIRS	= 3parts ipc mem
 
-CFLAGS += $(foreach DIR, $(SUBDIRS), -I$(DIR))
+#CFLAGS += $(foreach DIR, $(SUBDIRS), -I$(DIR))
+
+# MYNOS LIB INCLUDE
+CFLAGS += -I../../mynos-lib/include
 
 .PHONY: kernel clean all $(SUBDIRS)
 

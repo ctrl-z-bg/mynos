@@ -20,10 +20,10 @@
 
 #include "global.h"
 #include "gdt.h"
-#include "mem.h"
+#include "mem/mem.h"
 #include "video.h"
 #include "kutils.h"
-#include "dynalloc.h"
+#include "mem/dynalloc.h"
 
 #define INITIAL_SEGMENTS 5
 

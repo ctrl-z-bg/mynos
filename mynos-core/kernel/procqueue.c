@@ -18,28 +18,42 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 #include "procqueue.h"
+#include "mem/dynalloc.h"
+
+void pqInit(process_queue_t * q) {
+  listInit(q);
+}
+
+int pqEmpty(process_queue_t * q) {
+  return listEmpty(q);
+}
+
+uint32_t pqNElem(process_queue_t * q) {
+  return pqNElem(q);
+}
 
 tss_t * pqExtract(process_queue_t *q) {
-    tss_t * r;
-    
-    if ( pqEmpty(q) ) return(NULL);
-    
-    r = q->queue[q->head];
-    
-    q->head = (q->head+1)%q->len;
-    q->pres--;
-    return(r);
+  tss_t * ret = (tss_t*)listExtract(q);
+  if (ret) ret->queue = NULL;
+  return(ret);
 }
 
 int pqInsert(process_queue_t *q, tss_t * p) {
-  //pid_t r;
-    
-    if ( pqFull(q) ) return(-1);
-    
-    q->queue[q->tail] = p;
-    
-    q->tail = (q->tail+1)%q->len;
-    q->pres++;
-    return(0);
+  int ret = listInsert(q, p);
+  if (ret == 0) 
+    p->queue = q;
+
+  return(ret);
+}
+
+tss_t * pqShiftQueue(process_queue_t * q) {
+  return (tss_t*)listShiftQueue(q);
+}
+
+tss_t * pqExtractThread(process_queue_t *q, tss_t * p) {
+  tss_t * ret = (tss_t*)listExtractElem(q, p, NULL);
+  if (ret)
+    ret->queue = NULL;
+  return ret;
 }
 

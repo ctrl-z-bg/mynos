@@ -20,9 +20,9 @@
 
 #include "threads.h"
 #include "process.h"
-#include "dynalloc.h"
+#include "mem/dynalloc.h"
 #include "kutils.h"
-#include "mem.h"
+#include "mem/mem.h"
 #include "sem.h"
 #include "gdt.h"
 #include "sched.h"
@@ -38,6 +38,8 @@ int32_t __OS_threadCreate(uint32_t entry_point,
 
   /* create a new thread descriptor */
   tss = (tss_t*)kmalloc(sizeof(tss_t));
+
+  tss->pid = currProcess;
 
   /* copy the current thread's descriptor to the new one */
   kmemcpy(tss, currThread, sizeof(tss_t));
@@ -60,8 +62,14 @@ int32_t __OS_threadCreate(uint32_t entry_point,
   tss->prev = currThread;
   currThread->next = tss;
   tss->next = next;
+  if (next) next->prev = tss;
 
-  tss->threadID = processTable[currProcess].numThreads++;
+  processTable[currProcess]->numThreads++;
+  processTable[currProcess]->lastThread++;
+  tss->threadID = processTable[currProcess]->lastThread;
+
+  readyQueueInsert(tss);
+
   numThreads++;
 
   /* allocate the new thread's private semaphore */
@@ -75,6 +83,8 @@ void __OS_threadExit(void * retval) {
   char hasPrev, hasNext;
   tss_t * prev, * next;
 
+  readyQueueExtractThread(currThread);
+
   printk("Thread ");
   print_ulong(currThread->threadID);
   printk(" (process  ");
@@ -85,7 +95,7 @@ void __OS_threadExit(void * retval) {
   prev = currThread->prev;
   next = currThread->next;
 
-  processTable[currProcess].numThreads--;
+  processTable[currProcess]->numThreads--;
   numThreads--;
 
   hasPrev = (prev != NULL);
@@ -101,7 +111,7 @@ void __OS_threadExit(void * retval) {
     sched();
   } else if (!hasPrev && hasNext) {   /* this is the first thread in queue */
     next->prev = NULL;
-    processTable[currProcess].tss = next;
+    processTable[currProcess]->tss = next;
     sched();
   } else                              /* this is the last thread, we exit! */
     _linux_syscall_exit((int)retval);

@@ -22,7 +22,6 @@
 #define __TSS_H__
 
 #include "global.h"
-#include "ipc.h"
 
 typedef struct {
   /* i80386 TSS */
@@ -56,18 +55,23 @@ typedef struct {
   
   /* End of i386 TSS.  */
 
+  pid_t pid;
   uint32_t threadID;
 
   uint32_t justForked;
 
   // SEM
   int privSem;
-  int isWaitingOnP;
   // end SEM
 
   void * next, * prev;
 
+  int32_t lastChannel;  // last channel assigned by connectToPort
+
   uint32_t timeToWake;
+
+  // in which queue I am
+  void * queue;
 
 } tss_t;
 

@@ -38,7 +38,7 @@ __asm__ (\
 	 "   cmpl $4, %eax\n"\
 	 "   je .mynos_recv\n"\
 	 "   cmpl $5, %eax\n"\
-	 "   je .mynos_recvAll\n"\
+	 "   je .mynos_freeChannel\n"\
 	 "   cmpl $6, %eax\n"\
 	 "   je .mynos_P\n"\
 	 "   cmpl $7, %eax\n"\
@@ -55,6 +55,18 @@ __asm__ (\
 	 "   je .mynos_serviceRegister\n"\
 	 "   cmpl $12, %eax\n"\
 	 "   je .mynos_clientRegister\n"\
+	 "   cmpl $20, %eax\n"\
+	 "   je .mynos_allocatePort\n"\
+	 "   cmpl $21, %eax\n"\
+	 "   je .mynos_allocatePortP\n"\
+	 "   cmpl $22, %eax\n"\
+	 "   je .mynos_connectToPort\n"\
+	 "   cmpl $23, %eax\n"\
+	 "   je .mynos_listenPort\n"\
+	 "   cmpl $24, %eax\n"\
+	 "   je .mynos_freePort\n"\
+	 "   cmpl $25, %eax\n"\
+	 "   je .mynos_changePortOwner\n"\
 	 "   cmpl $100, %eax\n"\
 	 "   je .mynos_enableIrq\n"\
 	 "   cmpl $101, %eax\n"\
@@ -87,22 +99,16 @@ __asm__ (\
 	 "   pushl %edx\n"
 	 "   pushl %ecx\n"
 	 "   pushl %ebx\n"
-	 "   call __OS_ipc_recv     \n"\
+	 "   call __OS_ipc_recv\n"\
 	 "   popl %ebx\n"
 	 "   popl %ecx\n"
-	 "   popl %edx\n"\
+	 "   popl %edx\n"
 	 "   popl %esi\n"
 	 "   jmp .exit_mynos_syscall\n"\
-	 ".mynos_recvAll:\n"\
-	 "   pushl %esi\n"
-	 "   pushl %edx\n"
-	 "   pushl %ecx\n"
+	 ".mynos_freeChannel:\n"\
 	 "   pushl %ebx\n"
-	 "   call __OS_ipc_recvAll     \n"\
+	 "   call __OS_ipc_freeChannel\n"\
 	 "   popl %ebx\n"
-	 "   popl %ecx\n"
-	 "   popl %edx\n"\
-	 "   popl %esi\n"
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_P:\n"\
 	 "   pushl %ebx\n"
@@ -149,6 +155,40 @@ __asm__ (\
 	 "   pushl %ebx\n"
 	 "   call __OS_service_registerClient\n"\
 	 "   popl %ebx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_allocatePort:\n"\
+	 "   pushl %ebx\n"
+	 "   call __OS_port_allocPort\n"\
+	 "   popl %ebx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_allocatePortP:\n"\
+	 "   pushl %ecx\n"
+	 "   pushl %ebx\n"
+	 "   call __OS_port_allocPortP\n"\
+	 "   popl %ebx\n"
+	 "   popl %ecx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_connectToPort:\n"\
+	 "   pushl %ebx\n"
+	 "   call __OS_port_connectToPort\n"\
+	 "   popl %ebx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_listenPort:\n"\
+	 "   pushl %ebx\n"
+	 "   call __OS_port_listenPort\n"\
+	 "   popl %ebx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_freePort:\n"\
+	 "   pushl %ebx\n"
+	 "   call __OS_port_freePort\n"\
+	 "   popl %ebx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_changePortOwner:\n"\
+	 "   pushl %ecx\n"
+	 "   pushl %ebx\n"
+	 "   call __OS_port_changeOwner\n"\
+	 "   popl %ebx\n"
+	 "   popl %ecx\n"
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_enableIrq:\n"\
 	 "   pushw %bx\n"

@@ -20,13 +20,13 @@
 
 #include "global.h"
 #include "video.h"
-#include "mem.h"
+#include "mem/mem.h"
 #include "gdt.h"
 #include "tss.h"
 #include "process.h"
 #include "kutils.h"
 #include "linux_syscalls.h"
-#include "dynalloc.h"
+#include "mem/dynalloc.h"
 #include "sched.h"
 #include "sem.h"
 
@@ -222,7 +222,7 @@ int _linux_syscall_getpid() {
 }
 
 int _linux_syscall_getppid() {
-  return processTable[currProcess].ppid;
+  return processTable[currProcess]->ppid;
 }
 
 int _linux_syscall_munmap(void *start, size_t length) {
@@ -242,6 +242,10 @@ int _linux_syscall_munmap(void *start, size_t length) {
 
 void * _linux_syscall_mmap(struct mmap_args * args) {
   uint32_t npages;
+  void * ret;
+
+  npages = (args->length - 1) / PAGE_SIZE + 1;
+  ret =__OS_askPages(npages, 0, PF_READWRITE | PF_USER);
 
 #ifdef DEBUG
   printk("mmap: ");
@@ -256,11 +260,12 @@ void * _linux_syscall_mmap(struct mmap_args * args) {
   print_long((long32_t)args->fd);
   print_char(' ');
   print_long((long32_t)args->offset);
+  printk(" = ");
+  print_uint_hex(ret);
   print_char('\n');
 #endif //DEBUG
 
-  npages = (args->length - 1) / PAGE_SIZE + 1;
-  return __OS_askPages(npages, 0, PF_READWRITE | PF_USER);
+  return ret;
 }
 
 /* it returns:
@@ -316,7 +321,7 @@ static uint32_t copy_page_table(uint32_t ptp, uint32_t * ptc) {
    corrisponding to current thread, for further changes... see the code! */
 static tss_t * copyThreads(process_descriptor_t * ddest,
 			   process_descriptor_t * dorig,
-			   uint32_t * pdc);
+			   uint32_t * pdc, pid_t pid);
 
 int _linux_syscall_fork() {
   uint32_t i;
@@ -366,34 +371,48 @@ int _linux_syscall_fork() {
 
   new_pid = numProcess++;
   numProcesses++;
-  numThreads += processTable[currProcess].numThreads;
+  numThreads += processTable[currProcess]->numThreads;
+
+  processTable[new_pid] = 
+    (process_descriptor_t*)kmalloc(sizeof(process_descriptor_t));
 
   /* copy the whole structure */
-  kmemcpy((void*)&(processTable[new_pid]), 
-	  (void*)&(processTable[currProcess]),
+  kmemcpy(processTable[new_pid], 
+	  processTable[currProcess],
 	  sizeof(process_descriptor_t));
 
   /* copy the linear space map */
-  processTable[new_pid].lmemmap = 
-    __lmt_copyList(processTable[currProcess].lmemmap);
+  processTable[new_pid]->lmemmap = 
+    __lmt_copyList(processTable[currProcess]->lmemmap);
+
+  /* initialize the channel and port lists */
+  listInit(processTable[new_pid]->channelList);
+  listInit(processTable[new_pid]->portList);
 
   /* copy the tsses */
   mirror = 
-    copyThreads(&processTable[new_pid], &processTable[currProcess], pdc);
+    copyThreads(processTable[new_pid], processTable[currProcess], 
+		pdc, new_pid);
 
-  processTable[new_pid].pid = new_pid;
-  processTable[new_pid].ppid = currProcess;
-  processTable[new_pid].isAlive = 1;
+  // TODO: other threads!!!
+  readyQueueInsert(mirror);
+#if 0
+  // insert the threads into the readyQueue
+  {
+    tss_t * thread = processTable[new_pid]->tss;
+    while (thread) {
+      readyQueueInsert(thread);
+      thread = thread->next;
+    }
+  }
+#endif
 
-  processTable[new_pid].ptsMirror = (void*)LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
+  processTable[new_pid]->pid = new_pid;
+  processTable[new_pid]->ppid = currProcess;
+  processTable[new_pid]->isAlive = 1;
+
+  processTable[new_pid]->ptsMirror = (void*)LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
   //DEALLOCATE(lastPT);
-
-  // IPC
-  processTable[new_pid].isWaitingSender = -1;
-  processTable[new_pid].isWaitingReceiver = -1;
-  // SEM
-  
-  __OS_ipc_initChannelList(&(processTable[new_pid].channels));
   
   /* copy the registers, except eip and esp */
   asm volatile("movl %%eax, %0":"=m"(mirror->eax));
@@ -436,8 +455,8 @@ int _linux_syscall_fork() {
 
 static tss_t * copyThreads(process_descriptor_t * ddest,
 			   process_descriptor_t * dorig,
-			   uint32_t * pdc) {
-  tss_t * orig = processTable[currProcess].tss;
+			   uint32_t * pdc, pid_t pid) {
+  tss_t * orig = processTable[currProcess]->tss;
   tss_t * dest;
   tss_t * prevDest = NULL;
   tss_t * mirror;
@@ -450,10 +469,10 @@ static tss_t * copyThreads(process_descriptor_t * ddest,
 	    (void*)orig,
 	    sizeof(tss_t));
     dest->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
-    dest->isWaitingOnP = -1;
     dest->privSem = __OS_sem_allocateSemaphore(0);
     dest->prev = prevDest;
     prevDest = dest;
+    dest->pid = pid;
 
     if (orig == currThread) mirror = dest;
 

@@ -26,8 +26,6 @@
 #include "io.h"
 #include "irq.h"
 
-#include "ipc.h"
-
 #include "process.h"
 
 extern void int_null();

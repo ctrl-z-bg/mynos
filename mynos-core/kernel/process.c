@@ -19,7 +19,7 @@
 */
 
 #include "global.h"
-#include "mem.h"
+#include "mem/mem.h"
 #include "gdt.h"
 #include "tss.h"
 #include "sem.h"
@@ -27,7 +27,10 @@
 #include "elf.h"
 #include "process.h"
 #include "video.h"
-#include "dynalloc.h"
+#include "mem/dynalloc.h"
+#include "sched.h"
+#include "ipc/port.h"
+#include "ipc/channel.h"
 
 extern void startThread();
 typedef struct {
@@ -45,7 +48,7 @@ typedef struct {
   uint32_t ss;
 } init_stack_t;
 
-process_descriptor_t processTable[MAXPROCESSES];
+process_descriptor_t * processTable[MAXPROCESSES];
 uint32_t numProcess = 1;
 uint32_t currProcess = 0;  /* the first process is the idle process */
 
@@ -61,6 +64,12 @@ extern void * ramdisk;
 extern uint32_t ramdisk_len;
 extern uint32_t ramdisk_present;
 #endif
+
+void initProcessTable() {
+  int i;
+  for (i = 0; i < MAXPROCESSES; i++)
+    processTable[i] = NULL;
+}
 
 /*
  * Starting from the top of the linear address space, after the PD and
@@ -106,6 +115,10 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   // the linear space process map
   desc->lmemmap = NULL;
 
+  // channel and port lists
+  listInit(desc->channelList);
+  listInit(desc->portList);
+
   pinfoAddr  = upperLimit - PAGE_SIZE * PROCESS_INFO_NPAGES;
   kstackBottomAddr = pinfoAddr  - PAGE_SIZE * KERNEL_STACK_NPAGES;
   ustackBottomAddr = kstackBottomAddr - PAGE_SIZE * USER_STACK_NPAGES;
@@ -147,6 +160,15 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   // set the beginning of the space (process code, etc.)
   __lmt_forceAllocation(&(desc->lmemmap), USERMINPAGE, npages_for_process);
   // TODO: set the end of linear space as allocated...
+#if 0
+  __lmt_forceAllocation(&(desc->lmemmap), 
+			USERMAXPAGE - (PROCESS_INFO_NPAGES +
+				       KERNEL_STACK_NPAGES +
+				       USER_STACK_NPAGES) + 1,
+			PROCESS_INFO_NPAGES +
+			KERNEL_STACK_NPAGES +
+			USER_STACK_NPAGES);
+#endif
 
   if ((newPD = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(newPD, PAGE_SIZE);
@@ -275,6 +297,9 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
   tss = desc->tss;
 
+  // insert the thread into readyQueue
+  readyQueueInsert(tss);
+
   /* set the new process tss */
   tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(newPD);
   tss->io_bitmap_offset = sizeof(tss_t)<<16;
@@ -301,16 +326,9 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   /* prepare the initial stack for the new process */
   initStack(((uint32_t)stackData) + PAGE_SIZE, tss);
 
-  // IPC
-  desc->isWaitingSender = -1;
-  desc->isWaitingReceiver = -1;
-  __OS_ipc_initChannelList(&(desc->channels));
-  // end IPC
-  // SEM
-  desc->tss->isWaitingOnP = -1;
-
   // THREADS
   desc->numThreads = 1;
+  desc->lastThread = 0;
   desc->tss->next = desc->tss->prev = NULL;
   desc->tss->threadID = 0;
   // end THREADS
@@ -340,11 +358,41 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
 
 void killProcess() {
+  tss_t * tss;
+  process_queue_t * q;
+  int port, channel;
+  int i, n;
   /* TODO free sem for every threads */
-  //__OS_sem_freeSemaphore(processTable[currProcess].tss->privSem);
-  processTable[currProcess].isAlive = 0;
-  numThreads -= processTable[currProcess].numThreads;
+  //__OS_sem_freeSemaphore((processTable[currProcess]->tss)->privSem);
+  processTable[currProcess]->isAlive = 0;
+  numThreads -= processTable[currProcess]->numThreads;
   numProcesses--;
+  
+  tss = processTable[currProcess]->tss;
+  while (tss) {
+    q = tss->queue;
+    if (q) pqExtractThread(q, tss);
+    tss = tss->next;
+  }
+
+  // free process ports
+  n = listNElem(processTable[currProcess]->portList);
+  for (i = 0; i < n; i++) {
+    port = (int)listExtract(processTable[currProcess]->portList);
+    __OS_port_freePort(port);
+  }
+
+  // free process channels
+  n = listNElem(processTable[currProcess]->channelList);
+  for (i = 0; i < n; i++) {
+    channel = (int)listExtract(processTable[currProcess]->channelList);
+    __OS_ipc_freeChannel(channel);
+  }
+
+
+  // TODO: free all process resources
+  //kfree(processTable[currProcess]);
+  //processTable[currProcess] = NULL;
 }
 
 void initStack(uint32_t s, tss_t * tss) {
