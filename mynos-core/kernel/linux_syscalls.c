@@ -365,7 +365,9 @@ int _linux_syscall_fork() {
   //DEALLOCATE(pdc);
 
   new_pid = numProcess++;
-    
+  numProcesses++;
+  numThreads += processTable[currProcess].numThreads;
+
   /* copy the whole structure */
   kmemcpy((void*)&(processTable[new_pid]), 
 	  (void*)&(processTable[currProcess]),
@@ -379,7 +381,7 @@ int _linux_syscall_fork() {
   processTable[new_pid].ppid = currProcess;
   processTable[new_pid].isAlive = 1;
 
-  processTable[new_pid].ptsMirror = LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
+  processTable[new_pid].ptsMirror = (void*)LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
   //DEALLOCATE(lastPT);
 
   // IPC

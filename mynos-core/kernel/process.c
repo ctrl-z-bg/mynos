@@ -48,6 +48,10 @@ typedef struct {
 process_descriptor_t processTable[MAXPROCESSES];
 uint32_t numProcess = 1;
 uint32_t currProcess = 0;  /* the first process is the idle process */
+
+uint32_t numProcesses = 0;
+uint32_t numThreads = 0;
+
 tss_t * currThread;
 
 extern modinfo_t bytecode;
@@ -81,6 +85,9 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   uint32_t i;
   tss_t * tss;
   uint32_t npages_for_process;
+
+  numProcesses++;
+  numThreads++;
 
   Elf32_Phdr elf_phdata[ELF_MAXSEG];
   Elf32_Ehdr elf_ex;
@@ -328,6 +335,8 @@ void killProcess() {
   /* TODO free sem for every threads */
   //__OS_sem_freeSemaphore(processTable[currProcess].tss->privSem);
   processTable[currProcess].isAlive = 0;
+  numThreads -= processTable[currProcess].numThreads;
+  numProcesses--;
 }
 
 void initStack(uint32_t s, tss_t * tss) {

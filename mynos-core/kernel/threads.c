@@ -62,6 +62,7 @@ int32_t __OS_threadCreate(uint32_t entry_point,
   tss->next = next;
 
   tss->threadID = processTable[currProcess].numThreads++;
+  numThreads++;
 
   /* allocate the new thread's private semaphore */
   tss->privSem = __OS_sem_allocateSemaphore(0);
@@ -83,6 +84,9 @@ void __OS_threadExit(void * retval) {
   // TODO free this tss
   prev = currThread->prev;
   next = currThread->next;
+
+  processTable[currProcess].numThreads--;
+  numThreads--;
 
   hasPrev = (prev != NULL);
   hasNext = (next != NULL);

@@ -65,6 +65,12 @@ extern uint32_t numProcess;
 extern uint32_t currProcess;
 extern tss_t * currThread;
 
+/* the number of running processes */
+extern uint32_t numProcesses;
+
+/* the number of running threads */
+extern uint32_t numThreads;
+
 void initStack(uint32_t s, tss_t * tss);
 
 process_descriptor_t * spawnProcess(process_descriptor_t * desc, 

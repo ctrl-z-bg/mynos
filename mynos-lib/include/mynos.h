@@ -24,6 +24,13 @@
 #define MYNOS_IPC_FLAGS_NONBLOCK 0x1
 #define MYNOS_IPC_FLAGS_BYPID    0x2
 
+typedef struct {
+  unsigned int numProcesses;
+  unsigned int numThreads;
+  unsigned int pid;
+  unsigned int ppid;
+} mynos_stats_t;
+
 int mynos_send(int dest, void * buf, unsigned int size,
 	       unsigned int flags);
 int mynos_recv(int sender, void * buf, unsigned int maxsize,
@@ -57,5 +64,8 @@ int mynos_threadSelf();
 
 /* TIMER */
 int mynos_setTimer(unsigned long usec);
+
+/* STATS */
+void mynos_stats(mynos_stats_t * st);
 
 #endif

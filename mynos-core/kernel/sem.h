@@ -25,11 +25,11 @@ int __OS_sem_P(int semid);
 int __OS_sem_tryP(int semid);
 int __OS_sem_V(int semid);
 
-// TODO THREADS
+// TODO THREADS: for now it works for unthreaded processes (privV!!!)
 #if 0
 #define privP()    __OS_sem_P(processTable[currProcess].privSem)
 #define privV(p)   __OS_sem_V(processTable[p].privSem)
 #else
 #define privP()    __OS_sem_P(currThread->privSem)
-#define privV(p)   //__OS_sem_V(p->privSem)
+#define privV(p)   __OS_sem_V(processTable[p].tss->privSem)
 #endif

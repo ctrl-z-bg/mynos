@@ -25,7 +25,9 @@
 #include "pit.h"
 #include "irq.h"
 #include "services.h"
-#include "process.h"
+#include "stats.h"
+
+extern uint32_t currProcess;
 
 void _mynos_syscalls_trap_TRAP();
 __asm__ (\
@@ -65,6 +67,8 @@ __asm__ (\
 	 "   je .mynos_selfThread\n"\
 	 "   cmpl $300, %eax\n"\
 	 "   je .mynos_setTimer\n"\
+	 "   cmpl $400, %eax\n"\
+	 "   je .mynos_stats\n"\
 	 "   push %eax\n"\
 	 "   call _mynos_syscall_WRONGSYSCALL\n"\
 	 ".mynos_send:\n"\
@@ -176,6 +180,11 @@ __asm__ (\
 	 ".mynos_setTimer:\n"\
 	 "   pushl %ebx\n"\
 	 "   call _mynos_syscall_setTimer\n"\
+	 "   popl  %ebx\n"\
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_stats:\n"\
+	 "   pushl %ebx\n"\
+	 "   call __OS_fillStats\n"\
 	 "   popl  %ebx\n"\
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".exit_mynos_syscall:\n"\
