@@ -279,15 +279,32 @@ static uint32_t copy_page_table(uint32_t ptp, uint32_t * ptc) {
     pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(ptp, i);
     if (*pte & (PF_PRESENT | PF_LOGICAL_PRESENT)) {   // this PF is allocated
       flags = *pte & 0xFFF;
-      if (*pte & PF_PRESENT) {
-	if ((pf = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
-	ptc[i] = LINEAR_TO_PHYSICAL_ADDRESS(pf) | flags;
-		
-	/* copy the page frame */
-	kmemcpy((void*)pf, (void*)__MEM_LINEAR_ADDRESS(ptp, i, 0), 
-		PAGE_SIZE);
-	//DEALLOCATE(pf);
-      } else
+      if (*pte & PF_PRESENT) {  // the page is really allocated
+
+	/* if the page is a superuser page then copy it (in 386 arch
+	   ro check is not done in superuser mode, so cow cannot work) */
+	if (!(*pte & PF_USER)) {
+	  if ((pf = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
+	  ptc[i] = LINEAR_TO_PHYSICAL_ADDRESS(pf) | flags;
+	  
+	  /* copy the page frame */
+	  kmemcpy((void*)pf, (void*)__MEM_LINEAR_ADDRESS(ptp, i, 0), 
+		  PAGE_SIZE);
+	  //DEALLOCATE(pf);
+	} else {   // ok, it's a user page
+	  /* the page is set as cow only if: it's not shared, it's not RO,
+	     it's not already cow */
+	  if (!(*pte & PF_SHARED) && !(*pte & PF_READONLY) && !(*pte & PF_COW)) {
+	    *pte |= PF_COW;
+	    *pte = *pte & ~PF_READWRITE;  // to have the fault on write!
+	    INVALIDATE_THE_CACHE(__MEM_LINEAR_ADDRESS(ptp, i, 0));
+	  }
+	  /* anyway copy the pte...*/
+	  ptc[i] = *pte;
+	  /* ... and increment the page references counter */
+	  pmem_set((*pte)>>12);
+	}
+      } else  // logical allocated
 	ptc[i] = flags;
     } else
       ptc[i] = 0;

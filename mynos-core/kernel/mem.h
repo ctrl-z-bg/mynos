@@ -33,6 +33,8 @@
 #define PF_READONLY        0x0
 #define PF_READWRITE       (1<<1)
 #define PF_LOGICAL_PRESENT 0x800    /* one of the available bits */
+#define PF_COW             0x400    /* one of the available bits */
+#define PF_SHARED          0x200    /* one of the available bits */
 #define PF_PRESENT         0x1
 #define PF_NOTPRESENT      0x0
 

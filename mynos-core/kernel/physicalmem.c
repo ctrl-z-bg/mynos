@@ -119,6 +119,10 @@ void pmem_unset(uint32_t page) {
     __RESET_MEMORY_BITMAP_PAGE_BIT(page);
 }
 
+ushort16_t pmem_countref(uint32_t page) {
+  return pmemdes.page[page].countref;
+}
+
 uint32_t pmem_findAFreePhysicalPage() {
   static uint32_t current_page = 0;
   uint32_t current_byte        = current_page / 8;

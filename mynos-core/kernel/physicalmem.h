@@ -50,4 +50,7 @@ void pmem_set(uint32_t page);
 /* it decrements the countref, if zero, deallocates page */
 void pmem_unset(uint32_t page);
 
+/* returns the current countref of the page */
+ushort16_t pmem_countref(uint32_t page);
+
 #endif

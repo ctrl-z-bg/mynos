@@ -261,11 +261,54 @@ __asm__ (\
 	 "   iret                         \n"\
 	 );
 
+/* the copy-on-write code */
+static void __cowManager(uint32_t * pte, uint32_t addr) {
+    if (pmem_countref((*pte)>>12) == 1) {
+#ifdef DEBUG
+      printk("I'm the last referent\n\n");
+#endif
+      *pte = *pte & ~PF_COW;
+      *pte |= PF_READWRITE;
+      INVALIDATE_THE_CACHE(addr);
+    } else {
+      void * dest;
+      void * orig;
+      dest = __OS_askPages(1, 1, 0);
+      orig = (void*)(addr & 0xFFFFF000);
+      kmemcpy(dest, orig, PAGE_SIZE);
+      pmem_unset((*pte)>>12);
+      *pte = LINEAR_TO_PHYSICAL_ADDRESS(dest) | (*pte & 0xFFF);
+      *pte = *pte & ~PF_COW;
+      *pte |= PF_READWRITE;
+      __OS_releasePages(dest, 1, 0, 0);
+      INVALIDATE_THE_CACHE(addr);
+    }
+}
+
+static void __allocateOnUse(uint32_t * pte, uint32_t addr) {
+  uint32_t new_phy_page;
+  uint32_t flags;
+  
+  flags = *pte & 0x7FF; /* save the page flags, but not the 
+			   PF_LOGICAL_PRESENT */
+  new_phy_page = (pmem_findAFreePhysicalPage()<<12);
+  *pte = new_phy_page | flags | PF_PRESENT;
+  pmem_set((new_phy_page)>>12);
+  //__SET_MEMORY_BITMAP_PAGE_BIT((new_phy_page)>>12);
+  
+  // QUESTION: should be invalidated now? To be sure...
+  INVALIDATE_THE_CACHE(addr);
+#ifdef DEBUG
+  printk("new allocated page: ");
+  print_ulong_hex(new_phy_page);
+  print_char('\n');
+  print_char('\n');
+#endif
+}
+
 extern uint32_t currProcess;
 void _page_fault_handler(uint32_t addr, uint32_t errcode) {
-  uint32_t new_phy_page;
   uint32_t * pte;
-  uint32_t flags;
 
 #ifdef DEBUG
   print_char('\n');
@@ -307,28 +350,20 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
 #ifdef DEBUG
   if ((*pte) & PF_LOGICAL_PRESENT)
     printk("but the page is tagged as allocated\n");
+  if ((*pte) & PF_COW)
+    printk("but the page is tagged as COPY-ON_WRITE\n");
 #endif
 
-  if (!((*pte) & PF_LOGICAL_PRESENT)) // not allocated
+  if (!((*pte) & PF_LOGICAL_PRESENT) &&
+      !((*pte) & PF_COW)) // not allocated & not cow
     KPANIC("page fault");
   if (__number_of_free_physical_pages == 0)
     KPANIC("full memory!");
 
-  flags = *pte & 0x7FF; /* save the page flags, but not the 
-			   PF_LOGICAL_PRESENT */
-  new_phy_page = (pmem_findAFreePhysicalPage()<<12);
-  *pte = new_phy_page | flags | PF_PRESENT;
-  pmem_set((new_phy_page)>>12);
-  //__SET_MEMORY_BITMAP_PAGE_BIT((new_phy_page)>>12);
-
-  // QUESTION: should be invalidated now? To be sure...
-  INVALIDATE_THE_CACHE(addr);
-
-#ifdef DEBUG
-  printk("new allocated page: ");
-  print_ulong_hex(new_phy_page);
-  print_char('\n');
-  print_char('\n');
-#endif
+  if ((*pte) & PF_LOGICAL_PRESENT) { /* ALLOCATE ON USE */
+    __allocateOnUse(pte, addr);
+  } else if ((*pte) & PF_COW) {      /* COPY ON WRITE */
+    __cowManager(pte, addr);
+  } else KPANIC("MEMORY ERROR: NOT COW OR LOGICAL");
 }
 
