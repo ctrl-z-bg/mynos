@@ -247,7 +247,7 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   tssd_gdt_sel = gdt_get_free_index();
 
   gdt_set_entry(tssd_gdt_sel, 
-		LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)tss),
+		(uint32_t)tss,
 		sizeof(tss_t), D_TSS);
     printk("GDT TSS entry....\n");
   /* set the new process tss */

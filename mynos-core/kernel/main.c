@@ -79,7 +79,7 @@ void tsksw() {
 
   /* set the tssd in the gdt, for the incoming and the outcoming processes */
   gdt_set_entry(gdt_index,
-		LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)&(processTable[0])),
+		(uint32_t)&(processTable[0]),
 		sizeof(tss_t), D_TSS);
 
   /* load the task register with the relative address in the gdt of the
