@@ -212,6 +212,7 @@
 extern byte_t * __memory_bitmap;
 extern uint32_t __memory_bitmap_size;
 extern uint32_t __number_of_free_physical_pages;
+extern uint32_t __total_phy_pages;
 
 /* to call in mynos_main() */
 void init_memory();

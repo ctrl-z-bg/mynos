@@ -23,20 +23,23 @@
 #include "video.h"
 #include "kutils.h"
 #include "process.h"
+#include "physicalmem.h"
 
 byte_t * __memory_bitmap;
 uint32_t __memory_bitmap_size;
 uint32_t __number_of_free_physical_pages;
+uint32_t __total_phy_pages;
 
 void init_memory() {
   uint32_t i;
   uint32_t first_free_phy_page = (_asm_first_free_physical_page_address>>12);
-  uint32_t total_phy_pages = (_asm_global_mem_size*256);
+
+  __total_phy_pages = (_asm_global_mem_size*256);
 
   __memory_bitmap = (byte_t*)__MEMORY_BITMAP_PHY_ADDRESS;
-  __memory_bitmap_size = total_phy_pages / 8;
+  __memory_bitmap_size = __total_phy_pages / 8;
 
-  __number_of_free_physical_pages = total_phy_pages;
+  __number_of_free_physical_pages = __total_phy_pages;
 
   /* let the memory bitmap be coerent with the actual physical memory
      allocation (from 0 to _asm_first_free_physical_page_address - 1) */
@@ -60,6 +63,9 @@ void init_memory() {
       INIT_PAGE_TABLE(__GET_PAGE_TABLE_ENTRY(i, 0));
     }
   printk(" done\n");
+
+  /* create the real physical memory manager*/
+  createPhyMemManager();
 }
 
 void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
