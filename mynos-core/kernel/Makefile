@@ -57,7 +57,7 @@ clean:
 	for i in $(SUBDIRS) ; do \
           make -C $$i clean;\
 	done
-	rm -f *.o *.bin *~ Makefile.depend
+	rm -f *.o *.elf *~ Makefile.depend
 
 depend:
 	for i in $(SUBDIRS) ; do \
