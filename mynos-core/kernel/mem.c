@@ -184,10 +184,11 @@ void * __OS_releasePages(void *pageaddr, unsigned int npages,
   uint32_t i;
 
 #ifdef NEWMEM
-  if (__lmt_freeArea(&(processTable[currProcess].lmemmap),
-		     (addr >> 12),
-		     npages) != 0)
-    printk("Problems releasing pages\n");
+  if ((addr >> 12) >= USERMINPAGE) // if it's user space
+    if (__lmt_freeArea(&(processTable[currProcess].lmemmap),
+		       (addr >> 12),
+		       npages) != 0)
+      printk("Problems releasing pages\n");
 #endif
 
   for (i = 0; i < npages; i++) {
