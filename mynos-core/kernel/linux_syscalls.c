@@ -362,7 +362,6 @@ int _linux_syscall_fork() {
   ptc[1023] = LINEAR_TO_PHYSICAL_ADDRESS(pdc) | PF_PRESENT;
   kmemcpy((void*)lastPT, (void*)pdc, PAGE_SIZE);
 
-  //DEALLOCATE(lastPT);
   //DEALLOCATE(pdc);
 
   new_pid = numProcess++;
@@ -379,6 +378,10 @@ int _linux_syscall_fork() {
   processTable[new_pid].pid = new_pid;
   processTable[new_pid].ppid = currProcess;
   processTable[new_pid].isAlive = 1;
+
+  processTable[new_pid].ptsMirror = LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
+  //DEALLOCATE(lastPT);
+
   // IPC
   processTable[new_pid].isWaitingSender = -1;
   processTable[new_pid].isWaitingReceiver = -1;

@@ -54,6 +54,10 @@ typedef struct {
   // end IPC
 
   processData_t * processData;
+
+  /* this is the physical address of the page table using to access
+     all process' page tables (the last one...) */
+  void * ptsMirror;
 } process_descriptor_t;
 
 extern process_descriptor_t processTable[];
