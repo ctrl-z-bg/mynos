@@ -24,6 +24,7 @@
 #include "global.h"
 
 #define IPC_FLAGS_NOBLOCK (0x1)
+#define IPC_FLAGS_BYPID   (0x2)
 
 /* it returns a pointer to a channel */
 #define IPC_GET_CHANNEL(PLIST, ID) ((PLIST)->channels[ID])
@@ -84,11 +85,11 @@ void          __OS_ipc_zeroChannel(channel_t * c);
 
 /* IPC stuff */
 /******************/
-int           __OS_ipc_send(pid_t dest, char * buf, uint32_t size,
+int           __OS_ipc_send(int destd, char * buf, uint32_t size,
 			    uint32_t flags);
-int           __OS_ipc_recv(pid_t sender, char * buf, uint32_t size,
+int           __OS_ipc_recv(int senderd, char * buf, uint32_t size,
 			       uint32_t flags);
-int           __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
+int           __OS_ipc_recvAll(int * sender, char * buf, uint32_t size,
 			       uint32_t flags);
 
 #endif

@@ -21,12 +21,11 @@
 #ifndef __SERVICES_H__
 #define __SERVICES_H__
 
-#define SERVICENAMEMAXLEN 10
-
-#define MAXSERVICES 1000
+#include "global.h"
 
 void __OS_service_initServicesRegistry();
 void __OS_service_removeFromProcList(uint32_t idx, pid_t pid);
+pid_t __OS_service_getServicePid(uint32_t entry);
 int __OS_service_registerService(char * name);
 int __OS_service_registerClient(char * name);
 

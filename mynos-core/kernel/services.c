@@ -27,6 +27,10 @@
 #include "process.h"
 #include "services.h"
 
+#define SERVICENAMEMAXLEN 10
+
+#define MAXSERVICES 1000
+
 #define MIN(A,B) (((A) < (B))?(A):(B))
 
 typedef struct _procList {
@@ -64,7 +68,7 @@ static int insertInClientProcList(uint32_t entry) {
   servicesTable_t * table;
   int idx = 0;
   table = (processTable[currProcess].processData)->servicesTable;
-  while (!table[idx])
+  while (table[idx])
     idx++;
   table[idx] = entry;
   return idx;
@@ -119,7 +123,9 @@ int __OS_service_registerService(char * name) {
   if (numEntry == MAXSERVICES) return -1;
   /* TODO: check on name */
   do {
-    if (++lastInsertedEntry >= MAXSERVICES)
+    if (lastInsertedEntry < (MAXSERVICES - 1))
+      lastInsertedEntry++;
+    else
       lastInsertedEntry = 0;
   } while (servicesRegistry[lastInsertedEntry].pid != 0);
 
@@ -145,3 +151,8 @@ int __OS_service_registerClient(char * name) {
   insertInProcList(entry, currProcess);
   return clientEntry;
 }
+
+pid_t __OS_service_getServicePid(uint32_t entry) {
+  return servicesRegistry[entry].pid;
+}
+

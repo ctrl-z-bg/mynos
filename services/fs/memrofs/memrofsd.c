@@ -62,7 +62,8 @@ void memrofs_open(pid_t client, char *fname) {
     response.fd = fd;
     response.status = STATUS_OK;
   }  
-  if ( mynos_send(client, &response, sizeof(response), 0) < 0 )
+  if ( mynos_send(client, &response, 
+		  sizeof(response), MYNOS_IPC_FLAGS_BYPID) < 0 )
     // error responding, close the file (if it was open)
     if ( response.status == STATUS_OK ) {
       filedesc[response.fd].pid = 0; // "close" the file
@@ -82,7 +83,8 @@ void memrofs_close(pid_t client, int fd) {
     filedesc[fd].pid = 0;
     status = STATUS_OK;
   }
-  if ( mynos_send(client, &status, sizeof(status_t), 0) < 0 ) {};
+  if ( mynos_send(client, &status, 
+		  sizeof(status_t), MYNOS_IPC_FLAGS_BYPID) < 0 ) {};
 }
 
 void memrofs_read(pid_t client, int fd, size_t size) {
@@ -99,11 +101,14 @@ void memrofs_read(pid_t client, int fd, size_t size) {
     response.status = STATUS_OK;
   }
   if ( mynos_send(client, &response,
-		  sizeof(response), MYNOS_IPC_FLAGS_NONBLOCK) < 0 ) {
+		  sizeof(response), 
+		  MYNOS_IPC_FLAGS_NONBLOCK |
+		  MYNOS_IPC_FLAGS_BYPID) < 0 ) {
     // error, nothing to do
   } else {
     if ( (response.status == STATUS_OK) &&
-	 (mynos_send(client, filedesc[fd].currpos, response.rd, 0) < 0) ) {
+	 (mynos_send(client, filedesc[fd].currpos, 
+		     response.rd, MYNOS_IPC_FLAGS_BYPID) < 0) ) {
       // error, nothing to do
     } else {
       filedesc[fd].currpos += response.rd; // advance the pointer
@@ -157,15 +162,20 @@ int main() {
     request_t request;
     open_response_t open_response;
     read_response_t read_response;
+    int serviced;
+    if ((serviced = mynos_clientRegister("memrofs")) == -1) {
+      puts("MEMROFS service unavailable");
+      exit(-1);
+    }
     //puts("child.");
     request.type = OPEN;
     strcpy(request.data.fname, "AUTOEXEC.BAT");
     //puts("prereq");
     puts("Opening a text file...");
-    mynos_send(getppid(), &request, sizeof(request_t),
+    mynos_send(serviced, &request, sizeof(request_t),
 	       MYNOS_IPC_FLAGS_NONBLOCK);
     //puts("req1");
-    mynos_recv(getppid(), &open_response, sizeof(open_response_t), 0);
+    mynos_recv(serviced, &open_response, sizeof(open_response_t), 0);
     if ( open_response.status != STATUS_OK ) {
       puts("Open failed");
       exit(-1);
@@ -174,15 +184,15 @@ int main() {
     puts("Reading the file content...");
     request.type = READ;
     request.data.read_data.fd = open_response.fd;
-    request.data.read_data.to_read = 999;
-    mynos_send(getppid(), &request, sizeof(request_t),
+    request.data.read_data.to_read = 100;
+    mynos_send(serviced, &request, sizeof(request_t),
 	       MYNOS_IPC_FLAGS_NONBLOCK);
     //puts("req2");
-    if ( mynos_recv(getppid(), &read_response, sizeof(read_response_t), 0) < 0 )
+    if ( mynos_recv(serviced, &read_response, sizeof(read_response_t), 0) < 0 )
       puts("errore 1");
     //puts("resp2a");
     if ( (read_response.status == STATUS_OK) &&
-	 (mynos_recv(getppid(), mybuf, 999, 0) < 0) )
+	 (mynos_recv(serviced, mybuf, 100, 0) < 0) )
       puts("errore 2");
     //puts("resp2b");
     if ( read_response.rd == 0 )
@@ -199,6 +209,8 @@ int main() {
     exit(0);
   }
 #endif /* TEST */
+
+  mynos_serviceRegister("memrofs");
 
   while ( 1 ) {
     if ( mynos_recvAll(&sender, &request, sizeof(request_t),

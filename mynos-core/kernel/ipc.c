@@ -176,11 +176,22 @@ void __OS_ipc_zeroChannel(channel_t * c) {
   c->msgsize = 0;
 }
 
-int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
+int __OS_ipc_send(int destd, char * buf, uint32_t size, uint32_t flags) {
   process_descriptor_t * rdesc;         // receiver desc
   process_descriptor_t * sdesc;         // sender desc
   channelList_t * list; // receiver channel list
   channel_t * c;        // new channel
+
+  /* find the destination pid */
+  pid_t dest;
+  servicesTable_t * table;
+  if (!(flags & IPC_FLAGS_BYPID)) {
+    table = (processTable[currProcess].processData)->servicesTable;
+    if (!table[destd]) return -1;
+    dest = __OS_service_getServicePid(table[destd]);
+    if (dest == 0) KPANIC("IPC SEND: dest == 0");
+  } else
+    dest = destd;
 
   if ((dest >= MAXPROCESSES) || (dest < 0) || (!processTable[dest].isAlive))
     return -1;
@@ -242,13 +253,21 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
   return size;
 }
 
-int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
+int __OS_ipc_recv(int senderd, char * buf, uint32_t size, uint32_t flags) {
   process_descriptor_t * rdesc;         // receiver desc
   process_descriptor_t * sdesc;         // sender desc
   channelList_t * list; // receiver channel list
   channel_t * c;
   int32_t done = 0;
   uint32_t msgsize;
+
+  /* find the destination pid */
+  pid_t sender;
+  servicesTable_t * table;
+  table = (processTable[currProcess].processData)->servicesTable;
+  if (!table[senderd]) return -1;
+  sender = __OS_service_getServicePid(table[senderd]);
+  if (sender == 0) KPANIC("IPC RECV: sender == 0");
 
   while (!done) {
     if ((sender >= MAXPROCESSES) || (sender < 0))

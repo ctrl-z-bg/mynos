@@ -22,6 +22,7 @@
 #define __MYNOS_H__
 
 #define MYNOS_IPC_FLAGS_NONBLOCK 0x1
+#define MYNOS_IPC_FLAGS_BYPID    0x2
 
 int mynos_send(int dest, void * buf, unsigned int size,
 	       unsigned int flags);
@@ -41,6 +42,9 @@ int mynos_disableIrq(unsigned short n);
 
 int mynos_driverRegister(char * name, unsigned int irq, 
 			 unsigned int * io, unsigned int * mem);
+
+int mynos_serviceRegister(char * name);
+int mynos_clientRegister(char * name);
 
 void outportb(unsigned int port,unsigned char value);
 unsigned char inportb(unsigned int port);

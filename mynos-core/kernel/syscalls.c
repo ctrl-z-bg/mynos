@@ -23,6 +23,7 @@
 #include "syscalls.h"
 #include "pic.h"
 #include "irq.h"
+#include "services.h"
 
 extern uint32_t currProcess;
 
@@ -48,6 +49,10 @@ __asm__ (\
 	 "   je .mynos_semFree\n"\
 	 "   cmpl $10, %eax\n"\
 	 "   je .mynos_driverRegister\n"\
+	 "   cmpl $11, %eax\n"\
+	 "   je .mynos_serviceRegister\n"\
+	 "   cmpl $12, %eax\n"\
+	 "   je .mynos_clientRegister\n"\
 	 "   cmpl $100, %eax\n"\
 	 "   je .mynos_enableIrq\n"\
 	 "   cmpl $101, %eax\n"\
@@ -122,6 +127,16 @@ __asm__ (\
 	 "   popl %ecx\n"
 	 "   popl %edx\n"\
 	 "   popl %esi\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_serviceRegister:\n"\
+	 "   pushl %ebx\n"
+	 "   call __OS_service_registerService\n"\
+	 "   popl %ebx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_clientRegister:\n"\
+	 "   pushl %ebx\n"
+	 "   call __OS_service_registerClient\n"\
+	 "   popl %ebx\n"
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_enableIrq:\n"\
 	 "   pushw %bx\n"
