@@ -32,7 +32,7 @@ pid_t pqExtract(process_queue_t *q) {
 }
 
 int pqInsert(process_queue_t *q, pid_t p) {
-    pid_t r;
+  //pid_t r;
     
     if ( pqFull(q) ) return(-1);
     

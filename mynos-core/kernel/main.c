@@ -31,6 +31,8 @@
 #include "tss.h"
 #include "process.h"
 
+#include "sem.h"
+
 #include "kutils.h"
 
 #include "delay.h"

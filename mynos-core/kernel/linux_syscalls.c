@@ -29,6 +29,19 @@
 
 extern uint32_t currProcess;
 
+typedef unsigned long int clock_t;
+struct tms {
+              clock_t tms_utime;  /* user time */
+              clock_t tms_stime;  /* system time */
+              clock_t tms_cutime; /* user time of children */
+              clock_t tms_cstime; /* system time of children */
+       };
+void _linux_syscall_times(struct tms *buf) {
+  static uint32_t tm = 0;
+  tm += 10;
+  buf->tms_utime = buf->tms_stime = tm;
+}
+
 void _linux_syscalls_trap_TRAP();
 __asm__ (\
 	 ".globl _linux_syscalls_trap_TRAP         \n"\
@@ -47,6 +60,8 @@ __asm__ (\
 	 "   je .linux_close\n"\
 	 "   cmpl $20, %eax\n"\
 	 "   je .linux_getpid\n"\
+	 "   cmpl $43, %eax\n"\
+	 "   je .linux_times\n"\
 	 "   cmpl $64, %eax\n"\
 	 "   je .linux_getppid\n"\
 	 "   cmpl $90, %eax\n"\
@@ -106,6 +121,11 @@ __asm__ (\
 	 ".linux_mmap:\n"\
 	 "   pushl %ebx\n"
 	 "   call _linux_syscall_mmap     \n"\
+	 "   popl %ebx\n"
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_times:\n"\
+	 "   pushl %ebx\n"
+	 "   call _linux_syscall_times     \n"\
 	 "   popl %ebx\n"
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_munmap:\n"\
