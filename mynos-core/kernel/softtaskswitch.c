@@ -44,7 +44,7 @@ __asm__ (".globl startTask \n" \
 
 
 
-void switchTo(uint32_t old, uint32_t new) {
+void switchTo(pid_t old, pid_t new) {
   tss = &THEtss;
   
   if (old == new) return;
