@@ -65,7 +65,7 @@ int32_t mynos_recv(int channel, mynos_msg_t **pmsg, unsigned int flags) {
   return __mynos_recv(channel, *pmsg, shortmsg, flags);
 }
 
-void mynos_sendSync(int channel) {
+void mynos_signalSync(int channel) {
   mynos_send(channel, NULL, 0, 0);
 }
 

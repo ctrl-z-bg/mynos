@@ -60,7 +60,7 @@ int mynos_send(int channel, void * buf, unsigned int size,
 	       unsigned int flags);
 int mynos_recv(int channel, mynos_msg_t **pmsg, unsigned int flags);
 /* send and receive an empty message */
-void mynos_sendSync(int channel);
+void mynos_signalSync(int channel);
 void mynos_waitSync(int channel);
 int mynos_freeChannel(int c);
 int mynos_freeMsg(mynos_msg_t ** pmsg);
