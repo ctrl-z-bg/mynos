@@ -26,6 +26,8 @@ OFILES  =       $(SRC:%.c=%.o)
 CFLAGS = -I../../../../mynos-lib/include -I..
 LDFLAGS = -L../../../../mynos-lib/lib/ -lmynos -static -Xlinker -Ttext -Xlinker 0x40000000
 
+DEPEND = Makefile.depend
+
 all: createDisk
 
 createDisk: $(OFILES)
@@ -33,9 +35,7 @@ createDisk: $(OFILES)
 
 
 clean:
-	rm -f *~ $(OFILES) createDisk RAMDISK.dsk
-
-DEPEND = Makefile.depend
+	rm -f *~ $(OFILES) createDisk RAMDISK.dsk $(DEPEND)
 
 depend:
 	$(RM) $(DEPEND)

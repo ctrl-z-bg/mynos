@@ -16,6 +16,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
+DIRS = tool
+
 .PHONY  : all clean
 
 CC = diet gcc
@@ -29,15 +31,24 @@ CFLAGS = -I../../../mynos-lib/include
 LDFLAGS = -L../../../mynos-lib/lib/ -lmynos -static -Xlinker -Ttext -Xlinker 0x40000000
 
 all: memrofsd
+	for i in $(DIRS) ; do \
+		make -C $$i;\
+	done
 
 memrofsd: $(OFILES)
 	$(CC) $(OFILES) -o memrofsd $(LDFLAGS)
 
 
 clean:
+	for i in $(DIRS) ; do \
+		make -C $$i clean;\
+	done
 	rm -f *~ $(OFILES) memrofsd $(DEPEND)
 
 depend:
+	for i in $(DIRS) ; do \
+		make -C $$i depend;\
+	done
 	$(RM) $(DEPEND)
 	$(CC) $(CFLAGS) -M $(SRC) >> $(DEPEND)
 
