@@ -23,10 +23,9 @@
 #include "gdt.h"
 #include "tss.h"
 #include "kutils.h"
-#ifdef ELF
 #include "elf.h"
-#endif
 #include "process.h"
+#include "video.h"
 
 tss_t processTable[MAXPROCESSES];
 uint32_t numProcess = 1;
@@ -46,7 +45,6 @@ tss_t * spawnProcess(tss_t * tss) {
   ushort16_t tssd_gdt_sel, code_gdt_sel, data_gdt_sel;
   uint32_t npages_for_process;
 
-#ifdef ELF
   Elf32_Phdr elf_phdata[ELF_MAXSEG];
   Elf32_Ehdr elf_ex;
   uint32_t entryaddr, curraddr, size, baseaddr;
@@ -70,7 +68,6 @@ tss_t * spawnProcess(tss_t * tss) {
   size = elf_ex.e_phnum * elf_ex.e_phentsize;
   kmemcpy(elf_phdata, test_start+elf_ex.e_phoff, size);
    
-#endif
   npages_for_process = 32;
 
   if ((newPD = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
@@ -109,8 +106,6 @@ tss_t * spawnProcess(tss_t * tss) {
 
   kbzero(currPF, npages_for_process * PAGE_SIZE);
 
-  ///////////////
-#ifdef ELF
   /* From here instead ELF code is Grub "inspired" */
   curraddr = (uint32_t) currPF;
   baseaddr = 0;
@@ -146,25 +141,17 @@ tss_t * spawnProcess(tss_t * tss) {
       
       if (phdr->p_flags & PF_W) 
 	  control += D_WRITE;
-      gdt_set_entry(sel, 0x00000000, 0xFFFFF, control);
+      /* the only new segment descriptor we have to create is tssd */
+      //gdt_set_entry(sel, 0x00000000, 0xFFFFF, control);
 
   }
   /* Here the segments are loaded, we have not symbol loading at the moment,
      neither relocatable segments. */
   
-#else 
-kmemcpy((void*)currPF, (void*)test_start, test_len); 
-#endif
-
-  /////////////////
-
   for (i = 0; i < npages_for_process; i++)
   currPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(currPF +(1024*i)) 
     | PF_USER | PF_PRESENT | PF_READWRITE;
   printk("Set linear2phis addr....\n");
-  /* alloc a third page (allocated only logically)
-  if ((currPF = (uint32_t*)__OS_askPages(1, 0)) == NULL) return NULL;
-  currPT[2] = PF_USER | PF_LOGICAL_PRESENT | PF_READWRITE; */
 
   newPD[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
   newPD[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(lastButOnePT) | PF_USER | PF_READWRITE | PF_PRESENT;
@@ -182,20 +169,8 @@ kmemcpy((void*)currPF, (void*)test_start, test_len);
   
   lastButOnePT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(newPD) | PF_PRESENT;
   if ((stackFrame = (uint32_t*)__OS_askPages(1, 0, 0)) == NULL) return NULL;
-  //  lastButOnePT[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_USER | PF_PRESENT | PF_READWRITE;
   lastButOnePT[1024-2] = PF_USER | PF_LOGICAL_PRESENT | PF_READWRITE;
 
-  /* create new segments descriptors, if ELF is defined it has already been done. */
-#ifndef ELF 
-  code_gdt_sel = gdt_get_free_index();
-  gdt_set_entry(code_gdt_sel, 
-		0x00000000, 0xFFFFF, 
-		(D_CODE + D_BIG + D_BIG_LIM + D_DPL3));
-  data_gdt_sel = gdt_get_free_index();
-  gdt_set_entry(data_gdt_sel, 
-		0x00000000, 0xFFFFF, 
-		(D_DATA + D_WRITE + D_BIG + D_BIG_LIM+ D_DPL3));
-#endif
   tssd_gdt_sel = gdt_get_free_index();
 
   gdt_set_entry(tssd_gdt_sel, 
@@ -209,30 +184,16 @@ kmemcpy((void*)currPF, (void*)test_start, test_len);
 
   tss->isAlive = 1;
 
-  //#define LDT
-#ifdef LDT
-  tss->cs = 0x8 * 1 + 7;
-  tss->ds = 0x8 * 2 + 7;
-  tss->es = 0x8 * 2 + 7;
-  tss->fs = 0x8 * 2 + 7;
-  tss->gs = 0x8 * 2 + 7;
-  tss->ss = 0x8 * 2 + 7;
-#else
-  tss->cs = (((uint32_t)code_gdt_sel)<<3) + 3;
-  tss->ds = (((uint32_t)data_gdt_sel)<<3) + 3;
-  tss->es = (((uint32_t)data_gdt_sel)<<3) + 3;
-  tss->fs = (((uint32_t)data_gdt_sel)<<3) + 3;
-  tss->gs = (((uint32_t)data_gdt_sel)<<3) + 3;
-  tss->ss = (((uint32_t)data_gdt_sel)<<3) + 3;
-#endif
+  tss->cs = GDT_USER_CODE_SEL + 3;
+  tss->ds = GDT_USER_DATA_SEL + 3;
+  tss->es = GDT_USER_DATA_SEL + 3;
+  tss->fs = GDT_USER_DATA_SEL + 3;
+  tss->gs = GDT_USER_DATA_SEL + 3;
+  tss->ss = GDT_USER_DATA_SEL + 3;
 
   tss->tssd_gdt_selector = tssd_gdt_sel << 3;
 
-#ifdef LDT
-  tss->ldt = 102 * 0x8;
-#else
   tss->ldt = 0;
-#endif
 
   tss->eflags = 0x200;
   tss->esp = tss->ebp =
@@ -242,19 +203,6 @@ kmemcpy((void*)currPF, (void*)test_start, test_len);
   tss->esp0 = tss->esp1 = tss->esp2 = 0x40400000 - 1;//(uint32_t)stackFrame + 4095;
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
   printk("SET TSS entry....\n");
-#ifdef LDT
-{
-  union DT_entry * ldt;
-  /* CREATE LDT */
-  if ((ldt = (union DT_entry*)__OS_askPages(1, 0, 0)) == NULL) return NULL;
-
-  gdt_set_entry(102, (uint32_t)ldt,
-		4096, (D_LDT + D_BIG + D_DPL3));
-
-  SEG_createStandardDescriptor((uint32_t*)(ldt+1), 0x00000000, 0xFFFFF, (D_CODE + D_BIG + D_BIG_LIM + D_DPL3));
-  SEG_createStandardDescriptor((uint32_t*)(ldt+2), 0x00000000, 0xFFFFF, (D_DATA + D_WRITE + D_BIG + D_BIG_LIM+ D_DPL3));
-}
-#endif
   return tss;
 }
 

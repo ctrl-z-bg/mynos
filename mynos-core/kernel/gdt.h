@@ -25,6 +25,8 @@
 
 #define GDT_OS_CODE_SEL   0x08
 #define GDT_OS_DATA_SEL   0x10
+#define GDT_USER_CODE_SEL   0x18
+#define GDT_USER_DATA_SEL   0x20
 
 #define GDT_MAX_ENTRIES   8192
 
