@@ -18,7 +18,7 @@
 
 [BITS 32]			; this isn't DOS! ;-)
 extern mynos_main		; the real main is not in this file
-
+extern boot_info_global		; for soft reset
 
 
 ;;; the bottom of each process linear memory will be aliased with
@@ -227,3 +227,26 @@ _asm_last_kernel_page_dir_entry_used:	dd	KLAST_PAGE_DIR_ENTRY_USED
 
 global				_asm_first_free_physical_page_address
 _asm_first_free_physical_page_address:	dd	KERNEL_FIRST_FREE_PHY_PAGE
+
+
+global softReset
+softReset:
+	;; clear interrupt
+	cli
+	
+	;; disable PG in cr0
+  	mov	eax, cr0
+  	and	eax, 0x7FFFFFFF
+  	mov	cr0, eax
+
+	;; set a valid stack
+	mov	eax, 0x3FF000
+  	mov	esp, eax
+  	mov	ebp, esp
+
+	;; restore the original multiboot data
+	mov	ebx, [boot_info_global]
+
+	;; jump to top of the kernel!
+	jmp	_start
+		

@@ -54,6 +54,8 @@ void __print_free_phy_pages() {
   printk(" pagine fisiche non allocate)\n\n");
 }
 
+extern void softReset();
+
 extern process_descriptor_t processTable[20];
 extern uint32_t numProcess;
 ushort16_t * idle_tssd_selector;
@@ -103,12 +105,18 @@ uint32_t ramdisk_present = 0;
 
 modinfo_t bytecode;
 
+/* used in soft reset to restore the original multiboot data */
+multiboot_info_t * boot_info_global;
+
 void mynos_main(multiboot_info_t *boot_info) {
   module_t * module;
   modinfo_t modinfo[MAXMODULES];
   int i;
 
+
   __asm__("cli");
+
+  boot_info_global = boot_info;
 
   clear_screen();
 
