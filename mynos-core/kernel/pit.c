@@ -49,9 +49,9 @@ __asm__ (\
 	 );
 
 
-unsigned int timer_ticks = 0;
+uint32_t timerTicks = 0;
 void pit_handler() {
-  timer_ticks++;
+  timerTicks++;
 
   outportb(0x20, 0x20);
   

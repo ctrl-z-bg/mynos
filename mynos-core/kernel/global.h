@@ -34,9 +34,6 @@
 
 #define KPANIC(MSG) {printk(MSG); while(1){}}
 
-// ticks of timer elapsed from the beginning...
-extern unsigned int timer_ticks;
-
 typedef char           byte_t;
 typedef unsigned char  ubyte_t;
 typedef unsigned int   uint32_t;
@@ -51,6 +48,9 @@ typedef unsigned int   __kernel_size_t;
 typedef __kernel_size_t size_t;
 typedef size_t ssize_t;
 typedef long int off_t;               /* Type of file sizes and offsets.  */
+
+// ticks of timer elapsed from the beginning...
+extern uint32_t timerTicks;
 
 extern int _asm_global_mem_size;
 extern int _asm_last_kernel_page_dir_entry_used;

@@ -63,6 +63,8 @@ __asm__ (\
 	 "   je .linux_close\n"\
 	 "   cmpl $20, %eax\n"\
 	 "   je .linux_getpid\n"\
+	 "   cmpl $29, %eax\n"\
+	 "   je .linux_pause\n"\
 	 "   cmpl $43, %eax\n"\
 	 "   je .linux_times\n"\
 	 "   cmpl $64, %eax\n"\
@@ -90,6 +92,9 @@ __asm__ (\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_getpid:\n"\
 	 "   call _linux_syscall_getpid\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_pause:\n"\
+	 "   call _linux_syscall_pause\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_getppid:\n"\
 	 "   call _linux_syscall_getppid\n"\
@@ -170,6 +175,11 @@ void _linux_syscall_exit(int status) {
   print_char('\n');
   killProcess();
   sched();
+}
+
+int32_t _linux_syscall_pause() {
+  privP();
+  return -1;
 }
 
 int _linux_syscall_open(char * pathname, int flags, int mode) {

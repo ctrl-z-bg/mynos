@@ -22,10 +22,10 @@
 #include "video.h"
 #include "syscalls.h"
 #include "pic.h"
+#include "pit.h"
 #include "irq.h"
 #include "services.h"
-
-extern uint32_t currProcess;
+#include "process.h"
 
 void _mynos_syscalls_trap_TRAP();
 __asm__ (\
@@ -63,6 +63,8 @@ __asm__ (\
 	 "   je .mynos_exitThread\n"\
 	 "   cmpl $202, %eax\n"\
 	 "   je .mynos_selfThread\n"\
+	 "   cmpl $300, %eax\n"\
+	 "   je .mynos_setTimer\n"\
 	 "   push %eax\n"\
 	 "   call _mynos_syscall_WRONGSYSCALL\n"\
 	 ".mynos_send:\n"\
@@ -171,6 +173,11 @@ __asm__ (\
 	 ".mynos_selfThread:\n"\
 	 "   call __OS_threadSelf\n"\
 	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_setTimer:\n"\
+	 "   pushl %ebx\n"\
+	 "   call _mynos_syscall_setTimer\n"\
+	 "   popl  %ebx\n"\
+	 "   jmp .exit_mynos_syscall\n"\
 	 ".exit_mynos_syscall:\n"\
 	 "   iret                \n"\
 	 );
@@ -180,6 +187,12 @@ void _mynos_syscall_WRONGSYSCALL(uint32_t syscall_id) {
   printk("syscall ");
   print_uint(syscall_id);
   KPANIC(" doesn't exist!!");
+}
+
+int32_t _mynos_syscall_setTimer(ulong32_t usec) {
+  uint32_t ticks = usec / ONE_TICK_TIME;
+  currThread->timeToWake = timerTicks + ticks;
+  return 0;
 }
 
 int _mynos_syscall_enableIrq(ushort16_t n) {

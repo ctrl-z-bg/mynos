@@ -67,6 +67,8 @@ typedef struct {
 
   void * next, * prev;
 
+  uint32_t timeToWake;
+
 } tss_t;
 
 #endif

@@ -298,6 +298,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   desc->tss->next = desc->tss->prev = NULL;
   desc->tss->threadID = 0;
   // end THREADS
+  desc->tss->timeToWake = 0;
 
   /* Private Semaphore initialized to 0, as soon as P is made it yields */
   desc->tss->privSem = __OS_sem_allocateSemaphore(0);

@@ -79,6 +79,8 @@ void tsksw() {
   processTable[0].tss->prev = processTable[0].tss->prev = NULL;
   processTable[0].tss->threadID = 0;
 
+  processTable[0].tss->timeToWake = 0;
+
   processTable[0].tss->cs = GDT_OS_CODE_SEL;
   processTable[0].tss->ss0 = GDT_OS_DATA_SEL;
 

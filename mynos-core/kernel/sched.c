@@ -35,8 +35,14 @@ void sched() {
       currProcess = (currProcess + 1) % numProcess;
       currThread = processTable[currProcess].tss;
     }
+    if ((currThread->timeToWake) && (timerTicks >= currThread->timeToWake)) {
+      // SEND A SIGNAL... TODO
+      currThread->timeToWake = 0;
+      if (currThread->isWaitingOnP != -1)
+	__OS_sem_V(currThread->privSem);
+    }
   } while ((!processTable[currProcess].isAlive) ||
-	   (currThread->isWaitingOnP != -1) );
+	   (currThread->isWaitingOnP != -1));
 
   if (currThread != oldThread)
     switchTo(oldThread, currThread);

@@ -55,4 +55,7 @@ int mynos_threadCreate(void * (*start_routine)(void *),
 void mynos_threadExit(void * retval);
 int mynos_threadSelf();
 
+/* TIMER */
+int mynos_setTimer(unsigned long usec);
+
 #endif

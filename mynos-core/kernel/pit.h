@@ -33,6 +33,9 @@
 //#define PIT_FREQ 18.21
 #define PIT_FREQ 100
 
+/* msec corresponding to one tick */
+#define ONE_TICK_TIME (1000/PIT_FREQ)
+
 /* PIT ports */
 #define PIT_CHANNEL_0    0x40
 #define PIT_CHANNEL_1    0x41
