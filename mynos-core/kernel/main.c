@@ -116,6 +116,9 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   __asm__("cli");
 
+  /* initialize the FPU */
+  __asm__("finit");
+
   /* prepare the modules informations */
   /* NB: I do that right now because the memory bitmap allocation can
      reset the grub information
@@ -148,7 +151,7 @@ void mynos_main(multiboot_info_t *boot_info) {
   printk("Loading Interrupt Descriptor Table... ");
   init_idt();
   printk("done.\n");
-  
+
   calibratingDelayLoop();
 
   printk("Physical Memory : ");
