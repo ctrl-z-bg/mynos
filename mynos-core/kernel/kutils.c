@@ -71,7 +71,7 @@ int kmemcmp(const void *dst, const void *src, size_t count) {
 }
 
 int kstrlen(const char * s) {
-  register char * p = s;
+  char * p = (char*)s;
   while (*p)
     p++;
   return (p - s);
