@@ -1,7 +1,9 @@
 #include "dynalloc.h"
 
 extern void * __OS_askPages(unsigned int npages);
+extern void * __OS_askPagesFrom(void * pageaddr, unsigned int npages);
 extern void * __OS_releasePages(void *pageaddr, unsigned int npages);
+
 
 /* 1st allocated block (beginning of heap), NULL initialized */
 void *_heap = 0;
@@ -55,8 +57,26 @@ _findFreeBlock(unsigned int sz)
       /* check for unallocated pages in between, which make the space
 	 unusable */
       if ( _allPagesAllocatedBetween(ret - 1, _BLOCK_BGN(runner)) ) {
-	ret += _SIZE_SZ;
-	_insertBlock(ret, sz, old, runner);
+	_insertBlock(ret + _SIZE_SZ, sz, old, runner);
+	return(ret);
+      } else { /* ask for those pages! */
+	void * paddr = ret;
+	unsigned int npages;
+	if ( ret != _GET_PAGE_ADDRESS(ret) ) { /* not at the beginn. of page */
+	  paddr = _GET_NPAGE_ADDRESS(ret);
+	  /* number of bytes taken from the first page */
+	  if ( paddr - ret >= osz ) { /* OK, the sp. in the page was enough */
+	    _insertBlock(ret + _SIZE_SZ, sz, old, runner);
+	    return(ret);
+	  }
+	}
+	/* otherwise, must allocate */
+	npages = _PAGE_SPAN(paddr, ret + osz - 1);
+	if ( _GET_PAGE_ADDRESS(ret + osz - 1) == _GET_PAGE_BLOCK(runner) )
+	  // end within an allocated page 
+	  npages--;
+	__OS_askPagesFrom(paddr, npages);
+	_insertBlock(ret + _SIZE_SZ, sz, old, runner);
 	return(ret);
       }
     }
@@ -119,11 +139,12 @@ malloc(unsigned int sz)
 
   /* first of all, figures out how many pages are needed */
   unsigned int npages = _N_PAGES(sz);
-  /* If it's less than 1 page (npages = 0), look for a sufficient area
-     if we ever allocated some storage */
-  if ( _heap && !npages )
+  /* We now assume we KNOW what page to request. Therefore, we don't care
+     for how many pages were requested unless no space was found, or if
+     nothing was ever allocated */
+  if ( _heap ) /* was: ( _heap && !npages ) */
     ret = _findFreeBlock(sz);
-  /* If a page couldn't be found, or more than a page was requested,
+  /* If a hole couldn't be found, or nothing was ever allocated,
      ask OS for some page (at least 1) */
   if ( !ret )
     ret = _createNewBlock(((npages < 1)?1:npages), sz);
@@ -178,3 +199,18 @@ free(void *ptr)
 
   return;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

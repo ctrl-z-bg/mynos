@@ -44,6 +44,8 @@
 
 /* Macros of various sort */
 
+#define _PAGE_SZ (1 << 12)
+
  /* size of a block */
 #define _BLOCK_SZ(ptr) (*(unsigned int *)(ptr - _SIZE_SZ))
 /* total size of block + overhead */
