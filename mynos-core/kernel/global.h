@@ -24,7 +24,7 @@
 #define NULL 0x0
 
 //#define ARCH386
-//#define TRY_VGA
+#define TRY_VGA
 #define DEBUG
 #define RAMDISK
 

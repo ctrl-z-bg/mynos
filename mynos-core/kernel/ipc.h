@@ -58,6 +58,7 @@ typedef struct {
   /* something else, e.g. a semaphore... */
 } channelList_t;
 
+
 /* channels list stuff */
 /************************/
 void          __OS_ipc_initChannelList(channelList_t * list);
