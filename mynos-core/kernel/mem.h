@@ -161,6 +161,14 @@
                       }\
                      }
                         
+/* given a linear address, it returns the physical one. Be sure the address
+   is really a valid one */
+#define LINEAR_TO_PHYSICAL_ADDRESS(LADDRESS) \
+        (((*((uint32_t*)__GET_PAGE_TABLE_ENTRY( \
+                             __ADDRESS_PD_INDEX(LADDRESS), \
+		             __ADDRESS_PT_INDEX(LADDRESS)))) & 0xFFFFF000) | \
+         __ADDRESS_OFFSET(LADDRESS))
+
 
 extern byte_t * __memory_bitmap;
 extern uint32_t __memory_bitmap_size;
