@@ -255,6 +255,9 @@ movek:
 pmode1:	
 	mov	bx, (flat_data-gdt_table)
     	mov	ds, bx
+    	mov	es, bx
+    	mov	fs, bx
+    	mov	gs, bx
       	mov	ss, bx
 	add	esp, 0x90000
 	mov	ebp, esp

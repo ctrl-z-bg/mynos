@@ -50,7 +50,7 @@ void procA() {
   printk("directory coincide con quella di mio padre). Il mio codice e'\n");
   printk("interamente in main.c. Dagli un'occhiata (specialmente al mio tss).\n");
   printk("Fra una sega e l'altra questo e' il nostro primo task switch! :-)\n");
- asda: goto asda;
+ asd: goto asd;
 }
 
 void tsksw() {
@@ -71,7 +71,7 @@ void tsksw() {
   procA_tss.ldt = 0;
   procA_tss.eflags = 0x200;
   procA_tss.esp = procA_tss.ebp = 
-    _asm_last_page_dir_entry_used*0x400000 - 4100;
+    _asm_last_page_dir_entry_used*0x400000 - 6000;//4100;
   procA_tss.esp0 = procA_tss.esp;
   procA_tss.esp1 = procA_tss.esp;
   procA_tss.esp2 = procA_tss.esp;
@@ -84,11 +84,11 @@ void tsksw() {
 		sizeof(tss_t), D_TSS);
 
   /* load the task register with the relative address in the gdt of the
-     incoming process's tssd */
+     current process's tssd */
   __asm__ volatile ("ltrw (tssd_addr)\n");
 
-  /* task switching!!! :) */
-  __asm__ volatile ("ljmp $88,$0\n");
+    /* task switching!!! :) */
+    __asm__ volatile ("ljmp $88,$0\n");
 }
 
 
