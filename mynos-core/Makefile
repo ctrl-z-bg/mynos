@@ -20,29 +20,13 @@ DIRS = boot kernel
 
 .PHONY  : all clean bootfloppy depend
 
-all: test
+all:
 	for i in $(DIRS) ; do \
 		make -C $$i;\
 	done
 
-test: test.c
-	gcc -c -I/home/zava/tmp/dietlibc-0.17/include/ test.c
-
-	ld test.o \
-	  /home/zava/tmp/dietlibc-0.17/bin-i386/libm.a \
-	  /home/zava/tmp/dietlibc-0.17/bin-i386/dietlibc.a \
-	  -static -o test --oformat binary -Ttext 0x40000000
-
-bootfloppy:
-	dd if=/dev/zero of=floppyb bs=1024 count=221
-	/sbin/mkfs.msdos floppyb
-	mount -o loop -t msdos floppyb /mnt/floppy
-	cp kernel/kernel.elf /mnt/floppy/
-	cp test /mnt/floppy
-	umount /mnt/floppy
-
 clean:
-	rm -f *~ *.o test
+	rm -f *~ *.o
 	for i in $(DIRS) ; do \
 		make -C $$i clean;\
 	done
