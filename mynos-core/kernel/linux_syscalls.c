@@ -166,7 +166,7 @@ int _linux_syscall_fork() {
 
   /* copy the shared kernel space */ 
   for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
-    pdc[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
+    lastPT[i] = pdc[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
 
   /* copy the page dir entries, but not the last one (image for PTs...) */
   for (i = _asm_last_kernel_page_dir_entry_used + 1; i < 1023; i++) {
