@@ -22,6 +22,7 @@
 #define __TSS_H__
 
 #include "global.h"
+#include "ipc.h"
 
 typedef struct {
   /* i80386 TSS */
@@ -66,6 +67,8 @@ typedef struct {
   uint32_t ppid;
   uint32_t pid;
   pid_t isForking;
+
+  channelList_t channels;
 
 } tss_t;
 

@@ -202,6 +202,11 @@ tss_t * spawnProcess(tss_t * tss) {
   currPT[1023] = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_PRESENT;
   tss->esp0 = tss->esp1 = tss->esp2 = 0x40400000 - 1;//(uint32_t)stackFrame + 4095;
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
+
+#ifdef IPC
+  __OS_ipc_initChannelList(&(tss->channels));
+#endif
+
   printk("SET TSS entry....\n");
   return tss;
 }

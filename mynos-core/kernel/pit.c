@@ -81,6 +81,9 @@ void pit_handler() {
     processTable[isForking].ppid = currProcess;
     processTable[isForking].isForking = 0;
     processTable[isForking].isAlive = 1;
+#ifdef IPC
+    __OS_ipc_initChannelList(&(processTable[isForking].channels));
+#endif
   }
   
   if (p_ts_time && (currProcess != oldProcess))

@@ -23,6 +23,13 @@
 
 #include "global.h"
 
+/* it returns a pointer to a channel */
+#define IPC_GET_CHANNEL(PLIST, ID) ((PLIST)->channels[ID])
+
+#define IPC_SET_CHANNEL(PLIST, ID, PCHANNEL) {\
+    ((PLIST)->channels)[ID] = PCHANNEL;\
+  }
+
 typedef enum {
   CHANNEL_ERR_OK,
   CHANNEL_ERR_OVERFLOW,
@@ -36,24 +43,28 @@ typedef struct {
   uint32_t bufsize;
 } channel_t;
 
-#define MAXCHANNELS 2
-extern channel_t ** _channelTable;
+typedef struct {
+  channel_t ** channels;
+  /* something else, e.g. a semaphore... */
+} channelList_t;
 
 /* channels table stuff */
-void          __OS_channel_initChannelsTable();
-int32_t       __OS_channel_getFreshID();
+void          __OS_ipc_initChannelList(channelList_t * list);
+void          __OS_ipc_destroyChannelList(channelList_t * list);
+int32_t       __OS_ipc_getFreshID(channelList_t * list);
 
 
 /* channels stuff */
-channel_t *   __OS_channel_createChannel(uint32_t size);
-channel_err_t __OS_channel_writeToChannel(channel_t * c, 
-					  char * buf, uint32_t size);
-channel_err_t __OS_channel_readFromChannel(channel_t * c, char * buf);
-void          __OS_channel_destroyChannel(channel_t * c);
+channel_t *   __OS_ipc_createChannel(uint32_t size);
+channel_err_t __OS_ipc_writeToChannel(channel_t * c, 
+				      char * buf, uint32_t size);
+channel_err_t __OS_ipc_readFromChannel(channel_t * c, char * buf,
+				       uint32_t maxsize);
+void          __OS_ipc_destroyChannel(channel_t * c);
 
 /* the old data will be lost */
-channel_err_t __OS_channel_resizeChannel(channel_t * c, uint32_t size);
+channel_err_t __OS_ipc_resizeChannel(channel_t * c, uint32_t size);
 
-void          __OS_channel_zeroChannel(channel_t * c);
+void          __OS_ipc_zeroChannel(channel_t * c);
 
 #endif

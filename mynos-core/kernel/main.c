@@ -38,8 +38,6 @@
 
 #include "multiboot.h"
 
-#include "ipc.h"
-
 #ifdef TRY_VGA
 #include "vga.h"
 #endif
@@ -115,10 +113,6 @@ void mynos_main(multiboot_info_t *boot_info) {
   printk("Initializing the Intel 8253 Programmable Interval Timer... ");
   init_pit(PIT_FREQ, 0);
   set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT));
-  printk("done.\n");
-
-  printk("Initializing the Channels Table... ");
-  __OS_channel_initChannelsTable();
   printk("done.\n");
 
   /* prepare the modules informations */
