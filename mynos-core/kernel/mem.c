@@ -298,6 +298,9 @@ static void __cowManager(uint32_t * pte, uint32_t addr) {
 				       (pmem_findAFreePhysicalPage() << 12),
 				       0);
 
+      // AAAAAAAAAAAA TODO invalidate the tmp linear cow address
+
+
       dest = (void*)__COW_PAGE;
       orig = (void*)(addr & 0xFFFFF000);
       kmemcpy(dest, orig, PAGE_SIZE);
