@@ -48,6 +48,8 @@ __asm__ (\
 	 "   iret                \n"\
 	 );
 
+
+unsigned int timer_ticks = 0;
 #include "tss.h"
 #include "process.h"
 void pit_handler() {
@@ -59,7 +61,8 @@ void pit_handler() {
 
   //asm("int $0x1C"); /* Extra timer interrupt, used by floppy for timeout etc.. */
 
-  /* a task switch any 55 msec */
+  timer_ticks++;
+  /* a task switch any 10 msec */
   if ((count++) > 1) {
     p_ts_time = 1;
     count = 1;

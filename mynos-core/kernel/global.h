@@ -34,6 +34,9 @@
 
 #define KPANIC(MSG) {printk(MSG); while(1){}}
 
+// ticks of timer elapsed from the beginning...
+extern unsigned int timer_ticks;
+
 typedef char           byte_t;
 typedef unsigned char  ubyte_t;
 typedef unsigned int   uint32_t;

@@ -276,8 +276,8 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   // this is the idle process
   while(1) {
-    // to try the softReset
 #if 0
+    // to try the softReset
     static int first = 1;
     delay(5000);
     if (first) {first = 0; softReset(); }
