@@ -23,6 +23,7 @@
 #include "kutils.h"
 #include "tss.h"
 #include "process.h"
+#include "video.h"
 
 #ifdef IPC
 
@@ -157,13 +158,15 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
 
   // LOCK rec list
 
-  if (!(flags | IPC_FLAGS_BLOCK) &&
+#if 0
+  if ((flags & IPC_FLAGS_NOBLOCK) &&
       (rtss->isWaitingSender != currProcess) &&
       (rtss->isWaitingSender != 0)) {
     /* the receiver is not ready and I am not blocking, so return err */
     // UNLOCK rec list
     return -1;
   }
+#endif
 
   /* the receiver is waiting for me or anyone */
   if ((rtss->isWaitingSender == currProcess) ||
@@ -190,7 +193,7 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
     return -1;
   }
   
-  if (flags | IPC_FLAGS_BLOCK) {
+  if (!(flags & IPC_FLAGS_NOBLOCK)) {
     stss->isWaitingReceiver = dest;
     c->senderBlocked = 1;           // the receiver will see I'm blocked
   }
@@ -212,48 +215,52 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
   tss_t * stss;         // sender tss
   channelList_t * list; // receiver channel list
   channel_t * c;
+  int32_t done = 0;
 
-  if ((sender >= MAXPROCESSES) || (sender < 0))
-    return -1;
-
-  rtss = &(processTable[currProcess]);
-  list = &(rtss->channels);
-  stss = &(processTable[sender]);
-
-  // LOCK rec list
-  c = __OS_ipc_searchSender(list, sender);
-
-  if (c == NULL) {
-    /* if I'm not blocking and there is no message for me return err */
-    if (!(flags | IPC_FLAGS_BLOCK)) {
-      // UNLOCK rec list
+  while (!done) {
+    if ((sender >= MAXPROCESSES) || (sender < 0))
       return -1;
-    }
-    rtss->isWaitingSender = sender;
-  } else { // c is not null
-    /* the msg is smaller than we thinked */
-    if (__OS_ipc_readFromChannel(c, buf, size, NULL) != size) {
+    
+    rtss = &(processTable[currProcess]);
+    list = &(rtss->channels);
+    stss = &(processTable[sender]);
+    
+    // LOCK rec list
+    c = __OS_ipc_searchSender(list, sender);
+    
+    if (c == NULL) {
+      /* if I'm not blocking and there is no message for me return err */
+      if (flags & IPC_FLAGS_NOBLOCK) {
+	// UNLOCK rec list
+	return -1;
+      }
+      rtss->isWaitingSender = sender;
+    } else { // c is not null
+      /* the msg is smaller than we thinked */
+      if (__OS_ipc_readFromChannel(c, buf, size, NULL) != size) {
+	__OS_ipc_destroyChannelIntoList(list, c);
+	// UNLOCK rec list
+	return -1;
+      }
       __OS_ipc_destroyChannelIntoList(list, c);
-      // UNLOCK rec list
-      return -1;
-    }
-    __OS_ipc_destroyChannelIntoList(list, c);
+      done = 1;
+      
+      if (c->senderBlocked) {
+	// LOCK sender list
+	stss->isWaitingReceiver = -1;
+	// UNLOCK sender list
+      }
+    }  
     
-    if (c->senderBlocked) {
-      // LOCK sender list
-      stss->isWaitingReceiver = -1;
-      // UNLOCK sender list
+    // UNLOCK rec list
+    {   // tasksw to idle process
+      struct {long a ,b;} tmp = {0, 0};
+      
+      currProcess = 0;
+      tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
+      __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
     }
-  }  
-
-  // UNLOCK rec list
-  {   // tasksw to idle process
-    struct {long a ,b;} tmp = {0, 0};
-    
-    currProcess = 0;
-    tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
-    __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
-  }
+  }     // while (!done)
 
   return 0;
 }

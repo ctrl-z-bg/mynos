@@ -30,13 +30,19 @@
 
 void sendTo1_handler() {
   int a = 4;
-  __OS_ipc_send(1, (char *)&a, 4, IPC_FLAGS_BLOCK);
+  if (__OS_ipc_send(1, (char *)&a, 4, IPC_FLAGS_NOBLOCK) < 0)
+    printk("spedizione impossibile");
+  else
+    printk("spedito");
 }
 void recvFrom2_handler() {
   int a;
-  __OS_ipc_recv(2, (char *)&a, 4, IPC_FLAGS_BLOCK);
-  printk("ricevuto ");
-  print_ulong((ulong32_t)a);
+  if (__OS_ipc_recv(2, (char *)&a, 4, 0) < 0)
+    printk("ricezione impossibile");
+  else {
+    printk("ricevuto ");
+    print_ulong((ulong32_t)a);
+  }
 }
 TRAP_WRAPPER(sendTo1);
 TRAP_WRAPPER(recvFrom2);

@@ -23,7 +23,7 @@
 
 #include "global.h"
 
-#define IPC_FLAGS_BLOCK (0x1)
+#define IPC_FLAGS_NOBLOCK (0x1)
 
 /* it returns a pointer to a channel */
 #define IPC_GET_CHANNEL(PLIST, ID) ((PLIST)->channels[ID])
