@@ -21,6 +21,9 @@
 #include "video.h"
 #include "io.h"
 
+/* kernel messages will be printed in green */
+#define CHAR_ATTRIB 0xA
+
 /* void update_cursor(int row, int col)
  * by Dark Fiber
  * taken from alt.os.development FAQ
@@ -128,7 +131,7 @@ void print_char(char c) {
   }
   } else {
     *video = c;
-    *(video + 1) = 0x7;
+    *(video + 1) = CHAR_ATTRIB;
     video = video + 2;
   }
   /* move the cursor */
