@@ -31,6 +31,8 @@
 #include "tss.h"
 #include "process.h"
 
+#include "kutils.h"
+
 #include "3parts/delay.h"
 #include "3parts/fdc.h"
 #include "3parts/keyboard.h"
@@ -86,7 +88,7 @@ void mynos_main() {
   printk(" bytes allocated for memory map\n");
 
   printk("Initializing the Intel 8253 Programmable Interval Timer... ");
-  init_pit(18.3, 0);
+  init_pit(PIT_FREQ, 0);
   set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT));
   printk("done.\n");
 
@@ -94,18 +96,21 @@ void mynos_main() {
 
   init_floppy();
 
-  printk("premi un tasto\n");
-  getch();
-
   {
     char * buffer = (char*)50000;
-	if(read_block(98, (unsigned char *) buffer, 1)==FALSE)
-	{
-		printk("Kernel Panic: FDC not responding\n");
-		printk("Press any key to try again\n");
-	}
-  }
+    char asd[10];
+    uint32_t sector;
 
+    printk("logical sector for test program [98]: ");
+    kreadStr(asd, 10);
+    sector = (asd[0]?((ulong32_t)katoi(asd)):98);
+    if(read_block(sector, (unsigned char *) buffer, 1)==FALSE)
+      {
+	printk("Kernel Panic: FDC not responding\n");
+	printk("Press any key to try again\n");
+      }
+  }
+  
 
   tsksw();
   spawnProcess(&procA_tss);

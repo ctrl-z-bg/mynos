@@ -43,6 +43,7 @@ __asm__ (\
 	 );
 
 void pit_handler() {
+  static uint32_t count = 1;
   static int father = 1;
   unsigned long ret = 0;
   struct {long a ,b;} tmp = {0, 0};
@@ -50,8 +51,12 @@ void pit_handler() {
   asm("int $0x1C"); /* Extra timer interrupt, 
 		       used by floppy for timeout etc.. */
 
-  father = !father;
-  father?(ret = 80):(ret = 88);
+  /* a task switch any 110 msec */
+  if ((count++) > 2) {
+    count = 1;
+    father = !father;
+    father?(ret = 80):(ret = 88);
+  }
 
   outportb(0x20, 0x20);
 

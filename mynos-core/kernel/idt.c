@@ -37,14 +37,14 @@ struct {
 } loadidt = {
 (256 * sizeof(union DT_entry) - 1), IDT};
 
-TRAP_WRAPPER(trapScema);
-TRAP_WRAPPER(trapScema2);
+TRAP_WRAPPER(stupidTrap);
+TRAP_WRAPPER(stupidTrap2);
 
-void trapScema_handler() {
-  printk("Trap Scema\n");
+void stupidTrap_handler() {
+  printk("A Stupid Trap\n");
 }
-void trapScema2_handler() {
-  printk("Trap Scema2\n");
+void stupidTrap2_handler() {
+  printk("Another Stupid Trap!\n");
 }
 
 void init_idt() {
@@ -70,8 +70,8 @@ void init_idt() {
   set_vector(_int15, 15, D_PRESENT + D_INT);
   set_vector(_int16, 16, D_PRESENT + D_INT);
 
-  set_vector(trapScema_TRAP, 0x50, D_PRESENT + D_INT + D_DPL3);
-  set_vector(trapScema2_TRAP, 0x51, D_PRESENT + D_INT + D_DPL3);
+  set_vector(stupidTrap_TRAP, 0x50, D_PRESENT + D_INT + D_DPL3);
+  set_vector(stupidTrap2_TRAP, 0x51, D_PRESENT + D_INT + D_DPL3);
 
   asm("lidt (%0)                 \n"	/* Load the IDT                */
       "pushfl                    \n"	/* Clear the NT flag           */

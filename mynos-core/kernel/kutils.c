@@ -43,7 +43,7 @@ void kbzero(void *s, size_t n) {
   kmemset(s,0,n);
 }
 
-int atoi(const char* s) {
+int katoi(const char* s) {
   long int v=0;
   int sign=1;
   while ( *s == ' '  ||  (unsigned int)(*s - 9) < 5u) s++;
@@ -57,3 +57,21 @@ int atoi(const char* s) {
   return sign==-1?-v:v;
 }
 
+#include "video.h"
+#include "3parts/keyboard.h"
+void kreadStr(char * s, uint32_t bufsize) {
+  int i = 0;
+
+  for (i = 0; i < (bufsize-1); i++) {
+    s[i] = getch();
+    print_char(s[i]);
+    if (s[i] == '\n') {
+      s[i] = '\0';
+      return;
+    }
+  }
+
+  s[bufsize-1] = '\0';
+  print_char('\n');
+}
+    

@@ -29,6 +29,9 @@
 /* PIT input frequency */
 #define PIT_INPUT_Hz     1193181
 
+/* PIT right frequency */
+#define PIT_FREQ 18.21
+
 /* PIT ports */
 #define PIT_CHANNEL_0    0x40
 #define PIT_CHANNEL_1    0x41
