@@ -180,18 +180,25 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   tsksw();
 
-  /* Let's create some task! :) */
+  /* start the elf modules */
   {
-    uint32_t i, ntask = 1;
-    for (i = 0; i < ntask; i++)
-      if(!spawnProcess(&(processTable[numProcess++]), 
-		       modinfo[0].start,
-		       modinfo[0].len)) {
-	KPANIC("FULL MEMORY");
-      } else {
-	processTable[numProcess - 1].pid = numProcess - 1;
-	processTable[numProcess - 1].ppid = 0;
+    uint32_t i;
+    for (i = 0; i < boot_info->mods_count; i++) {
+      //module = (module_t*)((uint32_t*)(boot_info->mods_addr) + i);
+      modinfo[i].start = (uint32_t*)module[i].mod_start;
+      modinfo[i].len = module[i].mod_end - module[i].mod_start;
+      if ((*((char*)modinfo[i].start) == 0x7F) &&
+	  !kmemcmp((char*)modinfo[i].start + 1, "ELF", 3)) {
+	if(!spawnProcess(&(processTable[numProcess++]), 
+			 modinfo[i].start,
+			 modinfo[i].len)) {
+	  KPANIC("FULL MEMORY");
+	} else {
+	  processTable[numProcess - 1].pid = numProcess - 1;
+	  processTable[numProcess - 1].ppid = 0;
+	}
       }
+    }
   }
 
   InitKeyboard();
