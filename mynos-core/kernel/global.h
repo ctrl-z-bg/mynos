@@ -23,6 +23,8 @@
 
 #define NULL 0x0
 
+//#define TRY_VGA
+
 #define __MEMORY_BITMAP_PHY_ADDRESS 0x32000    /* 200KB */
 
 #define LAST_PAGE_DIR_VALID_INDEX 1023
@@ -40,6 +42,7 @@ typedef short          short16_t;
 typedef unsigned int   __kernel_size_t;
 typedef __kernel_size_t size_t;
 typedef size_t ssize_t;
+typedef long int off_t;               /* Type of file sizes and offsets.  */
 
 extern int _asm_global_mem_size;
 extern int _asm_last_kernel_page_dir_entry_used;

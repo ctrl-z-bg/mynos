@@ -49,14 +49,25 @@ void init_memory() {
 
 }
 
-void * __OS_askPages(unsigned int npages, int alloc_now) {
-  static uint32_t page_addr = 0;
-  uint32_t last_page = __LAST_LINEAR_PAGE;
+void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
+  uint32_t page_addr;
+  uint32_t last_page;
   uint32_t not_used;
 
-  for (; page_addr <= last_page; page_addr++)
+  if (flags & PF_USER) { // it's a user request
+    page_addr = ((_asm_last_kernel_page_dir_entry_used+1) * FOURMB)>>12;
+    last_page = __LAST_LINEAR_PAGE;
+  } else {
+    page_addr = 0;
+    last_page = ((_asm_last_kernel_page_dir_entry_used+1) * FOURMB - 
+		 PAGE_SIZE) >> 12;
+  }
+
+  for (; page_addr <= last_page; page_addr++) {
     if (__pg_free_pages_from_page(page_addr, npages, &not_used) == npages)
-      return __OS_askPagesFrom((void *)(page_addr<<12), npages, alloc_now);
+      return __OS_askPagesFrom((void *)(page_addr<<12), npages, alloc_now,
+			       flags);
+  }
 
   page_addr = 0x0;
 
@@ -102,7 +113,7 @@ uint32_t __pg_find_a_free_physical_page() {
 
 
 void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
-			 int alloc_now) {
+			 int alloc_now, uint32_t flags) {
   uint32_t page;
   uint32_t first_page = (((uint32_t)pageaddr)>>12);
   uint32_t last_page  = (first_page + npages -1);
@@ -140,10 +151,12 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
     if (alloc_now)
       __SET_PAGE_TABLE_ENTRY_AND_ALLOC(__PAGE_PD_INDEX(page),
 				       __PAGE_PT_INDEX(page),
-				       (__pg_find_a_free_physical_page() << 12))
+				       (__pg_find_a_free_physical_page() << 12),
+				       flags)
     else
       __SET_PAGE_TABLE_ENTRY(__PAGE_PD_INDEX(page),
-			     __PAGE_PT_INDEX(page));
+			     __PAGE_PT_INDEX(page),
+			     flags);
   }
 	
   return pageaddr;

@@ -42,39 +42,54 @@ tss_t * spawnProcess(tss_t * tss) {
   uint32_t * stackFrame; 
   uint32_t i;
   ushort16_t tssd_gdt_sel, code_gdt_sel, data_gdt_sel;
+  uint32_t npages_for_process = 16;
 
-  if ((newPD = (uint32_t*)__OS_askPages(1, 1)) == NULL) return NULL;
+  if ((newPD = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(newPD, PAGE_SIZE);
 
   for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
     newPD[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
 
-  if ((lastPT = (uint32_t*)__OS_askPages(1, 1)) == NULL) return NULL;
+  // HORRIBLE HACK!!! Open VGA memory to all processes!
+#ifdef TRY_VGA
+  {
+    uint32_t * pte;
+    uint32_t i;
+
+    newPD[0] = newPD[0] | PF_USER | PF_READWRITE;
+    for (i = 0xA0000; i<0xB0000; i+=0x1000) {
+      pte = (int*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(i), 
+					 __ADDRESS_PT_INDEX(i));
+      *pte = *pte | PF_USER | PF_READWRITE;
+    }
+  }
+#endif
+
+  if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(lastPT, PAGE_SIZE);
 
-  if ((lastButOnePT = (uint32_t*)__OS_askPages(1, 1)) == NULL) return NULL;
+  if ((lastButOnePT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(lastButOnePT, PAGE_SIZE);
 
-  if ((currPT = (uint32_t*)__OS_askPages(1, 1)) == NULL) return NULL;
+  if ((currPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(currPT, PAGE_SIZE);
   newPD[_asm_last_kernel_page_dir_entry_used + 1] = 
     LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_USER | PF_READWRITE | PF_PRESENT;
 
-  if ((currPF = (uint32_t*)__OS_askPages(2, 1)) == NULL) return NULL;
+  if ((currPF = (uint32_t*)__OS_askPages(npages_for_process, 1, 0)) == NULL) return NULL;
 
   ///////////////
   kmemcpy((void*)currPF, (void*)test_start, test_len);
   /////////////////
 
-  currPT[0] = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_USER | PF_PRESENT |
-    PF_READWRITE;
-  currPT[1] = LINEAR_TO_PHYSICAL_ADDRESS(currPF+1024) | PF_USER 
-    | PF_PRESENT | PF_READWRITE;
+  for (i = 0; i < npages_for_process; i++)
+  currPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(currPF +(1024*i)) 
+    | PF_USER | PF_PRESENT | PF_READWRITE;
 
-  /* alloc a third page (allocated only logically) */
+  /* alloc a third page (allocated only logically)
   if ((currPF = (uint32_t*)__OS_askPages(1, 0)) == NULL) return NULL;
   currPT[2] = PF_USER | PF_LOGICAL_PRESENT | PF_READWRITE;
-
+*/
 
   newPD[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
   newPD[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(lastButOnePT) | PF_USER | PF_READWRITE | PF_PRESENT;
@@ -91,7 +106,7 @@ tss_t * spawnProcess(tss_t * tss) {
   lastPT[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(lastButOnePT) | PF_PRESENT;
   
   lastButOnePT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(newPD) | PF_PRESENT;
-  if ((stackFrame = (uint32_t*)__OS_askPages(1, 0)) == NULL) return NULL;
+  if ((stackFrame = (uint32_t*)__OS_askPages(1, 0, 0)) == NULL) return NULL;
   //  lastButOnePT[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_USER | PF_PRESENT | PF_READWRITE;
   lastButOnePT[1024-2] = PF_USER | PF_LOGICAL_PRESENT | PF_READWRITE;
 
@@ -148,7 +163,7 @@ tss_t * spawnProcess(tss_t * tss) {
   tss->esp1 = tss->esp - 1000;
   tss->esp2 = tss->esp - 1000;
 #else
-  if ((stackFrame = (uint32_t*)__OS_askPages(1, 1)) == NULL) return NULL;
+  if ((stackFrame = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   tss->esp0 = tss->esp1 = tss->esp2 = (uint32_t)stackFrame + 4095;
 #endif
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
@@ -157,7 +172,7 @@ tss_t * spawnProcess(tss_t * tss) {
 {
   union DT_entry * ldt;
   /* CREATE LDT */
-  if ((ldt = (union DT_entry*)__OS_askPages(1, 0)) == NULL) return NULL;
+  if ((ldt = (union DT_entry*)__OS_askPages(1, 0, 0)) == NULL) return NULL;
 
   gdt_set_entry(102, (uint32_t)ldt,
 		4096, (D_LDT + D_BIG + D_DPL3));

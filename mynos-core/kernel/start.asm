@@ -83,20 +83,6 @@ _start:
 	jmp   multiboot_entry
 
 
-
-;%ifndef __ELF__
-;	 /* header_addr */
-;	 .long   multiboot_header
-;	 /* load_addr */
-;	 .long   _start
-;	 /* load_end_addr */
-;	 .long   _edata
-;	 /* bss_end_addr */
-;	 .long   _end
-;	 /* entry_addr */
-;	 .long   multiboot_entry
-;%endif /* ! __ELF__ */
-;
 multiboot_entry:
 
 	;; save multiboot information pointer on stack
@@ -167,8 +153,8 @@ multiboot_entry:
 	or	ebx, FLAG_PAGE_PRESENT
 	mov	[eax], ebx
 	
-	;; set the first 256 entry of the first page table
-	;; to map the first MB of physical ram
+	;; set the first 1024 entry of the first page table
+	;; to map the first 4MB of physical ram
 	mov	ecx, 768	; ELF
 	mov	eax, 0x1
 	mov	edi, KERNEL_FIRST_PAGE_TABLE

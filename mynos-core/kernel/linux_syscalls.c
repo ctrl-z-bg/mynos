@@ -1,5 +1,6 @@
 #include "global.h"
 #include "video.h"
+#include "mem.h"
 #include "linux_syscalls.h"
 
 extern uint32_t currProcess;
@@ -12,6 +13,8 @@ __asm__ (\
 	 "   je .linux_write\n"\
 	 "   cmpl $20, %eax\n"\
 	 "   je .linux_getpid\n"\
+	 "   cmpl $90, %eax\n"\
+	 "   je .linux_mmap\n"\
 	 "   push %eax\n"\
 	 "   call _linux_syscall_NOTIMPLEMENTED\n"\
 	 ".linux_getpid:\n"\
@@ -25,6 +28,11 @@ __asm__ (\
 	 "   popl %ebx\n"
 	 "   popl %ecx\n"
 	 "   popl %edx\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_mmap:\n"\
+	 "   pushl %ebx\n"
+	 "   call _linux_syscall_mmap     \n"\
+	 "   popl %ebx\n"
 	 "   jmp .exit_linux_syscall\n"\
 	 ".exit_linux_syscall:\n"\
 	 "   iret                \n"\
@@ -49,3 +57,23 @@ int _linux_syscall_getpid() {
   return currProcess;
 }
 
+void * _linux_syscall_mmap(struct mmap_args * args) {
+  uint32_t npages;
+
+  printk("mmap: ");
+  print_long((long32_t)args->start);
+  print_char(' ');
+  print_long((long32_t)args->length);
+  print_char(' ');
+  print_long((long32_t)args->prot);
+  print_char(' ');
+  print_long((long32_t)args->flags);
+  print_char(' ');
+  print_long((long32_t)args->fd);
+  print_char(' ');
+  print_long((long32_t)args->offset);
+  print_char('\n');
+
+  npages = (args->length - 1) / PAGE_SIZE + 1;
+  return __OS_askPages(npages, 0, PF_READWRITE | PF_USER);
+}

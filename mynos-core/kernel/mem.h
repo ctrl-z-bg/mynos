@@ -25,6 +25,7 @@
 
 #define __LAST_LINEAR_PAGE 0xFFFFF
 #define PAGE_SIZE          0x1000
+#define FOURMB             0x400000
 
 #define PF_USER            (1<<2)
 #define PF_SUPERVISOR      0x0
@@ -119,18 +120,19 @@
                      __IS_PAGE_TABLE_PRESENT_GIVEN_LINEAR_ADDRESS(ADDRESS)
 
 /* set a linear page as allocated */
-#define __SET_PAGE_TABLE_ENTRY(TABLE, ENTRY)\
+#define __SET_PAGE_TABLE_ENTRY(TABLE, ENTRY, FLAGS)\
                      {\
                       int * pun = (int*)__GET_PAGE_TABLE_ENTRY(TABLE, ENTRY);\
-                      *pun = PF_LOGICAL_PRESENT;\
+                      *pun = FLAGS | PF_LOGICAL_PRESENT;\
                      }
 // AAAAAAAA                      __SET_MEMORY_BITMAP_PAGE_BIT((PAGE_PHY_ADDRESS)>>12);
 
 /* map a linear page to a physical one */
-#define __SET_PAGE_TABLE_ENTRY_AND_ALLOC(TABLE, ENTRY, PAGE_PHY_ADDRESS) \
+#define __SET_PAGE_TABLE_ENTRY_AND_ALLOC(TABLE, ENTRY, PAGE_PHY_ADDRESS, \
+					 FLAGS) \
                      {\
                       int * pun = (int*)__GET_PAGE_TABLE_ENTRY(TABLE, ENTRY);\
-                      *pun = (PAGE_PHY_ADDRESS) | 0x1; /* present bit */\
+                      *pun = (PAGE_PHY_ADDRESS) | FLAGS | PF_PRESENT; \
                       __SET_MEMORY_BITMAP_PAGE_BIT((PAGE_PHY_ADDRESS)>>12);\
                      }
 
@@ -201,9 +203,9 @@ void init_memory();
    'NULL'     if some problem occours
 */
 void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
-			 int alloc_now);
+			 int alloc_now, uint32_t flags);
 
-void * __OS_askPages(unsigned int npages, int alloc_now);
+void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags);
 void * __OS_releasePages(void *pageaddr, unsigned int npages);
 
 /* return the id of a free physical page */

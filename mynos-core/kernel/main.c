@@ -38,6 +38,10 @@
 
 #include "multiboot.h"
 
+#ifdef TRY_VGA
+#include "vga.h"
+#endif
+
 void __print_free_phy_pages() {
   printk("(adesso ci sono ");
   print_uint(__number_of_free_physical_pages);
@@ -109,6 +113,25 @@ void mynos_main(multiboot_info_t *boot_info) {
   module = (module_t *)boot_info->mods_addr;
   test_start = module->mod_start;
   test_len = module->mod_end - module->mod_start;
+
+#ifdef TRY_VGA
+  init_graph_vga(320, 200, 1);
+#endif
+#if 0
+  {
+    int y;
+    for (y = 0; y < 200; y++)
+      vga_draw_line(0, y, 319, y, 0);
+  }
+
+  vga_draw_rect(0,0,319,199, 15);
+  vga_draw_rect(50, 20, 80, 50, 15);
+  vga_draw_rect(100, 20, 130, 50, 15);
+  vga_draw_line(90, 50, 90, 150, 15);
+  vga_draw_line(60, 170, 120, 170, 15);
+  vga_draw_line(50, 160, 60, 170, 15);
+  vga_draw_line(120, 170, 130, 160, 15);
+#endif
 
   tsksw();
 

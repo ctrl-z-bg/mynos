@@ -36,6 +36,14 @@ void printk(char * s) {
   }
 }
 
+void print_long(long32_t n) {
+  if (n < 0) {
+    print_char('-');
+    n = -n;
+  }
+  print_ulong((ulong32_t)n);
+}
+
 void print_ulong(ulong32_t n) {
   char s[MAX_INT_LEN];
   char * curr_char;

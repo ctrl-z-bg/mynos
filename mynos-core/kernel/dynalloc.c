@@ -1,8 +1,10 @@
+#include "global.h"
 #include "dynalloc.h"
 
-extern void * __OS_askPages(unsigned int npages, int alloc_now);
+extern void * __OS_askPages(unsigned int npages, int alloc_now, 
+			    uint32_t flags);
 extern void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
-				int alloc_now);
+				int alloc_now, uint32_t flags);
 extern void * __OS_releasePages(void *pageaddr, unsigned int npages);
 
 
@@ -76,7 +78,7 @@ _findFreeBlock(unsigned int sz)
 	if ( _GET_PAGE_ADDRESS(ret + osz - 1) == _GET_PAGE_BLOCK(runner) )
 	  /* end within an allocated page */
 	  npages--;
-	__OS_askPagesFrom(paddr, npages, 0);
+	__OS_askPagesFrom(paddr, npages, 0, 0);
 	_insertBlock(ret + _SIZE_SZ, sz, old, runner);
 	return(ret);
       }
@@ -106,7 +108,7 @@ _findFreeBlock(unsigned int sz)
 void *
 _createNewBlock(unsigned int npages, unsigned int sz)
 {
-  void *addr = __OS_askPages(npages, 0);
+  void *addr = __OS_askPages(npages, 0, 0);
   if ( !addr ) /* storage exhausted */
     return(0);
 

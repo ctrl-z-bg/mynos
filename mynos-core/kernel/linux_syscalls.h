@@ -18,6 +18,9 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#ifndef __LINU_SYSCALLS_H__
+#define __LINU_SYSCALLS_H__
+#include "global.h"
 
 /* the 0x80 handler */
 void _linux_syscalls_trap_TRAP();
@@ -28,3 +31,16 @@ void _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id);
 /* the sys_calls... */
 void _linux_syscall_write(int fd, const void *buf, size_t count);
 int _linux_syscall_getpid();
+
+struct mmap_args {
+  ulong32_t * start;
+  size_t length;
+  int prot;
+  int flags;
+  int fd;
+  off_t offset;
+};
+
+void * _linux_syscall_mmap(struct mmap_args * args);
+
+#endif

@@ -33,6 +33,10 @@ void print_ulong(ulong32_t n);
 #define print_uint(N) print_ulong((ulong32_t)N)
 #define print_ushort(N) print_ulong((ulong32_t)N)
 
+void print_long(long32_t n);
+#define print_int(N) print_long((long32_t)N)
+#define print_short(N) print_long((long32_t)N)
+
 void print_ulong_hex(ulong32_t n);
 #define print_uint_hex(N) print_ulong_hex((ulong32_t)N)
 #define print_uint_hex(N) print_ulong_hex((ulong32_t)N)
