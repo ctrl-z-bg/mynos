@@ -21,6 +21,8 @@ __asm__ (\
 	 "   je .linux_write\n"\
 	 "   cmpl $20, %eax\n"\
 	 "   je .linux_getpid\n"\
+	 "   cmpl $64, %eax\n"\
+	 "   je .linux_getppid\n"\
 	 "   cmpl $90, %eax\n"\
 	 "   je .linux_mmap\n"\
 	 "   push %eax\n"\
@@ -35,6 +37,9 @@ __asm__ (\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_getpid:\n"\
 	 "   call _linux_syscall_getpid\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_getppid:\n"\
+	 "   call _linux_syscall_getppid\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_write:\n"\
 	 "   pushl %edx\n"
@@ -85,6 +90,10 @@ void _linux_syscall_write(int fd, const void *buf, size_t count) {
 
 int _linux_syscall_getpid() {
   return currProcess;
+}
+
+int _linux_syscall_getppid() {
+  return processTable[currProcess].ppid;
 }
 
 void * _linux_syscall_mmap(struct mmap_args * args) {

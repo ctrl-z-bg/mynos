@@ -32,6 +32,7 @@ void _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id);
 void _linux_syscall_exit(int status);
 void _linux_syscall_write(int fd, const void *buf, size_t count);
 int _linux_syscall_getpid();
+int _linux_syscall_getppid();
 
 struct mmap_args {
   ulong32_t * start;
