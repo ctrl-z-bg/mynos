@@ -227,7 +227,7 @@ tss_t * spawnProcess(tss_t * tss) {
   newPD[_asm_last_kernel_page_dir_entry_used + 2] = 
     LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_USER | PF_READWRITE | PF_PRESENT;
 
-  for (i = 0; i < 10; i++)
+  for (i = 0; i < ((bytecode.len - 1) / PAGE_SIZE + 1); i++)
     currPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(bytecode.start +(1024*i)) 
       | PF_USER | PF_PRESENT | PF_READWRITE;
   lastPT[_asm_last_kernel_page_dir_entry_used + 2] = 

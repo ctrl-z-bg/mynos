@@ -35,12 +35,12 @@ int mynos_send(int dest, char * buf, unsigned int size,
   return ret;
 }
 
-int mynos_recv(int dest, char * buf, unsigned int maxsize,
+int mynos_recv(int sender, char * buf, unsigned int maxsize,
 	       unsigned int flags) {
   int ret;
   __asm__ volatile("pushal\n");
   __asm__ volatile("movl $4, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(dest));
+  __asm__ volatile("movl %0, %%ebx\n"::"m"(sender));
   __asm__ volatile("movl %0, %%ecx\n"::"m"(buf));
   __asm__ volatile("movl %0, %%edx\n"::"m"(maxsize));
   __asm__ volatile("movl %0, %%esi\n"::"m"(flags));
@@ -50,12 +50,12 @@ int mynos_recv(int dest, char * buf, unsigned int maxsize,
   return ret;
 }
 
-int mynos_recvAll(int * dest, char * buf, unsigned int maxsize,
+int mynos_recvAll(int * sender, char * buf, unsigned int maxsize,
 		  unsigned int flags) {
   int ret;
   __asm__ volatile("pushal\n");
   __asm__ volatile("movl $5, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(dest));
+  __asm__ volatile("movl %0, %%ebx\n"::"m"(sender));
   __asm__ volatile("movl %0, %%ecx\n"::"m"(buf));
   __asm__ volatile("movl %0, %%edx\n"::"m"(maxsize));
   __asm__ volatile("movl %0, %%esi\n"::"m"(flags));

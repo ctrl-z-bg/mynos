@@ -25,9 +25,9 @@
 
 int mynos_send(int dest, char * buf, unsigned int size,
 	       unsigned int flags);
-int mynos_recv(int dest, char * buf, unsigned int maxsize,
+int mynos_recv(int sender, char * buf, unsigned int maxsize,
 	       unsigned int flags);
-int mynos_recvAll(int * dest, char * buf, unsigned int maxsize,
+int mynos_recvAll(int * sender, char * buf, unsigned int maxsize,
 		  unsigned int flags);
 
 #endif
