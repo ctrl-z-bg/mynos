@@ -26,6 +26,7 @@
 #include "process.h"
 #include "procqueue.h"
 #include "video.h"
+#include "sched.h"
 
 #define MAXSEM ((MAXPROCESSES)*2)
 #define MAXSEMVALUE 100
@@ -46,21 +47,14 @@ static struct semaphore_list {
 } semaphores;
 
 
-
 #ifdef DEBUG
 #define yield() {\
-    struct {long a ,b;} tmp = {0, 0};\
     printk("Yielding on semaphore!\n");\
-    currProcess = 0;\
-    tmp.b = (long)processTable[currProcess].tssd_gdt_selector;\
-    __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));\
+    sched();\
     }
 #else
 #define yield() {\
-    struct {long a ,b;} tmp = {0, 0};\
-    currProcess = 0;\
-    tmp.b = (long)processTable[currProcess].tssd_gdt_selector;\
-    __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));\
+    sched();\
     }
 #endif
 

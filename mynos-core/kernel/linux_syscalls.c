@@ -27,6 +27,8 @@
 #include "kutils.h"
 #include "linux_syscalls.h"
 #include "dynalloc.h"
+#include "sched.h"
+#include "sem.h"
 
 extern uint32_t currProcess;
 
@@ -161,17 +163,13 @@ void _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id) {
 }
 
 void _linux_syscall_exit(int status) {
-  struct {long a ,b;} tmp = {0, 0};
-    
   printk("process ");
   print_int(currProcess);
   printk(" exited with code ");
   print_int(status);
   print_char('\n');
   killProcess();
-  currProcess = 0;
-  tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
-  __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
+  sched();
 }
 
 int _linux_syscall_open(char * pathname, int flags, int mode) {
@@ -294,6 +292,8 @@ int _linux_syscall_fork() {
   uint32_t *lastPT;
   uint32_t new_pid;
   int ret;
+  ushort16_t tssd_gdt_sel;
+  tss_t * new_pid_tss;
 
   if ((pdc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
   if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
@@ -335,34 +335,70 @@ int _linux_syscall_fork() {
 
   new_pid = numProcess++;
 
-  /* allocate a new tss */
-  processTable[new_pid].tss = (tss_t*)kmalloc(sizeof(tss_t));
-
-  processTable[new_pid].tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
-
+  new_pid_tss = (tss_t*)kmalloc(sizeof(tss_t));
   processTable[currProcess].isForking = new_pid;
 
-  { // set the tssd for the new process
-    ushort16_t tssd_gdt_sel;
-    tssd_gdt_sel = gdt_get_free_index();
-    gdt_set_entry(tssd_gdt_sel, 
-		  (uint32_t)processTable[new_pid].tss,
-		  sizeof(tss_t), D_TSS);
-    processTable[new_pid].tssd_gdt_selector = tssd_gdt_sel << 3;
-  }
+  // set the tssd for the new process
+  tssd_gdt_sel = gdt_get_free_index();
+  gdt_set_entry(tssd_gdt_sel, 
+		(uint32_t)new_pid_tss,
+		sizeof(tss_t), D_TSS);
 
-  {   // tasksw to idle process
-    struct {long a ,b;} tmp = {0, 0};
+  /* copy the forking process state to the new one */
     
-    currProcess = 0;
-    tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
-    __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
-  }
+  /* copy the whole structure */
+  kmemcpy((void*)&(processTable[new_pid]), 
+	  (void*)&(processTable[currProcess]),
+	  sizeof(process_descriptor_t));
+  
+  /* copy the tsses */
+  processTable[new_pid].tss = new_pid_tss;
+  kmemcpy((void*)processTable[new_pid].tss, 
+	  (void*)processTable[currProcess].tss,
+	  sizeof(tss_t));
+  
+  processTable[new_pid].tssd_gdt_selector = tssd_gdt_sel << 3;
+  processTable[new_pid].tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
+  
+  processTable[new_pid].pid = new_pid;
+  processTable[new_pid].ppid = currProcess;
+  processTable[new_pid].isForking = 0;
+  processTable[new_pid].isAlive = 1;
+  // IPC
+  processTable[new_pid].isWaitingSender = -1;
+  processTable[new_pid].isWaitingReceiver = -1;
+  // SEM
+  processTable[new_pid].isWaitingOnP = -1;
+  processTable[new_pid].privSem = __OS_sem_allocateSemaphore(0);
+  
+  __OS_ipc_initChannelList(&(processTable[new_pid].channels));
+  
+  /* copy the registers, except eip and esp */
+  asm volatile("movl %%eax, %0":"=m"(processTable[new_pid].tss->eax));
+  asm volatile("movl %%ebx, %0":"=m"(processTable[new_pid].tss->ebx));
+  asm volatile("movl %%ecx, %0":"=m"(processTable[new_pid].tss->ecx));
+  asm volatile("movl %%edx, %0":"=m"(processTable[new_pid].tss->edx));
+  asm volatile("movl %%esi, %0":"=m"(processTable[new_pid].tss->esi));
+  asm volatile("movl %%edi, %0":"=m"(processTable[new_pid].tss->edi));
+  asm volatile("movl %%ebp, %0":"=m"(processTable[new_pid].tss->ebp));
+  
+  asm volatile("movw %%cs, %0":"=m"(processTable[new_pid].tss->cs));
+  asm volatile("movw %%ds, %0":"=m"(processTable[new_pid].tss->ds));
+  asm volatile("movw %%es, %0":"=m"(processTable[new_pid].tss->es));
+  asm volatile("movw %%fs, %0":"=m"(processTable[new_pid].tss->fs));
+  asm volatile("movw %%gs, %0":"=m"(processTable[new_pid].tss->gs));
+  asm volatile("movw %%ss, %0":"=m"(processTable[new_pid].tss->ss));
+  
+  /* copy eip and esp and call the scheduler */
+  asm volatile ("movl $1f, %0\n\t"\
+		"movl %%esp, %1\n\t"\
+		"call sched\n\t"\
+		"1:\t"\
+		:"=m"(processTable[new_pid].tss->eip),\
+		"=m"(processTable[new_pid].tss->esp):);
 
   // back from a task switch...
-  ret = (int)processTable[currProcess].isForking;
+  ret = processTable[currProcess].isForking;
   processTable[currProcess].isForking = 0;
-
   return ret;
 }
-

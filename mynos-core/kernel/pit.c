@@ -23,7 +23,7 @@
 #include "io.h"
 #include "video.h"
 #include "kutils.h"
-#include "sem.h"
+#include "sched.h"
 
 void init_pit(int freq, unsigned char channel) {
   unsigned int temp;
@@ -50,65 +50,10 @@ __asm__ (\
 
 
 unsigned int timer_ticks = 0;
-#include "tss.h"
-#include "process.h"
 void pit_handler() {
-  static uint32_t count = 1;
-  uint32_t p_ts_time = 0;
-  struct {long a ,b;} tmp = {0, 0};
-  uint32_t oldProcess = currProcess;
-  pid_t isForking;
-
-  //asm("int $0x1C"); /* Extra timer interrupt, used by floppy for timeout etc.. */
-
   timer_ticks++;
-  /* a task switch any 10 msec */
-  if ((count++) > 1) {
-    p_ts_time = 1;
-    count = 1;
-    do {
-      currProcess = (currProcess + 1) % numProcess;
-    }
-    while ((!processTable[currProcess].isAlive) ||
-	   (processTable[currProcess].isWaitingOnP != -1) );
-    tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
-  }
 
   outportb(0x20, 0x20);
-
-  /* terminate a forking action */
-  if ((isForking = processTable[currProcess].isForking) != 0) {
-    uint32_t** pgdir = processTable[isForking].tss->pgdir;
-    ushort16_t tssd = processTable[isForking].tssd_gdt_selector;
-    tss_t * tss = processTable[isForking].tss;
-
-    /* copy the father process descriptor */
-    kmemcpy((void*)&(processTable[isForking]), 
-	    (void*)&(processTable[currProcess]),
-	    sizeof(process_descriptor_t));
-    /* restore the new process tss */
-    processTable[isForking].tss = tss;
-    /* copy the father tss to the child's */
-    kmemcpy((void*)processTable[isForking].tss, 
-	    (void*)processTable[currProcess].tss,
-	    sizeof(tss_t));
-    processTable[isForking].tss->io_bitmap_offset = sizeof(tss_t)<<16;
-    processTable[isForking].tss->pgdir = pgdir;
-    processTable[isForking].tssd_gdt_selector = tssd;
-    processTable[isForking].pid = isForking;
-    processTable[isForking].ppid = currProcess;
-    processTable[isForking].isForking = 0;
-    processTable[isForking].isAlive = 1;
-    // IPC
-    processTable[isForking].isWaitingSender = -1;
-    processTable[isForking].isWaitingReceiver = -1;
-    // SEM
-    processTable[isForking].isWaitingOnP = -1;
-    processTable[isForking].privSem = __OS_sem_allocateSemaphore(0);
-
-    __OS_ipc_initChannelList(&(processTable[isForking].channels));
-  }
   
-  if (p_ts_time && (currProcess != oldProcess))
-    __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
+  sched();
 }
