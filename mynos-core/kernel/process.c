@@ -23,7 +23,9 @@
 #include "gdt.h"
 #include "tss.h"
 #include "kutils.h"
+#ifdef ELF
 #include "elf.h"
+#endif
 #include "process.h"
 
 tss_t processTable[MAXPROCESSES];
