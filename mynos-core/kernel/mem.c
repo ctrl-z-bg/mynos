@@ -227,6 +227,7 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   uint32_t * pte;
   uint32_t flags;
 
+#ifdef DEBUG
   print_char('\n');
   print_char('\n');
   printk("Process ");
@@ -252,6 +253,7 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
     printk("in user mode\n");
   else
     printk("in superuser mode\n");
+#endif
 
   /* check if the page table is allocated */
   if ((*(uint32_t*)__GET_PAGE_DIR_ENTRY(__ADDRESS_PD_INDEX(addr)) &
@@ -260,8 +262,10 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
 
   pte = (int*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), 
 				     __ADDRESS_PT_INDEX(addr));
+#ifdef DEBUG
   if ((*pte) & PF_LOGICAL_PRESENT)
     printk("but the page is tagged as allocated\n");
+#endif
 
   if (!((*pte) & PF_LOGICAL_PRESENT)) // not allocated
     KPANIC("page fault");
@@ -273,9 +277,11 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   new_phy_page = (__pg_find_a_free_physical_page()<<12);
   *pte = new_phy_page | flags | PF_PRESENT;
   __SET_MEMORY_BITMAP_PAGE_BIT((new_phy_page)>>12);
+#ifdef DEBUG
   printk("new allocated page: ");
   print_ulong_hex(new_phy_page);
   print_char('\n');
   print_char('\n');
+#endif
 }
 

@@ -17,21 +17,34 @@ __asm__ (\
 	 "   je .linux_exit\n"\
 	 "   cmpl $2, %eax\n"\
 	 "   je .linux_fork\n"\
+	 "   cmpl $3, %eax\n"\
+	 "   je .linux_read\n"\
 	 "   cmpl $4, %eax\n"\
 	 "   je .linux_write\n"\
 	 "   cmpl $5, %eax\n"\
 	 "   je .linux_open\n"\
+	 "   cmpl $6, %eax\n"\
+	 "   je .linux_close\n"\
 	 "   cmpl $20, %eax\n"\
 	 "   je .linux_getpid\n"\
 	 "   cmpl $64, %eax\n"\
 	 "   je .linux_getppid\n"\
 	 "   cmpl $90, %eax\n"\
 	 "   je .linux_mmap\n"\
+	 "   cmpl $91, %eax\n"\
+	 "   je .linux_munmap\n"\
+	 "   cmpl $140, %eax\n"\
+	 "   je .linux_llseek\n"\
 	 "   push %eax\n"\
 	 "   call _linux_syscall_NOTIMPLEMENTED\n"\
 	 ".linux_exit:\n"\
 	 "   pushl %ebx\n"\
 	 "   call _linux_syscall_exit\n"\
+	 "   popl %ebx\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_close:\n"\
+	 "   pushl %ebx\n"\
+	 "   call _linux_syscall_close\n"\
 	 "   popl %ebx\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_fork:\n"\
@@ -42,6 +55,15 @@ __asm__ (\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_getppid:\n"\
 	 "   call _linux_syscall_getppid\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_read:\n"\
+	 "   pushl %edx\n"
+	 "   pushl %ecx\n"
+	 "   pushl %ebx\n"
+	 "   call _linux_syscall_read     \n"\
+	 "   popl %ebx\n"
+	 "   popl %ecx\n"
+	 "   popl %edx\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_write:\n"\
 	 "   pushl %edx\n"
@@ -65,6 +87,26 @@ __asm__ (\
 	 "   pushl %ebx\n"
 	 "   call _linux_syscall_mmap     \n"\
 	 "   popl %ebx\n"
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_munmap:\n"\
+	 "   pushl %ecx\n"
+	 "   pushl %ebx\n"
+	 "   call _linux_syscall_munmap     \n"\
+	 "   popl %ebx\n"
+	 "   popl %ecx\n"
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_llseek:\n"\
+	 "   pushl %edi\n"
+	 "   pushl %esi\n"
+	 "   pushl %edx\n"
+	 "   pushl %ecx\n"
+	 "   pushl %ebx\n"
+	 "   call _linux_syscall_llseek     \n"\
+	 "   popl %ebx\n"
+	 "   popl %ecx\n"
+	 "   popl %edx\n"\
+	 "   popl %esi\n"\
+	 "   popl %edi\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".exit_linux_syscall:\n"\
 	 "   iret                \n"\
@@ -92,15 +134,38 @@ void _linux_syscall_exit(int status) {
 }
 
 int _linux_syscall_open(char * pathname, int flags, int mode) {
-  return -1;
+  return 5;
 }
 
-void _linux_syscall_write(int fd, const void *buf, size_t count) {
+int _linux_syscall_close(int fd) {
+  return 0;
+}
+
+extern modinfo_t bytecode;
+static void * pun = 0;
+int _linux_syscall_read(int fd, const void *buf, size_t count) {
+  if (!pun) pun = (void*)bytecode.start;
+
+  kmemcpy((void*)buf, pun, count);
+  pun += count;
+  return count;
+}
+
+int _linux_syscall_llseek(uint32_t fd, ulong32_t offhi, ulong32_t offlow,
+			  long long int * result, uint32_t whence) {
+  long fava = (long)offlow;
+
+  pun = (void*)((uint32_t)bytecode.start + bytecode.len +fava);
+		//((offhi<<32) | offlow));
+  return 0;
+}
+
+int _linux_syscall_write(int fd, const void *buf, size_t count) {
   int i;
 
   for (i = 0; i < count; i++)
     print_char(((char*)buf)[i]);
-
+  return count;
 }
 
 int _linux_syscall_getpid() {
@@ -111,9 +176,20 @@ int _linux_syscall_getppid() {
   return processTable[currProcess].ppid;
 }
 
+int _linux_syscall_munmap(void *start, size_t length) {
+#ifdef DEBUG
+  printk("munmap: ");
+  print_ulong_hex((long32_t)start);
+  print_char(' ');
+  print_long((long32_t)length);
+#endif
+  return 0;
+}
+
 void * _linux_syscall_mmap(struct mmap_args * args) {
   uint32_t npages;
 
+#ifdef DEBUG
   printk("mmap: ");
   print_long((long32_t)args->start);
   print_char(' ');
@@ -127,6 +203,7 @@ void * _linux_syscall_mmap(struct mmap_args * args) {
   print_char(' ');
   print_long((long32_t)args->offset);
   print_char('\n');
+#endif //DEBUG
 
   npages = (args->length - 1) / PAGE_SIZE + 1;
   return __OS_askPages(npages, 0, PF_READWRITE | PF_USER);

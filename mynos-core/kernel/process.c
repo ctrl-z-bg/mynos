@@ -29,7 +29,7 @@ tss_t processTable[MAXPROCESSES];
 uint32_t numProcess = 1;
 uint32_t currProcess = 0;  /* the first process is the idle process */
 
-extern uint32_t test_start;
+extern uint32_t * test_start;
 extern uint32_t test_len;
 
 tss_t * spawnProcess(tss_t * tss) {

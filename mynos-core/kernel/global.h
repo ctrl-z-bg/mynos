@@ -24,6 +24,7 @@
 #define NULL 0x0
 
 //#define TRY_VGA
+#define DEBUG
 
 #define __MEMORY_BITMAP_PHY_ADDRESS 0x32000    /* 200KB */
 
@@ -48,5 +49,11 @@ typedef long int off_t;               /* Type of file sizes and offsets.  */
 extern int _asm_global_mem_size;
 extern int _asm_last_kernel_page_dir_entry_used;
 extern int _asm_first_free_physical_page_address;
+
+#define MAXMODULES 10
+typedef struct {
+  uint32_t * start;
+  uint32_t len;
+} modinfo_t;
 
 #endif

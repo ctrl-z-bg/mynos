@@ -77,14 +77,10 @@ void tsksw() {
 
 }
 
-#define MAXMODULES 10
-typedef struct {
-  uint32_t start;
-  uint32_t len;
-} modinfo_t;
-
-uint32_t test_start;
+uint32_t * test_start;
 uint32_t test_len;
+
+modinfo_t bytecode;
 
 void mynos_main(multiboot_info_t *boot_info) {
   module_t * module;
@@ -123,13 +119,15 @@ void mynos_main(multiboot_info_t *boot_info) {
   module = (module_t *)boot_info->mods_addr;
   for (i = 0; i < boot_info->mods_count; i++) {
     //module = (module_t*)((uint32_t*)(boot_info->mods_addr) + i);
-    modinfo[i].start = module[i].mod_start;
+    modinfo[i].start = (uint32_t*)module[i].mod_start;
     modinfo[i].len = module[i].mod_end - module[i].mod_start;
   }
 
   /* prepare the test program information */
   test_start = modinfo[0].start;
   test_len = modinfo[0].len;
+  bytecode.start = modinfo[1].start;
+  bytecode.len = modinfo[1].len;
 
 #ifdef TRY_VGA
   init_graph_vga(320, 200, 1);
@@ -161,7 +159,7 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   /* Let's create some task! :) */
   {
-    uint32_t i, ntask = 3;
+    uint32_t i, ntask = 1;
     for (i = 0; i < ntask; i++)
       if(!spawnProcess(&(processTable[numProcess++])))
 	KPANIC("FULL MEMORY");
