@@ -26,7 +26,7 @@
 /* Physical Page Descriptor Type */
 typedef struct {
   ushort16_t flags;
-  ushort16_t ref;
+  ushort16_t countref;
 } ppagedes_t;
 
 typedef struct {
@@ -36,6 +36,15 @@ typedef struct {
 
 extern pmemdes_t pmemdes;
 
-void createPhyMemManager();
+/* this function creates a physical memory manager. See .c for commments */
+void pmem_createPhyMemManager();
+
+uint32_t pmem_findAFreePhysicalPage();
+
+/* allocates page. if allocated then increments the countref*/
+void pmem_set(uint32_t page);
+
+/* it decrements the countref, if zero, deallocates page */
+void pmem_unset(uint32_t page);
 
 #endif

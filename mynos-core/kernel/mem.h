@@ -22,6 +22,7 @@
 #define __MEM_H__
 
 #include "global.h"
+#include "physicalmem.h"
 
 #define __LAST_LINEAR_PAGE 0xFFFFF
 #define PAGE_SIZE          0x1000
@@ -37,41 +38,6 @@
 
 /* this is used to allocate kernel pages in user space */
 #define PF_SUPERVISOR_IN_USER_SPACE 0x1000
-
-/*************************************************************************
-*                        MEMORY BITMAP STUFF                             *
-*************************************************************************/
-
-/* set a bit in the physical memory bitmap */
-#define __SET_MEMORY_BITMAP_PAGE_BIT(PHY_PAGE) \
-                     {\
-                      __memory_bitmap[(PHY_PAGE) / 8] |= (1<<((PHY_PAGE)%8));\
-                      __number_of_free_physical_pages--;\
-                     }
-
-/* reset a bit in the physical memory bitmap */
-#define __RESET_MEMORY_BITMAP_PAGE_BIT(PHY_PAGE) \
-                     {\
-                      __memory_bitmap[(PHY_PAGE) / 8] &= ~(1<<((PHY_PAGE)%8));\
-                      __number_of_free_physical_pages++;\
-                     }
-
-/* true if the page is not allocated */
-#define __IS_PHYSICAL_PAGE_FREE(PHY_PAGE) \
-                     (!(__memory_bitmap[(PHY_PAGE) / 8] & (1<<((PHY_PAGE)%8))))
-
-/* it returns a byte from the memory bitmap */
-#define __GET_MEMORY_BITMAP_BYTE(B) (__memory_bitmap[B])
-
-/* given a byte and a bit in the memory bitmap, it returns the corresponding
-   page number */
-#define __MEMORY_BITMAP_BIT_TO_PAGE(BYTE, BIT) (8*(BYTE) + (BIT))
-
-/************************************************************************
-*                        END OF MEMORY BITMAP STUFF                     *
-************************************************************************/
-
-
 
 /************************************************************************
 *                   PAGE DIRECTORY AND PAGE TABLES STUFF                *
@@ -128,7 +94,6 @@
                       uint32_t * pun = (uint32_t*)__GET_PAGE_TABLE_ENTRY(TABLE, ENTRY);\
                       *pun = FLAGS | PF_LOGICAL_PRESENT;\
                      }
-// AAAAAAAA                      __SET_MEMORY_BITMAP_PAGE_BIT((PAGE_PHY_ADDRESS)>>12);
 
 /* map a linear page to a physical one */
 #define __SET_PAGE_TABLE_ENTRY_AND_ALLOC(TABLE, ENTRY, PAGE_PHY_ADDRESS, \
@@ -136,7 +101,7 @@
                      {\
                       uint32_t * pun = (uint32_t*)__GET_PAGE_TABLE_ENTRY(TABLE, ENTRY);\
                       *pun = (PAGE_PHY_ADDRESS) | FLAGS | PF_PRESENT; \
-                      __SET_MEMORY_BITMAP_PAGE_BIT((PAGE_PHY_ADDRESS)>>12);\
+                      pmem_set((PAGE_PHY_ADDRESS)>>12);\
                      }
 
 
@@ -151,7 +116,7 @@
                       *pun = (PAGE_TAB_PHY_ADDRESS) | \
                              PF_USER | PF_READWRITE |PF_PRESENT;\
                       *pun2 = *pun;\
-                      __SET_MEMORY_BITMAP_PAGE_BIT((PAGE_TAB_PHY_ADDRESS)>>12);\
+                      pmem_set((PAGE_TAB_PHY_ADDRESS)>>12);\
                      }
 
 /* true if the linear page frame ENTRY is present. Use it ONLY if you

@@ -47,7 +47,8 @@ void init_memory() {
     __memory_bitmap[i] = 0x0;
   for (i = 0; i < first_free_phy_page; i++)   /* set bitmap for pages already 
 						 allocated */
-    __SET_MEMORY_BITMAP_PAGE_BIT(i);
+    pmem_set(i);
+  //__SET_MEMORY_BITMAP_PAGE_BIT(i);
 
   _init_gdt();
 
@@ -58,14 +59,14 @@ void init_memory() {
   printk(" PTs...");
   for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
     if (__IS_PAGE_TABLE_FREE(i)) {
-      uint32_t newptaddr = (__pg_find_a_free_physical_page() << 12);
+      uint32_t newptaddr = (pmem_findAFreePhysicalPage() << 12);
       __SET_PAGE_DIR_ENTRY(i, newptaddr);
       INIT_PAGE_TABLE(__GET_PAGE_TABLE_ENTRY(i, 0));
     }
   printk(" done\n");
 
   /* create the real physical memory manager*/
-  createPhyMemManager();
+  pmem_createPhyMemManager();
 }
 
 void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
@@ -93,41 +94,6 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
 
   return (void*)0;
 }
-
-uint32_t __pg_find_a_free_physical_page() {
-  static uint32_t current_page = 0;
-  uint32_t current_byte        = current_page / 8;
-  uint32_t old_current_byte    = current_byte;
-  uint32_t memory_full         = 0;
-  uint32_t i;
-
-  if (__IS_PHYSICAL_PAGE_FREE(current_page))
-    return current_page;
-
-  /* find the first 8 page group where I can find a free page */
-  while (!memory_full && !(~(__GET_MEMORY_BITMAP_BYTE(current_byte)))) {
-    current_byte = (current_byte+1) % __memory_bitmap_size;
-    if (current_byte == old_current_byte)
-      memory_full = 1;
-  }
-
-  /* memory full */
-  if (memory_full)
-    return 0;          /* page 0 is always reserved and so it cannot be free */
-
-  /* search for the first bit unused in the new current_byte */
-  current_page = __MEMORY_BITMAP_BIT_TO_PAGE(current_byte, 0);
-  for (i = 0; i < 8; i++) {
-    if (__IS_PHYSICAL_PAGE_FREE(current_page))
-      return current_page;
-    else
-      current_page++;
-  }
-
-  KPANIC("KERNEL ERROR IN __find_first_free_physical_page");
-}
-
-
 
 void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
 			 int alloc_now, uint32_t flags) {
@@ -160,7 +126,7 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
   for (page = first_page; page <= last_page; page++) {
     /* if the page table for 'page' doesn't exist, we create it */
     if (!__IS_PAGE_TABLE_PRESENT(__PAGE_PD_INDEX(page))) {
-      uint32_t newptaddr = (__pg_find_a_free_physical_page() << 12);
+      uint32_t newptaddr = (pmem_findAFreePhysicalPage() << 12);
 
       __SET_PAGE_DIR_ENTRY(__PAGE_PD_INDEX(page), newptaddr);
       INIT_PAGE_TABLE(__GET_PAGE_TABLE_ENTRY(__PAGE_PD_INDEX(page), 0));
@@ -169,7 +135,7 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
     if (alloc_now)
       __SET_PAGE_TABLE_ENTRY_AND_ALLOC(__PAGE_PD_INDEX(page),
 				       __PAGE_PT_INDEX(page),
-				       (__pg_find_a_free_physical_page() << 12),
+				       (pmem_findAFreePhysicalPage() << 12),
 				       flags)
     else
       __SET_PAGE_TABLE_ENTRY(__PAGE_PD_INDEX(page),
@@ -211,7 +177,8 @@ void * __OS_releasePages(void *pageaddr, unsigned int npages,
     /* free the physical page only if the page is really allocated */
     if (free && (*pte & PF_PRESENT)) {
       phyaddr = (*pte) & 0xFFFFF000;
-      __RESET_MEMORY_BITMAP_PAGE_BIT(phyaddr>>12);
+      pmem_unset(phyaddr>>12);
+      //__RESET_MEMORY_BITMAP_PAGE_BIT(phyaddr>>12);
 #ifdef DEBUG
       printk(" (phy: ");
       print_uint_hex(phyaddr);
@@ -349,9 +316,10 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
 
   flags = *pte & 0x7FF; /* save the page flags, but not the 
 			   PF_LOGICAL_PRESENT */
-  new_phy_page = (__pg_find_a_free_physical_page()<<12);
+  new_phy_page = (pmem_findAFreePhysicalPage()<<12);
   *pte = new_phy_page | flags | PF_PRESENT;
-  __SET_MEMORY_BITMAP_PAGE_BIT((new_phy_page)>>12);
+  pmem_set((new_phy_page)>>12);
+  //__SET_MEMORY_BITMAP_PAGE_BIT((new_phy_page)>>12);
 #ifdef DEBUG
   printk("new allocated page: ");
   print_ulong_hex(new_phy_page);
