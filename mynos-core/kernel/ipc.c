@@ -242,7 +242,13 @@ int __OS_ipc_send(int destd, char * buf, uint32_t size, uint32_t flags) {
     privP();
 
 #if 0
-  sched();
+    {   // tasksw to idle process
+      struct {long a ,b;} tmp = {0, 0};
+      
+      currProcess = 0;
+      tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
+      __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
+    }
 #endif
   
   return size;
@@ -306,7 +312,13 @@ int __OS_ipc_recv(int senderd, char * buf, uint32_t size, uint32_t flags) {
     }  
     
 #if 0
-    sched();
+    {   // tasksw to idle process
+      struct {long a ,b;} tmp = {0, 0};
+      
+      currProcess = 0;
+      tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
+      __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
+    }
 #endif
 
   }     // while (!done)
@@ -367,7 +379,13 @@ int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
     }  
     
 #if 0
-    sched();
+    {   // tasksw to idle process
+      struct {long a ,b;} tmp = {0, 0};
+      
+      currProcess = 0;
+      tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
+      __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
+    }
 #endif
 
   }     // while (!done)

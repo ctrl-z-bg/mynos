@@ -28,6 +28,8 @@
 
 #include "ipc.h"
 
+#include "process.h"
+
 extern void int_null();
 
 desc_table(IDT, 256)
@@ -137,7 +139,9 @@ void _int5() {
 }
 
 void _int6() {
-  printk("int6: Invalid opcode\n");
+  printk("int6: Invalid opcode (process ");
+  print_ulong(currProcess);
+  printk(")\n");
   while (1);
 }
 

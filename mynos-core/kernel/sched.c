@@ -23,6 +23,7 @@
 #include "kutils.h"
 #include "process.h"
 #include "sem.h"
+#include "softtaskswitch.h"
 
 void sched() {
   struct {long a ,b;} tmp = {0, 0};
@@ -37,5 +38,5 @@ void sched() {
 
 
   if (currProcess != oldProcess)
-    __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
+    switchTo(oldProcess, currProcess);
 }

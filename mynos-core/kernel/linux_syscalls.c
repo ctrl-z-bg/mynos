@@ -290,7 +290,7 @@ int _linux_syscall_fork() {
   uint32_t * pde, flags;
   uint32_t * pdc, *ptc;
   uint32_t *lastPT;
-  uint32_t new_pid;
+  pid_t new_pid;
   int ret;
   ushort16_t tssd_gdt_sel;
   tss_t * new_pid_tss;
@@ -336,7 +336,10 @@ int _linux_syscall_fork() {
   new_pid = numProcess++;
 
   new_pid_tss = (tss_t*)kmalloc(sizeof(tss_t));
+
+  /* the father has the new child's pid in that field */
   processTable[currProcess].isForking = new_pid;
+  /* (see below for the child's isForking) */
 
   // set the tssd for the new process
   tssd_gdt_sel = gdt_get_free_index();
@@ -362,8 +365,9 @@ int _linux_syscall_fork() {
   
   processTable[new_pid].pid = new_pid;
   processTable[new_pid].ppid = currProcess;
-  processTable[new_pid].isForking = 0;
   processTable[new_pid].isAlive = 1;
+  /* the child take the same as a negative value */
+  processTable[new_pid].isForking = -1 * new_pid;
   // IPC
   processTable[new_pid].isWaitingSender = -1;
   processTable[new_pid].isWaitingReceiver = -1;
@@ -381,21 +385,29 @@ int _linux_syscall_fork() {
   asm volatile("movl %%esi, %0":"=m"(processTable[new_pid].tss->esi));
   asm volatile("movl %%edi, %0":"=m"(processTable[new_pid].tss->edi));
   asm volatile("movl %%ebp, %0":"=m"(processTable[new_pid].tss->ebp));
-  
+
   asm volatile("movw %%cs, %0":"=m"(processTable[new_pid].tss->cs));
   asm volatile("movw %%ds, %0":"=m"(processTable[new_pid].tss->ds));
   asm volatile("movw %%es, %0":"=m"(processTable[new_pid].tss->es));
   asm volatile("movw %%fs, %0":"=m"(processTable[new_pid].tss->fs));
   asm volatile("movw %%gs, %0":"=m"(processTable[new_pid].tss->gs));
   asm volatile("movw %%ss, %0":"=m"(processTable[new_pid].tss->ss));
-  
+
   /* copy eip and esp and call the scheduler */
-  asm volatile ("movl $1f, %0\n\t"\
+  processTable[new_pid].tss->esp0 = processTable[currProcess].tss->esp0;
+  asm volatile (
+		"movl $1f, %0\n\t"\
 		"movl %%esp, %1\n\t"\
 		"call sched\n\t"\
 		"1:\t"\
 		:"=m"(processTable[new_pid].tss->eip),\
 		"=m"(processTable[new_pid].tss->esp):);
+
+  /* this process was just forked, restore some register */
+  if (processTable[currProcess].isForking < 0) {
+    processTable[currProcess].isForking = 0;
+    asm volatile("movl %0, %%ebp"::"m"(processTable[currProcess].tss->ebp));
+  }
 
   // back from a task switch...
   ret = processTable[currProcess].isForking;

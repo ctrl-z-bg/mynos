@@ -58,7 +58,7 @@ extern int _asm_first_free_physical_page_address;
 
 /* PROCESS INFORMATION AND STACKs MEMORY SIZE */
 #define PROCESS_INFO_NPAGES  2
-#define KERNEL_STACK_NPAGES 16
+#define KERNEL_STACK_NPAGES  4
 #define USER_STACK_NPAGES  256
 
 #define MAXMODULES 10

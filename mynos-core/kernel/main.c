@@ -60,6 +60,8 @@ extern process_descriptor_t processTable[20];
 extern uint32_t numProcess;
 ushort16_t * idle_tssd_selector;
 
+tss_t THEtss;
+
 void tsksw() {
   ushort16_t gdt_index;
 
@@ -73,6 +75,9 @@ void tsksw() {
   processTable[0].isAlive = 1;
   processTable[0].isForking = 0;
 
+  processTable[0].tss->cs = GDT_OS_CODE_SEL;
+  processTable[0].tss->ss0 = GDT_OS_DATA_SEL;
+
   // IPC
   processTable[0].isWaitingSender = -1;
   processTable[0].isWaitingReceiver = -1;
@@ -80,14 +85,14 @@ void tsksw() {
   //SEM
   processTable[0].isWaitingOnP = -1;
 
-
-
   gdt_index = gdt_get_free_index();
   processTable[0].tssd_gdt_selector = (uint32_t)gdt_index << 3;
 
+  kmemcpy(&THEtss, processTable[0].tss, sizeof(tss_t));
+
   /* set the tssd in the gdt, for the incoming and the outcoming processes */
   gdt_set_entry(gdt_index,
-		(uint32_t)(processTable[0]).tss,
+		(uint32_t)(&THEtss),
 		sizeof(tss_t), D_TSS);
 
   /* load the task register with the relative address in the gdt of the
@@ -279,6 +284,7 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   // this is the idle process
   while(1) {
+    //printk("idle\n");
 #if 0
     // to try the softReset
     static int first = 1;

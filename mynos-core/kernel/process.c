@@ -29,6 +29,22 @@
 #include "video.h"
 #include "dynalloc.h"
 
+extern void startTask();
+typedef struct {
+  /* segment registers (except cs and ss) */
+  ushort16_t gs;
+  ushort16_t fs;
+  ushort16_t es;
+  ushort16_t ds;
+
+  /* information for the taskswitch iret */
+  uint32_t eip;
+  uint32_t cs;
+  uint32_t eflags;
+  uint32_t esp;
+  uint32_t ss;
+} init_stack_t;
+
 process_descriptor_t processTable[MAXPROCESSES];
 uint32_t numProcess = 1;
 uint32_t currProcess = 0;  /* the first process is the idle process */
@@ -76,6 +92,9 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
   /* last linear address usable (top - PTs and PD mapping) */
   uint32_t upperLimit = 0 - (0x400000 + 0x1000);
+
+  /* initial kernel stack data of the new process */
+  init_stack_t * stackData;
 
   pinfoAddr  = upperLimit - PAGE_SIZE * PROCESS_INFO_NPAGES;
   kstackBottomAddr = pinfoAddr  - PAGE_SIZE * KERNEL_STACK_NPAGES;
@@ -227,6 +246,9 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   for (i = 0; i < KERNEL_STACK_NPAGES; i++) {
     if ((stackFrame = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
     *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_PRESENT;
+    /* at the end of this cycle stackData points to the last kernel
+       stack page of the new process, mapped in the current process page */
+    stackData = (init_stack_t*)stackFrame;
   }
 
   /* allocate the process info space */
@@ -237,7 +259,6 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   }
   
   /* copy the first shared entries in the PTs images */
-  /* to add to CVS!!! */
   for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
     lastPT[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
 
@@ -281,8 +302,27 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
   tss->eflags = 0x3200;  // iopl = 3
   tss->esp = tss->ebp = ustackBottomAddr + PAGE_SIZE * USER_STACK_NPAGES - 4;
-  tss->esp0 = tss->esp1 = tss->esp2 = kstackBottomAddr + PAGE_SIZE * KERNEL_STACK_NPAGES - 4;
+  tss->esp0 = tss->esp1 = tss->esp2 = kstackBottomAddr + PAGE_SIZE * KERNEL_STACK_NPAGES - sizeof(init_stack_t);
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
+
+  {
+    init_stack_t * stack = (init_stack_t*)(((uint32_t)stackData) + 
+					   PAGE_SIZE - 
+					   sizeof(init_stack_t));
+    stack->ss = GDT_USER_DATA_SEL + 3;
+    stack->esp = tss->esp;
+    stack->eflags = tss->eflags;
+    stack->cs = GDT_USER_CODE_SEL + 3;
+    stack->eip = tss->eip;
+
+    stack->ds = GDT_USER_DATA_SEL + 3;
+    stack->es = GDT_USER_DATA_SEL + 3;
+    stack->fs = GDT_USER_DATA_SEL + 3;
+    stack->gs = GDT_USER_DATA_SEL + 3;
+  }
+
+  tss->esp = tss->esp0;
+  tss->eip = (uint32_t)startTask;
 
   // IPC
   desc->isWaitingSender = -1;
