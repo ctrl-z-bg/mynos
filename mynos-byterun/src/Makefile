@@ -16,7 +16,7 @@
 include ../config/Makefile
 
 CC=$(BYTECC)
-CFLAGS=-O $(BYTECCCOMPOPTS)
+CFLAGS=-O $(BYTECCCOMPOPTS) -I../../mynos-lib/include
 DFLAGS=-g -DDEBUG $(BYTECCCOMPOPTS)
 
 OBJS=interp.o misc.o stacks.o fix_code.o startup.o main.o \
@@ -41,7 +41,8 @@ all: ocamlrun
 
 ocamlrun$(EXE): libcamlrun.a prims.o
 	$(BYTECC) $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) -o ocamlrun$(EXE) \
-	          prims.o libcamlrun.a $(BYTECCLIBS) -static \
+	          prims.o libcamlrun.a $(BYTECCLIBS) \
+		-L../../mynos-lib/lib/ -lmynos -static \
 		-Xlinker -Ttext -Xlinker 0x40000000
 
 ocamlrund$(EXE): libcamlrund.a prims.o

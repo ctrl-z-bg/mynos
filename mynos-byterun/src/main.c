@@ -21,6 +21,8 @@
 #endif
 
 #ifdef MYNOS
+#include <mynos.h>
+
 char *getenv(const char *name) {
   return (char*)0;
 }
