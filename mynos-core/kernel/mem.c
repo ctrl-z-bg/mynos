@@ -281,35 +281,50 @@ __asm__ (\
 /* the copy-on-write code */
 static void __cowManager(uint32_t * pte, uint32_t addr) {
 #ifdef DEBUG
-      printk("There are ");
-      print_ulong(pmem_countref((*pte)>>12));
-      printk(" references\n\n");
+  printk("There are ");
+  print_ulong(pmem_countref((*pte)>>12));
+  printk(" references\n");
 #endif
-    if (pmem_countref((*pte)>>12) == 1) {
-      *pte = *pte & ~PF_COW;
-      *pte |= PF_READWRITE;
-      INVALIDATE_THE_CACHE(addr);
-    } else {
-      void * dest;
-      void * orig;
-      
-      __SET_PAGE_TABLE_ENTRY_AND_ALLOC(__COW_TABLE,
-				       __COW_ENTRY,
-				       (pmem_findAFreePhysicalPage() << 12),
-				       0);
+  
+  /* if I'm the last referencing process then the page is mine! */
+  if (pmem_countref((*pte)>>12) == 1) {
+#ifdef DEBUG
+    printk("So now it's mine!\n");
+#endif
+    *pte = *pte & ~PF_COW;
+    *pte |= PF_READWRITE;
+    INVALIDATE_THE_CACHE(addr);
+  } else { // else...
+    void * dest;
+    void * orig;
+    
+#ifdef DEBUG
+    printk("So let's copy it!\n");
+#endif
 
-      // AAAAAAAAAAAA TODO invalidate the tmp linear cow address
+    /* alloc a new physical page to the COW tmp linear address */
+    __SET_PAGE_TABLE_ENTRY_AND_ALLOC(__COW_TABLE,
+				     __COW_ENTRY,
+				     (pmem_findAFreePhysicalPage() << 12),
+				     0);
+    
+    /* reload the cache corresponding to the current cow page */
+    INVALIDATE_THE_CACHE((void*)__COW_PAGE);
+    
+    /* copy the faulting page to the new one */
+    dest = (void*)__COW_PAGE;
+    orig = (void*)(addr & 0xFFFFF000);
+    kmemcpy(dest, orig, PAGE_SIZE);
 
+    /* unset the faulting page */
+    pmem_unset((*pte)>>12);
 
-      dest = (void*)__COW_PAGE;
-      orig = (void*)(addr & 0xFFFFF000);
-      kmemcpy(dest, orig, PAGE_SIZE);
-      pmem_unset((*pte)>>12);
-      *pte = LINEAR_TO_PHYSICAL_ADDRESS(dest) | (*pte & 0xFFF);
-      *pte = *pte & ~PF_COW;
-      *pte |= PF_READWRITE;
-      INVALIDATE_THE_CACHE(addr);
-    }
+    /* bind the linear page to the new physical one */
+    *pte = LINEAR_TO_PHYSICAL_ADDRESS(dest) | (*pte & 0xFFF);
+    *pte = *pte & ~PF_COW;
+    *pte |= PF_READWRITE;
+    INVALIDATE_THE_CACHE(addr);
+  }
 }
 
 static void __allocateOnUse(uint32_t * pte, uint32_t addr) {
