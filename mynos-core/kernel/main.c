@@ -171,8 +171,10 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   enable_irq(0);
 
+  // this is the idle process
   while(1) {
-    //    asm("int $0x50\n");
+    char a = getch();
+    print_char(a);
   }
 
   KPANIC("\nEND OF KERNEL DEMO");
