@@ -25,31 +25,7 @@
 #include "video.h"
 #include "io.h"
 
-#ifdef IPC
 #include "ipc.h"
-
-void sendTo1_handler() {
-  int a = 4;
-  if (__OS_ipc_send(1, (char *)&a, 4, IPC_FLAGS_NOBLOCK) < 0)
-    printk("spedizione impossibile");
-  else
-    printk("spedito");
-}
-void recvFrom2_handler() {
-  int a;
-  int pid;
-  if (__OS_ipc_recvAll(&pid, (char *)&a, 4, 0) < 0)
-    printk("ricezione impossibile");
-  else {
-    printk("ricevuto ");
-    print_ulong((ulong32_t)a);
-    printk("da ");
-    print_ulong((ulong32_t)pid);
-  }
-}
-TRAP_WRAPPER(sendTo1);
-TRAP_WRAPPER(recvFrom2);
-#endif //IPC
 
 extern void int_null();
 
@@ -98,10 +74,6 @@ void init_idt() {
 
   set_vector(_linux_syscalls_trap_TRAP, 0x80, D_PRESENT + D_INT + D_DPL3);
 
-#ifdef IPC
-  set_vector(sendTo1_TRAP, 0x81, D_PRESENT + D_INT + D_DPL3);
-  set_vector(recvFrom2_TRAP, 0x82, D_PRESENT + D_INT + D_DPL3);
-#endif
   set_vector(_mynos_syscalls_trap_TRAP, 0x90, D_PRESENT + D_INT + D_DPL3);
 
 

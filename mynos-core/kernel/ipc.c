@@ -25,8 +25,6 @@
 #include "process.h"
 #include "video.h"
 
-#ifdef IPC
-
 #define MAXCHANNELS 20
 
 void __OS_ipc_initChannelList(channelList_t * list) {
@@ -319,5 +317,3 @@ int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
 
   return msgsize;
 }
-
-#endif // IPC
