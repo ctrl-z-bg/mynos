@@ -320,6 +320,10 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   *pte = new_phy_page | flags | PF_PRESENT;
   pmem_set((new_phy_page)>>12);
   //__SET_MEMORY_BITMAP_PAGE_BIT((new_phy_page)>>12);
+
+  // QUESTION: should be invalidated now? To be sure...
+  INVALIDATE_THE_CACHE(addr);
+
 #ifdef DEBUG
   printk("new allocated page: ");
   print_ulong_hex(new_phy_page);

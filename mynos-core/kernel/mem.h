@@ -169,7 +169,7 @@
 		    "popl  %eax\n")
 #else
 #define INVALIDATE_THE_CACHE(LADDR) \
-  __asm__ volatile ("invlpg %0\n"::"m"(LADDR))
+  __asm__ volatile ("invlpg %0\n"::"m"(*((uint32_t*)(LADDR))))
 #endif
 
 
