@@ -78,7 +78,7 @@ typedef struct elf_section_header_table
   unsigned long shndx;
 } elf_section_header_table_t;
 
-/* The Multiboot information. */
+/* The Multiboot informations. */
 typedef struct multiboot_info
 {
   unsigned long flags;
