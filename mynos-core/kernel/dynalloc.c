@@ -73,7 +73,7 @@ _findFreeBlock(unsigned int sz)
 	/* otherwise, must allocate */
 	npages = _PAGE_SPAN(paddr, ret + osz - 1);
 	if ( _GET_PAGE_ADDRESS(ret + osz - 1) == _GET_PAGE_BLOCK(runner) )
-	  // end within an allocated page 
+	  /* end within an allocated page */
 	  npages--;
 	__OS_askPagesFrom(paddr, npages);
 	_insertBlock(ret + _SIZE_SZ, sz, old, runner);

@@ -38,7 +38,8 @@ struct {
 (256 * sizeof(union DT_entry) - 1), IDT};
 
 void keyb_handler() {
-  char a = (char) inportb(0x60);
+  char a;
+  a = (char) inportb(0x60);
   printk("hai premuto un tasto\n");
 }
 

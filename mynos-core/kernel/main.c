@@ -112,7 +112,7 @@ void mynos_main() {
   __print_free_phy_pages();
   }
 
-  enable_irq(1); // irq1 (keyboard) is interrupt M_VEC+1 (33)
+  enable_irq(1); /* irq1 (keyboard) is interrupt M_VEC+1 (33) */
   enable_irq(0);
 
   KPANIC("\nEND OF KERNEL DEMO");

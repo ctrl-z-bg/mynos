@@ -23,7 +23,7 @@
 
 #define NULL 0x0
 
-#define __MEMORY_BITMAP_PHY_ADDRESS 0x32000    // 200KB
+#define __MEMORY_BITMAP_PHY_ADDRESS 0x32000    /* 200KB */
 
 #define KPANIC(MSG) {printk(MSG); while(1){}}
 
@@ -34,6 +34,9 @@ typedef unsigned long  ulong32_t;
 typedef long           long32_t;
 typedef unsigned short ushort16_t;
 typedef short          short16_t;
+
+typedef unsigned int   __kernel_size_t;
+typedef __kernel_size_t size_t;
 
 extern int _asm_global_mem_size;
 extern int _asm_last_page_dir_entry_used;

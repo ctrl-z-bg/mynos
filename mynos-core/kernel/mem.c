@@ -39,10 +39,11 @@ void init_memory() {
 
   /* let the memory bitmap be coerent with the actual physical memory
      allocation (from 0 to _asm_first_free_physical_page_address - 1) */
-  for (i = 0; i < __memory_bitmap_size; i++)  // reset the bitmap
+  for (i = 0; i < __memory_bitmap_size; i++)  /* reset the bitmap */
     __memory_bitmap[i] = 0x0;
-  for (i = 0; i < first_free_phy_page; i++)   // set bitmap for paged already
-    __SET_MEMORY_BITMAP_PAGE_BIT(i);          // allcoated
+  for (i = 0; i < first_free_phy_page; i++)   /* set bitmap for paged already 
+						 allocated */
+    __SET_MEMORY_BITMAP_PAGE_BIT(i);
 }
 
 void * __OS_askPages(unsigned int npages) {return (void*)0;}
@@ -68,7 +69,7 @@ uint32_t __pg_find_a_free_physical_page() {
 
   /* memory full */
   if (memory_full)
-    return 0;          // page 0 is always reserved and so it cannot be free
+    return 0;          /* page 0 is always reserved and so it cannot be free */
 
   /* search for the first bit unused in the new current_byte */
   current_page = __MEMORY_BITMAP_BIT_TO_PAGE(current_byte, 0);
@@ -88,7 +89,8 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages) {
   uint32_t page;
   uint32_t first_page = (((uint32_t)pageaddr)>>12);
   uint32_t last_page  = (first_page + npages -1);
-  uint32_t new_pts_required = 0;     // how many new page tables are required
+  uint32_t new_pts_required = 0;     /* how many new page tables are 
+					required */
   uint32_t free_pages;
 
   if (npages < 1)
@@ -130,8 +132,8 @@ uint32_t __pg_free_pages_from_page(uint32_t first_page, uint32_t npages,
 				   uint32_t * new_pts_required) {
   uint32_t page;
   uint32_t last_page;
-  uint32_t last_pt_required = 12345; // an invalid value :)
-  uint32_t new_pts = 0;     // how many new page tables are required
+  uint32_t last_pt_required = 12345; /* an invalid value :) */
+  uint32_t new_pts = 0;     /* how many new page tables are required */
 
   if (npages != 0)
     last_page = (first_page + npages -1);
@@ -146,7 +148,7 @@ uint32_t __pg_free_pages_from_page(uint32_t first_page, uint32_t npages,
 	new_pts++;
       }
     } else
-      if (__IS_PAGE_PRESENT(page)) { // page is not free
+      if (__IS_PAGE_PRESENT(page)) { /* page is not free */
 	*new_pts_required = new_pts;
 	return (page - first_page);
       }

@@ -39,8 +39,8 @@ void printk(char * s) {
 void print_ulong(ulong32_t n) {
   char s[MAX_INT_LEN];
   char * curr_char;
-  ulong32_t q;      // quotient
-  ulong32_t r;      // rest
+  ulong32_t q;      /* quotient */
+  ulong32_t r;      /* rest */
   ulong32_t tmp;
 
   s[MAX_INT_LEN - 1] = '\0';
@@ -61,8 +61,8 @@ void print_ulong(ulong32_t n) {
 void print_ulong_hex(ulong32_t n) {
   char s[MAX_INT_LEN];
   char * curr_char;
-  ulong32_t q;      // quotient
-  ulong32_t r;      // rest
+  ulong32_t q;      /* quotient */
+  ulong32_t r;      /* rest */
   ulong32_t tmp;
 
   s[MAX_INT_LEN - 1] = '\0';
