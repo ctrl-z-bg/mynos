@@ -108,9 +108,10 @@ void mynos_main() {
     char asd[10];
     uint32_t sector;
 
-    printk("logical sector for test program [98]: ");
-    kreadStr(asd, 10);
-    sector = (asd[0]?((ulong32_t)katoi(asd)):98);
+    clearKeyboardBuffer();
+    printk("logical sector for test program [500]: ");
+    kgets(asd);
+    sector = (asd[0]?((ulong32_t)katoi(asd)):500);
     if(read_block(sector, (unsigned char *) buffer, 1)==FALSE)
       {
 	printk("Kernel Panic: FDC not responding\n");

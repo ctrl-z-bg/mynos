@@ -27,8 +27,7 @@ all:
 
 bootfloppy:
 	mformat a:
-	mcopy kernel/kernel.bin a:
-	dd if=boot/boot.bin of=/dev/fd0
+	mcopy kernel/kernel.elf a:
 
 clean:
 	rm -f *~

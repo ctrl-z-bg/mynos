@@ -27,6 +27,5 @@ void * kmemset(void * dst, int s, size_t count);
 void kbzero(void * s, size_t n);
 int katoi(const char* s);
 
-/* read from the keyboard a string shorter than bufsize characters
-   (one is for '\0') */
-void kreadStr(char * s, uint32_t bufsize);
+/* from gazos */
+void kgets(char *string);

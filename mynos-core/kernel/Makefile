@@ -51,13 +51,13 @@ $(ALL_OBJ):
 kernel: $(ALL_OBJ) $(OFILESC) start.asm
 	nasm -f elf start.asm -o start.o
 	$(LD) start.o $(OFILESC) $(ALL_OBJ) \
-		-o kernel.bin --oformat binary -Ttext 0x0
+		--oformat elf32-i386 -Ttext 0x200000 -o kernel.elf 
 
 clean:
 	for i in $(SUBDIRS) ; do \
           make -C $$i clean;\
 	done
-	rm -f *.o *.bin *~
+	rm -f *.o *.bin *~ Makefile.depend
 
 depend:
 	for i in $(SUBDIRS) ; do \

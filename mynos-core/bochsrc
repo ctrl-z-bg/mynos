@@ -11,10 +11,11 @@ vgaromimage: /usr/bochs/latest/VGABIOS-elpin-2.40
 
 # what disk images will be used 
 floppya: 1_44=/dev/fd0, status=inserted
+diskc: file=diskc, cyl=306, heads=4, spt=17
 newharddrivesupport: enabled=1
 
 # choose the boot disk.
-boot: a
+boot: c
 
 # where do we send log messages?
 log: bochsout.txt

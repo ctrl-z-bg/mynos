@@ -20,6 +20,8 @@
 extern mynos_main		; the real main is not in this file
 
 
+
+
 ;;; the bottom of each process linear memory will be aliased with
 ;;; kernel linear memory. This is the last index used in page directory
 %define	KLAST_PAGE_DIR_ENTRY_USED	1023 ;255	; 255 = 1GB
@@ -36,7 +38,7 @@ extern mynos_main		; the real main is not in this file
 ;;; some statically allocated page frames
 %define KERNEL_STACK_PAGE		0x104000
 
-%define KERNEL_FIRST_FREE_PHY_PAGE	0x105000
+%define KERNEL_FIRST_FREE_PHY_PAGE	0x300000; 0x105000 ELF
 
 ;;; flags in page table entries
 %define FLAG_PAGE_PRESENT		0x1
@@ -47,6 +49,7 @@ extern mynos_main		; the real main is not in this file
 ;;; SOME USEFULL MACROS
 ;;; this macro calculate the linear address of a table entry
 %define PTABLE_ENTRY(base, index)	(base) + (index)*4
+%define ASM	  1
 
 ;;; this macro puts a new entry in the page directory
 %macro NEW_ENTRY_IN_PAGE_DIR 2	; (index, page address)
@@ -57,8 +60,41 @@ extern mynos_main		; the real main is not in this file
 %endmacro
 
 ;;; LET'S START!
+
 global	_start
+    MULTIBOOT_PAGE_ALIGN   equ 1<<0
+    MULTIBOOT_MEMORY_INFO  equ 1<<1
+
+    MULTIBOOT_HEADER_MAGIC equ 0x1BADB002
+    MULTIBOOT_HEADER_FLAGS equ MULTIBOOT_PAGE_ALIGN | MULTIBOOT_MEMORY_INFO
+    CHECKSUM equ -(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS)
+
+    ; The Multiboot header (ELF Format)
+    align 4
+    dd MULTIBOOT_HEADER_MAGIC 
+    dd MULTIBOOT_HEADER_FLAGS
+    dd CHECKSUM
+
+
 _start:
+	jmp   multiboot_entry
+
+
+
+;%ifndef __ELF__
+;	 /* header_addr */
+;	 .long   multiboot_header
+;	 /* load_addr */
+;	 .long   _start
+;	 /* load_end_addr */
+;	 .long   _edata
+;	 /* bss_end_addr */
+;	 .long   _end
+;	 /* entry_addr */
+;	 .long   multiboot_entry
+;%endif /* ! __ELF__ */
+;
+multiboot_entry:
 
 ;;; now we calculate the amount of RAM you have by a read-back test
 ;;; the result, in eax, is in MB
@@ -74,7 +110,7 @@ _start:
 	add	eax, 1
 	cmp	ecx, 0x12345678	; test if the test number was really there
 	jz	.count
-	mov	[_asm_global_mem_size], eax
+	mov	[_asm_global_mem_size], eax 
 
 ;;; ENABLE PAGING
 ;  We put the page directory at 0x100000 (1MB). 
@@ -127,7 +163,7 @@ _start:
 	
 	;; set the first 256 entry of the first page table
 	;; to map the first MB of physical ram
-	mov	ecx, 256
+	mov	ecx, 768	; ELF
 	mov	eax, 0x1
 	mov	edi, KERNEL_FIRST_PAGE_TABLE
 .load_pt:	

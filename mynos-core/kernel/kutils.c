@@ -59,19 +59,22 @@ int katoi(const char* s) {
 
 #include "video.h"
 #include "keyboard.h"
-void kreadStr(char * s, uint32_t bufsize) {
-  int i = 0;
-
-  for (i = 0; i < (bufsize-1); i++) {
-    s[i] = getch();
-    print_char(s[i]);
-    if (s[i] == '\n') {
-      s[i] = '\0';
-      return;
-    }
-  }
-
-  s[bufsize-1] = '\0';
-  print_char('\n');
+void kgets(char *string)
+{
+	unsigned char c= 0, count = 0;
+	unsigned char tempstring[2];
+	
+	tempstring[1] = 0;
+	
+	while(1)
+	{
+		c = getch();
+		if(c == 10) break;
+		if(c == 8 && count > 0) count-=2;
+		else string[count] = c;
+		tempstring[0] = c;
+		printk(tempstring);
+		count++;
+	}
+	string[count] = '\0';
 }
-    

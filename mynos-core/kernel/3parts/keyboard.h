@@ -24,5 +24,6 @@ void InitKeyboard();
 void keyb_handler();
 void setleds();
 unsigned char getch();
+void clearKeyboardBuffer();
 
 #endif
