@@ -76,9 +76,9 @@ void mynos_main() {
 
   __asm__("cli");
 
-  init_memory();
-
   clear_screen();
+
+  init_memory();
 
   init_pics();
   init_idt();
@@ -117,6 +117,7 @@ void mynos_main() {
 
   // TryPageAlloc();
 
+#if 0
   {
     int * a;
     a = (int*)kmalloc(8192*8);
@@ -128,7 +129,7 @@ void mynos_main() {
     print_ulong((ulong32_t)*a);
     printk("--\n");
   }
-
+#endif
 
   enable_irq(1); /* irq1 (keyboard) is interrupt M_VEC+1 (33) */
   enable_irq(0);

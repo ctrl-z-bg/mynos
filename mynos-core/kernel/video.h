@@ -30,10 +30,12 @@
 
 void printk(char *s);
 void print_ulong(ulong32_t n);
-#define print_uint(N) print_ulong((uint32_t)N)
+#define print_uint(N) print_ulong((ulong32_t)N)
+#define print_ushort(N) print_ulong((ulong32_t)N)
 
 void print_ulong_hex(ulong32_t n);
-#define print_uint_hex(N) print_ulong_hex((uint32_t)N)
+#define print_uint_hex(N) print_ulong_hex((ulong32_t)N)
+#define print_uint_hex(N) print_ulong_hex((ulong32_t)N)
 
 void print_char(char c);
 

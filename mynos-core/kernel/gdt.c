@@ -19,8 +19,12 @@
 */
 
 #include "gdt.h"
+#include "kutils.h"
+#include "dynalloc.h"
 
-desc_table(GDT, 5) { //8192) {
+#define INITIAL_SEGMENTS 4
+
+desc_table(GDT, INITIAL_SEGMENTS) { //8192) {
   /* dummy descriptor (not used by processor) */
   {dummy:0},
   /* kernel code segment */
@@ -31,13 +35,26 @@ desc_table(GDT, 5) { //8192) {
   stnd_desc(0, 0xFFFFF, (D_DATA + D_WRITE + D_BIG + D_BIG_LIM + D_DPL3)),
 };
 
-struct
+struct loadgdt_st
 {
 	unsigned short limit __attribute__ ((packed));
 	union DT_entry *idt __attribute__ ((packed));
-} loadgdt = { (3 * sizeof(union DT_entry) - 1), GDT };
+} loadgdt = { (INITIAL_SEGMENTS * sizeof(union DT_entry) - 1), GDT };
+
+struct loadgdt_st  temp;
 
 void _init_gdt() {
+  union DT_entry * gdt_addr;
+
+  /* alloc a full GDT */
+  gdt_addr = (union DT_entry *)kmalloc(8192*8);
+
+  /* copy the temporary GDT to our new one */
+  kmemcpy((void*)gdt_addr, (const void*)loadgdt.idt, loadgdt.limit + 1);
+
+  /* set out true gdt */
+  loadgdt.idt = gdt_addr;
+  loadgdt.limit = (8192 * sizeof(union DT_entry) - 1); /* a full GDT! */
   __asm__ volatile ("lgdtl (loadgdt)\n");
 }
 
