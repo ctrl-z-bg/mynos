@@ -220,6 +220,7 @@ __asm__ (\
 	 "   iret                         \n"\
 	 );
 
+extern uint32_t currProcess;
 void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   uint32_t new_phy_page;
   uint32_t * pte;
@@ -227,7 +228,9 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
 
   print_char('\n');
   print_char('\n');
-  printk("You tried to access the linear address ");
+  printk("Process ");
+  print_uint(currProcess);
+  printk(" tried to access the linear address ");
   print_uint_hex(addr);
   print_char('\n');
   printk("and you got the errorcode ");

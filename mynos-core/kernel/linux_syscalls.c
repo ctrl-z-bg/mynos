@@ -129,15 +129,11 @@ static uint32_t * copy_page_table(uint32_t ptp, uint32_t * ptc) {
   uint32_t * ret = (uint32_t*)1;
 
   /* copy the page table entries */
-  printk("----\n");
   for (i = 0; i < 1024; i++) {
     pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(ptp, i);
     if (*pte & (PF_PRESENT | PF_LOGICAL_PRESENT)) {   // this PF is allocated
       flags = *pte & 0xFFF;
       if (*pte & PF_PRESENT) {
-      printk("pd: ");
-      print_ulong_hex((ulong32_t)*pte);
-      print_char('\n');
 	if ((pf = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return 0;
 	ptc[i] = LINEAR_TO_PHYSICAL_ADDRESS(pf) | flags;
 		
@@ -155,7 +151,6 @@ static uint32_t * copy_page_table(uint32_t ptp, uint32_t * ptc) {
     } else
       ptc[i] = 0;
   }
-  printk("++++\n");
   return ret;
 }
 
