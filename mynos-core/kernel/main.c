@@ -54,8 +54,11 @@ void procA() {
 }
 
 void tsksw() {
+  /* set a tss for the outcoming process */
   idle_tss.pgdir = (uint32_t**)0x100000;
   idle_tss.io_bitmap_offset = 0;
+
+  /* set a tss for the incoming process! */
   procA_tss.pgdir = (uint32_t**)0x100000;
   procA_tss.io_bitmap_offset = 0;
   procA_tss.eip = (uint32_t)procA;
@@ -66,20 +69,25 @@ void tsksw() {
   procA_tss.gs = 0x18;
   procA_tss.ss = 0x18;
   procA_tss.ldt = 0;
-
   procA_tss.eflags = 0x200;
-
-  procA_tss.esp = procA_tss.ebp = _asm_last_page_dir_entry_used*0x400000 - 4100;
+  procA_tss.esp = procA_tss.ebp = 
+    _asm_last_page_dir_entry_used*0x400000 - 4100;
   procA_tss.esp0 = procA_tss.esp;
   procA_tss.esp1 = procA_tss.esp;
   procA_tss.esp2 = procA_tss.esp;
   procA_tss.ss0 = procA_tss.ss1 = procA_tss.ss2 = 0x18;
 
+  /* set the tssd in the gdt, for the incoming and the outcoming processes */
   gdt_set_entry(10, LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)&idle_tss),
 		sizeof(tss_t), D_TSS);
   gdt_set_entry(11, LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)&procA_tss),
 		sizeof(tss_t), D_TSS);
+
+  /* load the task register with the relative address in the gdt of the
+     incoming process's tssd */
   __asm__ volatile ("ltrw (tssd_addr)\n");
+
+  /* task switching!!! :) */
   __asm__ volatile ("ljmp $88,$0\n");
 }
 
