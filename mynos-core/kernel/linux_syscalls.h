@@ -18,8 +18,8 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#ifndef __LINU_SYSCALLS_H__
-#define __LINU_SYSCALLS_H__
+#ifndef __LINUX_SYSCALLS_H__
+#define __LINUX_SYSCALLS_H__
 #include "global.h"
 
 /* the 0x80 handler */

@@ -71,6 +71,7 @@ void int7_handler() {
 
 extern void _page_fault_handler_TRAP();   /* see mem.c */
 extern void _linux_syscalls_trap_TRAP();  /* see linux_syscalls.c */
+extern void _mynos_syscalls_trap_TRAP();  /* see linux_syscalls.c */
 
 void init_idt() {
   int count = 0;
@@ -101,6 +102,8 @@ void init_idt() {
   set_vector(sendTo1_TRAP, 0x81, D_PRESENT + D_INT + D_DPL3);
   set_vector(recvFrom2_TRAP, 0x82, D_PRESENT + D_INT + D_DPL3);
 #endif
+  set_vector(_mynos_syscalls_trap_TRAP, 0x90, D_PRESENT + D_INT + D_DPL3);
+
 
   asm("lidt (%0)                 \n"	/* Load the IDT                */
       "pushfl                    \n"	/* Clear the NT flag           */
