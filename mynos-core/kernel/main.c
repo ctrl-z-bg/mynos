@@ -106,17 +106,36 @@ uint32_t ramdisk_present = 0;
 modinfo_t bytecode;
 
 /* used in soft reset to restore the original multiboot data */
-multiboot_info_t * boot_info_global;
+//multiboot_info_t * boot_info_global;
 
 void mynos_main(multiboot_info_t *boot_info) {
   module_t * module;
   modinfo_t modinfo[MAXMODULES];
   int i;
-
+  int nmodules;
 
   __asm__("cli");
 
-  boot_info_global = boot_info;
+  /* prepare the modules informations */
+  /* NB: I do that right now because the memory bitmap allocation can
+     reset the grub information
+  */
+  module = (module_t *)boot_info->mods_addr;
+  nmodules = boot_info->mods_count;
+  for (i = 0; i < boot_info->mods_count; i++) {
+    modinfo[i].start = (uint32_t*)module[i].mod_start;
+    modinfo[i].len = module[i].mod_end - module[i].mod_start;
+#ifdef RAMDISK
+    if (!kmemcmp((uint32_t*)modinfo[i].start, ".RAMDISK", 8)) {
+      ramdisk = (void *)modinfo[i].start;
+      ramdisk_len = modinfo[i].len;
+      ramdisk_present = i;
+    }
+#endif
+  }
+
+
+  //boot_info_global = boot_info;
 
   clear_screen();
 
@@ -156,27 +175,14 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   __OS_service_initServicesRegistry();
 
-  /* prepare the modules informations */
-  module = (module_t *)boot_info->mods_addr;
-  for (i = 0; i < boot_info->mods_count; i++) {
-    //module = (module_t*)((uint32_t*)(boot_info->mods_addr) + i);
-    modinfo[i].start = (uint32_t*)module[i].mod_start;
-    modinfo[i].len = module[i].mod_end - module[i].mod_start;
-#ifdef RAMDISK
-    if (!kmemcmp((uint32_t*)modinfo[i].start, ".RAMDISK", 8)) {
-      ramdisk = (void *)modinfo[i].start;
-      ramdisk_len = modinfo[i].len;
-      printk("RAMDISK found (module ");
-      print_uint(i);
-      printk(")\n");
-      ramdisk_present = 1;
-    }
-#endif
-  }
-
 #ifdef RAMDISK
   if (!ramdisk_present)
     printk("No RAMDISK found\n");
+  else {
+    printk("RAMDISK found (module ");
+    print_uint(ramdisk_present);
+    printk(")\n");
+  }
 #endif
 
   /* prepare the test program information */
@@ -247,7 +253,8 @@ void mynos_main(multiboot_info_t *boot_info) {
   /* start the elf modules */
   {
     uint32_t i;
-    for (i = 0; i < boot_info->mods_count; i++) {
+    //for (i = 0; i < boot_info->mods_count; i++) {
+    for (i = 0; i < nmodules; i++) {
       //module = (module_t*)((uint32_t*)(boot_info->mods_addr) + i);
       modinfo[i].start = (uint32_t*)module[i].mod_start;
       modinfo[i].len = module[i].mod_end - module[i].mod_start;
@@ -278,8 +285,6 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   // this is the idle process
   while(1) {
-    printk("casa\n");
-    delay(1000);
     // to try the softReset
 #if 0
     static int first = 1;

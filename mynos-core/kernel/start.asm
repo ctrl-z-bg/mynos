@@ -245,7 +245,8 @@ softReset:
   	mov	ebp, esp
 
 	;; restore the original multiboot data
-	mov	ebx, [boot_info_global]
+	;; WARNING!!! THIS MAY BE CLEAR!!!
+	; mov	ebx, [boot_info_global]
 
 	;; jump to top of the kernel!
 	jmp	_start
