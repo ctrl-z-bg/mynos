@@ -19,7 +19,7 @@ int main() {
 
   strcat(a, "AAasd   asdasdasdsadsadsadasdsadsa");
   while(1) {
-    //printf("--VIA! %d", 4);
+    printf("--VIA! %d", 4);
 
     //putc('X', stdout);
     puts(a);
