@@ -18,12 +18,14 @@
 
 DIRS = boot kernel
 
-.PHONY  : all
+.PHONY  : all clean bootfloppy depend
 
 all:
 	for i in $(DIRS) ; do \
 		make -C $$i;\
 	done
+
+bootfloppy:
 	mformat a:
 	dd if=boot/boot.bin of=/dev/fd0
 	mcopy kernel/kernel.bin a:
