@@ -23,6 +23,7 @@
 #include "gdt.h"
 #include "tss.h"
 #include "kutils.h"
+#include "elf.h"
 #include "process.h"
 
 tss_t processTable[MAXPROCESSES];
@@ -41,7 +42,22 @@ tss_t * spawnProcess(tss_t * tss) {
   uint32_t * stackFrame; 
   uint32_t i;
   ushort16_t tssd_gdt_sel, code_gdt_sel, data_gdt_sel;
-  uint32_t npages_for_process = 32;
+  uint32_t npages_for_process;
+
+#ifdef ELF
+  elfAllocInfo_t ret;
+  Elf32_Phdr *text, *data;
+
+  /* get elf information */
+  text = elfGetTextHeader((char*)test_start);
+  data = elfGetDataHeader((char*)test_start);
+  elfAllocTextArea((char*)test_start, &ret);
+  npages_for_process = ret.npages;
+  elfAllocDataArea((char*)test_start, &ret);
+  npages_for_process += ret.npages;
+#else
+  npages_for_process = 32;
+#endif
 
   if ((newPD = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(newPD, PAGE_SIZE);
@@ -77,8 +93,17 @@ tss_t * spawnProcess(tss_t * tss) {
 
   if ((currPF = (uint32_t*)__OS_askPages(npages_for_process, 1, 0)) == NULL) return NULL;
 
+  kbzero(currPF, npages_for_process * PAGE_SIZE);
+
   ///////////////
+#ifdef ELF
+  kmemcpy((void*)currPF, (void*)(test_start + (int)(text->p_offset)), 
+	  text->p_filesz);
+  kmemcpy((void*)(data->p_vaddr - 0x40000000 + (int)currPF),
+	  (void*)(test_start + (int)(data->p_offset)), data->p_filesz);
+#else
   kmemcpy((void*)currPF, (void*)test_start, test_len);
+#endif
   /////////////////
 
   for (i = 0; i < npages_for_process; i++)

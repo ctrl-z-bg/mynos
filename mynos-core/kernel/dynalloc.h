@@ -95,4 +95,8 @@ kmalloc(unsigned int sz);
 void
 kfree(void *ptr);
 
+#ifndef NULL
+#define NULL ((void*) 0)
+#endif
+
 #endif
