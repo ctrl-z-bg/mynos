@@ -78,7 +78,6 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   uint32_t * stackFrame; 
   uint32_t * pun;
   uint32_t i;
-  ushort16_t code_gdt_sel, data_gdt_sel;
   tss_t * tss;
   uint32_t npages_for_process;
 
@@ -181,7 +180,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   for (i = 0; i < elf_ex.e_phnum; i++) {
       Elf32_Phdr *phdr;
       uint32_t memsz, filesz;
-      ushort16_t control, sel, startaddr;
+      ushort16_t startaddr;
       
       phdr = (Elf32_Phdr *) ((char *)test_start + elf_ex.e_phoff +  (elf_ex.e_phentsize * i));
       /* we consider only the segments to be loaded*/
@@ -197,21 +196,6 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
       if (memsz > filesz) { /*We do not need that if we already zero'ed all the pages */
 	  kbzero((void *)(curraddr + filesz), memsz-filesz);
       }
-      sel = gdt_get_free_index();
-      control = D_BIG + D_BIG_LIM + D_DPL3;
-      if (phdr->p_flags & PF_X) {
-	  code_gdt_sel = sel;
-	  control += D_CODE;
-      } else {
-	  data_gdt_sel = sel;
-	  control += D_DATA;
-      }
-      
-      if (phdr->p_flags & PF_W) 
-	  control += D_WRITE;
-      /* the only new segment descriptor we have to create is tssd */
-      //gdt_set_entry(sel, 0x00000000, 0xFFFFF, control);
-
   }
   /* Here the segments are loaded, we have not symbol loading at the moment,
      neither relocatable segments. */
