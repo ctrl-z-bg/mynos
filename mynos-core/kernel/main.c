@@ -59,7 +59,7 @@ void tsksw() {
 
   /* set a tss for the outcoming process */
   processTable[0].pgdir = (uint32_t**)0x100000;
-  processTable[0].io_bitmap_offset = 0;
+  processTable[0].io_bitmap_offset = sizeof(tss_t)<<16;
   processTable[0].ldt = 0;
   processTable[0].isAlive = 1;
   processTable[0].isForking = 0;

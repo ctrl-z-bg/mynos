@@ -78,6 +78,7 @@ void pit_handler() {
     ushort16_t tssd = processTable[isForking].tssd_gdt_selector;
     kmemcpy((void*)&processTable[isForking], (void*)&processTable[currProcess],
 	    sizeof(tss_t));
+    processTable[isForking].io_bitmap_offset = sizeof(tss_t)<<16;
     processTable[isForking].pgdir = pgdir;
     processTable[isForking].tssd_gdt_selector = tssd;
     processTable[isForking].pid = isForking;

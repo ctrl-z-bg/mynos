@@ -196,7 +196,7 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
     printk("GDT TSS entry....\n");
   /* set the new process tss */
   tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(newPD);
-  tss->io_bitmap_offset = 0;
+  tss->io_bitmap_offset = sizeof(tss_t)<<16;
   tss->eip = (uint32_t)0x40000000;
 
   tss->isAlive = 1;

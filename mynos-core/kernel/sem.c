@@ -47,7 +47,7 @@ static struct semaphore_list {
 
 
 
-
+#ifdef DEBUG
 #define yield() {\
     struct {long a ,b;} tmp = {0, 0};\
     printk("Yielding on semaphore!\n");\
@@ -55,7 +55,14 @@ static struct semaphore_list {
     tmp.b = (long)processTable[currProcess].tssd_gdt_selector;\
     __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));\
     }
-
+#else
+#define yield() {\
+    struct {long a ,b;} tmp = {0, 0};\
+    currProcess = 0;\
+    tmp.b = (long)processTable[currProcess].tssd_gdt_selector;\
+    __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));\
+    }
+#endif
 
 static inline int __testnset(uint32_t *m) {
     uint32_t result;
@@ -132,9 +139,11 @@ int __OS_sem_allocateSemaphore(uint32_t n) {
     semaphores.list[i].value = n;
     __unlock(&(semaphores.list[i].mutex));
     __unlock(&(semaphores.mutex));
+#ifdef DEBUG
     printk("*SEM*: allocate, found: ");
     print_uint(l);
     printk("\n");
+#endif
     return(l);
 }
 
@@ -167,6 +176,7 @@ int __OS_sem_P(int semid) {
     sm = &(semaphores.list[i].mutex);
 
     __lock(sm);
+#ifdef DEBUG
     printk("*SEM*: P, locked: ");
     print_uint(i);
     printk("[used: ");
@@ -176,7 +186,7 @@ int __OS_sem_P(int semid) {
     printk("] [value: ");
     print_uint(semaphores.list[i].value);
     printk("]\n");
-
+#endif
     if ( (!semaphores.list[i].used) || (semaphores.list[i].id != semid) ) {
 	__unlock(sm);
 	return(-1);
@@ -191,10 +201,14 @@ int __OS_sem_P(int semid) {
 	pqInsert(semaphores.list[i].queue, currProcess);
 
 	__unlock(sm);
+#ifdef DEBUG
 	printk("*SEM*: P, busy\n");
+#endif
 	yield();
     }
+#ifdef DEBUG
     printk("*SEM*: P GOT!\n");
+#endif
 
     /* Here the semaphore is mine:
        if I was in the queue the lock has been done by the V */
@@ -238,9 +252,11 @@ int __OS_sem_V(int semid) {
     
     sm = &(semaphores.list[i].mutex);
     __lock(sm);
+#ifdef DEBUG
     printk("*SEM*: V, locked: ");
     print_uint(i);
     printk("\n");
+#endif
 
     if ( (!semaphores.list[i].used) || (semaphores.list[i].id != semid) ) {
 	__unlock(sm);
@@ -257,9 +273,11 @@ int __OS_sem_V(int semid) {
 	     (otherwise is not fair)
 	   - value will be put to zero by the waken process */
 	p = pqExtract(semaphores.list[i].queue);
+#ifdef DEBUG
 	printk("*SEM*: V, waking up: ");
 	print_uint(p);
 	printk("\n");
+#endif
 
 	/* Wake me up before you go go... */
 	/* pqInsert(ReadyQueue, p); */
