@@ -20,7 +20,7 @@ NAME 		= 3parts
 MODULE_NAME	= $(NAME)_module.o
 
 CC = gcc
-CFLAGS = -Wall
+CFLAGS = -nostdinc -nostdlib -Wall
 LD = ld
 
 .PHONY = all

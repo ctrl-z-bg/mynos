@@ -35,15 +35,7 @@ void init_pit(float freq, unsigned char channel) {
 ISR_WRAPPER(pit);
 
 void pit_handler() {
-  static int count = 0;
   asm("int $0x1C"); /* Extra timer interrupt, 
 		       used by floppy for timeout etc.. */
-#if 0
-  count++;
-  if (count == 19) {
-    printk("timer!\n");
-    count = 0;
-  }
-#endif
 }
 

@@ -37,6 +37,7 @@ struct {
 } loadidt = {
 (256 * sizeof(union DT_entry) - 1), IDT};
 
+#if 0
 void keyb_handler() {
   char a;
   a = (char) inportb(0x60);
@@ -44,6 +45,7 @@ void keyb_handler() {
 }
 
 ISR_WRAPPER(keyb);
+#endif
 
 void init_idt() {
   int count = 0;
@@ -67,9 +69,10 @@ void init_idt() {
   set_vector(_int14, 14, D_PRESENT + D_INT);
   set_vector(_int15, 15, D_PRESENT + D_INT);
   set_vector(_int16, 16, D_PRESENT + D_INT);
-  
+
+#if 0  
   set_vector(keyb_ISR, 33, D_PRESENT + D_INT);
-  
+#endif
   
   asm("lidt (%0)                 \n"	/* Load the IDT                */
       "pushfl                    \n"	/* Clear the NT flag           */

@@ -28,8 +28,9 @@
 #include "pit.h"
 #include "idt.h"
 
-#include <delay.h>
-#include <fdc.h>
+#include "3parts/delay.h"
+#include "3parts/fdc.h"
+#include "3parts/keyboard.h"
 
 void __print_free_phy_pages() {
   printk("(adesso ci sono ");
@@ -66,7 +67,8 @@ void mynos_main() {
   set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT + D_DPL3));
   printk("done.\n");
 
-  enable_irq(1); /* irq1 (keyboard) is interrupt M_VEC+1 (33) */
+  InitKeyboard();
+  //  enable_irq(1); /* irq1 (keyboard) is interrupt M_VEC+1 (33) */
   enable_irq(0);
 
   init_floppy();
@@ -83,6 +85,11 @@ void mynos_main() {
 	  printk(buffer+3);
 	  printk("\n");
 	}
+  }
+
+  {
+    //    while (1)
+    //    print_char(getch());
   }
 
   KPANIC("\nEND OF KERNEL DEMO");

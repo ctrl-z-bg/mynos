@@ -20,7 +20,7 @@
 SUBDIRS	= 3parts
 
 CC = gcc
-CFLAGS = -Wall $(foreach DIR, $(SUBDIRS), -I$(DIR))
+CFLAGS = -nostdinc -nostdlib -Wall $(foreach DIR, $(SUBDIRS), -I$(DIR))
 LD = ld
 MAKE	= make
 
