@@ -18,7 +18,7 @@
 
 
 CC = diet gcc
-CFLAGS = -DMYNOS -Wall
+CFLAGS = -DMYNOS -Wall -I../include
 LD = ld
 MAKE	= make
 

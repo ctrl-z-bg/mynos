@@ -67,7 +67,7 @@ void memrofs_open(pid_t client, char *fname) {
     response.status = STATUS_OK;
   }  
   if ( mynos_send(client, &response, 
-		  sizeof(response), MYNOS_IPC_FLAGS_BYPID) < 0 )
+		  sizeof(response), 0) < 0 )
     // error responding, close the file (if it was open)
     if ( response.status == STATUS_OK ) {
       filedesc[response.fd].pid = 0; // "close" the file
@@ -87,7 +87,7 @@ void memrofs_close(pid_t client, int fd) {
     status = STATUS_OK;
   }
   if ( mynos_send(client, &status, 
-		  sizeof(status_t), MYNOS_IPC_FLAGS_BYPID) < 0 ) {};
+		  sizeof(status_t), 0) < 0 ) {};
 }
 
 void memrofs_read(pid_t client, int fd, size_t size) {
@@ -105,13 +105,12 @@ void memrofs_read(pid_t client, int fd, size_t size) {
   }
   if ( mynos_send(client, &response,
 		  sizeof(response), 
-		  MYNOS_IPC_FLAGS_NONBLOCK |
-		  MYNOS_IPC_FLAGS_BYPID) < 0 ) {
+		  MYNOS_IPC_NONBLOCK) < 0 ) {
     // error, nothing to do
   } else {
     if ( (response.status == STATUS_OK) &&
 	 (mynos_send(client, filedesc[fd].currpos, 
-		     response.rd, MYNOS_IPC_FLAGS_BYPID) < 0) ) {
+		     response.rd, 0) < 0) ) {
       // error, nothing to do
     } else {
       filedesc[fd].currpos += response.rd; // advance the pointer
@@ -142,6 +141,17 @@ void process_request(pid_t client, request_t request) {
 int main() {
   int sender;
   request_t request;
+  int port;
+  int channel;
+  mynos_msg_t * msg;
+
+  {
+    int i;
+    for (i = 0; i < 10000; i++);
+  }
+
+  port = mynos_registryRegister("memrofs");
+  printf("memrofs service port: %d\n", port);
 
 #if 0
   if ( mynos_recv(0 /* kernel! */, &ramdisk,
@@ -165,43 +175,45 @@ int main() {
     request_t request;
     open_response_t open_response;
     read_response_t read_response;
-    int serviced;
     int i;
     /* wait a bit to let the father's init */
     for (i = 0; i < 100000; i++);
 
-    if ((serviced = mynos_clientRegister("memrofs")) == -1) {
-      puts("MEMROFS service unavailable");
-      exit(-1);
-    }
+    channel = mynos_connectToPort(port);
+
     //puts("child.");
     request.type = OPEN;
     strcpy(request.data.fname, "AUTOEXEC.BAT");
     //puts("prereq");
     puts("Opening a text file...");
-    mynos_send(serviced, &request, sizeof(request_t),
-	       MYNOS_IPC_FLAGS_NONBLOCK);
+    mynos_send(channel, &request, sizeof(request_t),
+	       MYNOS_IPC_NONBLOCK);
     //puts("req1");
-    mynos_recv(serviced, &open_response, sizeof(open_response_t), 0);
+    mynos_recv(channel, &msg, 0);
+    memcpy(&open_response, msg->start, sizeof(open_response_t));
+    mynos_freeMsg(&msg);
     if ( open_response.status != STATUS_OK ) {
       puts("Open failed");
       exit(-1);
     }
     //puts("resp1");
+    mynos_freeChannel(channel);
+    channel = mynos_connectToPort(port);
     puts("Reading the file content...");
     request.type = READ;
     request.data.read_data.fd = open_response.fd;
     request.data.read_data.to_read = 100;
-    mynos_send(serviced, &request, sizeof(request_t),
-	       MYNOS_IPC_FLAGS_NONBLOCK);
+    mynos_send(channel, &request, sizeof(request_t),
+	       MYNOS_IPC_NONBLOCK);
     //puts("req2");
-    if ( mynos_recv(serviced, &read_response, sizeof(read_response_t), 0) < 0 )
+    if ( mynos_recv(channel, &msg, 0) < 0 )
       puts("errore 1");
     //puts("resp2a");
-    if ( (read_response.status == STATUS_OK) &&
-	 (mynos_recv(serviced, mybuf, 100, 0) < 0) )
-      puts("errore 2");
-    //puts("resp2b");
+    memcpy(&read_response, msg->start, sizeof(read_response_t));
+    mynos_freeMsg(&msg);
+    mynos_recv(channel, &msg, 0);
+    memcpy(mybuf, msg->start, 100);
+    mynos_freeMsg(&msg);
     if ( read_response.rd == 0 )
       if ( read_response.status != STATUS_OK )
 	puts("Some error.");
@@ -217,15 +229,16 @@ int main() {
   }
 #endif /* TEST */
 
-  mynos_serviceRegister("memrofs");
-
   while ( 1 ) {
-    if ( mynos_recvAll(&sender, &request, sizeof(request_t),
-		       0) < 0 ) {
+    if ((channel = mynos_listenPort(port)) < 0) {
       puts("Error receiving request");
       exit(-1);
     }
+    mynos_recv(channel, &msg, 0);
+    memcpy(&request, msg->start, sizeof(request_t));
+    mynos_freeMsg(&msg);
     process_request(sender, request);
+    mynos_freeChannel(channel);
   }
 
   return 0;

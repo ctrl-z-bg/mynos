@@ -21,23 +21,59 @@
 #ifndef __MYNOS_H__
 #define __MYNOS_H__
 
-#define MYNOS_IPC_FLAGS_NONBLOCK 0x1
-#define MYNOS_IPC_FLAGS_BYPID    0x2
+#include <mynos_registry.h>
+
+// MYNOS ERRORS
+#define MYNOS_ERR_FULL     (-1)
+#define MYNOS_ERR_BUSY     (-2)
+#define MYNOS_ERR_INVALID  (-3)
+#define MYNOS_ERR_DENY     (-4)
+#define MYNOS_ERR_BROKEN   (-5)
+
+// IPC FLAGS
+#define MYNOS_IPC_SHARED     0x1
+#define MYNOS_IPC_NONBLOCK   0x2
+
+/* PREDEFINED PORTS */
+#define MYNOS_PORT_REGISTRY 0
+
+// under this size (byte) the message is copied if not shared
+// (copied twice, to be honest)
+#define MYNOS_SHORT_MESSAGE_SIZE 8
+
+typedef struct {
+  void * start;
+  unsigned int size;
+  int isShort;
+} mynos_msg_t;
 
 typedef struct {
   unsigned int numProcesses;
   unsigned int numThreads;
   unsigned int pid;
   unsigned int ppid;
+  unsigned int freeppages;
 } mynos_stats_t;
 
-int mynos_send(int dest, void * buf, unsigned int size,
+/* IPC */
+int mynos_send(int channel, void * buf, unsigned int size,
 	       unsigned int flags);
-int mynos_recv(int sender, void * buf, unsigned int maxsize,
-	       unsigned int flags);
-int mynos_recvAll(int * sender, void * buf, unsigned int maxsize,
-		  unsigned int flags);
+int mynos_recv(int channel, mynos_msg_t **pmsg, unsigned int flags);
+/* send and receive an empty message */
+void mynos_sendSync(int channel);
+void mynos_waitSync(int channel);
+int mynos_freeChannel(int c);
+int mynos_freeMsg(mynos_msg_t ** pmsg);
 
+/* Port */
+int mynos_allocPort();
+int mynos_allocPortP(int port);
+int mynos_connectToPort(int port);
+int mynos_listenPort(int port);
+int mynos_changePortOwner(int port, int newpid);
+int mynos_freePort(int port);
+
+/* Semaphore */
 int mynos_P(int sem);
 int mynos_tryP(int sem);
 int mynos_V(int sem);

@@ -16,7 +16,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-DIRS = fs keyboard serial
+DIRS = fs keyboard serial registry
 
 .PHONY  : all clean depend
 

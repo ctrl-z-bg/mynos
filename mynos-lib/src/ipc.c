@@ -20,12 +20,15 @@
 
 #include "../include/mynos.h"
 
-int mynos_send(int dest, void * buf, unsigned int size,
+#include <stdlib.h>
+#include <sys/mman.h>
+
+int mynos_send(int channel, void * buf, unsigned int size,
 	       unsigned int flags) {
   int ret;
   __asm__ volatile("pushal\n");
   __asm__ volatile("movl $3, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(dest));
+  __asm__ volatile("movl %0, %%ebx\n"::"m"(channel));
   __asm__ volatile("movl %0, %%ecx\n"::"m"(buf));
   __asm__ volatile("movl %0, %%edx\n"::"m"(size));
   __asm__ volatile("movl %0, %%esi\n"::"m"(flags));
@@ -35,32 +38,64 @@ int mynos_send(int dest, void * buf, unsigned int size,
   return ret;
 }
 
-int mynos_recv(int sender, void * buf, unsigned int maxsize,
-	       unsigned int flags) {
+static int  __mynos_recv(int channel, mynos_msg_t * msg,
+			 void * shortmsg, unsigned int flags) {
   int ret;
   __asm__ volatile("pushal\n");
   __asm__ volatile("movl $4, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(sender));
-  __asm__ volatile("movl %0, %%ecx\n"::"m"(buf));
-  __asm__ volatile("movl %0, %%edx\n"::"m"(maxsize));
+  __asm__ volatile("movl %0, %%ebx\n"::"m"(channel));
+  __asm__ volatile("movl %0, %%ecx\n"::"m"(msg));
+  __asm__ volatile("movl %0, %%edx\n"::"m"(shortmsg));
   __asm__ volatile("movl %0, %%esi\n"::"m"(flags));
-  __asm__ volatile ("int $0x90\n");
+  __asm__ volatile("int $0x90\n");
   __asm__ volatile("movl %%eax, %0":"=m"(ret):);
   __asm__ volatile("popal\n");
+  if (ret < 0) {
+    if (shortmsg != NULL) free(shortmsg);
+    if (msg != NULL) free(msg);
+  } else 
+    if (msg && (msg->start != shortmsg))  // if it wasn't a short message...
+      if (shortmsg != NULL) free(shortmsg);
   return ret;
 }
 
-int mynos_recvAll(int * sender, void * buf, unsigned int maxsize,
-		  unsigned int flags) {
+int32_t mynos_recv(int channel, mynos_msg_t **pmsg, unsigned int flags) {
+  void * shortmsg = malloc(MYNOS_SHORT_MESSAGE_SIZE);
+  (*pmsg) = (mynos_msg_t*)malloc(sizeof(mynos_msg_t));
+  return __mynos_recv(channel, *pmsg, shortmsg, flags);
+}
+
+void mynos_sendSync(int channel) {
+  mynos_send(channel, NULL, 0, 0);
+}
+
+void mynos_waitSync(int channel) {
+  __mynos_recv(channel, NULL, NULL, 0);
+}
+
+int mynos_freeChannel(int c) {
   int ret;
   __asm__ volatile("pushal\n");
   __asm__ volatile("movl $5, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(sender));
-  __asm__ volatile("movl %0, %%ecx\n"::"m"(buf));
-  __asm__ volatile("movl %0, %%edx\n"::"m"(maxsize));
-  __asm__ volatile("movl %0, %%esi\n"::"m"(flags));
+  __asm__ volatile("movl %0, %%ebx\n"::"m"(c));
   __asm__ volatile ("int $0x90\n");
   __asm__ volatile("movl %%eax, %0":"=m"(ret):);
   __asm__ volatile("popal\n");
-  return ret;
+  return ret;    
 }
+
+int mynos_freeMsg(mynos_msg_t ** pmsg) {
+  mynos_msg_t * msg = *pmsg;
+  void * start;
+  unsigned int len;
+  if (msg->isShort)
+    free(msg->start);
+  else {
+    start = (void *)((unsigned int)(msg->start) & 0xFFFFF000);
+    len = ((unsigned int)(msg->start) & 0xFFF) + msg->size;
+    munmap(start, len);
+  }
+  free(msg);
+  return 0;
+}
+
