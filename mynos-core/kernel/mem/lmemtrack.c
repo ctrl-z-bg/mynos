@@ -175,17 +175,30 @@ uint32_t __lmt_forceAllocation(pdListEl **pdListBgn, uint32_t fromPage, uint32_t
     return 0;
   }
   
-  while ( runner && (runner->bgn <= fromPage) )
+  while ( runner && (runner->end <= fromPage) )
     runner = runner->next;
 
   if ( !runner || !(runner->end >= (fromPage+npages-1)) )
     KPANIC("lmemtrack.c: Block not found");
   
-  if ( runner->bgn == fromPage ) {
+  if ( (runner->bgn == fromPage) && runner->end == (fromPage+npages-1) ) {
+    /* the block must be removed!! */
+    if ( runner == *pdListBgn )
+      *pdListBgn = runner->next;
+    else /* assert(runner->prev); */
+      runner->prev->next = runner->next;
+    if ( runner->next )
+      runner->next->prev = runner->prev;
+    myfree(runner);
+  } else if ( runner->bgn == fromPage ) { /* the block must be left trimmed */
     runner->bgn = fromPage+npages;
-  } else { /* create a new block */
+  } else if ( runner->end == (fromPage+npages-1) ) { /* right trimmed */
+    runner->end = fromPage - 1;
+  } else { /* the block must be splitted */
     pdListEl *newEl = __lmt_newPdListEl(runner->bgn, fromPage-1,
 					runner, runner->prev);
+    if ( runner->prev )
+      runner->prev->next = newEl;
     runner->bgn = fromPage+npages;
     runner->prev = newEl;
   }
