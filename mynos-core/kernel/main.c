@@ -78,7 +78,7 @@ void mynos_main() {
   init_idt();
   printk("done.\n");
   
-  cpuSpeed();
+  calibratingDelayLoop();
 
   printk("Physical Memory : ");
   print_uint(_asm_global_mem_size);
@@ -128,21 +128,11 @@ void mynos_main() {
   KPANIC("\nEND OF KERNEL DEMO");
 }
 
-void cpuSpeed() {
-  uint32_t cpuspeed = 0;
+void calibratingDelayLoop() {
   ulong32_t delaycount = 0;
 
   printk("Calibrating delay loop... [");
   delaycount = calibrateDelayLoop();
   print_ulong(delaycount);
   printk("]\n");
-
-  cpuspeed = (uint32_t)(((float)delaycount)/500.0);
-
-#if 0
-  printk("CPU = ");
-  print_ulong(cpuspeed);
-  printk("\n");
-#endif
-
 }
