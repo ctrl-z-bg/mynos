@@ -18,6 +18,9 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#ifndef __LMEMTRACK_H__
+#define __LMEMTRACK_H__
+
 typedef struct _pdListEl {
   int bgn, end; /* boundaries *included* */
   struct _pdListEl *next, *prev;
@@ -25,7 +28,9 @@ typedef struct _pdListEl {
 
 //extern pdListEl *pdListBgn;
 
-int allocArea(pdListEl **pdListBgn, int nPages);
-int freeArea(pdListEl **pdListBgn, int fromPage, int nPages);
-int forceAllocation(pdListEl **pdListBgn, int fromPage, int npages);
-pdListEl *copyList(pdListEl *pdListBgn);
+int __lmt_allocArea(pdListEl **pdListBgn, int nPages);
+int __lmt_freeArea(pdListEl **pdListBgn, int fromPage, int nPages);
+int __lmt_forceAllocation(pdListEl **pdListBgn, int fromPage, int npages);
+pdListEl *__lmt_copyList(pdListEl *pdListBgn);
+
+#endif

@@ -38,7 +38,7 @@
 
 //pdListEl *pdListBgn = NULL;
 
-pdListEl *newPdListEl(int bgn, int end, pdListEl* next, pdListEl* prev)
+pdListEl *__lmt_newPdListEl(int bgn, int end, pdListEl* next, pdListEl* prev)
 {
   pdListEl *toret = (pdListEl*) myalloc(sizeof(pdListEl));
   toret->bgn = bgn;
@@ -48,12 +48,12 @@ pdListEl *newPdListEl(int bgn, int end, pdListEl* next, pdListEl* prev)
   return toret;
 }
 
-pdListEl *findArea(pdListEl **pdListBgn, int npages)
+pdListEl *__lmt_findArea(pdListEl **pdListBgn, int npages)
 {
   pdListEl *runner;
 
   if (!(*pdListBgn)) { /* allocate and return */
-    (*pdListBgn) = newPdListEl(MINPAGES, MAXPAGES, NULL, NULL);
+    (*pdListBgn) = __lmt_newPdListEl(MINPAGES, MAXPAGES, NULL, NULL);
     return *pdListBgn;
   }
 
@@ -67,7 +67,7 @@ pdListEl *findArea(pdListEl **pdListBgn, int npages)
 
 /* returns the page number at which the area begins.
    Adjusts the free space list */
-int allocArea(pdListEl **pdListBgn, int npages)
+int __lmt_allocArea(pdListEl **pdListBgn, int npages)
 {
   pdListEl *tomod;
   int toret;
@@ -75,7 +75,7 @@ int allocArea(pdListEl **pdListBgn, int npages)
   if (npages > (MAXPAGES-MINPAGES)) return AREATOOLARGE;
   
   /* first fit */
-  tomod = findArea(pdListBgn, npages);
+  tomod = __lmt_findArea(pdListBgn, npages);
   if ( tomod ) {
     toret = tomod->bgn;
     if ( PAGESPAN(*tomod) == npages ) { /* the element must be removed */
@@ -94,7 +94,7 @@ int allocArea(pdListEl **pdListBgn, int npages)
 }
 
 /* frees a block of pages, adjusting the list */
-int freeArea(pdListEl **pdListBgn, int fromPage, int npages)
+int __lmt_freeArea(pdListEl **pdListBgn, int fromPage, int npages)
 {
   /* we must find the first block whose 'bgn' is after fromPage+npages */
   pdListEl *runner = *pdListBgn;
@@ -112,7 +112,7 @@ int freeArea(pdListEl **pdListBgn, int fromPage, int npages)
     if ( (fromPage + npages) == runner->bgn ) { /* extend runner */
       runner->bgn = fromPage;
     } else { /* must create a new previous... */
-      *pdListBgn = newPdListEl(fromPage, fromPage+npages-1, runner, NULL);
+      *pdListBgn = __lmt_newPdListEl(fromPage, fromPage+npages-1, runner, NULL);
       runner->prev = *pdListBgn;
     }
     return 0;
@@ -131,7 +131,7 @@ int freeArea(pdListEl **pdListBgn, int fromPage, int npages)
   } else if ( prev->end < (fromPage - 1) ) {
     /* must create another block */
     pdListEl *newBlock =
-      newPdListEl(fromPage, fromPage+npages-1, runner, prev);
+      __lmt_newPdListEl(fromPage, fromPage+npages-1, runner, prev);
     prev->next = runner->prev  = newBlock;
   } else /* error!! */
     return NOTALLOCATED;
@@ -139,14 +139,14 @@ int freeArea(pdListEl **pdListBgn, int fromPage, int npages)
   return 0;
 }
 
-pdListEl *copyList(pdListEl *pdListBgn)
+pdListEl *__lmt_copyList(pdListEl *pdListBgn)
 {
   pdListEl *ret = NULL;
   pdListEl *run = NULL;
   pdListEl *prev = NULL;
 
   while ( pdListBgn ) {
-    run = newPdListEl(pdListBgn->bgn, pdListBgn->end, NULL, prev);
+    run = __lmt_newPdListEl(pdListBgn->bgn, pdListBgn->end, NULL, prev);
     if ( prev )
       prev->next = run;
     else
@@ -158,7 +158,7 @@ pdListEl *copyList(pdListEl *pdListBgn)
   return ret;
 }
 
-int forceAllocation(pdListEl **pdListBgn, int fromPage, int npages)
+int __lmt_forceAllocation(pdListEl **pdListBgn, int fromPage, int npages)
 {
   /* we must find the first block whose 'bgn' is after fromPage+npages */
   pdListEl *runner = *pdListBgn;
@@ -168,11 +168,11 @@ int forceAllocation(pdListEl **pdListBgn, int fromPage, int npages)
 
   if ( !pdListBgn ) {
     if ( fromPage == MINPAGES ) {
-      *pdListBgn = newPdListEl(fromPage+npages, MAXPAGES, NULL, NULL);
+      *pdListBgn = __lmt_newPdListEl(fromPage+npages, MAXPAGES, NULL, NULL);
     } else {
       pdListEl *newEl;
-      *pdListBgn = newPdListEl(MINPAGES, fromPage-1, NULL, NULL);
-      newEl = newPdListEl(fromPage+npages, MAXPAGES, NULL, *pdListBgn);
+      *pdListBgn = __lmt_newPdListEl(MINPAGES, fromPage-1, NULL, NULL);
+      newEl = __lmt_newPdListEl(fromPage+npages, MAXPAGES, NULL, *pdListBgn);
       (*pdListBgn)->next = newEl;
     }
     return 0;
@@ -187,8 +187,8 @@ int forceAllocation(pdListEl **pdListBgn, int fromPage, int npages)
   if ( runner->bgn == fromPage ) {
     runner->bgn = fromPage+npages;
   } else { /* create a new block */
-    pdListEl *newEl = newPdListEl(runner->bgn, fromPage-1,
-				  runner, runner->prev);
+    pdListEl *newEl = __lmt_newPdListEl(runner->bgn, fromPage-1,
+					runner, runner->prev);
     runner->bgn = fromPage+npages;
     runner->prev = newEl;
   }
