@@ -21,16 +21,17 @@
 #ifndef __GLOBAL_H__
 #define __GLOBAL_H__
 
-#define NULL 0x0
+#define NULL (0x0)
 
 //#define ARCH386
 //#define TRY_VGA
 //#define DEBUG
 #define RAMDISK
 
-#define __MEMORY_BITMAP_PHY_ADDRESS 0x32000    /* 200KB */
+#define __MEMORY_BITMAP_PHY_ADDRESS (0x32000)    /* 200KB */
 
-#define LAST_PDPT_INDEX 1023
+#define PDPT_ENTRIES (1024)
+#define LAST_PDPT_INDEX (1023)
 
 #define KPANIC(MSG) {printk(MSG); while(1){}}
 

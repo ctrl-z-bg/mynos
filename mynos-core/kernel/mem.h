@@ -70,7 +70,7 @@
    current page directory */
 #define __GET_PAGE_DIR_ENTRY(ENTRY) \
                      __MEM_LINEAR_ADDRESS(LAST_PDPT_INDEX - 1,\
-                                           1023, (ENTRY)*4)
+                                           LAST_PDPT_INDEX, (ENTRY)*4)
 
 /* return a linear address to access the entry ENTRY in the 
    page table TABLE */
@@ -134,13 +134,13 @@
 
 /* shortcut to change the external PD mapping */
 #define __EXTERNAL_PD_TABLE (_asm_last_kernel_page_dir_entry_used - 1)
-#define __EXTERNAL_PD_ENTRY (1023)
+#define __EXTERNAL_PD_ENTRY (LAST_PDPT_INDEX)
 #define __EXTERNAL_PD_PAGE_ENTRY ((uint32_t*)(__GET_PAGE_TABLE_ENTRY(__EXTERNAL_PD_TABLE, __EXTERNAL_PD_ENTRY)))
 #define __EXTERNAL_PD_PAGE ((uint32_t*)(__MEM_LINEAR_ADDRESS(__EXTERNAL_PD_TABLE, __EXTERNAL_PD_ENTRY, 0)))
 
 /* shortcut to change the cow page */
 #define __COW_TABLE (_asm_last_kernel_page_dir_entry_used - 1)
-#define __COW_ENTRY (1022)
+#define __COW_ENTRY (LAST_PDPT_INDEX - 1)
 #define __COW_PAGE_ENTRY ((uint32_t*)(__GET_PAGE_TABLE_ENTRY(__COW_TABLE, __COW_ENTRY)))
 #define __COW_PAGE ((uint32_t*)(__MEM_LINEAR_ADDRESS(__COW_TABLE, __COW_ENTRY, 0)))
 
@@ -149,7 +149,7 @@
                      {\
                       uint32_t * pun = (uint32_t *)(ADDRESS);\
                       uint32_t i;\
-                      for(i = 0; i < 1024; i++) {\
+                      for(i = 0; i <= LAST_PDPT_INDEX; i++) {\
                         *pun = 0;\
                         pun++;\
                       }\
@@ -160,7 +160,7 @@
                      {\
                       uint32_t * pun = (uint32_t *)(ADDRESS);\
                       uint32_t i;\
-                      for(i = 0; i < 1024; i++) {\
+                      for(i = 0; i <= LAST_PDPT_INDEX; i++) {\
                         *pun = 0;\
                         pun++;\
                       }\

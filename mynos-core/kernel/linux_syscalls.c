@@ -274,8 +274,8 @@ static uint32_t copy_page_table(uint32_t ptp, uint32_t * ptc) {
   uint32_t * pf;
 
   /* copy the page table entries */
-  for (i = 0; i < 1024; i++) {
-    if ((ptp == 1022) && (i == 1023)) return 1; // this is the pd image
+  for (i = 0; i <= LAST_PDPT_INDEX; i++) {
+    if ((ptp == (LAST_PDPT_INDEX - 1)) && (i == LAST_PDPT_INDEX)) return 1; // this is the pd image
     pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(ptp, i);
     if (*pte & (PF_PRESENT | PF_LOGICAL_PRESENT)) {   // this PF is allocated
       flags = *pte & 0xFFF;
@@ -330,7 +330,7 @@ int _linux_syscall_fork() {
   if ((pdc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
   if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
 
-  pdc[1023] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | 
+  pdc[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | 
     PF_USER | PF_READWRITE | PF_PRESENT;
 
   /* copy the shared kernel space */
@@ -338,7 +338,7 @@ int _linux_syscall_fork() {
     pdc[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
 
   /* copy the page dir entries, but not the last one (image for PTs...) */
-  for (i = _asm_last_kernel_page_dir_entry_used + 1; i < 1023; i++) {
+  for (i = _asm_last_kernel_page_dir_entry_used + 1; i < LAST_PDPT_INDEX; i++) {
     pde = (uint32_t*)__GET_PAGE_DIR_ENTRY(i);
     /* this if should never be PF_LOGICAL_PRESENT because we don't allocate
        a page table logically */
@@ -359,7 +359,7 @@ int _linux_syscall_fork() {
   }
 
   /* set the PD pointer: now ptc is the last but one PT */
-  ptc[1023] = LINEAR_TO_PHYSICAL_ADDRESS(pdc) | PF_PRESENT;
+  ptc[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(pdc) | PF_PRESENT;
   kmemcpy((void*)lastPT, (void*)pdc, PAGE_SIZE);
 
   //DEALLOCATE(pdc);

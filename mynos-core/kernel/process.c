@@ -107,7 +107,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   kstackBottomAddr = pinfoAddr  - PAGE_SIZE * KERNEL_STACK_NPAGES;
   ustackBottomAddr = kstackBottomAddr - PAGE_SIZE * USER_STACK_NPAGES;
 
-  nInfoAndStacksPTs = 1022 - __ADDRESS_PD_INDEX(ustackBottomAddr) + 1;
+  nInfoAndStacksPTs = (LAST_PDPT_INDEX - 1) - __ADDRESS_PD_INDEX(ustackBottomAddr) + 1;
 
   elf_ex=*(Elf32_Ehdr *)test_start;
 
@@ -210,23 +210,23 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
      neither relocatable segments. */
   
   for (i = 0; i < npages_for_process; i++)
-  currPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(currPF +(1024*i)) 
+  currPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(currPF +(PDPT_ENTRIES*i)) 
     | PF_USER | PF_PRESENT | PF_READWRITE;
   printk("Set linear2phis addr....\n");
 
-  newPD[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
-  lastPT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
+  newPD[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
+  lastPT[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
 
   pun = infoAndStacksPTs;
 
   /* register the last PTs */
-  for (i = 1022 - nInfoAndStacksPTs + 1; i < 1023; i++) {
+  for (i = (LAST_PDPT_INDEX - 1) - nInfoAndStacksPTs + 1; i < LAST_PDPT_INDEX; i++) {
     newPD[i] = LINEAR_TO_PHYSICAL_ADDRESS(pun) | PF_USER | PF_READWRITE | PF_PRESENT;
     lastPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(pun) | PF_PRESENT;
-    pun += 1024;
+    pun += PDPT_ENTRIES;
   }
 
-  pun = infoAndStacksPTs + (nInfoAndStacksPTs*1024 - 1 -
+  pun = infoAndStacksPTs + (nInfoAndStacksPTs*PDPT_ENTRIES - 1 -
 			    (PROCESS_INFO_NPAGES +
 			     KERNEL_STACK_NPAGES +
 			     USER_STACK_NPAGES));// + nInfoAndStacksPTs*1024 - 1;
@@ -260,7 +260,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
     LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
   
   /* map the page directory in the process linear space */
-  lastButOnePT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(newPD) | PF_PRESENT;
+  lastButOnePT[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(newPD) | PF_PRESENT;
 
   /* allocate a new tss */
   desc->tss = (tss_t*)kmalloc(sizeof(tss_t));
