@@ -22,6 +22,7 @@
 #include "idt.h"
 #include "io.h"
 #include "video.h"
+#include "kutils.h"
 
 void init_pit(float freq, unsigned char channel) {
   unsigned int temp;
