@@ -24,3 +24,6 @@ int __OS_sem_freeSemaphore(int semid);
 int __OS_sem_P(int semid);
 int __OS_sem_tryP(int semid);
 int __OS_sem_V(int semid);
+
+#define privP()    __OS_sem_P(processTable[currProcess].privSem)
+#define privV(p)   __OS_sem_V(processTable[p].privSem)

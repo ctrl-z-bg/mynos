@@ -226,6 +226,8 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   // end IPC
   // SEM
   tss->isWaitingOnP = -1;
+  /* Private Semaphore initialized to 0, as soon as P is made it yields */
+  tss->privSem = __OS_sem_allocateSemaphore(0);
 
 #ifdef RAMDISK
   if (ramdisk_present) {
@@ -248,5 +250,6 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
 
 
 void killProcess() {
+  __OS_sem_freeSemaphore(processTable[currProcess].privSem);
   processTable[currProcess].isAlive = 0;
 }

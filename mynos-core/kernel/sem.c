@@ -27,10 +27,8 @@
 #include "procqueue.h"
 #include "video.h"
 
-#define MAXSEM 20
+#define MAXSEM ((MAXPROCESSES)*2)
 #define MAXSEMVALUE 100
-
-typedef struct {volatile uint32_t val;} atomic_t;
 
 typedef struct _semaphore_t {
     uint32_t mutex; /* mutex and used could be merged */
