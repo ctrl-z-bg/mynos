@@ -35,4 +35,11 @@ int mynos_tryP(int sem);
 int mynos_V(int sem);
 int mynos_initSem(unsigned int n);
 int mynos_freeSem(int sem);
+
+int mynos_enableIrq(unsigned short n);
+int mynos_disableIrq(unsigned short n);
+
+void outportb(unsigned int port,unsigned char value);
+unsigned char inportb(unsigned int port);
+
 #endif
