@@ -59,7 +59,7 @@ tss_t * spawnProcess(tss_t * tss) {
   if ((currPF = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
 
   ///////////////
-  kmemcpy((void*)currPF, (void*)0x208000/*50000*/, 0xc/*4096*/);
+  kmemcpy((void*)currPF, (void*)0x208000, 4096);
   /////////////////
 
   currPT[0] = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_USER | PF_PRESENT |
