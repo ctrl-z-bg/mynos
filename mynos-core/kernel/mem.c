@@ -299,7 +299,7 @@ __asm__ (\
 	 );
 
 /* the copy-on-write code */
-static void __cowManager(uint32_t * pte, uint32_t addr) {
+void __mem_cowManager(uint32_t * pte, uint32_t addr) {
 #ifdef DEBUG
   printk("There are ");
   print_ulong(pmem_countref((*pte)>>12));
@@ -348,7 +348,7 @@ static void __cowManager(uint32_t * pte, uint32_t addr) {
   }
 }
 
-static void __allocateOnUse(uint32_t * pte, uint32_t addr) {
+void __mem_allocateOnUse(uint32_t * pte, uint32_t addr) {
   uint32_t new_phy_page;
   uint32_t flags;
   
@@ -424,9 +424,9 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
     KPANIC("full memory!");
 
   if ((*pte) & PF_LOGICAL_PRESENT) { /* ALLOCATE ON USE */
-    __allocateOnUse(pte, addr);
+    __mem_allocateOnUse(pte, addr);
   } else if ((*pte) & PF_COW) {      /* COPY ON WRITE */
-    __cowManager(pte, addr);
+    __mem_cowManager(pte, addr);
   } else KPANIC("MEMORY ERROR: NOT COW OR LOGICAL");
 }
 
