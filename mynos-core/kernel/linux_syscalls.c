@@ -294,7 +294,7 @@ static uint32_t copy_page_table(uint32_t ptp, uint32_t * ptc) {
 	} else {   // ok, it's a user page
 	  /* the page is set as cow only if: it's not shared, it's not RO,
 	     it's not already cow */
-	  if (!(*pte & PF_SHARED) && !(*pte & PF_READONLY) && !(*pte & PF_COW)) {
+	  if (!(*pte & PF_SHARED) && (*pte & PF_READWRITE) && !(*pte & PF_COW)) {
 	    *pte |= PF_COW;
 	    *pte = *pte & ~PF_READWRITE;  // to have the fault on write!
 	    INVALIDATE_THE_CACHE(__MEM_LINEAR_ADDRESS(ptp, i, 0));

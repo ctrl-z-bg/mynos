@@ -279,6 +279,13 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   printk("\n-----------------------\n");
 
+  /* testing the external mem
+  print_uint_hex(__MEM_LINEAR_ADDRESS(512,1000,0));
+  __OS_setExternalPT(1, 512, 4001);
+  __OS_setExternalProcessPage(1, 512, 1000, 4000, 
+			      PF_READWRITE | PF_USER | PF_PRESENT);
+  */
+
   enable_irq(0);
 
 #ifdef RAMDISK

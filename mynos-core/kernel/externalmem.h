@@ -25,9 +25,9 @@
 
 /* returned value != 0 if the targed address is already allocated */
 int __OS_setExternalProcessPage(pid_t pid, uint32_t table, 
-				uint32_t entry, uint32_t phyPage);
+				uint32_t entry, uint32_t phyPage,
+				uint32_t flags);
 
-int __OS_setExternalPT(pid_t pid, uint32_t table, 
-		       uint32_t phyPage);
+int __OS_setExternalPT(pid_t pid, uint32_t table, uint32_t phyPage);
 
 #endif

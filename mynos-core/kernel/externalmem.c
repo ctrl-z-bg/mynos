@@ -59,13 +59,14 @@ static int __mapProcessPT(pid_t pid, uint32_t table) {
 }
 
 int __OS_setExternalProcessPage(pid_t pid, uint32_t table, 
-				uint32_t entry, uint32_t phyPage) {
+				uint32_t entry, uint32_t phyPage,
+				uint32_t flags) {
   uint32_t * pt;
 
   __mapProcessPT(pid, table);
 
   pt = __EXTERNAL_VMSPACE_PAGE;
-  pt[entry] = (phyPage<<12) | PF_READWRITE | PF_USER | PF_PRESENT;
+  pt[entry] = (phyPage<<12) | flags;
 
   return 0;
 }
@@ -81,7 +82,8 @@ int __OS_setExternalPT(pid_t pid, uint32_t table,
   pd[table] = (phyPage<<12) | PF_READWRITE | PF_USER | PF_PRESENT;
 
   // set the PD mirror entry
-  __OS_setExternalProcessPage(pid, LAST_PDPT_INDEX, table, phyPage);
+  __OS_setExternalProcessPage(pid, LAST_PDPT_INDEX, table, phyPage,
+			      PF_READWRITE | PF_USER | PF_PRESENT);
 
   return 0;
 }

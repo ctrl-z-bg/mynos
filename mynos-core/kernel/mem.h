@@ -30,7 +30,6 @@
 
 #define PF_USER            (1<<2)
 #define PF_SUPERVISOR      0x0
-#define PF_READONLY        0x0
 #define PF_READWRITE       (1<<1)
 #define PF_LOGICAL_PRESENT 0x800    /* one of the available bits */
 #define PF_COW             0x400    /* one of the available bits */
