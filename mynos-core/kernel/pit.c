@@ -25,7 +25,7 @@
 #include "kutils.h"
 #include "sem.h"
 
-void init_pit(float freq, unsigned char channel) {
+void init_pit(int freq, unsigned char channel) {
   unsigned int temp;
 
   temp = PIT_INPUT_Hz/freq;

@@ -60,7 +60,7 @@
 #define PIT_SEL_CH1      0x40        /* Select Counter 1            */
 #define PIT_SEL_CH2      0x80        /* Select Counter 2            */
 
-void init_pit(float freq, unsigned char channel);
+void init_pit(int freq, unsigned char channel);
 void pit_ISR();
 void pit_handler();
 
