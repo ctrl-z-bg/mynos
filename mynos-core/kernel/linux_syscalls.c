@@ -266,19 +266,6 @@ static uint32_t copy_page_table(uint32_t ptp, uint32_t * ptc) {
   return 1;
 }
 
-/* those macros will be useful for a better fork implementation... */
-#if 0
-/* WARNING!!! Save eax before you use this MACRO!!! */
-#define COPY_TSS_ENTRY(ENTRY) {\
-  __asm__ volatile(" movl %0, %%eax\n"::"m"(processTable[currProcess].ENTRY));\
-  __asm__ volatile(" movl %%eax, %0\n":"=m"(processTable[new_pid].ENTRY):);\
-}
-
-#define COPY_TSS_REGISTER(REG) {\
-  __asm__ volatile(" movl %%"#REG", %0\n":"=m"(processTable[new_pid].REG):);\
-}
-#endif
-
 int _linux_syscall_fork() {
   uint32_t i;
   uint32_t * pde, flags;
@@ -338,7 +325,6 @@ int _linux_syscall_fork() {
 		  sizeof(tss_t), D_TSS);
     processTable[new_pid].tssd_gdt_selector = tssd_gdt_sel << 3;
   }
-
 
   {   // tasksw to idle process
     struct {long a ,b;} tmp = {0, 0};
