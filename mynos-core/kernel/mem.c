@@ -144,6 +144,7 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
     /* if the page table for 'page' doesn't exist, we create it */
     if (!__IS_PAGE_TABLE_PRESENT(__PAGE_PD_INDEX(page))) {
       uint32_t newptaddr = (__pg_find_a_free_physical_page() << 12);
+
       __SET_PAGE_DIR_ENTRY(__PAGE_PD_INDEX(page), newptaddr);
       INIT_PAGE_TABLE(__GET_PAGE_TABLE_ENTRY(__PAGE_PD_INDEX(page), 0));
     }

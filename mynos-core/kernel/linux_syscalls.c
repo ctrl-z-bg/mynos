@@ -137,36 +137,31 @@ void * _linux_syscall_mmap(struct mmap_args * args) {
    0: error
    something else: address for the PD image
 */
-static uint32_t * copy_page_table(uint32_t ptp, uint32_t * ptc) {
+static uint32_t copy_page_table(uint32_t ptp, uint32_t * ptc) {
   uint32_t i;
   uint32_t * pte, flags;
   uint32_t * pf;
-  uint32_t * ret = (uint32_t*)1;
 
   /* copy the page table entries */
   for (i = 0; i < 1024; i++) {
+    if ((ptp == 1022) && (i == 1023)) return 1; // this is the pd image
     pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(ptp, i);
     if (*pte & (PF_PRESENT | PF_LOGICAL_PRESENT)) {   // this PF is allocated
       flags = *pte & 0xFFF;
       if (*pte & PF_PRESENT) {
-	if ((pf = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return 0;
+	if ((pf = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
 	ptc[i] = LINEAR_TO_PHYSICAL_ADDRESS(pf) | flags;
 		
-	/* this is the PD image frame */
-	if ((ptp == 1022) && (i == 1023))
-	  ret = pf;
-	else
-	  /* copy the page frame */
-	  kmemcpy((void*)pf, (void*)__MEM_LINEAR_ADDRESS(ptp, i, 0), 
-		  PAGE_SIZE);
-
+	/* copy the page frame */
+	kmemcpy((void*)pf, (void*)__MEM_LINEAR_ADDRESS(ptp, i, 0), 
+		PAGE_SIZE);
 	//DEALLOCATE(pf);
       } else
 	ptc[i] = flags;
     } else
       ptc[i] = 0;
   }
-  return ret;
+  return 1;
 }
 
 int _linux_syscall_fork() {
@@ -175,7 +170,6 @@ int _linux_syscall_fork() {
   uint32_t * pdc, *ptc;
   uint32_t *lastPT;
   uint32_t new_pid;
-  uint32_t * PDimage;
   int ret;
 
   if ((pdc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
@@ -184,9 +178,9 @@ int _linux_syscall_fork() {
   pdc[1023] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | 
     PF_USER | PF_READWRITE | PF_PRESENT;
 
-  /* copy the shared kernel space */ 
+  /* copy the shared kernel space */
   for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
-    lastPT[i] = pdc[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
+    pdc[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
 
   /* copy the page dir entries, but not the last one (image for PTs...) */
   for (i = _asm_last_kernel_page_dir_entry_used + 1; i < 1023; i++) {
@@ -200,20 +194,18 @@ int _linux_syscall_fork() {
 	pdc[i] = LINEAR_TO_PHYSICAL_ADDRESS(ptc) | flags;
 	
 	/* copy the page table */
-	if ((PDimage = copy_page_table(i, ptc)) == 0) return -1;
+	if (copy_page_table(i, ptc) == -1) return -1;
 
 	//DEALLOCATE(ptc);
       } else
 	pdc[i] = flags;
     } else
       pdc[i] = 0;
-
-    /* update the PT image */
-    lastPT[i] = pdc[i];
   }
 
-  /* copy the PD image */
-  kmemcpy((void*)PDimage, (void*)pdc, PAGE_SIZE);
+  /* set the PD pointer: now ptc is the last but one PT */
+  ptc[1023] = LINEAR_TO_PHYSICAL_ADDRESS(pdc) | PF_PRESENT;
+  kmemcpy((void*)lastPT, (void*)pdc, PAGE_SIZE);
 
   //DEALLOCATE(lastPT);
   //DEALLOCATE(pdc);
