@@ -51,7 +51,7 @@ $(ALL_OBJ):
 kernel: $(ALL_OBJ) $(OFILESC) start.asm
 	nasm -f elf start.asm -o start.o
 	$(LD) start.o $(OFILESC) $(ALL_OBJ) \
-		-o kernel.bin -oformat binary -Ttext 0x0
+		-o kernel.bin --oformat binary -Ttext 0x0
 
 clean:
 	for i in $(SUBDIRS) ; do \

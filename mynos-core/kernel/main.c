@@ -77,7 +77,7 @@ void mynos_main() {
   printk("Loading Interrupt Descriptor Table... ");
   init_idt();
   printk("done.\n");
-
+  
   cpuSpeed();
 
   printk("Physical Memory : ");
