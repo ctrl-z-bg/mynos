@@ -113,16 +113,12 @@ void mynos_main() {
 
   tsksw();
   spawnProcess(&procA_tss);
-  //  __asm__ volatile ("ljmp $88,$0\n");
   enable_irq(0);
 
   while(1) {
-    //  disable_irq(0);
-    printk("I'm the father\n"); 
-    //        asm("int $0x50\n");
-    //  enable_irq(0);
-    delay(1000);
-    //    __asm__ volatile ("ljmp $88,$0\n");
+    asm("int $0x51\n");
+    //    printk("I'm the father\n"); 
+    //    delay(1000);
   }
 
   {

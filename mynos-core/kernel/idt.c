@@ -37,20 +37,14 @@ struct {
 } loadidt = {
 (256 * sizeof(union DT_entry) - 1), IDT};
 
-#if 0
-void keyb_handler() {
-  char a;
-  a = (char) inportb(0x60);
-  printk("hai premuto un tasto\n");
-}
-
-ISR_WRAPPER(keyb);
-#endif
-
 TRAP_WRAPPER(trapScema);
+TRAP_WRAPPER(trapScema2);
 
 void trapScema_handler() {
-  printk("TS\n");
+  printk("Trap Scema\n");
+}
+void trapScema2_handler() {
+  printk("Trap Scema2\n");
 }
 
 void init_idt() {
@@ -77,11 +71,8 @@ void init_idt() {
   set_vector(_int16, 16, D_PRESENT + D_INT);
 
   set_vector(trapScema_TRAP, 0x50, D_PRESENT + D_INT);
+  set_vector(trapScema2_TRAP, 0x51, D_PRESENT + D_INT);
 
-#if 0  
-  set_vector(keyb_ISR, 33, D_PRESENT + D_INT);
-#endif
-  
   asm("lidt (%0)                 \n"	/* Load the IDT                */
       "pushfl                    \n"	/* Clear the NT flag           */
       "andl $0xffffbfff,(%%esp)  \n" "popfl                     \n":
