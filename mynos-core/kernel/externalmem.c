@@ -25,7 +25,7 @@
 
 /* map a physical page to the externalVMPage (see mem.h) */
 static void __mapPageToAppPage(uint32_t phyPage) {
-  *(__EXTERNAL_VMSPACE_PAGE_ENTRY) |= (phyPage<<12);
+  *(__EXTERNAL_VMSPACE_PAGE_ENTRY) = (phyPage<<12) | 0x1;
   INVALIDATE_THE_CACHE((void*)__EXTERNAL_VMSPACE_PAGE);
 }
 
@@ -60,9 +60,28 @@ static int __mapProcessPT(pid_t pid, uint32_t table) {
 
 int __OS_setExternalProcessPage(pid_t pid, uint32_t table, 
 				uint32_t entry, uint32_t phyPage) {
+  uint32_t * pt;
+
   __mapProcessPT(pid, table);
 
+  pt = __EXTERNAL_VMSPACE_PAGE;
+  pt[entry] = (phyPage<<12) | PF_READWRITE | PF_USER | PF_PRESENT;
 
+  return 0;
+}
+
+int __OS_setExternalPT(pid_t pid, uint32_t table, 
+		       uint32_t phyPage) {
+  uint32_t * pd;
+
+  // set the PD entry
+  __mapProcessPD(pid);
+
+  pd = __EXTERNAL_VMSPACE_PAGE;
+  pd[table] = (phyPage<<12) | PF_READWRITE | PF_USER | PF_PRESENT;
+
+  // set the PD mirror entry
+  __OS_setExternalProcessPage(pid, LAST_PDPT_INDEX, table, phyPage);
 
   return 0;
 }

@@ -47,7 +47,6 @@
 #include "vga.h"
 #endif
 
-
 void __print_free_phy_pages() {
   printk("(adesso ci sono ");
   print_uint(__number_of_free_physical_pages);
