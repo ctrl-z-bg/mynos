@@ -23,6 +23,8 @@
 
 #include "global.h"
 
+#define IPC_FLAGS_BLOCK (0x1)
+
 /* it returns a pointer to a channel */
 #define IPC_GET_CHANNEL(PLIST, ID) ((PLIST)->channels[ID])
 
@@ -41,30 +43,51 @@ typedef struct {
   char * buf;
   uint32_t msgsize;
   uint32_t bufsize;
+  pid_t sender;
+  uint32_t senderBlocked;
 } channel_t;
 
 typedef struct {
   channel_t ** channels;
+  /* index to scan the channel list for receive */
+  uint32_t recIdx;
+  /* index to scan the channel list for receiveAll */
+  uint32_t recAllIdx;
+  /* who waked up the process (the sender in recvAll case) */
+  pid_t    sender;
   /* something else, e.g. a semaphore... */
 } channelList_t;
 
-/* channels table stuff */
+/* channels list stuff */
+/************************/
 void          __OS_ipc_initChannelList(channelList_t * list);
 void          __OS_ipc_destroyChannelList(channelList_t * list);
-int32_t       __OS_ipc_getFreshID(channelList_t * list);
+int32_t       __OS_ipc_insertIntoList(channelList_t * list, channel_t * c);
+channel_t  *  __OS_ipc_searchSender(channelList_t * list, pid_t sender);
 
 
 /* channels stuff */
-channel_t *   __OS_ipc_createChannel(uint32_t size);
+/******************/
+channel_t *   __OS_ipc_createChannel(uint32_t size, pid_t sender);
 channel_err_t __OS_ipc_writeToChannel(channel_t * c, 
 				      char * buf, uint32_t size);
-channel_err_t __OS_ipc_readFromChannel(channel_t * c, char * buf,
-				       uint32_t maxsize);
+int           __OS_ipc_readFromChannel(channel_t * c, char * buf,
+				       uint32_t maxsize,
+				       pid_t * sender);
 void          __OS_ipc_destroyChannel(channel_t * c);
 
 /* the old data will be lost */
 channel_err_t __OS_ipc_resizeChannel(channel_t * c, uint32_t size);
 
 void          __OS_ipc_zeroChannel(channel_t * c);
+
+/* IPC stuff */
+/******************/
+int           __OS_ipc_send(pid_t dest, char * buf, uint32_t size,
+			    uint32_t flags);
+int           __OS_ipc_recv(pid_t sender, char * buf, uint32_t size,
+			       uint32_t flags);
+int           __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
+			       uint32_t flags);
 
 #endif

@@ -204,6 +204,8 @@ tss_t * spawnProcess(tss_t * tss) {
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
 
 #ifdef IPC
+  tss->isWaitingSender = -1;
+  tss->isWaitingReceiver = -1;
   __OS_ipc_initChannelList(&(tss->channels));
 #endif
 

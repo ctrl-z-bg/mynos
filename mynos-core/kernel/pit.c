@@ -63,7 +63,14 @@ void pit_handler() {
     count = 1;
     do {
       currProcess = (currProcess + 1) % numProcess;
-    } while (!processTable[currProcess].isAlive);
+    }
+#ifdef IPC
+    while ((!processTable[currProcess].isAlive) ||
+	   (processTable[currProcess].isWaitingReceiver != -1) ||
+	   (processTable[currProcess].isWaitingSender != -1));
+#else
+    while (!processTable[currProcess].isAlive);
+#endif
     tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
   }
 
@@ -82,6 +89,8 @@ void pit_handler() {
     processTable[isForking].isForking = 0;
     processTable[isForking].isAlive = 1;
 #ifdef IPC
+    processTable[isForking].isWaitingSender = -1;
+    processTable[isForking].isWaitingReceiver = -1;
     __OS_ipc_initChannelList(&(processTable[isForking].channels));
 #endif
   }

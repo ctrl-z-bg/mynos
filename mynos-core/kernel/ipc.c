@@ -21,6 +21,10 @@
 #include "ipc.h"
 #include "dynalloc.h"
 #include "kutils.h"
+#include "tss.h"
+#include "process.h"
+
+#ifdef IPC
 
 #define MAXCHANNELS 20
 
@@ -40,7 +44,17 @@ void __OS_ipc_destroyChannelList(channelList_t * list) {
   kfree(list->channels);
 }
 
-int32_t __OS_ipc_getFreshID(channelList_t * list) {
+void __OS_ipc_destroyChannelIntoList(channelList_t * list, channel_t * c) {
+  uint32_t i;
+  
+  for (i = 0; i < MAXCHANNELS; i++)
+    if ((list->channels)[i] == c) {
+      __OS_ipc_destroyChannel(c);
+      (list->channels)[i] = NULL;
+    }
+}
+
+int32_t __OS_ipc_insertIntoList(channelList_t * list, channel_t * c) {
   static int32_t id = 0;
   int32_t start;
 
@@ -50,13 +64,32 @@ int32_t __OS_ipc_getFreshID(channelList_t * list) {
       break;
     id = (id + 1) % MAXCHANNELS;
   } while (id != start);
-  if ((list->channels)[id] == NULL)
-    return id;
-  else
+  if ((list->channels)[id] != NULL)
     return -1;
+  (list->channels)[id] = c;
+  return 0;
 }
 
-channel_t * __OS_ipc_createChannel(uint32_t size) {
+channel_t * __OS_ipc_searchSender(channelList_t * list, pid_t sender) {
+  int32_t start;
+  int32_t found;
+  
+  start = list->recIdx;
+  do {
+    if (((list->channels)[list->recIdx] != NULL) &&
+	((list->channels)[list->recIdx]->sender == sender)) {
+      found = 1;
+      break;
+    }
+    list->recIdx = (list->recIdx + 1) % MAXCHANNELS;
+  } while (list->recIdx != start);
+  if (!found)
+    return NULL;
+  return (list->channels)[list->recIdx];
+}
+
+channel_t * __OS_ipc_createChannel(uint32_t size,
+				   pid_t sender) {
   channel_t * c;
   c = (channel_t*)kmalloc(sizeof(channel_t));
   if (c == NULL) return NULL;
@@ -64,10 +97,13 @@ channel_t * __OS_ipc_createChannel(uint32_t size) {
   if (c->buf == NULL) return NULL;
   c->bufsize = size;
   c->msgsize = 0;
+  c->sender = sender;
+  c->senderBlocked = 0;
   return c;
 }
 
-channel_err_t __OS_ipc_writeToChannel(channel_t * c, char * buf, uint32_t size) {
+channel_err_t __OS_ipc_writeToChannel(channel_t * c, 
+				      char * buf, uint32_t size) {
   /* TODO: checks on buffer permissions */
   if (size > c->bufsize)
     return CHANNEL_ERR_OVERFLOW;
@@ -76,14 +112,16 @@ channel_err_t __OS_ipc_writeToChannel(channel_t * c, char * buf, uint32_t size) 
   return CHANNEL_ERR_OK;
 }
 
-channel_err_t __OS_ipc_readFromChannel(channel_t * c, char * buf, 
-				       uint32_t maxsize) {
+int __OS_ipc_readFromChannel(channel_t * c, char * buf, 
+			     uint32_t maxsize,
+			     pid_t * sender) {
   /* TODO: checks on buffer permissions */
   if (maxsize != 0)  // zero means no control
     if (maxsize < c->msgsize)
-      return CHANNEL_ERR_OVERFLOW;
+      return -1;
   kmemcpy((void*)buf, (void*)c->buf, c->msgsize);
-  return CHANNEL_ERR_OK;
+  if (sender) *sender = c->sender;
+  return c->msgsize;
 }
 
 void __OS_ipc_destroyChannel(channel_t * c) {
@@ -104,3 +142,125 @@ channel_err_t __OS_ipc_resizeChannel(channel_t * c, uint32_t size) {
 void __OS_ipc_zeroChannel(channel_t * c) {
   c->msgsize = 0;
 }
+
+int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
+  tss_t * rtss;         // receiver tss
+  tss_t * stss;         // sender tss
+  channelList_t * list; // receiver channel list
+  channel_t * c;        // new channel
+
+  if ((dest >= MAXPROCESSES) || (dest < 0) || (!processTable[dest].isAlive))
+    return -1;
+  rtss = &(processTable[dest]);
+  stss = &(processTable[currProcess]);
+  list = &(rtss->channels);
+
+  // LOCK rec list
+
+  if (!(flags | IPC_FLAGS_BLOCK) &&
+      (rtss->isWaitingSender != currProcess) &&
+      (rtss->isWaitingSender != 0)) {
+    /* the receiver is not ready and I am not blocking, so return err */
+    // UNLOCK rec list
+    return -1;
+  }
+
+  /* the receiver is waiting for me or anyone */
+  if ((rtss->isWaitingSender == currProcess) ||
+      (rtss->isWaitingSender == 0)) {
+    (rtss->channels).sender = currProcess;  // It was me who woke the recv
+    rtss->isWaitingSender = -1;             // let's wake up the recv
+  }
+
+  /* create the channel... */
+  if ((c = __OS_ipc_createChannel(size, currProcess)) == NULL) {
+    // UNLOCK rec list
+    return -1;
+  }
+  /* ... and insert it into the list */
+  if (__OS_ipc_insertIntoList(list, c) < 0) {
+    // UNLOCK rec list
+    __OS_ipc_destroyChannel(c);
+    return -1;
+  }
+  
+  /* fill the channel */
+  if (__OS_ipc_writeToChannel(c, buf, size) != CHANNEL_ERR_OK) {
+    // UNLOCK rec list
+    return -1;
+  }
+  
+  if (flags | IPC_FLAGS_BLOCK) {
+    stss->isWaitingReceiver = dest;
+    c->senderBlocked = 1;           // the receiver will see I'm blocked
+  }
+
+  // UNLOCK rec list
+  {   // tasksw to idle process
+    struct {long a ,b;} tmp = {0, 0};
+    
+    currProcess = 0;
+    tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
+    __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
+  }
+
+  return 0;
+}
+
+int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
+  tss_t * rtss;         // receiver tss
+  tss_t * stss;         // sender tss
+  channelList_t * list; // receiver channel list
+  channel_t * c;
+
+  if ((sender >= MAXPROCESSES) || (sender < 0))
+    return -1;
+
+  rtss = &(processTable[currProcess]);
+  list = &(rtss->channels);
+  stss = &(processTable[sender]);
+
+  // LOCK rec list
+  c = __OS_ipc_searchSender(list, sender);
+
+  if (c == NULL) {
+    /* if I'm not blocking and there is no message for me return err */
+    if (!(flags | IPC_FLAGS_BLOCK)) {
+      // UNLOCK rec list
+      return -1;
+    }
+    rtss->isWaitingSender = sender;
+  } else { // c is not null
+    /* the msg is smaller than we thinked */
+    if (__OS_ipc_readFromChannel(c, buf, size, NULL) != size) {
+      __OS_ipc_destroyChannelIntoList(list, c);
+      // UNLOCK rec list
+      return -1;
+    }
+    __OS_ipc_destroyChannelIntoList(list, c);
+    
+    if (c->senderBlocked) {
+      // LOCK sender list
+      stss->isWaitingReceiver = -1;
+      // UNLOCK sender list
+    }
+  }  
+
+  // UNLOCK rec list
+  {   // tasksw to idle process
+    struct {long a ,b;} tmp = {0, 0};
+    
+    currProcess = 0;
+    tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
+    __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
+  }
+
+  return 0;
+}
+
+int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size, 
+		     uint32_t flags) {
+  return 0;
+}
+
+#endif // IPC

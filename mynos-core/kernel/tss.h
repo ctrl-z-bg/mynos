@@ -68,7 +68,13 @@ typedef struct {
   uint32_t pid;
   pid_t isForking;
 
+#ifdef IPC
   channelList_t channels;
+
+  /* -1 means nobody, zero means anybody */
+  pid_t isWaitingSender;
+  pid_t isWaitingReceiver;
+#endif
 
 } tss_t;
 

@@ -62,6 +62,11 @@ void tsksw() {
   processTable[0].isAlive = 1;
   processTable[0].isForking = 0;
 
+#ifdef IPC
+  processTable[0].isWaitingSender = -1;
+  processTable[0].isWaitingReceiver = -1;
+#endif
+
   gdt_index = gdt_get_free_index();
   processTable[0].tssd_gdt_selector = (uint32_t)gdt_index << 3;
 

@@ -25,6 +25,23 @@
 #include "video.h"
 #include "io.h"
 
+#ifdef IPC
+#include "ipc.h"
+
+void sendTo1_handler() {
+  int a = 4;
+  __OS_ipc_send(1, (char *)&a, 4, IPC_FLAGS_BLOCK);
+}
+void recvFrom2_handler() {
+  int a;
+  __OS_ipc_recv(2, (char *)&a, 4, IPC_FLAGS_BLOCK);
+  printk("ricevuto ");
+  print_ulong((ulong32_t)a);
+}
+TRAP_WRAPPER(sendTo1);
+TRAP_WRAPPER(recvFrom2);
+#endif //IPC
+
 extern void int_null();
 
 desc_table(IDT, 256)
@@ -70,6 +87,11 @@ void init_idt() {
   set_vector(_int16, 16, D_PRESENT + D_INT);
 
   set_vector(_linux_syscalls_trap_TRAP, 0x80, D_PRESENT + D_INT + D_DPL3);
+
+#ifdef IPC
+  set_vector(sendTo1_TRAP, 0x81, D_PRESENT + D_INT + D_DPL3);
+  set_vector(recvFrom2_TRAP, 0x82, D_PRESENT + D_INT + D_DPL3);
+#endif
 
   asm("lidt (%0)                 \n"	/* Load the IDT                */
       "pushfl                    \n"	/* Clear the NT flag           */
