@@ -22,6 +22,7 @@
 #define __PROCESS_H__
 
 #include "tss.h"
+#include "lmemtrack.h"
 
 #define MAXPROCESSES 30
 #define MAXOPENSERVICES 100
@@ -54,6 +55,9 @@ typedef struct {
   // end IPC
 
   processData_t * processData;
+
+  // linear space map
+  pdListEl * lmemmap;
 
   /* this is the physical address of the page table using to access
      all process' page tables (the last one...) */

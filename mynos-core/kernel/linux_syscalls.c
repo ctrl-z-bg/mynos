@@ -372,7 +372,11 @@ int _linux_syscall_fork() {
   kmemcpy((void*)&(processTable[new_pid]), 
 	  (void*)&(processTable[currProcess]),
 	  sizeof(process_descriptor_t));
-  
+
+  /* copy the linear space map */
+  processTable[new_pid].lmemmap = 
+    __lmt_copyList(processTable[currProcess].lmemmap);
+
   /* copy the tsses */
   mirror = 
     copyThreads(&processTable[new_pid], &processTable[currProcess], pdc);

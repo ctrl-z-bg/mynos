@@ -103,6 +103,9 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   /* initial kernel stack data of the new process */
   void * stackData;
 
+  // the linear space process map
+  desc->lmemmap = NULL;
+
   pinfoAddr  = upperLimit - PAGE_SIZE * PROCESS_INFO_NPAGES;
   kstackBottomAddr = pinfoAddr  - PAGE_SIZE * KERNEL_STACK_NPAGES;
   ustackBottomAddr = kstackBottomAddr - PAGE_SIZE * USER_STACK_NPAGES;
