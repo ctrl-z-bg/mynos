@@ -146,7 +146,7 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   /* Let's create some task! :) */
   {
-    uint32_t i, ntask = 3;
+    uint32_t i, ntask = 1;
     for (i = 0; i < ntask; i++)
       if(!spawnProcess(&(processTable[numProcess++])))
 	KPANIC("FULL MEMORY");
