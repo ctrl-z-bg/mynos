@@ -1,0 +1,102 @@
+/*
+  MyNOS
+  Copyright (C) 2002
+  MyNOS team (http://sourceforge.net/projects/mynos/)
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation; either version 2 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+*/
+
+#include "mem.h"
+#include "gdt.h"
+#include "tss.h"
+#include "kutils.h"
+
+tss_t processTable[20];
+uint32_t numProcess = 0;
+
+tss_t * spawnProcess(tss_t * tss) {
+  uint32_t * newPD;
+  uint32_t * lastPT;
+  uint32_t * lastButOnePT;
+  uint32_t * currPT;
+  uint32_t * currPF;        /* current page frame */
+  uint32_t * stackFrame; 
+  uint32_t i;
+
+  if ((newPD = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
+  kbzero(newPD, PAGE_SIZE);
+
+  for (i = 0; i <= 255/*_asm_last_page_dir_entry_used*/; i++)
+    newPD[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
+
+  if ((lastPT = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
+  kbzero(lastPT, PAGE_SIZE);
+
+  if ((lastButOnePT = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
+  kbzero(lastButOnePT, PAGE_SIZE);
+
+  if ((currPT = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
+  kbzero(currPT, PAGE_SIZE);
+  newPD[256]=//_asm_last_page_dir_entry_used + 1] = 
+    LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
+
+  if ((currPF = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
+
+  ///////////////
+  kmemcpy((void*)currPF, (void*)50000, 1024);
+  /////////////////
+
+  currPT[0] = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_USER | PF_PRESENT |
+    PF_READWRITE;
+  newPD[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
+  newPD[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(lastButOnePT) | PF_PRESENT;
+  
+  lastPT[0] = LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
+  lastPT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
+  lastPT[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(lastButOnePT) | PF_PRESENT;
+  
+  lastButOnePT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(newPD) | PF_PRESENT;
+  if ((stackFrame = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
+  lastButOnePT[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_PRESENT;
+
+  /* set the new process tss */
+  tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(newPD);
+  tss->io_bitmap_offset = 0;
+  tss->eip = (uint32_t)0;//(1024*1024*1024);
+  tss->cs = 0x8 * 100;
+  tss->ds = 0x8 * 101;
+  tss->es = 0x8 * 101;
+  tss->fs = 0x8 * 101;
+  tss->gs = 0x8 * 101;
+  tss->ss = 0x8 * 101;
+  tss->ldt = 0;
+  tss->eflags = 0x200;
+  tss->esp = tss->ebp = //3*(uint32_t)(1024*1024*1024) - 0x400000 - 4100;
+    (uint32_t)((_asm_last_page_dir_entry_used)*0x400000 - 4100);// - 0x40000000);
+  tss->esp0 = tss->esp - 1000;
+  tss->esp1 = tss->esp - 1000;
+  tss->esp2 = tss->esp - 1000;
+  tss->ss0 = tss->ss1 = tss->ss2 = 0x8 * 101;
+
+  gdt_set_entry(100, 0x40000000, 0xFFF00, (D_CODE + D_BIG + D_BIG_LIM));// + D_DPL3));
+  gdt_set_entry(101, 0x00000000, 0xFFFFF, (D_DATA + D_WRITE + D_BIG + D_BIG_LIM));//+ D_DPL3));
+
+  gdt_set_entry(11, LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)tss),
+		sizeof(tss_t), D_TSS);
+
+  return NULL;
+}
+
+

@@ -22,7 +22,7 @@ extern mynos_main		; the real main is not in this file
 
 ;;; the bottom of each process linear memory will be aliased with
 ;;; kernel linear memory. This is the last index used in page directory
-%define	KLAST_PAGE_DIR_ENTRY_USED	255	; 255 = 1GB
+%define	KLAST_PAGE_DIR_ENTRY_USED	1023 ;255	; 255 = 1GB
 	
 ;;; last linear page frame will be mapped here
 %define KERNEL_PAGE_DIR			0x100000

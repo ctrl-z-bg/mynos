@@ -26,6 +26,13 @@
 #define __LAST_LINEAR_PAGE 0xFFFFF
 #define PAGE_SIZE          0x1000
 
+#define PF_USER            (1<<2)
+#define PF_SUPERVISOR      0x0
+#define PF_READONLY        0x0
+#define PF_READWRITE       (1<<1)
+#define PF_PRESENT         0x1
+#define PF_NOTPRESENT      0x0
+
 /*************************************************************************
 *                        MEMORY BITMAP STUFF                             *
 *************************************************************************/
@@ -165,9 +172,9 @@
    is really a valid one */
 #define LINEAR_TO_PHYSICAL_ADDRESS(LADDRESS) \
         (((*((uint32_t*)__GET_PAGE_TABLE_ENTRY( \
-                             __ADDRESS_PD_INDEX(LADDRESS), \
-		             __ADDRESS_PT_INDEX(LADDRESS)))) & 0xFFFFF000) | \
-         __ADDRESS_OFFSET(LADDRESS))
+                             __ADDRESS_PD_INDEX((uint32_t) (LADDRESS)), \
+		             __ADDRESS_PT_INDEX((uint32_t) (LADDRESS))))) & 0xFFFFF000) | \
+         __ADDRESS_OFFSET((uint32_t) (LADDRESS)))
 
 
 extern byte_t * __memory_bitmap;

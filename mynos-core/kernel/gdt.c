@@ -71,8 +71,8 @@ void _init_gdt() {
   __asm__ volatile ("lgdtl (loadgdt)\n");
 }
 
-void gdt_set_entry(int entry, uint32_t base, uint32_t limit, 
-		   ushort16_t control) {
+void gdt_set_entry(uint32_t entry, uint32_t base,
+		   uint32_t limit, ushort16_t control) {
   SEG_createStandardDescriptor((uint32_t *) (gdt_addr+entry),
 			       base, limit, control);
 }

@@ -29,7 +29,7 @@
 
 void _init_gdt();
 
-void gdt_set_entry(int entry, uint32_t base, uint32_t limit, 
-		   ushort16_t control);
+void gdt_set_entry(uint32_t entry,
+		   uint32_t base, uint32_t limit, ushort16_t control);
 
 #endif

@@ -29,6 +29,7 @@
 #include "idt.h"
 
 #include "tss.h"
+#include "process.h"
 
 #include "3parts/delay.h"
 #include "3parts/fdc.h"
@@ -44,44 +45,14 @@ tss_t idle_tss;
 tss_t procA_tss;
 char * tssd_addr = (char*)(10*8);
 
-void procA() {
-  printk("\n I'm the child\n");
-  while(1) {
-    delay(1000);
-    __asm__ volatile ("ljmp $80,$0\n");
-    printk(" I'm the child\n");
-  }
-}
-
 void tsksw() {
   /* set a tss for the outcoming process */
   idle_tss.pgdir = (uint32_t**)0x100000;
   idle_tss.io_bitmap_offset = 0;
   idle_tss.ldt = 0;
 
-  /* set a tss for the incoming process! */
-  procA_tss.pgdir = (uint32_t**)0x100000;
-  procA_tss.io_bitmap_offset = 0;
-  procA_tss.eip = (uint32_t)procA;
-  procA_tss.cs = 0x8;
-  procA_tss.ds = 0x18;
-  procA_tss.es = 0x18;
-  procA_tss.fs = 0x18;
-  procA_tss.gs = 0x18;
-  procA_tss.ss = 0x18;
-  procA_tss.ldt = 0;
-  procA_tss.eflags = 0x200;
-  procA_tss.esp = procA_tss.ebp = 
-    _asm_last_page_dir_entry_used*0x400000 - 6000;//4100;
-  procA_tss.esp0 = procA_tss.esp;
-  procA_tss.esp1 = procA_tss.esp;
-  procA_tss.esp2 = procA_tss.esp;
-  procA_tss.ss0 = procA_tss.ss1 = procA_tss.ss2 = 0x18;
-
   /* set the tssd in the gdt, for the incoming and the outcoming processes */
   gdt_set_entry(10, LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)&idle_tss),
-		sizeof(tss_t), D_TSS);
-  gdt_set_entry(11, LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)&procA_tss),
 		sizeof(tss_t), D_TSS);
 
   /* load the task register with the relative address in the gdt of the
@@ -89,9 +60,8 @@ void tsksw() {
   __asm__ volatile ("ltrw (tssd_addr)\n");
 
   /* task switching!!! :) */
-  __asm__ volatile ("ljmp $88,$0\n");
+  //  __asm__ volatile ("ljmp $88,$0\n");
 }
-
 
 void mynos_main() {
   __asm__("cli");
@@ -124,30 +94,35 @@ void mynos_main() {
 
   InitKeyboard();
   //  enable_irq(1); /* irq1 (keyboard) is interrupt M_VEC+1 (33) */
-  enable_irq(0);
+  //  enable_irq(0);
 
   init_floppy();
 
+  printk("premi un tasto\n");
+  getch();
+
   {
-    char buffer[512];
-	if(read_block(0, (unsigned char *) buffer, 1)==FALSE)
+    char * buffer = (char*)50000;
+	if(read_block(98, (unsigned char *) buffer, 1)==FALSE)
 	{
 		printk("Kernel Panic: FDC not responding\n");
 		printk("Press any key to try again\n");
-	} else {
-	  printk("\nLetto dal bootsector : ");
-	  buffer[11] = '\0';
-	  printk(buffer+3);
-	  printk("\n");
 	}
   }
 
+
   tsksw();
+  spawnProcess(&procA_tss);
+  //  __asm__ volatile ("ljmp $88,$0\n");
+  enable_irq(0);
 
   while(1) {
+    //  disable_irq(0);
     printk("I'm the father\n"); 
+    //        asm("int $0x50\n");
+    //  enable_irq(0);
     delay(1000);
-    __asm__ volatile ("ljmp $88,$0\n");
+    //    __asm__ volatile ("ljmp $88,$0\n");
   }
 
   {

@@ -35,7 +35,26 @@ void init_pit(float freq, unsigned char channel) {
 ISR_WRAPPER(pit);
 
 void pit_handler() {
+  static int count = 1;
+  static int father = 1;
+  unsigned long ret = 0;
+  struct {long a ,b;} tmp = {0, 0};
+
   asm("int $0x1C"); /* Extra timer interrupt, 
 		       used by floppy for timeout etc.. */
+
+  if (count++ >= 20) {
+    count = 1;
+    father = !father;
+    father?(ret = 80):(ret = 88);
+  }
+
+  outportb(0x20, 0x20);
+
+  tmp.b = ret;
+
+  if (ret)
+    __asm__ volatile ("ljmp %0\n"::"m"(tmp.a));
+
 }
 

@@ -212,8 +212,7 @@ void reset(void)
    motor = FALSE;
 
    /* program data rate (500K/s) */
-
-   //   outportb(FDC_DRS,0);    MYNOSSSSSSSSSSSSSSSSSSS
+   // outportb(FDC_DRS,0);//    MYNOSSSSSSSSSSSSSSSSSSS
 
    /* re-enable interrupts */
    outportb(FDC_DOR,0x0c);
@@ -357,6 +356,8 @@ BOOL read_block(int block,BYTE *blockbuff, unsigned long nosectors)
 	
 	if(track!=track2)
 	{
+	  print_ulong(nosectors);
+	  print_char('\n');
 		for(loop=0; loop<nosectors; loop++)
 			result = fdc_rw(block+loop, blockbuff+(loop*512), TRUE, 1);
 		return result;
@@ -382,7 +383,7 @@ BOOL fdc_rw(int block,BYTE *blockbuff,BOOL read,unsigned long nosectors)
    
    /* convert logical address into physical address */
    block2hts(block,&head,&track,&sector);
-   
+
    /* spin up the disk */
    motoron();
 
@@ -416,6 +417,7 @@ BOOL fdc_rw(int block,BYTE *blockbuff,BOOL read,unsigned long nosectors)
       /* program data rate (500K/s) */
       outportb(FDC_CCR,0);
       
+
       /* send command */
       if (read) {
 	 dma_xfer(2,tbaddr,nosectors*512,FALSE);
