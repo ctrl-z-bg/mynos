@@ -23,6 +23,7 @@
 #include "io.h"
 #include "video.h"
 #include "kutils.h"
+#include "sem.h"
 
 void init_pit(float freq, unsigned char channel) {
   unsigned int temp;
@@ -90,6 +91,7 @@ void pit_handler() {
     processTable[isForking].isWaitingReceiver = -1;
     // SEM
     processTable[isForking].isWaitingOnP = -1;
+    processTable[isForking].privSem = __OS_sem_allocateSemaphore(0);
 
     __OS_ipc_initChannelList(&(processTable[isForking].channels));
   }

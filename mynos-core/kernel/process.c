@@ -22,6 +22,7 @@
 #include "mem.h"
 #include "gdt.h"
 #include "tss.h"
+#include "sem.h"
 #include "kutils.h"
 #include "elf.h"
 #include "process.h"
