@@ -65,6 +65,7 @@ void init_floppy(void)
    
    /* install IRQ6 handler */
    set_vector(floppy_ISR, M_VEC+6, (D_INT+D_PRESENT+D_DPL1));
+
    enable_irq(6);
 
    set_vector(_int1c, 0x1c, (D_INT+D_PRESENT+D_DPL1));

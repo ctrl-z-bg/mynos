@@ -17,24 +17,33 @@
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
-OTHER_MODULES	= 3parts
+SUBDIRS	= 3parts
 
 CC = gcc
-CFLAGS = -Wall -I$(OTHER_MODULES)
+CFLAGS = -Wall $(foreach DIR, $(SUBDIRS), -I$(DIR))
 LD = ld
+MAKE	= make
 
 AS = nasm
 ASFLAGS = -f elf
 
-.PHONY = kernel all $(OTHER_MODULES)
+.PHONY: kernel clean all $(SUBDIRS)
 
 SRCSC	= 	$(wildcard *.c)
-OFILESC	=	$(SRCSC:%.c=%.o)  
+OFILESC	=	$(SRCSC:%.c=%.o)
 
 SRCSAS	= 	$(wildcard *.asm)
-OFILESAS	=	$(SRCSAS:%.asm=%.o)  
+OFILESAS	=	$(SRCSAS:%.asm=%.o)
 
-all: kernel
+ALL_OBJ  = $(foreach DIR, $(SUBDIRS), $(DIR)/$(DIR:%=%_module.o))
+
+all: $(SUBDIRS) kernel
+
+$(SUBDIRS):
+	$(MAKE) -C $@
+
+$(ALL_OBJ):
+	$(MAKE) -C $(@D:%_module.o=%)
 
 ($OFILESC): $(SRCSC)
 	$(CC) -c $(CFLAGS) $<
@@ -42,16 +51,21 @@ all: kernel
 ($OFILESAS): $(SRCSC)
 	$(AS) $(ASFLAGS) $<
 
-kernel: $(OFILESC) start.asm
-	make -C $(OTHER_MODULES)
+kernel: $(ALL_OBJ) $(OFILESC) start.asm
 	nasm -f elf start.asm -o start.o
-	$(LD) start.o $(OFILESC) $(OTHER_MODULES)/$(OTHER_MODULES)_module.o \
+	$(LD) start.o $(OFILESC) $(ALL_OBJ) \
 		-o kernel.bin -oformat binary -Ttext 0x0
 
 clean:
+	for i in $(SUBDIRS) ; do \
+          make -C $$i clean;\
+	done
 	rm -f *.o *.bin *~
 
 depend:
+	for i in $(SUBDIRS) ; do \
+	  make -C $$i depend;\
+	done
 	$(RM) $(DEPEND)
 	$(CC) -M $(SRCSC) >> $(DEPEND)
 

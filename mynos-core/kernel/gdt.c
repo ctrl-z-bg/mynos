@@ -24,6 +24,8 @@
 
 #define INITIAL_SEGMENTS 4
 
+#define GDT_SIZE 8192*8
+
 desc_table(GDT, INITIAL_SEGMENTS) { //8192) {
   /* dummy descriptor (not used by processor) */
   {dummy:0},
@@ -45,7 +47,10 @@ void _init_gdt() {
   union DT_entry * gdt_addr;
 
   /* alloc a full GDT */
-  gdt_addr = (union DT_entry *)kmalloc(8192*8);
+  gdt_addr = (union DT_entry *)kmalloc(GDT_SIZE);
+
+  /* let's zero it */
+  kbzero((void *)gdt_addr, GDT_SIZE);
 
   /* copy the temporary GDT to our new one */
   kmemcpy((void*)gdt_addr, (const void*)loadgdt.idt, loadgdt.limit + 1);
