@@ -47,7 +47,7 @@ tss_t * spawnProcess(tss_t * tss) {
 
   Elf32_Phdr elf_phdata[ELF_MAXSEG];
   Elf32_Ehdr elf_ex;
-  uint32_t entryaddr, curraddr, size, baseaddr;
+  uint32_t entryaddr, curraddr, size, baseaddr, lastaddr;
   
   elf_ex=*(Elf32_Ehdr *)test_start;
 
@@ -68,7 +68,17 @@ tss_t * spawnProcess(tss_t * tss) {
   size = elf_ex.e_phnum * elf_ex.e_phentsize;
   kmemcpy(elf_phdata, test_start+elf_ex.e_phoff, size);
    
-  npages_for_process = 32;
+  for (i = 0; i < elf_ex.e_phnum; i++) {
+      Elf32_Phdr *phdr;
+      
+      phdr = (Elf32_Phdr *) ((char *)test_start + elf_ex.e_phoff +  (elf_ex.e_phentsize * i));
+      /* we consider only the segments to be loaded*/
+      if (phdr->p_type != PT_LOAD) continue; 
+      if (baseaddr == 0) baseaddr=phdr->p_vaddr;
+      lastaddr = phdr->p_vaddr+phdr->p_memsz;
+  }
+  
+  npages_for_process = ((lastaddr - baseaddr)>>12)+1;
 
   if ((newPD = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(newPD, PAGE_SIZE);
@@ -109,6 +119,7 @@ tss_t * spawnProcess(tss_t * tss) {
   /* From here instead ELF code is Grub "inspired" */
   curraddr = (uint32_t) currPF;
   baseaddr = 0;
+
 
   for (i = 0; i < elf_ex.e_phnum; i++) {
       Elf32_Phdr *phdr;
