@@ -74,12 +74,22 @@ void pit_handler() {
 
   /* terminate a forking action */
   if ((isForking = processTable[currProcess].isForking) != 0) {
-    uint32_t** pgdir = processTable[isForking].pgdir;
+    uint32_t** pgdir = processTable[isForking].tss->pgdir;
     ushort16_t tssd = processTable[isForking].tssd_gdt_selector;
-    kmemcpy((void*)&processTable[isForking], (void*)&processTable[currProcess],
+    tss_t * tss = processTable[isForking].tss;
+
+    /* copy the father process descriptor */
+    kmemcpy((void*)&(processTable[isForking]), 
+	    (void*)&(processTable[currProcess]),
+	    sizeof(process_descriptor_t));
+    /* restore the new process tss */
+    processTable[isForking].tss = tss;
+    /* copy the father tss to the child's */
+    kmemcpy((void*)processTable[isForking].tss, 
+	    (void*)processTable[currProcess].tss,
 	    sizeof(tss_t));
-    processTable[isForking].io_bitmap_offset = sizeof(tss_t)<<16;
-    processTable[isForking].pgdir = pgdir;
+    processTable[isForking].tss->io_bitmap_offset = sizeof(tss_t)<<16;
+    processTable[isForking].tss->pgdir = pgdir;
     processTable[isForking].tssd_gdt_selector = tssd;
     processTable[isForking].pid = isForking;
     processTable[isForking].ppid = currProcess;

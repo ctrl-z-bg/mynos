@@ -26,6 +26,7 @@
 #include "process.h"
 #include "kutils.h"
 #include "linux_syscalls.h"
+#include "dynalloc.h"
 
 extern uint32_t currProcess;
 
@@ -333,7 +334,11 @@ int _linux_syscall_fork() {
   //DEALLOCATE(pdc);
 
   new_pid = numProcess++;
-  processTable[new_pid].pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
+
+  /* allocate a new tss */
+  processTable[new_pid].tss = (tss_t*)kmalloc(sizeof(tss_t));
+
+  processTable[new_pid].tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
 
   processTable[currProcess].isForking = new_pid;
 
@@ -341,7 +346,7 @@ int _linux_syscall_fork() {
     ushort16_t tssd_gdt_sel;
     tssd_gdt_sel = gdt_get_free_index();
     gdt_set_entry(tssd_gdt_sel, 
-		  (uint32_t)&processTable[new_pid],
+		  (uint32_t)processTable[new_pid].tss,
 		  sizeof(tss_t), D_TSS);
     processTable[new_pid].tssd_gdt_selector = tssd_gdt_sel << 3;
   }

@@ -31,6 +31,8 @@
 #include "tss.h"
 #include "process.h"
 
+#include "dynalloc.h"
+
 #include "sem.h"
 
 #include "kutils.h"
@@ -51,17 +53,20 @@ void __print_free_phy_pages() {
   printk(" pagine fisiche non allocate)\n\n");
 }
 
-extern tss_t processTable[20];
+extern process_descriptor_t processTable[20];
 extern uint32_t numProcess;
 ushort16_t * idle_tssd_selector;
 
 void tsksw() {
   ushort16_t gdt_index;
 
+  /* allocate a new tss */
+  processTable[0].tss = (tss_t*)kmalloc(sizeof(tss_t));
+
   /* set a tss for the outcoming process */
-  processTable[0].pgdir = (uint32_t**)0x100000;
-  processTable[0].io_bitmap_offset = sizeof(tss_t)<<16;
-  processTable[0].ldt = 0;
+  processTable[0].tss->pgdir = (uint32_t**)0x100000;
+  processTable[0].tss->io_bitmap_offset = sizeof(tss_t)<<16;
+  processTable[0].tss->ldt = 0;
   processTable[0].isAlive = 1;
   processTable[0].isForking = 0;
 
@@ -79,7 +84,7 @@ void tsksw() {
 
   /* set the tssd in the gdt, for the incoming and the outcoming processes */
   gdt_set_entry(gdt_index,
-		(uint32_t)&(processTable[0]),
+		(uint32_t)(processTable[0]).tss,
 		sizeof(tss_t), D_TSS);
 
   /* load the task register with the relative address in the gdt of the

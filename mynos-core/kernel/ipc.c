@@ -177,8 +177,8 @@ void __OS_ipc_zeroChannel(channel_t * c) {
 }
 
 int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
-  tss_t * rtss;         // receiver tss
-  tss_t * stss;         // sender tss
+  process_descriptor_t * rdesc;         // receiver desc
+  process_descriptor_t * sdesc;         // sender desc
   channelList_t * list; // receiver channel list
   channel_t * c;        // new channel
 
@@ -187,17 +187,17 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
 
   CHECK_BUFFER(buf, size, 0);
 
-  rtss = &(processTable[dest]);
-  stss = &(processTable[currProcess]);
-  list = &(rtss->channels);
+  rdesc = &(processTable[dest]);
+  sdesc = &(processTable[currProcess]);
+  list = &(rdesc->channels);
 
   // LOCK rec list
 
   /* the receiver is waiting for me or anyone */
-  if ((rtss->isWaitingSender == currProcess) ||
-      (rtss->isWaitingSender == 0)) {
-    (rtss->channels).sender = currProcess;  // It was me who woke the recv
-    rtss->isWaitingSender = -1;             // let's wake up the recv
+  if ((rdesc->isWaitingSender == currProcess) ||
+      (rdesc->isWaitingSender == 0)) {
+    (rdesc->channels).sender = currProcess;  // It was me who woke the recv
+    rdesc->isWaitingSender = -1;             // let's wake up the recv
     privV(dest);
   }
 
@@ -221,7 +221,7 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
   }
   
   if (!(flags & IPC_FLAGS_NOBLOCK)) {
-    stss->isWaitingReceiver = dest;
+    sdesc->isWaitingReceiver = dest;
     c->senderBlocked = 1;           // the receiver will see I'm blocked
   }
 
@@ -243,8 +243,8 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
 }
 
 int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
-  tss_t * rtss;         // receiver tss
-  tss_t * stss;         // sender tss
+  process_descriptor_t * rdesc;         // receiver desc
+  process_descriptor_t * sdesc;         // sender desc
   channelList_t * list; // receiver channel list
   channel_t * c;
   int32_t done = 0;
@@ -256,9 +256,9 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
     
     CHECK_BUFFER(buf, size, 1);
 
-    rtss = &(processTable[currProcess]);
-    list = &(rtss->channels);
-    stss = &(processTable[sender]);
+    rdesc = &(processTable[currProcess]);
+    list = &(rdesc->channels);
+    sdesc = &(processTable[sender]);
     
     // LOCK rec list
     c = __OS_ipc_searchSender(list, sender);
@@ -269,7 +269,7 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
 	// UNLOCK rec list
 	return -1;
       }
-      rtss->isWaitingSender = sender;
+      rdesc->isWaitingSender = sender;
       // UNLOCK rec list
       privP();
     } else { // c is not null
@@ -285,7 +285,7 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
       
       if (c->senderBlocked) {
 	// LOCK sender list
-	stss->isWaitingReceiver = -1;
+	sdesc->isWaitingReceiver = -1;
 	// UNLOCK sender list
 	privV(sender);
       }
@@ -308,8 +308,8 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
 
 int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size, 
 		     uint32_t flags) {
-  tss_t * rtss;         // receiver tss
-  tss_t * stss;         // sender tss
+  process_descriptor_t * rdesc;         // receiver desc
+  process_descriptor_t * sdesc;         // sender desc
   channelList_t * list; // receiver channel list
   channel_t * c;
   int32_t done = 0;
@@ -318,12 +318,12 @@ int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
   while (!done) {
     CHECK_BUFFER(buf, size, 1);
 
-    rtss = &(processTable[currProcess]);
-    list = &(rtss->channels);
+    rdesc = &(processTable[currProcess]);
+    list = &(rdesc->channels);
     
     // LOCK rec list
-    if ((rtss->channels).sender != -1) {
-      *sender = (rtss->channels).sender;
+    if ((rdesc->channels).sender != -1) {
+      *sender = (rdesc->channels).sender;
       c = __OS_ipc_searchSender(list, *sender);
     } else
       c = __OS_ipc_searchSender(list, 0);
@@ -335,7 +335,7 @@ int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
 	// UNLOCK rec list
 	return -1;
       }
-      rtss->isWaitingSender = 0;
+      rdesc->isWaitingSender = 0;
       // UNLOCK rec list
       privP();
     } else { // c is not null
@@ -350,9 +350,9 @@ int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
       done = 1;
 
       if (c->senderBlocked) {
-	stss = &(processTable[*sender]);
+	sdesc = &(processTable[*sender]);
 	// LOCK sender list
-	stss->isWaitingReceiver = -1;
+	sdesc->isWaitingReceiver = -1;
 	// UNLOCK sender list
 	privV(*sender);
       }

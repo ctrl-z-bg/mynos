@@ -27,8 +27,9 @@
 #include "elf.h"
 #include "process.h"
 #include "video.h"
+#include "dynalloc.h"
 
-tss_t processTable[MAXPROCESSES];
+process_descriptor_t processTable[MAXPROCESSES];
 uint32_t numProcess = 1;
 uint32_t currProcess = 0;  /* the first process is the idle process */
 
@@ -49,7 +50,8 @@ extern uint32_t ramdisk_present;
  */
 
 
-tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
+process_descriptor_t * spawnProcess(process_descriptor_t * desc, 
+				    uint32_t * test_start, uint32_t test_len) {
   uint32_t * newPD;
   uint32_t * lastPT;
   uint32_t * lastButOnePT;
@@ -61,6 +63,7 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   uint32_t * pun;
   uint32_t i;
   ushort16_t tssd_gdt_sel, code_gdt_sel, data_gdt_sel;
+  tss_t * tss;
   uint32_t npages_for_process;
 
   Elf32_Phdr elf_phdata[ELF_MAXSEG];
@@ -246,6 +249,11 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
 
   tssd_gdt_sel = gdt_get_free_index();
 
+  /* allocate a new tss */
+  desc->tss = (tss_t*)kmalloc(sizeof(tss_t));
+
+  tss = desc->tss;
+
   gdt_set_entry(tssd_gdt_sel, 
 		(uint32_t)tss,
 		sizeof(tss_t), D_TSS);
@@ -255,7 +263,7 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   tss->io_bitmap_offset = sizeof(tss_t)<<16;
   tss->eip = (uint32_t)0x40000000;
 
-  tss->isAlive = 1;
+  desc->isAlive = 1;
 
   tss->cs = GDT_USER_CODE_SEL + 3;
   tss->ds = GDT_USER_DATA_SEL + 3;
@@ -264,7 +272,7 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   tss->gs = GDT_USER_DATA_SEL + 3;
   tss->ss = GDT_USER_DATA_SEL + 3;
 
-  tss->tssd_gdt_selector = tssd_gdt_sel << 3;
+  desc->tssd_gdt_selector = tssd_gdt_sel << 3;
 
   tss->ldt = 0;
 
@@ -274,14 +282,14 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
 
   // IPC
-  tss->isWaitingSender = -1;
-  tss->isWaitingReceiver = -1;
-  __OS_ipc_initChannelList(&(tss->channels));
+  desc->isWaitingSender = -1;
+  desc->isWaitingReceiver = -1;
+  __OS_ipc_initChannelList(&(desc->channels));
   // end IPC
   // SEM
-  tss->isWaitingOnP = -1;
+  desc->isWaitingOnP = -1;
   /* Private Semaphore initialized to 0, as soon as P is made it yields */
-  tss->privSem = __OS_sem_allocateSemaphore(0);
+  desc->privSem = __OS_sem_allocateSemaphore(0);
 
 #ifdef RAMDISK
   if (ramdisk_present) {
@@ -299,7 +307,7 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
 #endif
 
   printk("SET TSS entry....\n");
-  return tss;
+  return desc;
 }
 
 

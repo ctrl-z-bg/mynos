@@ -87,6 +87,7 @@ _findFreeBlock(unsigned int sz)
 	  /* end within an allocated page */
 	  npages--;
 	__OS_askPagesFrom(paddr, npages, 1, 0);
+	
 	_insertBlock(ret + _SIZE_SZ, sz, old, runner);
 	return(ret + _SIZE_SZ);
       }

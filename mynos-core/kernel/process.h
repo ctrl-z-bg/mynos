@@ -25,11 +25,35 @@
 
 #define MAXPROCESSES 30
 
-extern tss_t processTable[];
+typedef struct {
+  tss_t * tss;
+
+  /* selector of the task's tssd */
+  ushort16_t tssd_gdt_selector;
+  uint32_t isAlive;
+  uint32_t ppid;
+  uint32_t pid;
+  pid_t isForking;
+
+  // IPC
+  channelList_t channels;
+
+  /* -1 means nobody, zero means anybody */
+  pid_t isWaitingSender;
+  pid_t isWaitingReceiver;
+  // end IPC
+  // SEM
+  int privSem;
+  int isWaitingOnP;
+  // end SEM
+} process_descriptor_t;
+
+extern process_descriptor_t processTable[];
 extern uint32_t numProcess;
 extern uint32_t currProcess;
 
-tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len);
+process_descriptor_t * spawnProcess(process_descriptor_t * desc, 
+				    uint32_t * test_start, uint32_t test_len);
 void killProcess();
 
 #endif

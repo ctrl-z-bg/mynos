@@ -56,29 +56,6 @@ typedef struct {
   
   /* End of i386 TSS.  */
 
-
-  /*************************/
-  /* MyNOS specific fields */
-  /*************************/
-
-  /* selector of the task's tssd */
-  ushort16_t tssd_gdt_selector;
-  uint32_t isAlive;
-  uint32_t ppid;
-  uint32_t pid;
-  pid_t isForking;
-
-  // IPC
-  channelList_t channels;
-
-  /* -1 means nobody, zero means anybody */
-  pid_t isWaitingSender;
-  pid_t isWaitingReceiver;
-  // end IPC
-  // SEM
-  int privSem;
-  int isWaitingOnP;
-  // end SEM
 } tss_t;
 
 #endif
