@@ -179,10 +179,12 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   enable_irq(0);
 
+#ifdef RAMDISK
   {
     uint32_t ramdisk = 0x40400000;
     __OS_ipc_send(1, (char*)&ramdisk, sizeof(uint32_t), 1);
   }
+#endif
 
   // this is the idle process
   while(1) {

@@ -221,6 +221,7 @@ tss_t * spawnProcess(tss_t * tss) {
   __OS_ipc_initChannelList(&(tss->channels));
   // end IPC
 
+#ifdef RAMDISK
   /////////////////////////////////////////////////// RAMDISK
   if ((currPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(currPT, PAGE_SIZE);
@@ -233,6 +234,7 @@ tss_t * spawnProcess(tss_t * tss) {
   lastPT[_asm_last_kernel_page_dir_entry_used + 2] = 
     LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
   /////////////////////////////////////////////////// RAMDISK
+#endif
 
   printk("SET TSS entry....\n");
   return tss;
