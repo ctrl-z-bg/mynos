@@ -262,8 +262,8 @@ void mynos_main(multiboot_info_t *boot_info) {
 
 #ifdef RAMDISK
   if (ramdisk_present) {
-    uint32_t ramdisk = 0x40400000;
-    __OS_ipc_send(1, (char*)&ramdisk, sizeof(uint32_t), 1);
+    //uint32_t ramdisk = 0x40400000;
+    //__OS_ipc_send(1, (char*)&ramdisk, sizeof(uint32_t), 1);
   }
 #endif
 

@@ -32,8 +32,8 @@ TRAP_WRAPPER(irq1);
 TRAP_WRAPPER(irq4);
 
 /* drivers processes semaphores */
-static int irq1_sem = 2;
-static int irq4_sem = 3;
+static int irq1_sem = 3;
+static int irq4_sem = 4;
 
 /* the handlers */
 void irq1_handler() {

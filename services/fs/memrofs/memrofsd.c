@@ -136,11 +136,15 @@ int main() {
   int sender;
   request_t request;
 
+#if 0
   if ( mynos_recv(0 /* kernel! */, &ramdisk,
 		  sizeof(char *), 0) < 0 ) {
     puts("Could not receive ramdisk pointer.");
     exit(-1);
   }
+#else
+  ramdisk = (char*)0x40400000;
+#endif
 
   filesystem = (fileentry_t *)(ramdisk + strlen(MAGIC));
 #define TEST
