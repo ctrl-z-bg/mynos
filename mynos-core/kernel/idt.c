@@ -37,79 +37,14 @@ struct {
 } loadidt = {
 (256 * sizeof(union DT_entry) - 1), IDT};
 
-//TRAP_WRAPPER(stupidTrap);
-
-void stupidTrap_TRAP();
-__asm__ (\
-	 ".globl stupidTrap_TRAP         \n"\
-	 "stupidTrap_TRAP:               \n"\
-	 "   pushal                      \n"\
-	 "   pushl %edx\n"
-	 "   pushl %ecx\n"
-	 "   pushl %ebx\n"
-	 "   call stupidTrap_handler    \n"     /* call the ISR handler */\
-	 "   popl %ebx\n"
-	 "   popl %ecx\n"
-	 "   popl %edx\n"
-	 "   popal                       \n"\
-	 "   iret                \n"\
-	 );
-
 /* coprocessor not available */
 TRAP_WRAPPER(int7);
 void int7_handler() {
   __asm__ volatile ("clts");
 }
 
-#if 0
-void _page_fault_handler_TRAP();
-__asm__ (\
-	 ".globl _page_fault_handler_TRAP         \n"\
-	 "_page_fault_handler_TRAP:               \n"\
-	 " movl %eax, (0)\n"\
-	 "   movl %cr2, %eax        \n"\
-	 "   pushl %eax             \n"\
-	 "   call _page_fault_handler    \n"     /* call the ISR handler */\
-	 "   popl %eax   \n"                     /* pop the argument */\
-	 "   popl %eax   \n"                     /* pop the error code */\
-	 " movl (0), %eax\n"\
-	 "   iret                \n"\
-	 );
-#else
-void _page_fault_handler_TRAP();
-__asm__ (\
-	 ".globl _page_fault_handler_TRAP \n"\
-	 "_page_fault_handler_TRAP:       \n"\
-	 "   movl %eax, (0)               \n"\
-	 "   popl %eax                    \n"  /* retrieve error code */\
-         "   pushal                       \n"  /* save all registers */\
-	 "   pushl %eax                   \n"  /* push error code */\
-	 "   movl %cr2, %eax              \n"\
-	 "   pushl %eax                   \n"  /* push faulting address */\
-	 "   call _page_fault_handler     \n"  /* call the ISR handler */\
-	 "   popl %eax                    \n"  /* pop the address */\
-	 "   popl %eax                    \n"  /* pop the error code */\
-	 "   popal                        \n"\
-	 "   movl (0), %eax               \n"\
-	 "   iret                         \n"\
-	 );
-#endif
-
-extern uint32_t currProcess;
-void stupidTrap_handler(int fd, const void *buf, size_t count) {
-  int i;
-
-#if 1
-  printk("I'm the process ");
-  print_ulong((uint32_t)currProcess);
-  printk(" ");
-#endif
-
-  for (i = 0; i < count; i++)
-    print_char(((char*)buf)[i]);
-
-  print_char('\n');
-}
+extern void _page_fault_handler_TRAP();   /* see mem.c */
+extern void _linux_syscalls_trap_TRAP();  /* see linux_syscalls.c */
 
 void init_idt() {
   int count = 0;
@@ -134,7 +69,7 @@ void init_idt() {
   set_vector(_int15, 15, D_PRESENT + D_INT);
   set_vector(_int16, 16, D_PRESENT + D_INT);
 
-  set_vector(stupidTrap_TRAP, 0x80, D_PRESENT + D_INT + D_DPL3);
+  set_vector(_linux_syscalls_trap_TRAP, 0x80, D_PRESENT + D_INT + D_DPL3);
 
   asm("lidt (%0)                 \n"	/* Load the IDT                */
       "pushfl                    \n"	/* Clear the NT flag           */

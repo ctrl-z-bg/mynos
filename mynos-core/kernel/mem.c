@@ -189,6 +189,24 @@ void SEG_createStandardDescriptor(uint32_t * address,
 }
 
 
+extern void _page_fault_handler_TRAP();
+__asm__ (\
+	 ".globl _page_fault_handler_TRAP \n"\
+	 "_page_fault_handler_TRAP:       \n"\
+	 "   movl %eax, (0)               \n"\
+	 "   popl %eax                    \n"  /* retrieve error code */\
+         "   pushal                       \n"  /* save all registers */\
+	 "   pushl %eax                   \n"  /* push error code */\
+	 "   movl %cr2, %eax              \n"\
+	 "   pushl %eax                   \n"  /* push faulting address */\
+	 "   call _page_fault_handler     \n"  /* call the ISR handler */\
+	 "   popl %eax                    \n"  /* pop the address */\
+	 "   popl %eax                    \n"  /* pop the error code */\
+	 "   popal                        \n"\
+	 "   movl (0), %eax               \n"\
+	 "   iret                         \n"\
+	 );
+
 void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   uint32_t new_phy_page;
   uint32_t * pte;

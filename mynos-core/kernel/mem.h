@@ -223,4 +223,10 @@ void SEG_createStandardDescriptor(uint32_t * address,
 				  uint32_t base, uint32_t limit, 
 				  ushort16_t control);
 
+/* PAGE FAULT STUFF!!! */
+void _page_fault_handler_TRAP();  /* the wrapper... */
+void _page_fault_handler(uint32_t addr, uint32_t errcode); /* ... and the 
+							      real handler */
+
+
 #endif
