@@ -25,10 +25,11 @@ all: test
 		make -C $$i;\
 	done
 
-test: test.c
-	gcc -c test.c
+test: test.c printf/doprintf.c printf/printf.c
+	gcc -c -I/home/zava/tmp/dietlibc-0.17/include/ test.c
 
 	ld test.o \
+	  printf/doprintf.o printf/printf.o\
 	  /home/zava/tmp/dietlibc-0.17/bin-i386/libm.a \
 	  /home/zava/tmp/dietlibc-0.17/bin-i386/dietlibc.a \
 	  -static -o test --oformat binary -Ttext 0x40000000

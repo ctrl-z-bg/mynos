@@ -68,6 +68,13 @@ tss_t * spawnProcess(tss_t * tss) {
 
   currPT[0] = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_USER | PF_PRESENT |
     PF_READWRITE;
+
+  /* alloc a second page */
+  if ((currPF = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
+  currPT[1] = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_USER | PF_PRESENT |
+    PF_READWRITE;
+
+
   newPD[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
   newPD[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(lastButOnePT) | PF_USER | PF_READWRITE | PF_PRESENT;
   
@@ -126,9 +133,15 @@ tss_t * spawnProcess(tss_t * tss) {
   tss->eflags = 0x200;
   tss->esp = tss->ebp =
     (uint32_t)((uint32_t)LAST_PAGE_DIR_VALID_INDEX*0x400000 - 4100);
+#define KERNEL_STACK_STANDALONE
+#ifndef KERNEL_STACK_STANDALONE
   tss->esp0 = tss->esp - numProcess*100;
   tss->esp1 = tss->esp - 1000;
   tss->esp2 = tss->esp - 1000;
+#else
+  if ((stackFrame = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
+  tss->esp0 = tss->esp1 = tss->esp2 = (uint32_t)stackFrame + 4095;
+#endif
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
 
 #ifdef LDT

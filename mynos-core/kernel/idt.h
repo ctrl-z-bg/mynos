@@ -62,7 +62,7 @@ void _int10();
 void _int11();
 void _int12();
 void _int13();
-void _int14();
+void _int14(uint32_t addr, uint32_t errcode);
 void _int15();
 void _int16();
 

@@ -112,15 +112,6 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   tsksw();
 
-/*   { */
-/*     int a; */
-/*     asm("pushl %eax"); */
-/*     asm("movl $62, %eax"); */
-/*     asm("movl %%eax, %0": "=r"(a)); */
-/*     print_ulong(a); */
-/*     asm("popl %eax"); */
-/*   } */
-
   /* Let's create some task! :) */
   {
     uint32_t i, ntask = 20;
