@@ -20,14 +20,47 @@
 
 #include "externalmem.h"
 #include "process.h"
+#include "mem.h"
+#include "video.h"
+
+/* map a physical page to the externalVMPage (see mem.h) */
+static void __mapPageToAppPage(uint32_t phyPage) {
+  *(__EXTERNAL_VMSPACE_PAGE_ENTRY) |= (phyPage<<12);
+  INVALIDATE_THE_CACHE((void*)__EXTERNAL_VMSPACE_PAGE);
+}
 
 static void __mapProcessPD(pid_t pid) {
-  //processTable[pid].tss->pgdir;
+  uint32_t phyPageAddress;
+
+  if (!processTable[pid].isAlive)
+    KPANIC("Try to alloc a inexistent process PD!!!");
+
+  phyPageAddress = (uint32_t)(processTable[pid].tss->pgdir);
+  __mapPageToAppPage(phyPageAddress >> 12);
+}
+
+/* return != 0 if the PT is not present */
+static int __mapProcessPT(pid_t pid, uint32_t table) {
+  uint32_t phyPageAddress;
+  uint32_t * pd;
+
+  if (!processTable[pid].isAlive)
+    KPANIC("Try to alloc a inexistent process PT!!!");
+
+  /* map the process PD */
+  __mapProcessPD(pid);
+
+  pd = __EXTERNAL_VMSPACE_PAGE;
+
+  phyPageAddress = pd[table] & 0xFFFFF000;
+  if (!phyPageAddress) return -1;
+  __mapPageToAppPage(phyPageAddress >> 12);
+  return 0;
 }
 
 int __OS_setExternalProcessPage(pid_t pid, uint32_t table, 
 				uint32_t entry, uint32_t phyPage) {
-  __mapProcessPD(pid);
+  __mapProcessPT(pid, table);
 
 
 
