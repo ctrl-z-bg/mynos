@@ -48,7 +48,7 @@ _findFreeBlock(unsigned int sz)
     return(_heap);
   }
   
-  old = 0;
+  old = _heap;
   runner = _NEXT_BLOCK_PTR(_heap);
 
   while ( runner ) {
@@ -88,7 +88,7 @@ _findFreeBlock(unsigned int sz)
   /* if runner is null, check for space at the end of the page */
   if ( !runner ) {
     void *bend = _BLOCK_END(old);
-    /* address os the successive (unallocated) page */
+    /* address of the successive (unallocated) page */
     void *npage = _GET_NPAGE_ADDRESS(bend);
     if ( (npage - bend) >= osz ) { /* space at the end! */
       void *ret = bend + _SIZE_SZ;
