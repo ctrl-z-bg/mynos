@@ -39,6 +39,7 @@ int listEmpty(list_t * q);
 void * listExtract(list_t *q);
 void * listExtractElem(list_t *q, void * p, int (*eq)(void*, void*));
 int listInsert(list_t *q, void * p);
+int listInsertOrdered(list_t *q, void * p, int (*cmp)(void*, void*));
 // it returns the old first element (now the last one)
 void * listShiftQueue(list_t * q);
 uint32_t listNElem(list_t * q);

@@ -27,7 +27,8 @@
 #include "softtaskswitch.h"
 #include "video.h"
 
-process_queue_t readyQueue;
+static process_queue_t readyQueue;
+static process_queue_t timerQueue;
 
 void readyQueueInsert(tss_t * t) {
   pqInsert(&readyQueue, t);
@@ -45,8 +46,66 @@ uint32_t readyQueueNElem() {
   return pqNElem(&readyQueue);
 }
 
+#if 0
+void prova() {
+  tss_t * a;
+  tss_t * b;
+  tss_t * c;
+  list_elem_t * el;
+  timerTicks = 120;
+  a = kmalloc(sizeof(tss_t));
+  b = kmalloc(sizeof(tss_t));
+  c = kmalloc(sizeof(tss_t));
+  timerQueueInsert(a, 2000);
+  timerQueueInsert(b, 5000);
+  timerQueueInsert(c, 3000);
+  el = timerQueue.head;
+  printk("\n--");
+  print_ulong(timerTicks);
+  while (el != NULL) {
+    tss_t * t = (tss_t*)el->elem;
+    printk("\n----");
+    print_ulong(t->timeToWake);
+    el = el->next;
+  }
+  while(1);
+}
+#endif
+
 void initScheduler() {
+  pqInit(&timerQueue);
   pqInit(&readyQueue);
+}
+
+void timerQueueInsert(tss_t * t, uint32_t msec) {
+  pqInsertOrderByTime(&timerQueue, t, msec);
+}
+
+tss_t * timerQueueNext() {
+  return pqShiftQueue(&timerQueue);
+}
+
+tss_t * timerQueueExtractThread(tss_t * t) {
+  return pqExtractThread(&timerQueue, t);
+}
+
+uint32_t timerQueueNElem() {
+  return pqNElem(&timerQueue);
+}
+
+tss_t * timerQueueExtractExpired() {
+  tss_t * ret;
+  if (pqEmpty(&timerQueue))
+    return NULL;
+  
+  ret = (tss_t*)(timerQueue.head->elem);
+  if (ret->timeToWake < timerTicks) {
+    // remove the first element...
+    pqExtract(&timerQueue);
+    // ... and return it
+    return ret;
+  }
+  return NULL;
 }
 
 #if 0

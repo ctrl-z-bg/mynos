@@ -19,6 +19,15 @@
 */
 #include "procqueue.h"
 #include "mem/dynalloc.h"
+#include "pit.h"
+
+// function used to insert a thread into the timer queue
+static int __is_lower_than(void * _t1, void * _t2) {
+  tss_t * t1 = (tss_t*)_t1;
+  tss_t * t2 = (tss_t*)_t2;
+
+  return (t1->timeToWake < t2->timeToWake);
+}
 
 void pqInit(process_queue_t * q) {
   listInit(q);
@@ -44,6 +53,12 @@ int pqInsert(process_queue_t *q, tss_t * p) {
     p->queue = q;
 
   return(ret);
+}
+
+int pqInsertOrderByTime(process_queue_t *q, tss_t * p, uint32_t msec) {
+  uint32_t ticks = msec / ONE_TICK_TIME;
+  p->timeToWake = timerTicks + ticks;
+  return listInsertOrdered(q, p, __is_lower_than);
 }
 
 tss_t * pqShiftQueue(process_queue_t * q) {

@@ -31,5 +31,6 @@ int __OS_sem_V(int semid);
 #define privV(p)   __OS_sem_V(processTable[p]->privSem)
 #else
 #define privP()    __OS_sem_P(currThread->privSem)
-#define privV(p)   __OS_sem_V((processTable[p]->tss)->privSem)
+//#define privV(p)   __OS_sem_V((processTable[p]->tss)->privSem)
+#define privV(t)   __OS_sem_V(t->privSem)
 #endif

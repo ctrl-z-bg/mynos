@@ -75,7 +75,7 @@ int listInsert(list_t *q, void * p) {
 /* this function could be implemented as listExtract and listInsert
    but this is more efficent */
 void * listShiftQueue(list_t * q) {
-  list_elem_t * el;  
+  list_elem_t * el;
   if (listEmpty(q)) return NULL;
   if (q->head == q->tail) return (q->head)->elem; // just one element
 
@@ -124,5 +124,47 @@ void * listExtractElem(list_t *q, void * p, int (*eq)(void*, void*)) {
   ret = el->elem;
   kfree(el);
   return ret;
+}
+
+// insert at the end of the queue
+int listInsertOrdered(list_t *q, void * p, int (*cmp)(void*, void*)) {
+  list_elem_t * el;  
+  list_elem_t * tmp_next;
+  list_elem_t * tmp_prev;
+
+  el = kmalloc(sizeof(list_elem_t));
+  el->elem = p;
+
+  // check if the queue is empty
+  if (listEmpty(q))
+    return listInsert(q, p);
+
+  // check the tail case
+  if ((*cmp)(q->tail->elem, p))
+    return listInsert(q, p);
+
+  // check the head case
+  if ((*cmp)(p, q->head->elem)) {
+    el->prev = NULL;
+    el->next = q->head;
+    q->head->prev = el;
+    q->head = el;
+    q->nelem++;
+    return 0;
+  }
+
+  // insert inside the list
+  tmp_next = q->head;
+  while ((*cmp)(tmp_next->elem, p))
+    tmp_next = tmp_next->next;
+  tmp_prev = tmp_next->prev;
+
+  tmp_prev->next = tmp_next->prev = el;
+  el->next = tmp_next;
+  el->prev = tmp_prev;
+  
+  q->nelem++;
+
+  return(0);
 }
 

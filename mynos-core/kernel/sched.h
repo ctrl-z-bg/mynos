@@ -24,10 +24,18 @@
 #include "procqueue.h"
 
 void initScheduler();
+
 void readyQueueInsert(tss_t * t);
 tss_t * readyQueueNext();
 tss_t * readyQueueExtractThread(tss_t * t);
 uint32_t readyQueueNElem();
 void sched();
+
+// timer queue stuff
+void timerQueueInsert(tss_t * t, uint32_t msec);
+tss_t * timerQueueNext();
+tss_t * timerQueueExtractThread(tss_t * t);
+uint32_t timerQueueNElem();
+tss_t * timerQueueExtractExpired();
 
 #endif
