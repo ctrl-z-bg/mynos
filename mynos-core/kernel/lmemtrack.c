@@ -166,7 +166,7 @@ int __lmt_forceAllocation(pdListEl **pdListBgn, int fromPage, int npages)
   if ( fromPage < MINPAGES )
     KPANIC("lmemtrack.c: cannot allocate under 1GB (LA)");
 
-  if ( !pdListBgn ) {
+  if ( !(*pdListBgn) ) {
     if ( fromPage == MINPAGES ) {
       *pdListBgn = __lmt_newPdListEl(fromPage+npages, MAXPAGES, NULL, NULL);
     } else {
