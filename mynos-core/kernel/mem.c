@@ -47,9 +47,12 @@ void init_memory() {
 
   _init_gdt();
 
-  /* let the first 256 PTs be allocated (to be share by all processes) */
-  printk("Allocating the first 256 PTs...");
-  for (i = 0; i < 256; i++)
+  /* let the first (_asm_last_kernel_page_dir_entry_used + 1) PTs 
+     be allocated (to be share by all processes) */
+  printk("Allocating the first ");
+  print_ulong(_asm_last_kernel_page_dir_entry_used + 1);
+  printk(" PTs...");
+  for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
     if (__IS_PAGE_TABLE_FREE(i)) {
       uint32_t newptaddr = (__pg_find_a_free_physical_page() << 12);
       __SET_PAGE_DIR_ENTRY(i, newptaddr);
