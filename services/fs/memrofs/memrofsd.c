@@ -1,0 +1,207 @@
+/*
+  MyNOS
+  Copyright (C) 2002
+  MyNOS team (http://sourceforge.net/projects/mynos/)
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation; either version 2 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+*/
+
+#include <mynos.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include "memrofs.h"
+
+filedescriptor_t filedesc[MAXOPENFILES];
+fileentry_t * filesystem;
+char *ramdisk;
+
+#define MIN(a, b) (((a)<(b))?(a):(b))
+
+int isBusy(filedescriptor_t fdscr) {
+  return(fdscr.pid);
+}
+
+void memrofs_open(pid_t client, char *fname) {
+  int curr = 0;
+  int found = 0;
+  int fd = 3;
+  open_response_t response;
+
+  do {
+    if ( !strncmp(filesystem[curr].filename, fname, FILENAMEMAXLEN) ) {
+      found = 1;
+      while ( isBusy(filedesc[fd]) && (fd < MAXOPENFILES) ) fd++;
+      filedesc[fd].currpos = ramdisk + (int) filesystem[curr].start;
+      filedesc[fd].fileidx = curr;
+      filedesc[fd].pid = client;
+    }
+    curr++;
+  } while ( (!found) && (curr<MAXFILES) );
+  
+  if ( curr >= MAXFILES ) { // file not found
+    response.fd = -1;
+    response.status = STATUS_NOT_FOUND;
+  } else if ( fd >= MAXOPENFILES ) { // too many open files
+    response.fd = -1;
+    response.status = STATUS_TOO_MANY;
+  } else { // OK
+    response.fd = fd;
+    response.status = STATUS_OK;
+  }  
+  if ( mynos_send(client, (char *) &response, sizeof(response), 0) < 0 )
+    // error responding, close the file (if it was open)
+    if ( response.status == STATUS_OK ) {
+      filedesc[response.fd].pid = 0; // "close" the file
+    }
+}
+
+void memrofs_close(pid_t client, int fd) {
+  pid_t owner = 0;
+  status_t status;
+  if ( fd > MAXOPENFILES ) 
+    status = STATUS_TOO_MANY;
+  else if ( !(filedesc[fd].pid) )
+    status = STATUS_NOT_OPEN;
+  else if ( filedesc[fd].pid != client ) // not owner
+    status = STATUS_PERMISSION_DENIED;
+  else { // ok, close
+    filedesc[fd].pid = 0;
+    status = STATUS_OK;
+  }
+  if ( mynos_send(client, (char *) &status, sizeof(status_t), 0) < 0 ) {};
+}
+
+void memrofs_read(pid_t client, int fd, size_t size) {
+  read_response_t response;
+
+  response.rd = 0;
+  if ( fd > MAXOPENFILES )
+    response.status = STATUS_TOO_MANY;
+  else if ( filedesc[fd].pid != client )
+    response.status = STATUS_PERMISSION_DENIED;
+  else { // actually read
+    fileentry_t *fe = &filesystem[filedesc[fd].fileidx];
+    response.rd = MIN(fe->size - (filedesc[fd].currpos - fe->start), size);
+    response.status = STATUS_OK;
+  }
+
+  if ( mynos_send(client, (char *) &response,
+		  sizeof(response), MYNOS_IPC_FLAGS_NONBLOCK) < 0 ) {
+    // error, nothing to do
+  } else {
+    if ( (response.status == STATUS_OK) &&
+	 (mynos_send(client, filedesc[fd].currpos, response.rd, 0) < 0) ) {
+      // error, nothing to do
+    } else {
+      filedesc[fd].currpos += response.rd; // advance the pointer
+    }
+  }
+}
+
+void process_request(pid_t client, request_t request) {
+  switch ( request.type ) {
+  case OPEN:
+    memrofs_open(client, request.data.fname);
+    break;
+  case CLOSE:
+    memrofs_close(client, request.data.fd);
+    break;
+  case READ:
+    memrofs_read(client, request.data.read_data.fd,
+		 request.data.read_data.to_read);
+    break;
+  case LSEEK:
+    break;
+    // default:
+    // something (signal error?)
+  }
+
+}
+
+int main() {
+  int sender;
+  request_t request;
+
+  if ( mynos_recv(0 /* kernel! */, (char *) &ramdisk,
+		  sizeof(char *), 0) < 0 ) {
+    puts("Could not receive ramdisk pointer.");
+    exit(-1);
+  }
+
+  filesystem = (fileentry_t *)ramdisk;
+  
+#define TEST
+#ifdef TEST
+  if ( fork() ) {
+    puts("father.");
+    // father
+  } else {
+    // child
+    puts("child.");
+    char mybuf[1000];
+    request_t request;
+    open_response_t open_response;
+    read_response_t read_response;
+    request.type = OPEN;
+    strcpy(request.data.fname, "AUTOEXEC.BAT");
+    puts("prereq");
+    mynos_send(getppid(), (char *) &request, sizeof(request_t),
+	       MYNOS_IPC_FLAGS_NONBLOCK);
+    puts("req1");
+    mynos_recv(getppid(), (char *) &open_response, sizeof(open_response_t), 0);
+    if ( open_response.status != STATUS_OK ) {
+      puts("Open failed");
+      exit(-1);
+    }
+    puts("resp1");
+    request.type = READ;
+    request.data.read_data.fd = open_response.fd;
+    request.data.read_data.to_read = 3;
+    mynos_send(getppid(), (char *) &request, sizeof(request_t),
+	       MYNOS_IPC_FLAGS_NONBLOCK);
+    puts("req2");
+    if ( mynos_recv(getppid(), (char *) &read_response, sizeof(read_response_t), 0) < 0 )
+      puts("errore 1");
+    puts("resp2a");
+    if ( (read_response.status == STATUS_OK) &&
+	 (mynos_recv(getppid(), mybuf, 999, 0) < 0) )
+      puts("errore 2");
+    puts("resp2b");
+    if ( read_response.rd == 0 )
+      if ( read_response.status != STATUS_OK )
+	puts("Some error.");
+      else
+	puts("EOF");
+    else {
+      mybuf[read_response.rd] = 0;
+      puts("content:");
+      puts(mybuf);
+    }
+    
+    exit(0);
+  }
+#endif /* TEST */
+
+  while ( 1 ) {
+    if ( mynos_recvAll(&sender, (char *) &request, sizeof(request_t),
+		       0) < 0 ) {
+      puts("Error receiving request");
+      exit(-1);
+    }
+    process_request(sender, request);
+  }
+
+  return 0;
+}
