@@ -190,14 +190,15 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
   }
 
   // UNLOCK rec list
-  {   // tasksw to idle process
-    struct {long a ,b;} tmp = {0, 0};
-    
-    currProcess = 0;
-    tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
-    __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
-  }
-
+  if (!(flags & IPC_FLAGS_NOBLOCK))
+    {   // tasksw to idle process
+      struct {long a ,b;} tmp = {0, 0};
+      
+      currProcess = 0;
+      tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
+      __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
+    }
+  
   return size;
 }
 

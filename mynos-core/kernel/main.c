@@ -165,15 +165,24 @@ void mynos_main(multiboot_info_t *boot_info) {
   {
     uint32_t i, ntask = 1;
     for (i = 0; i < ntask; i++)
-      if(!spawnProcess(&(processTable[numProcess++])))
+      if(!spawnProcess(&(processTable[numProcess++]))) {
 	KPANIC("FULL MEMORY");
+      } else {
+	processTable[numProcess - 1].pid = numProcess - 1;
+	processTable[numProcess - 1].ppid = 0;
+      }
   }
 
   InitKeyboard();
 
-  printk("\n\n\n\n\n\n-----------------------\n\n\n\n\n\n\n");
+  printk("\n-----------------------\n");
 
   enable_irq(0);
+
+  {
+    uint32_t ramdisk = 0x40400000;
+    __OS_ipc_send(1, (char*)&ramdisk, sizeof(uint32_t), 1);
+  }
 
   // this is the idle process
   while(1) {

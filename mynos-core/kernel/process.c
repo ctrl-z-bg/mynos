@@ -33,6 +33,7 @@ uint32_t currProcess = 0;  /* the first process is the idle process */
 
 extern uint32_t * test_start;
 extern uint32_t test_len;
+extern modinfo_t bytecode;
 
 tss_t * spawnProcess(tss_t * tss) {
   uint32_t * newPD;
@@ -219,6 +220,19 @@ tss_t * spawnProcess(tss_t * tss) {
   tss->isWaitingReceiver = -1;
   __OS_ipc_initChannelList(&(tss->channels));
   // end IPC
+
+  /////////////////////////////////////////////////// RAMDISK
+  if ((currPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
+  kbzero(currPT, PAGE_SIZE);
+  newPD[_asm_last_kernel_page_dir_entry_used + 2] = 
+    LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_USER | PF_READWRITE | PF_PRESENT;
+
+  for (i = 0; i < 10; i++)
+    currPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(bytecode.start +(1024*i)) 
+      | PF_USER | PF_PRESENT | PF_READWRITE;
+  lastPT[_asm_last_kernel_page_dir_entry_used + 2] = 
+    LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
+  /////////////////////////////////////////////////// RAMDISK
 
   printk("SET TSS entry....\n");
   return tss;
