@@ -197,12 +197,17 @@ int _linux_syscall_getppid() {
 }
 
 int _linux_syscall_munmap(void *start, size_t length) {
+  uint32_t npages;
 #ifdef DEBUG
   printk("munmap: ");
   print_ulong_hex((long32_t)start);
   print_char(' ');
   print_long((long32_t)length);
+  print_char('\n');
 #endif
+  npages = (length - 1) / PAGE_SIZE + 1;
+  if (__OS_releasePages(start, npages, 1, 1) == NULL)
+    return -1;
   return 0;
 }
 

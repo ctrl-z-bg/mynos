@@ -122,7 +122,7 @@
 /* set a linear page as allocated */
 #define __SET_PAGE_TABLE_ENTRY(TABLE, ENTRY, FLAGS)\
                      {\
-                      int * pun = (int*)__GET_PAGE_TABLE_ENTRY(TABLE, ENTRY);\
+                      uint32_t * pun = (uint32_t*)__GET_PAGE_TABLE_ENTRY(TABLE, ENTRY);\
                       *pun = FLAGS | PF_LOGICAL_PRESENT;\
                      }
 // AAAAAAAA                      __SET_MEMORY_BITMAP_PAGE_BIT((PAGE_PHY_ADDRESS)>>12);
@@ -131,7 +131,7 @@
 #define __SET_PAGE_TABLE_ENTRY_AND_ALLOC(TABLE, ENTRY, PAGE_PHY_ADDRESS, \
 					 FLAGS) \
                      {\
-                      int * pun = (int*)__GET_PAGE_TABLE_ENTRY(TABLE, ENTRY);\
+                      uint32_t * pun = (uint32_t*)__GET_PAGE_TABLE_ENTRY(TABLE, ENTRY);\
                       *pun = (PAGE_PHY_ADDRESS) | FLAGS | PF_PRESENT; \
                       __SET_MEMORY_BITMAP_PAGE_BIT((PAGE_PHY_ADDRESS)>>12);\
                      }
@@ -141,8 +141,8 @@
    the page tables mapping on the last page table */
 #define __SET_PAGE_DIR_ENTRY(ENTRY, PAGE_TAB_PHY_ADDRESS) \
                      {\
-                      int * pun  = (int*)__GET_PAGE_DIR_ENTRY(ENTRY);\
-                      int * pun2 = (int*)__GET_PAGE_TABLE_ENTRY(\
+                      uint32_t * pun  = (uint32_t*)__GET_PAGE_DIR_ENTRY(ENTRY);\
+                      uint32_t * pun2 = (uint32_t*)__GET_PAGE_TABLE_ENTRY(\
                                                 LAST_PAGE_DIR_VALID_INDEX,\
                                                 ENTRY);\
                       *pun = (PAGE_TAB_PHY_ADDRESS) | \
@@ -192,6 +192,20 @@
          __ADDRESS_OFFSET((uint32_t) (LADDRESS)))
 
 
+/* invalidate the cache: for 386 the cr3 must be reload */
+#ifdef ARCH386
+#define INVALIDATE_THE_CACHE(LADDR) \
+  __asm__ volatile ("pushl %eax\n"\
+		    "movl  %cr3, %eax\n"\
+		    "movl  %eax, %cr3\n"\
+		    "popl  %eax\n")
+#else
+#define INVALIDATE_THE_CACHE(LADDR) \
+  __asm__ volatile ("invlpg %0\n"::"m"(LADDR))
+#endif
+
+
+
 extern byte_t * __memory_bitmap;
 extern uint32_t __memory_bitmap_size;
 extern uint32_t __number_of_free_physical_pages;
@@ -207,7 +221,10 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
 			 int alloc_now, uint32_t flags);
 
 void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags);
-void * __OS_releasePages(void *pageaddr, unsigned int npages);
+/* if free is false the physical page is left allocated 
+   if check is false no check is made on the page permissions */
+void * __OS_releasePages(void *pageaddr, unsigned int npages, 
+			 int free, int check);
 
 /* return the id of a free physical page */
 uint32_t __pg_find_a_free_physical_page();

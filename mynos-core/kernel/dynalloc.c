@@ -5,7 +5,8 @@ extern void * __OS_askPages(unsigned int npages, int alloc_now,
 			    uint32_t flags);
 extern void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
 				int alloc_now, uint32_t flags);
-extern void * __OS_releasePages(void *pageaddr, unsigned int npages);
+extern void * __OS_releasePages(void *pageaddr, unsigned int npages, 
+				int free, int check);
 
 
 /* 1st allocated block (beginning of heap), NULL initialized */
@@ -203,7 +204,7 @@ _removeBlock(void *ptr, void *prev)
   
   /* now, ask the OS to release these pages */
   if ( nPagesToRelease > 0 )
-    __OS_releasePages(firstPage, (unsigned int) nPagesToRelease);
+    __OS_releasePages(firstPage, (unsigned int) nPagesToRelease, 1, 0);
     
 }
 

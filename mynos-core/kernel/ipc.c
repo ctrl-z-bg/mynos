@@ -32,24 +32,29 @@
 #define MUST_CHECK_BUFFER() (currProcess != 0)
 
 #define CHECK_BUFFER(BUF, SIZE, WRITE) {\
+  uint32_t * pte;\
+  uint32_t page_addr = (uint32_t)BUF & 0xFFFFF000;\
   if (SIZE && MUST_CHECK_BUFFER()) {\
-    uint32_t * pte;\
-    uint32_t addr = (uint32_t)BUF;\
-    /* check if the page table is allocated */\
-    if ((*(uint32_t*)__GET_PAGE_DIR_ENTRY(__ADDRESS_PD_INDEX(addr)) &\
-         PF_PRESENT) == 0)\
-      return -1;\
-    pte = (int*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), \
-	  			       __ADDRESS_PT_INDEX(addr));\
-    /* check if the page is present */\
-    if (!(*pte & (PF_PRESENT | PF_LOGICAL_PRESENT))) \
-      return -1;\
-    /* check if the page is a user's page */\
-    if (!(*pte & PF_USER)) \
-      return -1;\
-    /* check if the page is writable, only for recv and recvAll */\
-    if (WRITE && !(*pte & PF_READWRITE))\
-      return -1;\
+    uint32_t limit;\
+    limit = (uint32_t)BUF + SIZE;\
+    do {\
+      /* check if the page table is allocated */\
+      if ((*(uint32_t*)__GET_PAGE_DIR_ENTRY(__ADDRESS_PD_INDEX(page_addr)) &\
+           PF_PRESENT) == 0)\
+        return -1;\
+      pte = (int*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(page_addr), \
+	  			       __ADDRESS_PT_INDEX(page_addr));\
+      /* check if the page is present */\
+      if (!(*pte & (PF_PRESENT | PF_LOGICAL_PRESENT))) \
+        return -1;\
+      /* check if the page is a user's page */\
+      if (!(*pte & PF_USER)) \
+        return -1;\
+      /* check if the page is writable, only for recv and recvAll */\
+      if (WRITE && !(*pte & PF_READWRITE))\
+        return -1;\
+      page_addr += PAGE_SIZE;\
+    } while (page_addr < limit);\
   }\
 }
 

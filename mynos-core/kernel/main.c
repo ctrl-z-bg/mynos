@@ -171,12 +171,42 @@ void mynos_main(multiboot_info_t *boot_info) {
   vga_draw_line(120, 170, 130, 160, 15);
 #endif
 
- {
-   int i;
+  {
+    int i;
+    
+    for (i = 0; i < MAXPROCESSES; i++)
+      processTable[i].isAlive = 0;
+  }
+  
 
-   for (i = 0; i < MAXPROCESSES; i++)
-     processTable[i].isAlive = 0;
- }
+  /* to try the releasePages */
+#if 0
+  printk("free pages: ");
+  print_uint(__number_of_free_physical_pages);
+  print_char('\n');
+  {
+    uint32_t * pun;
+    pun = __OS_askPagesFrom((void*)0x1000000,1,0,0);
+    *pun = 5;
+    printk("free pages: ");
+    print_uint(__number_of_free_physical_pages);
+    print_char('\n');
+    print_uint_hex(pun);
+    print_char('\n');
+    print_uint(*pun);
+    print_char('\n');
+    __OS_releasePages((void*)0x1000000, 1, 1, 0);
+    printk("free pages: ");
+    print_uint(__number_of_free_physical_pages);
+    print_char('\n');
+    *pun = 5;
+    print_char('\n');
+    print_uint_hex(pun);
+    print_char('\n');
+    print_uint(*pun);
+    while(1);
+  }
+#endif
 
   tsksw();
 

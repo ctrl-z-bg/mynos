@@ -74,9 +74,6 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
   return (void*)0;
 }
 
-void * __OS_releasePages(void *pageaddr, unsigned int npages) {return (void*)0;}
-
-
 uint32_t __pg_find_a_free_physical_page() {
   static uint32_t current_page = 0;
   uint32_t current_byte        = current_page / 8;
@@ -162,6 +159,62 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
 	
   return pageaddr;
 }
+
+void * __OS_releasePages(void *pageaddr, unsigned int npages, 
+			 int free, int check) {
+  uint32_t addr = (uint32_t)pageaddr;
+  uint32_t * pte;
+  uint32_t phyaddr;
+  uint32_t i;
+
+  for (i = 0; i < npages; i++) {
+    /* check if the page dir entry is valid */
+    if (check &&
+	((*(uint32_t*)__GET_PAGE_DIR_ENTRY(__ADDRESS_PD_INDEX(addr)) &
+	  PF_PRESENT) == 0))
+      return NULL;
+
+    /* get the page table entry */
+    pte = (int*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), 
+				       __ADDRESS_PT_INDEX(addr));
+
+    /* check if the page is an allocated user page */
+    if (check &&
+	(!(*pte & (PF_PRESENT | PF_LOGICAL_PRESENT)) ||
+	 !(*pte & PF_USER)))
+      return NULL;
+
+#ifdef DEBUG
+    printk(__FUNCTION__": releasing page ");
+    print_uint_hex(addr);
+#endif    
+    /* free the physical page only if the page is really allocated */
+    if (free && (*pte & PF_PRESENT)) {
+      phyaddr = (*pte) & 0xFFFFF000;
+      __RESET_MEMORY_BITMAP_PAGE_BIT(phyaddr>>12);
+#ifdef DEBUG
+      printk(" (phy: ");
+      print_uint_hex(phyaddr);
+      print_char(')');
+#endif    
+    }
+#ifdef DEBUG
+    print_char('\n');
+#endif    
+    
+    /* let's zero the page table entry */
+   *pte = 0;
+
+   /* invalidate the cache */
+   INVALIDATE_THE_CACHE(addr);
+   addr += PAGE_SIZE;
+  }
+
+  return pageaddr;
+}
+  
+
+
 
 
 uint32_t __pg_free_pages_from_page(uint32_t first_page, uint32_t npages,
