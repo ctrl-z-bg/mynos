@@ -18,6 +18,8 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#define NEWMEM
+
 #include "mem.h"
 #include "gdt.h"
 #include "video.h"
@@ -101,6 +103,17 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
 		 PAGE_SIZE) >> 12;
   }
 
+  // TO TEST THE LINEAR SPACE MAP!!!
+#ifdef NEWMEM
+  if ((flags & PF_USER) || (flags & PF_SUPERVISOR_IN_USER_SPACE)) {
+    int start = __lmt_allocArea(&(processTable[currProcess].lmemmap), 
+				npages);
+    //printk("====   "); print_uint_hex(start);
+    return __OS_askPagesFrom((void *)(start<<12), npages, alloc_now,
+			     flags);
+  }
+#endif
+
   for (; page_addr <= last_page; page_addr++) {
     if (__pg_free_pages_from_page(page_addr, npages, &not_used) == npages)
       return __OS_askPagesFrom((void *)(page_addr<<12), npages, alloc_now,
@@ -169,6 +182,13 @@ void * __OS_releasePages(void *pageaddr, unsigned int npages,
   uint32_t * pte;
   uint32_t phyaddr;
   uint32_t i;
+
+#ifdef NEWMEM
+  if (__lmt_freeArea(&(processTable[currProcess].lmemmap),
+		     (addr >> 12),
+		     npages) != 0)
+    printk("Problems releasing pages\n");
+#endif
 
   for (i = 0; i < npages; i++) {
     /* check if the page dir entry is valid */

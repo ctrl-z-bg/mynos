@@ -27,12 +27,10 @@
 #define myalloc(sz) kmalloc(sz)
 #define myfree(ptr) kfree(ptr)
 
-#define MINPAGES (0x40001)
-#define MAXPAGES (0x100000)
 #define PAGESPAN(p) ((p).end - (p).bgn)
 
 #define BLOCKNOTFOUND -1
-#define AREATOOLARGE -2
+#define AREATOOLARGE -1
 
 #define NOTALLOCATED -1
 
@@ -53,7 +51,7 @@ pdListEl *__lmt_findArea(pdListEl **pdListBgn, int npages)
   pdListEl *runner;
 
   if (!(*pdListBgn)) { /* allocate and return */
-    (*pdListBgn) = __lmt_newPdListEl(MINPAGES, MAXPAGES, NULL, NULL);
+    (*pdListBgn) = __lmt_newPdListEl(USERMINPAGE, USERMAXPAGE, NULL, NULL);
     return *pdListBgn;
   }
 
@@ -72,7 +70,7 @@ int __lmt_allocArea(pdListEl **pdListBgn, int npages)
   pdListEl *tomod;
   int toret;
 
-  if (npages > (MAXPAGES-MINPAGES)) return AREATOOLARGE;
+  if (npages > (USERMAXPAGE-USERMINPAGE)) return AREATOOLARGE;
   
   /* first fit */
   tomod = __lmt_findArea(pdListBgn, npages);
@@ -163,16 +161,16 @@ int __lmt_forceAllocation(pdListEl **pdListBgn, int fromPage, int npages)
   /* we must find the first block whose 'bgn' is after fromPage+npages */
   pdListEl *runner = *pdListBgn;
 
-  if ( fromPage < MINPAGES )
+  if ( fromPage < USERMINPAGE )
     KPANIC("lmemtrack.c: cannot allocate under 1GB (LA)");
 
   if ( !(*pdListBgn) ) {
-    if ( fromPage == MINPAGES ) {
-      *pdListBgn = __lmt_newPdListEl(fromPage+npages, MAXPAGES, NULL, NULL);
+    if ( fromPage == USERMINPAGE ) {
+      *pdListBgn = __lmt_newPdListEl(fromPage+npages, USERMAXPAGE, NULL, NULL);
     } else {
       pdListEl *newEl;
-      *pdListBgn = __lmt_newPdListEl(MINPAGES, fromPage-1, NULL, NULL);
-      newEl = __lmt_newPdListEl(fromPage+npages, MAXPAGES, NULL, *pdListBgn);
+      *pdListBgn = __lmt_newPdListEl(USERMINPAGE, fromPage-1, NULL, NULL);
+      newEl = __lmt_newPdListEl(fromPage+npages, USERMAXPAGE, NULL, *pdListBgn);
       (*pdListBgn)->next = newEl;
     }
     return 0;
