@@ -35,6 +35,9 @@
 
 */
 
+#ifndef __DYNALLOC_H__
+#define __DYNALLOC_H__
+
 /* Some defines */
 
 #define _SIZE_SZ (4)  /* number of bytes for size */
@@ -74,7 +77,7 @@
     ((void *) (((((unsigned int) (ptr)) >> 12 ) + 1) << 12))
 
 /* number of pages to request for a block of size sz */
-#define _N_PAGES(sz) (((sz) + _OVERHEAD_SZ) >> 12)
+#define _N_PAGES(sz) (((sz) + _OVERHEAD_SZ + 4096) >> 12)
 
 /* pointer to the previous and next block */
 #define _PREV_BLOCK_PTR(ptr) (*(void **)((ptr) + _BLOCK_SZ(ptr)))
@@ -86,8 +89,10 @@
 
 /* No explanation needed */
 void *
-malloc(unsigned int sz);
+kmalloc(unsigned int sz);
 
 /* No explanation needed */
 void
-free(void *ptr);
+kfree(void *ptr);
+
+#endif

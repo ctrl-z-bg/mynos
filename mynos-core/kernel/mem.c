@@ -31,7 +31,6 @@ void init_memory() {
   uint32_t first_free_phy_page = (_asm_first_free_physical_page_address>>12);
   uint32_t total_phy_pages = (_asm_global_mem_size*256);
 
-  _init_gdt();
   __memory_bitmap = (byte_t*)__MEMORY_BITMAP_PHY_ADDRESS;
   __memory_bitmap_size = total_phy_pages / 8;
 
@@ -44,9 +43,16 @@ void init_memory() {
   for (i = 0; i < first_free_phy_page; i++)   /* set bitmap for paged already 
 						 allocated */
     __SET_MEMORY_BITMAP_PAGE_BIT(i);
+
+  _init_gdt();
+
 }
 
-void * __OS_askPages(unsigned int npages) {return (void*)0;}
+/* TEMP!!! Start from 2MB */
+void * __OS_askPages(unsigned int npages) {
+  return __OS_askPagesFrom((void *)0x200000, npages);
+}
+
 void * __OS_releasePages(void *pageaddr, unsigned int npages) {return (void*)0;}
 
 

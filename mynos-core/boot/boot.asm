@@ -40,7 +40,7 @@ nTotalSect32		dd	0x00000000
 bBootDrive		db	0x00
 ResvdByte		db	0x00
 ExtBootSig		db	0x29
-nOSSectors		dw	0xc8		; c8 = 100KB
+nOSSectors		dw	0x28		; c8 = 100KB
 ResvdWord		dw	0x0000
 Volname			db	"QUASI  BOOT"
 FatType			db	"FAT12   "

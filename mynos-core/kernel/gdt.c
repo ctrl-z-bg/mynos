@@ -20,7 +20,7 @@
 
 #include "gdt.h"
 
-desc_table(GDT, 8192) {
+desc_table(GDT, 5) { //8192) {
   /* dummy descriptor (not used by processor) */
   {dummy:0},
   /* kernel code segment */

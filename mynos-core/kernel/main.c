@@ -29,12 +29,47 @@
 
 #include "idt.h"
 
+#include "dynalloc.h"
+
 void __print_free_phy_pages() {
   printk("(adesso ci sono ");
   print_uint(__number_of_free_physical_pages);
   printk(" pagine fisiche non allocate)\n\n");
 }
 
+void TryPageAlloc() {
+  /* esempio di allocazione: questo funziona... */
+  if (__OS_askPagesFrom((void*)(0x200000), 3000) == NULL)
+    printk("PROBLEMA DI ALLOCAZIONE!\n\n");
+  else {
+    printk("Allocate 3000 pagine\n");
+    __print_free_phy_pages();
+  }
+
+  /* ...questo no perche' non ci sono abbastanza pagine fisiche libere... */
+  if (__OS_askPagesFrom((void*)(0x110000), 5000) == NULL)
+    printk("PROBLEMA DI ALLOCAZIONE!\n\n");
+  else {
+    printk("Allocate 5000 pagine\n");
+    __print_free_phy_pages();
+  }
+
+  /* ...questo funziona... */
+  if (__OS_askPagesFrom((void*)(0x110000), 3) == NULL)
+    printk("PROBLEMA DI ALLOCAZIONE!\n\n");
+  else {
+    printk("Allocate 3 pagine\n");
+    __print_free_phy_pages();
+  }
+
+  /* ...questo non funziona perche' trova pagine gia' allocate! */
+  if (__OS_askPagesFrom((void*)(0x10F000), 2) == NULL)
+    printk("PROBLEMA DI ALLOCAZIONE!\n\n");
+  else {
+    printk("Allocate 2 pagine\n");
+  __print_free_phy_pages();
+  }
+}
 
 void mynos_main() {
   int * tmp = (int*)__GET_PAGE_DIR_ENTRY(_asm_last_page_dir_entry_used); 
@@ -80,37 +115,20 @@ void mynos_main() {
   print_uint_hex(((*tmp)>>12)<<12);
   printk(")\n\n\n");
 
-  /* esempio di allocazione: questo funziona... */
-  if (__OS_askPagesFrom((void*)(0x200000), 3000) == NULL)
-    printk("PROBLEMA DI ALLOCAZIONE!\n\n");
-  else {
-    printk("Allocate 3000 pagine\n");
-    __print_free_phy_pages();
+  // TryPageAlloc();
+
+  {
+    int * a;
+    a = (int*)kmalloc(8192*8);
+    a = (int*)kmalloc(8192*8);
+    *a = 123;
+    printk("--");
+    print_ulong((ulong32_t)a);
+    printk("--");
+    print_ulong((ulong32_t)*a);
+    printk("--\n");
   }
 
-  /* ...questo no perche' non ci sono abbastanza pagine fisiche libere... */
-  if (__OS_askPagesFrom((void*)(0x110000), 5000) == NULL)
-    printk("PROBLEMA DI ALLOCAZIONE!\n\n");
-  else {
-    printk("Allocate 5000 pagine\n");
-    __print_free_phy_pages();
-  }
-
-  /* ...questo funziona... */
-  if (__OS_askPagesFrom((void*)(0x110000), 3) == NULL)
-    printk("PROBLEMA DI ALLOCAZIONE!\n\n");
-  else {
-    printk("Allocate 3 pagine\n");
-    __print_free_phy_pages();
-  }
-
-  /* ...questo non funziona perche' trova pagine gia' allocate! */
-  if (__OS_askPagesFrom((void*)(0x10F000), 2) == NULL)
-    printk("PROBLEMA DI ALLOCAZIONE!\n\n");
-  else {
-    printk("Allocate 2 pagine\n");
-  __print_free_phy_pages();
-  }
 
   enable_irq(1); /* irq1 (keyboard) is interrupt M_VEC+1 (33) */
   enable_irq(0);

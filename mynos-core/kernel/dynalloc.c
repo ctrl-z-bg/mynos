@@ -133,7 +133,7 @@ _createNewBlock(unsigned int npages, unsigned int sz)
 
 
 void *
-malloc(unsigned int sz)
+kmalloc(unsigned int sz)
 {
   void *ret = 0;
 
@@ -177,7 +177,7 @@ _removeBlock(void *ptr, void *prev)
 }
 
 void
-free(void *ptr)
+kfree(void *ptr)
 {
   void *runner;
 
@@ -199,18 +199,4 @@ free(void *ptr)
 
   return;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
