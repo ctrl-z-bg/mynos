@@ -38,13 +38,11 @@ struct {
 (256 * sizeof(union DT_entry) - 1), IDT};
 
 TRAP_WRAPPER(stupidTrap);
-TRAP_WRAPPER(stupidTrap2);
-
+extern uint32_t currProcess;
 void stupidTrap_handler() {
-  printk("A Stupid Trap\n");
-}
-void stupidTrap2_handler() {
-  printk("Another Stupid Trap!\n");
+  printk("I'm the process ");
+  print_ulong((uint32_t)currProcess);
+  print_char('\n');
 }
 
 void init_idt() {
@@ -71,7 +69,6 @@ void init_idt() {
   set_vector(_int16, 16, D_PRESENT + D_INT);
 
   set_vector(stupidTrap_TRAP, 0x50, D_PRESENT + D_INT + D_DPL3);
-  set_vector(stupidTrap2_TRAP, 0x51, D_PRESENT + D_INT + D_DPL3);
 
   asm("lidt (%0)                 \n"	/* Load the IDT                */
       "pushfl                    \n"	/* Clear the NT flag           */

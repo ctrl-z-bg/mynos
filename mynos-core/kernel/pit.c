@@ -46,7 +46,6 @@ __asm__ (\
 #include "process.h"
 void pit_handler() {
   static uint32_t count = 1;
-  static int current = 0;
   uint32_t p_ts_time = 0;
   struct {long a ,b;} tmp = {0, 0};
 
@@ -57,13 +56,12 @@ void pit_handler() {
   if ((count++) > 2) {
     p_ts_time = 1;
     count = 1;
-    current = (current + 1) % numProcess;
-    tmp.b = (long)processTable[current].tssd_gdt_selector;
+    currProcess = (currProcess + 1) % numProcess;
+    tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
   }
 
   outportb(0x20, 0x20);
 
   if (p_ts_time)
     __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
-
 }

@@ -45,21 +45,27 @@ void __print_free_phy_pages() {
 
 extern tss_t processTable[20];
 extern uint32_t numProcess;
-char * idle_tssd_selector = (char*)(10*8);
+ushort16_t * idle_tssd_selector;
 
 void tsksw() {
+  ushort16_t gdt_index;
+
   /* set a tss for the outcoming process */
   processTable[0].pgdir = (uint32_t**)0x100000;
   processTable[0].io_bitmap_offset = 0;
   processTable[0].ldt = 0;
 
+  gdt_index = gdt_get_free_index();
+  processTable[0].tssd_gdt_selector = (uint32_t)gdt_index << 3;
+
   /* set the tssd in the gdt, for the incoming and the outcoming processes */
-  gdt_set_entry(10, LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)&(processTable[0])),
+  gdt_set_entry(gdt_index,
+		LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)&(processTable[0])),
 		sizeof(tss_t), D_TSS);
-  processTable[0].tssd_gdt_selector = 80;
 
   /* load the task register with the relative address in the gdt of the
      current process's tssd */
+  idle_tssd_selector = (ushort16_t*)((uint32_t)processTable[0].tssd_gdt_selector);
   __asm__ volatile ("ltrw (idle_tssd_selector)\n");
 
 }
@@ -111,14 +117,20 @@ void mynos_main() {
 	printk("Press any key to try again\n");
       }
   }
-  
 
   tsksw();
-  spawnProcess(&(processTable[numProcess++]));
+
+  /* Let's create some task! :) */
+  {
+    uint32_t i, ntask = 3;
+    for (i = 0; i < ntask; i++)
+      spawnProcess(&(processTable[numProcess++]));
+  }
+
   enable_irq(0);
 
   while(1) {
-    asm("int $0x51\n");
+    asm("int $0x50\n");
   }
 
   {

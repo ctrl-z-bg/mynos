@@ -26,9 +26,14 @@
 #define GDT_OS_CODE_SEL   0x08
 #define GDT_OS_DATA_SEL   0x10
 
+#define GDT_MAX_ENTRIES   8192
+
 void _init_gdt();
 
 void gdt_set_entry(uint32_t entry,
 		   uint32_t base, uint32_t limit, ushort16_t control);
+
+/* returns a free entry in the gdt different than zero */
+uint32_t gdt_get_free_index();
 
 #endif

@@ -25,6 +25,7 @@
 
 tss_t processTable[20];
 uint32_t numProcess = 1;
+uint32_t currProcess = 0;  /* the first process is the idle process */
 
 tss_t * spawnProcess(tss_t * tss) {
   uint32_t * newPD;
@@ -34,6 +35,7 @@ tss_t * spawnProcess(tss_t * tss) {
   uint32_t * currPF;        /* current page frame */
   uint32_t * stackFrame; 
   uint32_t i;
+  ushort16_t tssd_gdt_sel, code_gdt_sel, data_gdt_sel;
 
   if ((newPD = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
   kbzero(newPD, PAGE_SIZE);
@@ -71,33 +73,41 @@ tss_t * spawnProcess(tss_t * tss) {
   if ((stackFrame = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
   lastButOnePT[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_USER | PF_PRESENT | PF_READWRITE;
 
+  /* create new segments descriptors */
+  code_gdt_sel = gdt_get_free_index();
+  gdt_set_entry(code_gdt_sel, 
+		0x40000000, 0xFFF00, 
+		(D_CODE + D_BIG + D_BIG_LIM + D_DPL3));
+  data_gdt_sel = gdt_get_free_index();
+  gdt_set_entry(data_gdt_sel, 
+		0x00000000, 0xFFFFF, 
+		(D_DATA + D_WRITE + D_BIG + D_BIG_LIM+ D_DPL3));
+  tssd_gdt_sel = gdt_get_free_index();
+  gdt_set_entry(tssd_gdt_sel, 
+		LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)tss),
+		sizeof(tss_t), D_TSS);
+
   /* set the new process tss */
   tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(newPD);
   tss->io_bitmap_offset = 0;
   tss->eip = (uint32_t)0;//(1024*1024*1024);
 
-  tss->tssd_gdt_selector = 88;
+  tss->tssd_gdt_selector = tssd_gdt_sel << 3;
 
-  tss->cs = 0x8 * 100 + 3;
-  tss->ds = 0x8 * 101 + 3;
-  tss->es = 0x8 * 101 + 3;
-  tss->fs = 0x8 * 101 + 3;
-  tss->gs = 0x8 * 101 + 3;
-  tss->ss = 0x8 * 101 + 3;
+  tss->cs = (((uint32_t)code_gdt_sel)<<3) + 3;
+  tss->ds = (((uint32_t)data_gdt_sel)<<3) + 3;
+  tss->es = (((uint32_t)data_gdt_sel)<<3) + 3;
+  tss->fs = (((uint32_t)data_gdt_sel)<<3) + 3;
+  tss->gs = (((uint32_t)data_gdt_sel)<<3) + 3;
+  tss->ss = (((uint32_t)data_gdt_sel)<<3) + 3;
   tss->ldt = 0;
   tss->eflags = 0x200;
   tss->esp = tss->ebp =
     (uint32_t)((_asm_last_page_dir_entry_used)*0x400000 - 4100);
-  tss->esp0 = tss->esp - 1000;
+  tss->esp0 = tss->esp - numProcess*100;//1000;
   tss->esp1 = tss->esp - 1000;
   tss->esp2 = tss->esp - 1000;
-  tss->ss0 = tss->ss1 = tss->ss2 = 0x8 * 2;
-
-  gdt_set_entry(100, 0x40000000, 0xFFF00, (D_CODE + D_BIG + D_BIG_LIM + D_DPL3));
-  gdt_set_entry(101, 0x00000000, 0xFFFFF, (D_DATA + D_WRITE + D_BIG + D_BIG_LIM+ D_DPL3));
-
-  gdt_set_entry(11, LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)tss),
-		sizeof(tss_t), D_TSS);
+  tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
 
   return NULL;
 }

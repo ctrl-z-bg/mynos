@@ -74,3 +74,20 @@ void gdt_set_entry(uint32_t entry, uint32_t base,
   SEG_createStandardDescriptor((uint32_t *) (gdt_addr+entry),
 			       base, limit, control);
 }
+
+uint32_t gdt_get_free_index() {
+  static ushort16_t index = 0;
+  ushort16_t start;
+  uint32_t hidword;
+
+  start = index;
+  do {
+    index = (index + 1) % GDT_MAX_ENTRIES;
+    if (!index) continue;
+    hidword = *(((uint32_t*)(gdt_addr + index)) + 1);
+    if (!(hidword & D_PRESENT))
+      return index;
+  } while (index != start);
+
+  return 0;
+}
