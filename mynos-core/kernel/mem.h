@@ -145,7 +145,8 @@
                       int * pun2 = (int*)__GET_PAGE_TABLE_ENTRY(\
                                                 LAST_PAGE_DIR_VALID_INDEX,\
                                                 ENTRY);\
-                      *pun = (PAGE_TAB_PHY_ADDRESS) | PF_PRESENT;\
+                      *pun = (PAGE_TAB_PHY_ADDRESS) | \
+                             PF_USER | PF_READWRITE |PF_PRESENT;\
                       *pun2 = *pun;\
                       __SET_MEMORY_BITMAP_PAGE_BIT((PAGE_TAB_PHY_ADDRESS)>>12);\
                      }

@@ -252,6 +252,11 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   else
     printk("in superuser mode\n");
 
+  /* check if the page table is allocated */
+  if ((*(uint32_t*)__GET_PAGE_DIR_ENTRY(__ADDRESS_PD_INDEX(addr)) &
+       PF_PRESENT) == 0)
+    KPANIC("page fault (?)");
+
   pte = (int*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), 
 				     __ADDRESS_PT_INDEX(addr));
   if ((*pte) & PF_LOGICAL_PRESENT)

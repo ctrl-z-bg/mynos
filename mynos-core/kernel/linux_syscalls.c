@@ -19,6 +19,8 @@ __asm__ (\
 	 "   je .linux_fork\n"\
 	 "   cmpl $4, %eax\n"\
 	 "   je .linux_write\n"\
+	 "   cmpl $5, %eax\n"\
+	 "   je .linux_open\n"\
 	 "   cmpl $20, %eax\n"\
 	 "   je .linux_getpid\n"\
 	 "   cmpl $64, %eax\n"\
@@ -46,6 +48,15 @@ __asm__ (\
 	 "   pushl %ecx\n"
 	 "   pushl %ebx\n"
 	 "   call _linux_syscall_write     \n"\
+	 "   popl %ebx\n"
+	 "   popl %ecx\n"
+	 "   popl %edx\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_open:\n"\
+	 "   pushl %edx\n"
+	 "   pushl %ecx\n"
+	 "   pushl %ebx\n"
+	 "   call _linux_syscall_open     \n"\
 	 "   popl %ebx\n"
 	 "   popl %ecx\n"
 	 "   popl %edx\n"\
@@ -78,6 +89,10 @@ void _linux_syscall_exit(int status) {
   currProcess = 0;
   tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
   __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
+}
+
+int _linux_syscall_open(char * pathname, int flags, int mode) {
+  return -1;
 }
 
 void _linux_syscall_write(int fd, const void *buf, size_t count) {
@@ -166,7 +181,8 @@ int _linux_syscall_fork() {
   if ((pdc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
   if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
 
-  pdc[1023] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
+  pdc[1023] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | 
+    PF_USER | PF_READWRITE | PF_PRESENT;
 
   /* copy the shared kernel space */ 
   for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
