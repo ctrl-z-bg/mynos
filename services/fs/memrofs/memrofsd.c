@@ -23,6 +23,8 @@
 #include <unistd.h>
 #include "memrofs.h"
 
+char * MAGIC = ".RAMDISK";
+
 filedescriptor_t filedesc[MAXOPENFILES];
 fileentry_t * filesystem;
 char *ramdisk;
@@ -49,7 +51,7 @@ void memrofs_open(pid_t client, char *fname) {
     }
     curr++;
   } while ( (!found) && (curr<MAXFILES) );
-  
+
   if ( curr >= MAXFILES ) { // file not found
     response.fd = -1;
     response.status = STATUS_NOT_FOUND;
@@ -140,12 +142,11 @@ int main() {
     exit(-1);
   }
 
-  filesystem = (fileentry_t *)ramdisk;
-  
+  filesystem = (fileentry_t *)(ramdisk + strlen(MAGIC));
 #define TEST
 #ifdef TEST
   if ( fork() ) {
-    puts("father.");
+    //puts("father.");
     // father
   } else {
     // child
@@ -153,32 +154,34 @@ int main() {
     request_t request;
     open_response_t open_response;
     read_response_t read_response;
-    puts("child.");
+    //puts("child.");
     request.type = OPEN;
     strcpy(request.data.fname, "AUTOEXEC.BAT");
-    puts("prereq");
+    //puts("prereq");
+    puts("Opening a text file...");
     mynos_send(getppid(), (char *) &request, sizeof(request_t),
 	       MYNOS_IPC_FLAGS_NONBLOCK);
-    puts("req1");
+    //puts("req1");
     mynos_recv(getppid(), (char *) &open_response, sizeof(open_response_t), 0);
     if ( open_response.status != STATUS_OK ) {
       puts("Open failed");
       exit(-1);
     }
-    puts("resp1");
+    //puts("resp1");
+    puts("Reading the file content...");
     request.type = READ;
     request.data.read_data.fd = open_response.fd;
-    request.data.read_data.to_read = 3;
+    request.data.read_data.to_read = 999;
     mynos_send(getppid(), (char *) &request, sizeof(request_t),
 	       MYNOS_IPC_FLAGS_NONBLOCK);
-    puts("req2");
+    //puts("req2");
     if ( mynos_recv(getppid(), (char *) &read_response, sizeof(read_response_t), 0) < 0 )
       puts("errore 1");
-    puts("resp2a");
+    //puts("resp2a");
     if ( (read_response.status == STATUS_OK) &&
 	 (mynos_recv(getppid(), mybuf, 999, 0) < 0) )
       puts("errore 2");
-    puts("resp2b");
+    //puts("resp2b");
     if ( read_response.rd == 0 )
       if ( read_response.status != STATUS_OK )
 	puts("Some error.");
@@ -186,7 +189,7 @@ int main() {
 	puts("EOF");
     else {
       mybuf[read_response.rd] = 0;
-      puts("content:");
+      puts("Show the content:");
       puts(mybuf);
     }
     

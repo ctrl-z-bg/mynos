@@ -37,6 +37,11 @@ int main(int argc, char ** argv) {
   int headerlen;
   char * index;
   int sumlen = 0;
+  char * MAGIC = ".RAMDISK";
+  int MAGIC_len;
+  int disksize;
+
+  MAGIC_len = strlen(MAGIC);
 
   headerlen = MAXFILES * sizeof(fileentry_t);
   header = (fileentry_t*)malloc(headerlen);
@@ -54,9 +59,10 @@ int main(int argc, char ** argv) {
     close(fd);
   }
 
-  disk = (char*)malloc(headerlen + sumlen);
+  disksize = MAGIC_len + headerlen + sumlen;
+  disk = (char*)malloc(disksize);
 
-  index = disk + headerlen;
+  index = disk + MAGIC_len + headerlen;
 
   /* copy the files */
   for (i = 1; i < argc; i++) {
@@ -67,15 +73,17 @@ int main(int argc, char ** argv) {
     close(fd);
   }
 
+  /* copy the MAGIC */
+  memcpy(disk, MAGIC, MAGIC_len);
   /* copy the header */
-  memcpy(disk, header, headerlen);
+  memcpy(disk + MAGIC_len, header, headerlen);
 
   if ((diskFILE = fopen("RAMDISK.dsk", "w")) == NULL) {
     fprintf(stderr, "Unable to create the disk file\n");
     exit(-1);
   }
   //printf("scritti %d bytes\n",
-  write(fileno(diskFILE), disk, headerlen + sumlen);
+  write(fileno(diskFILE), disk, disksize);
   fclose(diskFILE);
 
   free(header);
