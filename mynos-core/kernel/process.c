@@ -95,6 +95,8 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   /* initial kernel stack data of the new process */
   init_stack_t * stackData;
 
+  init_stack_t * stack;
+
   pinfoAddr  = upperLimit - PAGE_SIZE * PROCESS_INFO_NPAGES;
   kstackBottomAddr = pinfoAddr  - PAGE_SIZE * KERNEL_STACK_NPAGES;
   ustackBottomAddr = kstackBottomAddr - PAGE_SIZE * USER_STACK_NPAGES;
@@ -281,22 +283,21 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   tss->esp0 = tss->esp1 = tss->esp2 = kstackBottomAddr + PAGE_SIZE * KERNEL_STACK_NPAGES - sizeof(init_stack_t);
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
 
-  {
-    init_stack_t * stack = (init_stack_t*)(((uint32_t)stackData) + 
-					   PAGE_SIZE - 
-					   sizeof(init_stack_t));
-    stack->ss = GDT_USER_DATA_SEL + 3;
-    stack->esp = tss->esp;
-    stack->eflags = tss->eflags;
-    stack->cs = GDT_USER_CODE_SEL + 3;
-    stack->eip = tss->eip;
-
-    stack->ds = GDT_USER_DATA_SEL + 3;
-    stack->es = GDT_USER_DATA_SEL + 3;
-    stack->fs = GDT_USER_DATA_SEL + 3;
-    stack->gs = GDT_USER_DATA_SEL + 3;
-  }
-
+  /* prepare the initial stack for the new process */
+  stack = (init_stack_t*)(((uint32_t)stackData) + 
+			  PAGE_SIZE - 
+			  sizeof(init_stack_t));
+  stack->ss = GDT_USER_DATA_SEL + 3;
+  stack->esp = tss->esp;
+  stack->eflags = tss->eflags;
+  stack->cs = GDT_USER_CODE_SEL + 3;
+  stack->eip = tss->eip;
+  
+  stack->ds = GDT_USER_DATA_SEL + 3;
+  stack->es = GDT_USER_DATA_SEL + 3;
+  stack->fs = GDT_USER_DATA_SEL + 3;
+  stack->gs = GDT_USER_DATA_SEL + 3;
+  
   tss->esp = tss->esp0;
   tss->eip = (uint32_t)startTask;
 
