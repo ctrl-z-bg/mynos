@@ -234,9 +234,6 @@ void keyb_handler(void)
 		}
 	}
 
-#if !defined(MYNOS)
-	outportb(M_PIC, EOI);
-#endif
 }
 
 unsigned char getch()
