@@ -18,9 +18,12 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "gdt.h"
+#include "global.h"
 #include "mem.h"
+#include "gdt.h"
 #include "video.h"
+#include "kutils.h"
+#include "macro_gdt.h"
 
 byte_t * __memory_bitmap;
 uint32_t __memory_bitmap_size;

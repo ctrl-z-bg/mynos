@@ -17,15 +17,12 @@
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
+RELPATH    = kernel
+include ../CommonHeader
+
 SUBDIRS	= 3parts
 
-CC = gcc
-CFLAGS = -nostdinc -nostdlib -Wall $(foreach DIR, $(SUBDIRS), -I$(DIR))
-LD = ld
-MAKE	= make
-
-AS = nasm
-ASFLAGS = -f elf
+CFLAGS += $(foreach DIR, $(SUBDIRS), -I$(DIR))
 
 .PHONY: kernel clean all $(SUBDIRS)
 

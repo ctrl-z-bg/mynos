@@ -16,14 +16,13 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
+RELPATH    = kernel/3parts
+include ../../CommonHeader
+
 NAME 		= 3parts
 MODULE_NAME	= $(NAME)_module.o
 
-CC = gcc
-CFLAGS = -nostdinc -nostdlib -Wall
-LD = ld
-
-.PHONY = all
+.PHONY: all
 
 SRCS	= 	$(wildcard *.c)
 OFILES	=	$(SRCS:%.c=%.o)
@@ -37,7 +36,7 @@ $(MODULE_NAME): $(OFILES)
 	$(CC) -c $(CFLAGS) $<
 
 clean:
-	rm -f *.o *~
+	rm -f *.o *.bin *~
 
 depend:
 	$(RM) $(DEPEND)

@@ -47,7 +47,7 @@ void _init_gdt() {
   union DT_entry * gdt_addr;
 
   /* alloc a full GDT */
-  gdt_addr = (union DT_entry *)kmalloc(GDT_SIZE);
+  gdt_addr = (union DT_entry *)kmalloc(GDT_SIZE); /* 8192 * sizeof(DT_entry) */
 
   /* let's zero it */
   kbzero((void *)gdt_addr, GDT_SIZE);
