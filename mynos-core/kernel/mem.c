@@ -41,7 +41,7 @@ void init_memory() {
      allocation (from 0 to _asm_first_free_physical_page_address - 1) */
   for (i = 0; i < __memory_bitmap_size; i++)  /* reset the bitmap */
     __memory_bitmap[i] = 0x0;
-  for (i = 0; i < first_free_phy_page; i++)   /* set bitmap for paged already 
+  for (i = 0; i < first_free_phy_page; i++)   /* set bitmap for pages already 
 						 allocated */
     __SET_MEMORY_BITMAP_PAGE_BIT(i);
 
@@ -49,17 +49,15 @@ void init_memory() {
 
 }
 
-/* TEMP!!! Start from 2MB */
+/* TEMP!!! Start Search from 0x0 */
 void * __OS_askPages(unsigned int npages) {
   uint32_t page_addr;
   uint32_t last_page = __LAST_LINEAR_PAGE;
   uint32_t not_used;
 
-  for (page_addr = 0x100; page_addr <= last_page; page_addr++)
+  for (page_addr = 0x0; page_addr <= last_page; page_addr++)
     if (__pg_free_pages_from_page(page_addr, npages, &not_used) == npages)
       return __OS_askPagesFrom((void *)(page_addr<<12), npages);
-    else
-      { printk("no "); print_ulong_hex(page_addr); printk("\n");}
 
   return (void*)0;
 }

@@ -86,7 +86,7 @@ void print_ulong_hex(ulong32_t n) {
 }
  
 void print_char(char c) {
-  if (video >= (char*)END_VIDEO) {
+  if (video > (char*)END_VIDEO) {
     scroll_screen();
     video -= 0xA0;
   }

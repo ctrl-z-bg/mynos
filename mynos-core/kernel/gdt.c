@@ -18,13 +18,18 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "global.h"
 #include "gdt.h"
+#include "mem.h"
+#include "video.h"
 #include "kutils.h"
 #include "dynalloc.h"
 
 #define INITIAL_SEGMENTS 4
 
 #define GDT_SIZE 8192*8
+
+union DT_entry * gdt_addr;
 
 desc_table(GDT, INITIAL_SEGMENTS) { //8192) {
   /* dummy descriptor (not used by processor) */
@@ -44,15 +49,15 @@ struct loadgdt_st
 } loadgdt = { (INITIAL_SEGMENTS * sizeof(union DT_entry) - 1), GDT };
 
 void _init_gdt() {
-  union DT_entry * gdt_addr;
-
   /* alloc a full GDT */
-  gdt_addr = (union DT_entry *)kmalloc(GDT_SIZE); /* 8192 * sizeof(DT_entry) */
-
-  printk("--");
-  print_ulong_hex(((unsigned)gdt_addr>>12)<<12);
-  printk("--\n");
-
+  gdt_addr = (union DT_entry *)__OS_askPages(GDT_SIZE / PAGE_SIZE);
+  printk("Alloc ");
+  print_ulong(GDT_SIZE);
+  printk(" bytes (");
+  print_ulong(GDT_SIZE / PAGE_SIZE);
+  printk(" pages) for the GDT, starting from linear page ");
+  print_ulong_hex((uint32_t)gdt_addr);
+  print_char('\n');
 
   /* let's zero it */
   kbzero((void *)gdt_addr, GDT_SIZE);
@@ -66,3 +71,8 @@ void _init_gdt() {
   __asm__ volatile ("lgdtl (loadgdt)\n");
 }
 
+void gdt_set_entry(int entry, uint32_t base, uint32_t limit, 
+		   ushort16_t control) {
+  SEG_createStandardDescriptor((uint32_t *) (gdt_addr+entry),
+			       base, limit, control);
+}
