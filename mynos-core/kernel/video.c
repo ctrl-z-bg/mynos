@@ -21,9 +21,6 @@
 #include "video.h"
 #include "io.h"
 
-/* kernel messages will be printed in green */
-#define CHAR_ATTRIB 0xA
-
 /* void update_cursor(int row, int col)
  * by Dark Fiber
  * taken from alt.os.development FAQ
@@ -112,7 +109,7 @@ void print_ulong_hex(ulong32_t n) {
   printk(curr_char + 1);
 }
  
-void print_char(char c) {
+void _print_char(char c, char attrib) {
   uint32_t cursor;
   if (video >= (char*)END_VIDEO) {
     scroll_screen();
@@ -131,7 +128,7 @@ void print_char(char c) {
   }
   } else {
     *video = c;
-    *(video + 1) = CHAR_ATTRIB;
+    *(video + 1) = attrib;
     video = video + 2;
   }
   /* move the cursor */

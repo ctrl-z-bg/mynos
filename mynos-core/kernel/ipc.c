@@ -26,6 +26,7 @@
 #include "video.h"
 #include "mem.h"
 #include "sem.h"
+#include "services.h"
 
 #define MAXCHANNELS 20
 

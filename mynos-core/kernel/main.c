@@ -257,10 +257,6 @@ void mynos_main(multiboot_info_t *boot_info) {
     }
   }
 
-  //initKeyboard();
-  //initSerial();
-  //enable_irq(4);   /* serial */
-
   printk("\n-----------------------\n");
 
   enable_irq(0);

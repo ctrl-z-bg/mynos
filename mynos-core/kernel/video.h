@@ -28,6 +28,11 @@
 #define COLUMNS 80
 #define ROWS    25
 
+/* kernel messages will be printed in green */
+#define CHAR_KERNEL_ATTRIB 0xA
+/* user messages will be printed in gray */
+#define CHAR_USER_ATTRIB 0x7
+
 void printk(char *s);
 void print_ulong(ulong32_t n);
 #define print_uint(N) print_ulong((ulong32_t)N)
@@ -41,7 +46,8 @@ void print_ulong_hex(ulong32_t n);
 #define print_uint_hex(N) print_ulong_hex((ulong32_t)N)
 #define print_uint_hex(N) print_ulong_hex((ulong32_t)N)
 
-void print_char(char c);
+void _print_char(char c, char attrib);
+#define print_char(C) _print_char(C, CHAR_KERNEL_ATTRIB)
 
 void clear_screen();
 void scroll_screen();

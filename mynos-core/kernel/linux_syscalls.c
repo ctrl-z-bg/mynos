@@ -205,7 +205,7 @@ int _linux_syscall_write(int fd, const void *buf, size_t count) {
   int i;
 
   for (i = 0; i < count; i++)
-    print_char(((char*)buf)[i]);
+    _print_char(((char*)buf)[i], CHAR_USER_ATTRIB);
   return count;
 }
 
