@@ -66,6 +66,11 @@ void tsksw() {
   processTable[0].isWaitingSender = -1;
   processTable[0].isWaitingReceiver = -1;
 
+  //SEM
+  processTable[0].isWaitingOnP = -1;
+
+
+
   gdt_index = gdt_get_free_index();
   processTable[0].tssd_gdt_selector = (uint32_t)gdt_index << 3;
 
@@ -121,7 +126,7 @@ void mynos_main(multiboot_info_t *boot_info) {
   init_pit(PIT_FREQ, 0);
   set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT));
   printk("done.\n");
-
+  __OS_sem_initSemaphores();
   /* prepare the modules informations */
   module = (module_t *)boot_info->mods_addr;
   for (i = 0; i < boot_info->mods_count; i++) {

@@ -75,7 +75,9 @@ typedef struct {
   pid_t isWaitingSender;
   pid_t isWaitingReceiver;
   // end IPC
-
+  // SEM
+  int isWaitingOnP;
+  // end SEM
 } tss_t;
 
 #endif

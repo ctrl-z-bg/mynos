@@ -224,6 +224,8 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   tss->isWaitingReceiver = -1;
   __OS_ipc_initChannelList(&(tss->channels));
   // end IPC
+  // SEM
+  tss->isWaitingOnP = -1;
 
 #ifdef RAMDISK
   if (ramdisk_present) {

@@ -34,6 +34,16 @@ __asm__ (\
 	 "   je .mynos_recv\n"\
 	 "   cmpl $5, %eax\n"\
 	 "   je .mynos_recvAll\n"\
+	 "   cmpl $6, %eax\n"\
+	 "   je .mynos_P\n"\
+	 "   cmpl $7, %eax\n"\
+	 "   je .mynos_tryP\n"\
+	 "   cmpl $8, %eax\n"\
+	 "   je .mynos_V\n"\
+	 "   cmpl $9, %eax\n"\
+	 "   je .mynos_semInit\n"\
+	 "   cmpl $9, %eax\n"\
+	 "   je .mynos_semFree\n"\
 	 "   push %eax\n"\
 	 "   call _mynos_syscall_WRONGSYSCALL\n"\
 	 ".mynos_send:\n"\
@@ -68,6 +78,31 @@ __asm__ (\
 	 "   popl %ecx\n"
 	 "   popl %edx\n"\
 	 "   popl %esi\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_P:\n"\
+	 "   pushl %ebx\n"
+	 "   call __OS_sem_P     \n"\
+	 "   popl %ebx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_tryP:\n"\
+	 "   pushl %ebx\n"
+	 "   call __OS_sem_tryP     \n"\
+	 "   popl %ebx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_V:\n"\
+	 "   pushl %ebx\n"
+	 "   call __OS_sem_V     \n"\
+	 "   popl %ebx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_semInit:\n"\
+	 "   pushl %ebx\n"
+	 "   call __OS_sem_allocateSemaphore\n"\
+	 "   popl %ebx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_semFree:\n"\
+	 "   pushl %ebx\n"
+	 "   call __OS_sem_freeSemaphore\n"\
+	 "   popl %ebx\n"
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".exit_mynos_syscall:\n"\
 	 "   iret                \n"\

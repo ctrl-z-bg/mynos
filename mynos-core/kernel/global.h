@@ -35,6 +35,7 @@
 #define KPANIC(MSG) {printk(MSG); while(1){}}
 
 typedef char           byte_t;
+typedef unsigned char  ubyte_t;
 typedef unsigned int   uint32_t;
 typedef int            int32_t;
 typedef unsigned long  ulong32_t;
