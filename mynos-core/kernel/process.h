@@ -24,6 +24,15 @@
 #include "tss.h"
 
 #define MAXPROCESSES 30
+#define MAXOPENSERVICES 100
+
+typedef int servicesTable_t;
+
+/* the process data at the end of the process memory space */
+typedef struct {
+  /* service descriptor table */
+  servicesTable_t servicesTable[MAXOPENSERVICES];
+} processData_t;
 
 typedef struct {
   tss_t * tss;
@@ -46,6 +55,7 @@ typedef struct {
   int privSem;
   int isWaitingOnP;
   // end SEM
+  processData_t * processData;
 } process_descriptor_t;
 
 extern process_descriptor_t processTable[];

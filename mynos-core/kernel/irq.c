@@ -26,8 +26,8 @@
 #include "gdt.h"
 #include "sem.h"
 #include "irq.h"
+#include "services.h"
 
-#define NAMEMAXLEN 10
 #define NUMSEM 20
 
 /* drivers processes semaphores */
@@ -60,9 +60,7 @@ void __OS_initExternalIRQs() {
 
 int __OS_driverRegister(char * name, uint32_t irq, 
 			uint32_t * io, uint32_t * mem) {
-  printk("Driver ");
-  printk(name);
-  printk(" registered\n");
+  if (__OS_service_registerService(name) == -1) return -1;
   return (irqSemTable[irq] = __OS_sem_allocateSemaphore(0));
 }
 

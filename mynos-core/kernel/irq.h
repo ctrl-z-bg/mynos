@@ -18,8 +18,13 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#ifndef __IRQ_H__
+#define __IRQ_H__
+
 /* the init function */
 void __OS_initExternalIRQs();
 
 int __OS_driverRegister(char * name, uint32_t irq, 
 			uint32_t * io, uint32_t * mem);
+
+#endif

@@ -232,6 +232,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   /* allocate the process info space */
   for (i = 0; i < PROCESS_INFO_NPAGES; i++) {
     if ((currPF = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
+    kbzero(currPF, PAGE_SIZE);
     *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_PRESENT;
   }
   
@@ -240,10 +241,10 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
     lastPT[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
 
-    printk("Copied first shared entries....\n");
+  printk("Copied first shared entries....\n");
   lastPT[_asm_last_kernel_page_dir_entry_used + 1] = 
     LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
-
+  
   /* map the page directory in the process linear space */
   lastButOnePT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(newPD) | PF_PRESENT;
 
@@ -264,6 +265,8 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   tss->eip = (uint32_t)0x40000000;
 
   desc->isAlive = 1;
+
+  desc->processData = (processData_t*)pinfoAddr;
 
   tss->cs = GDT_USER_CODE_SEL + 3;
   tss->ds = GDT_USER_DATA_SEL + 3;

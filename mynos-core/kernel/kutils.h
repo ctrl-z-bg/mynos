@@ -18,6 +18,9 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#ifndef __KUTILS_H__
+#define __KUTILS_H__
+
 #include "global.h"
 
 /* utilities adapted by from diet libc: http://www.fefe.de/dietlibc/ */
@@ -27,4 +30,6 @@ void * kmemset(void * dst, int s, size_t count);
 void kbzero(void * s, size_t n);
 int katoi(const char* s);
 int kmemcmp(const void *dst, const void *src, size_t count);
+int kstrlen(const char * s);
 
+#endif

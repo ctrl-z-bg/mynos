@@ -37,6 +37,8 @@
 
 #include "kutils.h"
 
+#include "services.h"
+
 #include "delay.h"
 
 #include "multiboot.h"
@@ -143,6 +145,9 @@ void mynos_main(multiboot_info_t *boot_info) {
   set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT));
   printk("done.\n");
   __OS_sem_initSemaphores();
+
+  __OS_service_initServicesRegistry();
+
   /* prepare the modules informations */
   module = (module_t *)boot_info->mods_addr;
   for (i = 0; i < boot_info->mods_count; i++) {
