@@ -159,8 +159,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   /* initialize the linear space map */
   // set the beginning of the space (process code, etc.)
   __lmt_forceAllocation(&(desc->lmemmap), USERMINPAGE, npages_for_process);
-  // TODO: set the end of linear space as allocated...
-#if 0
+  // set the end of linear space as allocated...
   __lmt_forceAllocation(&(desc->lmemmap), 
 			USERMAXPAGE - (PROCESS_INFO_NPAGES +
 				       KERNEL_STACK_NPAGES +
@@ -168,7 +167,6 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 			PROCESS_INFO_NPAGES +
 			KERNEL_STACK_NPAGES +
 			USER_STACK_NPAGES);
-#endif
 
   if ((newPD = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(newPD, PAGE_SIZE);

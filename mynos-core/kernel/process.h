@@ -26,8 +26,8 @@
 #include "global.h"
 #include "list.h"
 
-#define MAXPROCESSES 30
-#define MAXOPENSERVICES 100
+#define MAXPROCESSES (1000)
+#define MAXOPENSERVICES (100)
 #define INITIAL_EFLAGS (0x3200)
 
 typedef int servicesTable_t;
