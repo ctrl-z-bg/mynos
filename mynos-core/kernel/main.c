@@ -255,6 +255,18 @@ void mynos_main(multiboot_info_t *boot_info) {
   while(1) {
     char a = getch();
     print_char(a);
+#ifdef TRY_VGA
+    switch (a) {
+    case 'l': a = -1; break;
+    case 'j': a = -2; break;
+    case 'k': a = -3; break;
+    case 'i': a = -4; break;
+    case '1': a = -5; break;
+    default: break;
+    }
+      
+    __OS_ipc_send(1, &a, 1, 1);
+#endif // TRY_VGA
   }
 
   KPANIC("\nEND OF KERNEL DEMO");
