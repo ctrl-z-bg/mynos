@@ -286,7 +286,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   tss->ldt = 0;
 
   tss->eflags = INITIAL_EFLAGS;  // iopl = 3
-  tss->esp = tss->ebp = ustackBottomAddr + PAGE_SIZE * USER_STACK_NPAGES - 4;
+  tss->esp = tss->ebp = ustackBottomAddr + PAGE_SIZE * USER_STACK_NPAGES - 16;
   tss->esp0 = tss->esp1 = tss->esp2 = kstackBottomAddr + PAGE_SIZE * KERNEL_STACK_NPAGES;
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
 
