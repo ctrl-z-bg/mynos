@@ -1,6 +1,7 @@
 #include "global.h"
 #include "video.h"
 #include "mem.h"
+#include "gdt.h"
 #include "tss.h"
 #include "process.h"
 #include "kutils.h"
@@ -12,6 +13,8 @@ void _linux_syscalls_trap_TRAP();
 __asm__ (\
 	 ".globl _linux_syscalls_trap_TRAP         \n"\
 	 "_linux_syscalls_trap_TRAP:               \n"\
+	 "   cmpl $1, %eax\n"\
+	 "   je .linux_exit\n"\
 	 "   cmpl $2, %eax\n"\
 	 "   je .linux_fork\n"\
 	 "   cmpl $4, %eax\n"\
@@ -22,6 +25,11 @@ __asm__ (\
 	 "   je .linux_mmap\n"\
 	 "   push %eax\n"\
 	 "   call _linux_syscall_NOTIMPLEMENTED\n"\
+	 ".linux_exit:\n"\
+	 "   pushl %ebx\n"\
+	 "   call _linux_syscall_exit\n"\
+	 "   popl %ebx\n"\
+	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_fork:\n"\
 	 "   call _linux_syscall_fork\n"\
 	 "   jmp .exit_linux_syscall\n"\
@@ -51,6 +59,20 @@ void _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id) {
   printk("syscall ");
   print_uint(syscall_id);
   KPANIC(" is not yet implemented!");
+}
+
+void _linux_syscall_exit(int status) {
+  struct {long a ,b;} tmp = {0, 0};
+    
+  printk("process ");
+  print_int(currProcess);
+  printk(" exited with code ");
+  print_int(status);
+  print_char('\n');
+  killProcess();
+  currProcess = 0;
+  tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
+  __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
 }
 
 void _linux_syscall_write(int fd, const void *buf, size_t count) {
@@ -98,11 +120,15 @@ static uint32_t * copy_page_table(uint32_t ptp, uint32_t * ptc) {
   uint32_t * ret = (uint32_t*)1;
 
   /* copy the page table entries */
+  printk("----\n");
   for (i = 0; i < 1024; i++) {
     pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(ptp, i);
     if (*pte & (PF_PRESENT | PF_LOGICAL_PRESENT)) {   // this PF is allocated
       flags = *pte & 0xFFF;
       if (*pte & PF_PRESENT) {
+      printk("pd: ");
+      print_ulong_hex((ulong32_t)*pte);
+      print_char('\n');
 	if ((pf = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return 0;
 	ptc[i] = LINEAR_TO_PHYSICAL_ADDRESS(pf) | flags;
 		
@@ -111,7 +137,8 @@ static uint32_t * copy_page_table(uint32_t ptp, uint32_t * ptc) {
 	  ret = pf;
 	else
 	  /* copy the page frame */
-	  kmemcpy((void*)pf, (void*)(*pte & 0xFFFFF000), PAGE_SIZE);
+	  kmemcpy((void*)pf, (void*)__MEM_LINEAR_ADDRESS(ptp, i, 0), 
+		  PAGE_SIZE);
 
 	//DEALLOCATE(pf);
       } else
@@ -119,6 +146,7 @@ static uint32_t * copy_page_table(uint32_t ptp, uint32_t * ptc) {
     } else
       ptc[i] = 0;
   }
+  printk("++++\n");
   return ret;
 }
 
@@ -129,6 +157,7 @@ int _linux_syscall_fork() {
   uint32_t *lastPT;
   uint32_t new_pid;
   uint32_t * PDimage;
+  int ret;
 
   if ((pdc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
   if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
@@ -171,12 +200,31 @@ int _linux_syscall_fork() {
 
   new_pid = numProcess++;
   processTable[new_pid].pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
-  processTable[new_pid].pid = new_pid;
-  processTable[new_pid].ppid = currProcess;
-  processTable[new_pid].ldt = 0;
-  processTable[new_pid].io_bitmap_offset = 0;
 
-  return 1;
-  // code to return
+  processTable[currProcess].isForking = new_pid;
+
+  { // set the tssd for the new process
+    ushort16_t tssd_gdt_sel;
+    tssd_gdt_sel = gdt_get_free_index();
+    gdt_set_entry(tssd_gdt_sel, 
+		  LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)&processTable[new_pid]),
+		  sizeof(tss_t), D_TSS);
+    processTable[new_pid].tssd_gdt_selector = tssd_gdt_sel << 3;
+  }
+
+
+  {   // tasksw to idle process
+    struct {long a ,b;} tmp = {0, 0};
+    
+    currProcess = 0;
+    tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
+    __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
+  }
+
+  // back from a task switch...
+  ret = (int)processTable[currProcess].isForking;
+  processTable[currProcess].isForking = 0;
+
+  return ret;
 }
 

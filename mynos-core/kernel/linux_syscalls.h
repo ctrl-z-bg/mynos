@@ -29,6 +29,7 @@ void _linux_syscalls_trap_TRAP();
 void _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id);
 
 /* the sys_calls... */
+void _linux_syscall_exit(int status);
 void _linux_syscall_write(int fd, const void *buf, size_t count);
 int _linux_syscall_getpid();
 

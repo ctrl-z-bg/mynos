@@ -41,7 +41,7 @@ tss_t * spawnProcess(tss_t * tss) {
   uint32_t * stackFrame; 
   uint32_t i;
   ushort16_t tssd_gdt_sel, code_gdt_sel, data_gdt_sel;
-  uint32_t npages_for_process = 16;
+  uint32_t npages_for_process = 2;
 
   if ((newPD = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(newPD, PAGE_SIZE);
@@ -181,3 +181,6 @@ tss_t * spawnProcess(tss_t * tss) {
 }
 
 
+void killProcess() {
+  processTable[currProcess].isAlive = 0;
+}

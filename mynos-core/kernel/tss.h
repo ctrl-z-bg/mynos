@@ -65,6 +65,7 @@ typedef struct {
   uint32_t isAlive;
   uint32_t ppid;
   uint32_t pid;
+  pid_t isForking;
 
 } tss_t;
 

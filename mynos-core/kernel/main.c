@@ -60,6 +60,7 @@ void tsksw() {
   processTable[0].io_bitmap_offset = 0;
   processTable[0].ldt = 0;
   processTable[0].isAlive = 1;
+  processTable[0].isForking = 0;
 
   gdt_index = gdt_get_free_index();
   processTable[0].tssd_gdt_selector = (uint32_t)gdt_index << 3;
@@ -145,7 +146,7 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   /* Let's create some task! :) */
   {
-    uint32_t i, ntask = 5;
+    uint32_t i, ntask = 1;
     for (i = 0; i < ntask; i++)
       if(!spawnProcess(&(processTable[numProcess++])))
 	KPANIC("FULL MEMORY");

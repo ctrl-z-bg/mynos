@@ -51,12 +51,13 @@ void pit_handler() {
   uint32_t p_ts_time = 0;
   struct {long a ,b;} tmp = {0, 0};
   uint32_t oldProcess = currProcess;
+  pid_t isForking;
 
   asm("int $0x1C"); /* Extra timer interrupt, 
 		       used by floppy for timeout etc.. */
 
-  /* a task switch any 110 msec */
-  if ((count++) > 2) {
+  /* a task switch any 55 msec */
+  if ((count++) > 1) {
     p_ts_time = 1;
     count = 1;
     do {
@@ -67,6 +68,20 @@ void pit_handler() {
 
   outportb(0x20, 0x20);
 
+  /* terminate a forking action */
+  if ((isForking = processTable[currProcess].isForking) != 0) {
+    uint32_t** pgdir = processTable[isForking].pgdir;
+    ushort16_t tssd = processTable[isForking].tssd_gdt_selector;
+    kmemcpy((void*)&processTable[isForking], (void*)&processTable[currProcess],
+	    sizeof(tss_t));
+    processTable[isForking].pgdir = pgdir;
+    processTable[isForking].tssd_gdt_selector = tssd;
+    processTable[isForking].pid = isForking;
+    processTable[isForking].ppid = currProcess;
+    processTable[isForking].isForking = 0;
+    processTable[isForking].isAlive = 1;
+  }
+  
   if (p_ts_time && (currProcess != oldProcess))
     __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
 }

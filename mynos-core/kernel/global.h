@@ -39,6 +39,7 @@ typedef long           long32_t;
 typedef unsigned short ushort16_t;
 typedef short          short16_t;
 
+typedef int pid_t;
 typedef unsigned int   __kernel_size_t;
 typedef __kernel_size_t size_t;
 typedef size_t ssize_t;
