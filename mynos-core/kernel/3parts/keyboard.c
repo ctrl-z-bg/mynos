@@ -226,12 +226,14 @@ void keyb_handler(void)
 			keyboard_buffer[keyboard_buffer_size] = key_ascii;
 			keyboard_buffer_size++;
 		}
+#ifndef MYNOS
 		else
 		{
 			keyboard_buffer[keyboard_buffer_size] = (key_ascii & 0xFF);
 			keyboard_buffer[keyboard_buffer_size+1] = (key_ascii & 0xFF00);
 			keyboard_buffer_size += 2;
 		}
+#endif /* MYNOS */
 	}
 
 	outportb(M_PIC, EOI);
