@@ -54,10 +54,16 @@ int main()
 void initSerial() {
   outportb(PORT1 + 1, 0);     /* turn off interrupts - port 1 */
   outportb(PORT1 + 3, 0x80);    /* set DLAB on */
-  outportb(PORT1 + 0, 0x03);    /* set baud rate to 38400 bps (low byte) */
+
+  //outportb(PORT1 + 0, 0x03);    /* set baud rate to 38400 bps (low byte) */
   //outportb(PORT1 + 0, 0x30);    /* set baud rate to 2400 bps (low byte) */
+  outportb(PORT1 + 0, 0x60);    /* set baud rate to 1200 bps (low byte) */
+
   outportb(PORT1 + 1, 0x00);    /* set baud rate (high byte) */
+
   outportb(PORT1 + 3, 0x03);    /* 8 bits, no parity, 1 stop bit */
+  //outportb(PORT1 + 3, 0x02);    /* 7 bits, no parity, 1 stop bit */
+
   outportb(PORT1 + 2, 0xC7);    /* FIFO control register */
   outportb(PORT1 + 4, 0x0B);    /* turn on DTR, RTS and OUT2 */
   outportb(PORT1 + 1, 0x01);    /* interrupt when data received */
@@ -76,5 +82,56 @@ void serial_handler(void) {
       putchar(asd);
     }
   } while (c & 1);
+  outportb(0x20, 0x20);
+}
+
+// to read serial mouse data
+void _serial_handler(void) {
+  char c;
+  char asd;
+  int n = 1;
+  int i = 1;
+  char x, y;
+  static char left = 1;  // pressed is zero
+  static char right = 1;
+
+  do {
+    c = inportb(PORT1 + 5);
+    if (c & 1) {
+      asd = buffer[bufferin] = inportb(PORT1);
+      bufferin++;
+      if (bufferin == 1024) bufferin = 0;
+      //putchar(asd);
+
+      // wait for the first byte
+      printf("%d\n", i++);
+      if (asd & 0x40) {
+	n = 1;
+	left  = (asd & 0x20)?'1':'0';
+	right = (asd & 0x10)?'1':'0';
+	printf("%c %c\n", left, right);
+      }
+      
+      switch (n) {
+      case 1:
+	left  = (asd & 0x20)?'1':'0';
+	right = (asd & 0x10)?'1':'0';
+	//printf("%c %c\n", left, right);
+	n = 2;
+	break;
+      case 2:
+	n = 3;
+	break;
+      case 3:
+	n = 1;
+	break;
+      default: break;
+      }
+
+
+    }
+  } while (c & 1);
+
+  puts("\n\n");
   outportb(0x20, 0x20);
 }
