@@ -54,8 +54,8 @@ int main()
 void initSerial() {
   outportb(PORT1 + 1, 0);     /* turn off interrupts - port 1 */
   outportb(PORT1 + 3, 0x80);    /* set DLAB on */
-  //outportb(PORT1 + 0, 0x03);    /* set baud rate to 38400 bps (low byte) */
-  outportb(PORT1 + 0, 0x30);    /* set baud rate to 2400 bps (low byte) */
+  outportb(PORT1 + 0, 0x03);    /* set baud rate to 38400 bps (low byte) */
+  //outportb(PORT1 + 0, 0x30);    /* set baud rate to 2400 bps (low byte) */
   outportb(PORT1 + 1, 0x00);    /* set baud rate (high byte) */
   outportb(PORT1 + 3, 0x03);    /* 8 bits, no parity, 1 stop bit */
   outportb(PORT1 + 2, 0xC7);    /* FIFO control register */
