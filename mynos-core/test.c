@@ -6,8 +6,7 @@
 int main() {
   char a[20];
   char * b = "zxc";
-
-  //  int radice = (int)sqrt(9);
+  double radice = sqrt(9);
 
   a[0] = (char)0;
 

@@ -25,10 +25,8 @@ all: test
 		make -C $$i;\
 	done
 
-test: test.c write.c
+test: test.c
 	gcc -c test.c
-	gcc -c write.c
-#	ld test.o write.o -o test --oformat binary -Ttext 0x40000000
 
 	ld test.o \
 	  /home/zava/tmp/dietlibc-0.17/bin-i386/libm.a \

@@ -53,6 +53,12 @@ __asm__ (\
 	 "   iret                \n"\
 	 );
 
+/* coprocessor not available */
+TRAP_WRAPPER(int7);
+void int7_handler() {
+  __asm__ volatile ("clts");
+}
+
 extern uint32_t currProcess;
 void stupidTrap_handler(int fd, const void *buf, size_t count) {
   int i;
@@ -80,7 +86,7 @@ void init_idt() {
   set_vector(_int4, 4, D_PRESENT + D_INT);
   set_vector(_int5, 5, D_PRESENT + D_INT);
   set_vector(_int6, 6, D_PRESENT + D_INT);
-  set_vector(_int7, 7, D_PRESENT + D_INT);
+  set_vector(int7_TRAP, 7, D_PRESENT + D_INT);
   set_vector(_int8, 8, D_PRESENT + D_INT);
   set_vector(_int9, 9, D_PRESENT + D_INT);
   set_vector(_int10, 10, D_PRESENT + D_INT);
@@ -153,10 +159,12 @@ void _int6() {
   while (1);
 }
 
+/*
 void _int7() {
   printk("int7: Coprocessor not available\n");
   while (1);
 }
+*/
 
 void _int8() {
   printk("int8: Double fault\n");
