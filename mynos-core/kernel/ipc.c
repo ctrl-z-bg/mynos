@@ -95,8 +95,10 @@ channel_t * __OS_ipc_createChannel(uint32_t size,
   channel_t * c;
   c = (channel_t*)kmalloc(sizeof(channel_t));
   if (c == NULL) return NULL;
-  c->buf = (char*)kmalloc(size);
-  if (c->buf == NULL) return NULL;
+  /* a message can be empty (only to synch) */
+  if (size) c->buf = (char*)kmalloc(size);
+  /* kmalloc error */
+  if ((c->buf == NULL) && (size != 0)) return NULL;
   c->bufsize = size;
   c->msgsize = 0;
   c->sender = sender;
@@ -118,9 +120,8 @@ int __OS_ipc_readFromChannel(channel_t * c, char * buf,
 			     uint32_t maxsize,
 			     pid_t * sender) {
   /* TODO: checks on buffer permissions */
-  if (maxsize != 0)  // zero means no control
-    if (maxsize < c->msgsize)
-      return -1;
+  if (maxsize < c->msgsize)
+    return -1;
   kmemcpy((void*)buf, (void*)c->buf, c->msgsize);
   if (sender) *sender = c->sender;
   return c->msgsize;
@@ -171,6 +172,7 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
     // UNLOCK rec list
     return -1;
   }
+
   /* ... and insert it into the list */
   if (__OS_ipc_insertIntoList(list, c) < 0) {
     // UNLOCK rec list
@@ -198,7 +200,7 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
     __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
   }
 
-  return 0;
+  return size;
 }
 
 int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
@@ -207,6 +209,7 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
   channelList_t * list; // receiver channel list
   channel_t * c;
   int32_t done = 0;
+  uint32_t msgsize;
 
   while (!done) {
     if ((sender >= MAXPROCESSES) || (sender < 0))
@@ -227,6 +230,7 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
       }
       rtss->isWaitingSender = sender;
     } else { // c is not null
+      msgsize = c->msgsize;
       /* the msg is longer than we expected */
       if (__OS_ipc_readFromChannel(c, buf, size, NULL) < 0) {
 	__OS_ipc_destroyChannelIntoList(list, c);
@@ -253,7 +257,7 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
     }
   }     // while (!done)
 
-  return 0;
+  return msgsize;
 }
 
 int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size, 
@@ -263,6 +267,7 @@ int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
   channelList_t * list; // receiver channel list
   channel_t * c;
   int32_t done = 0;
+  uint32_t msgsize;
 
   while (!done) {
     rtss = &(processTable[currProcess]);
@@ -284,6 +289,7 @@ int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
       }
       rtss->isWaitingSender = 0;
     } else { // c is not null
+      msgsize = c->msgsize;
       /* the msg is longer than we expected */
       if (__OS_ipc_readFromChannel(c, buf, size, sender) < 0) {
 	__OS_ipc_destroyChannelIntoList(list, c);
@@ -311,7 +317,7 @@ int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
     }
   }     // while (!done)
 
-  return 0;
+  return msgsize;
 }
 
 #endif // IPC
