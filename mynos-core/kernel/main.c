@@ -116,10 +116,13 @@ void mynos_main(multiboot_info_t *boot_info) {
   {
     uint32_t i, ntask = 20;
     for (i = 0; i < ntask; i++)
-      spawnProcess(&(processTable[numProcess++]));
+      if(!spawnProcess(&(processTable[numProcess++])))
+	KPANIC("FULL MEMORY");
   }
 
   InitKeyboard();
+
+  printk("\n\n\n\n\n\n-----------------------\n\n\n\n\n\n\n");
 
   enable_irq(0);
 

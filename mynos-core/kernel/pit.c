@@ -38,7 +38,9 @@ void pit_ISR();
 __asm__ (\
 	 ".globl pit_ISR         \n"\
 	 "pit_ISR:               \n"\
+	 "   pushal              \n"\
 	 "   call pit_handler    \n"     /* call the ISR handler */\
+	 "   popal               \n"\
 	 "   iret                \n"\
 	 );
 

@@ -16,7 +16,7 @@ int main() {
   char * b = "zxc";
   double radice = sqrt(9);
   int i;
-
+  
   strcat(a, "AAasd   asdasdasdsadsadsadasdsadsa");
   while(1) {
     printf("--VIA! %d", 4);

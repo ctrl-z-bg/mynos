@@ -30,6 +30,7 @@
 #define PF_SUPERVISOR      0x0
 #define PF_READONLY        0x0
 #define PF_READWRITE       (1<<1)
+#define PF_LOGICAL_PRESENT 0x800    /* one of the available bits */
 #define PF_PRESENT         0x1
 #define PF_NOTPRESENT      0x0
 
@@ -117,13 +118,22 @@
 #define __IS_PAGE_TABLE_FREE_GIVEN_LINEAR_ADDRESS(ADDRESS)\
                      __IS_PAGE_TABLE_PRESENT_GIVEN_LINEAR_ADDRESS(ADDRESS)
 
+/* set a linear page as allocated */
+#define __SET_PAGE_TABLE_ENTRY(TABLE, ENTRY)\
+                     {\
+                      int * pun = (int*)__GET_PAGE_TABLE_ENTRY(TABLE, ENTRY);\
+                      *pun = PF_LOGICAL_PRESENT;\
+                     }
+// AAAAAAAA                      __SET_MEMORY_BITMAP_PAGE_BIT((PAGE_PHY_ADDRESS)>>12);
+
 /* map a linear page to a physical one */
-#define __SET_PAGE_TABLE_ENTRY(TABLE, ENTRY, PAGE_PHY_ADDRESS) \
+#define __SET_PAGE_TABLE_ENTRY_AND_ALLOC(TABLE, ENTRY, PAGE_PHY_ADDRESS) \
                      {\
                       int * pun = (int*)__GET_PAGE_TABLE_ENTRY(TABLE, ENTRY);\
                       *pun = (PAGE_PHY_ADDRESS) | 0x1; /* present bit */\
                       __SET_MEMORY_BITMAP_PAGE_BIT((PAGE_PHY_ADDRESS)>>12);\
                      }
+
 
 /* define a new page table: it adjusts the corresponding page dir entry and
    the page tables mapping on the last page table */
@@ -142,8 +152,10 @@
  are SURE that the page table for this page it exists */
 #define __IS_PAGE_PRESENT(ENTRY) \
 		     ((*((uint32_t*)__GET_PAGE_TABLE_ENTRY( \
-                                             __PAGE_PD_INDEX(ENTRY), \
-				             __PAGE_PT_INDEX(ENTRY)))) & 0x1)
+                                      __PAGE_PD_INDEX(ENTRY), \
+				      __PAGE_PT_INDEX(ENTRY)))) & \
+                                         (PF_LOGICAL_PRESENT | PF_PRESENT))
+
 #define __IS_PAGE_FREE(ENTRY) __IS_PAGE_PRESENT(ENTRY)
 
 /* reset the entries in a new page directory */
@@ -188,9 +200,10 @@ void init_memory();
    'pageaddr' on success
    'NULL'     if some problem occours
 */
-void * __OS_askPagesFrom(void * pageaddr, unsigned int npages);
+void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
+			 int alloc_now);
 
-void * __OS_askPages(unsigned int npages);
+void * __OS_askPages(unsigned int npages, int alloc_now);
 void * __OS_releasePages(void *pageaddr, unsigned int npages);
 
 /* return the id of a free physical page */

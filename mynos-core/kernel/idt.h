@@ -26,11 +26,11 @@
   __asm__ (\
    ".globl "#NAME"_ISR     \n"\
    #NAME"_ISR:             \n"\
+   "   pushal              \n"\
    "   call "#NAME"_handler\n"     /* call the ISR handler */\
-   "   pushw %ax           \n"     /* send the EOI to master PIC */\
-   "   movb $0x20, %al     \n"\
+   "   movb $0x20, %al     \n"     /* send the EOI to master PIC */\
    "   outb %al, $0x20     \n"\
-   "   popw %ax            \n"\
+   "   popal               \n"\
    "   iret                \n"\
 )
 
@@ -39,7 +39,9 @@
   __asm__ (\
    ".globl "#NAME"_TRAP    \n"\
    #NAME"_TRAP:            \n"\
+   "   pushal              \n"\
    "   call "#NAME"_handler\n"     /* call the TRAP handler */\
+   "   popal               \n"\
    "   iret                \n"\
 );
 
@@ -63,6 +65,7 @@ void _int11();
 void _int12();
 void _int13();
 void _int14(uint32_t addr, uint32_t errcode);
+extern void _page_fault_handler(uint32_t addr, uint32_t errcode);
 void _int15();
 void _int16();
 

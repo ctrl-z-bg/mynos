@@ -43,6 +43,7 @@ void stupidTrap_TRAP();
 __asm__ (\
 	 ".globl stupidTrap_TRAP         \n"\
 	 "stupidTrap_TRAP:               \n"\
+	 "   pushal                      \n"\
 	 "   pushl %edx\n"
 	 "   pushl %ecx\n"
 	 "   pushl %ebx\n"
@@ -50,6 +51,7 @@ __asm__ (\
 	 "   popl %ebx\n"
 	 "   popl %ecx\n"
 	 "   popl %edx\n"
+	 "   popal                       \n"\
 	 "   iret                \n"\
 	 );
 
@@ -59,46 +61,39 @@ void int7_handler() {
   __asm__ volatile ("clts");
 }
 
-void _int14_ISR();
+#if 0
+void _page_fault_handler_TRAP();
 __asm__ (\
-	 ".globl _int14_ISR         \n"\
-	 "_int14_ISR:               \n"\
+	 ".globl _page_fault_handler_TRAP         \n"\
+	 "_page_fault_handler_TRAP:               \n"\
+	 " movl %eax, (0)\n"\
 	 "   movl %cr2, %eax        \n"\
 	 "   pushl %eax             \n"\
-	 "   call _int14    \n"     /* call the ISR handler */\
+	 "   call _page_fault_handler    \n"     /* call the ISR handler */\
+	 "   popl %eax   \n"                     /* pop the argument */\
+	 "   popl %eax   \n"                     /* pop the error code */\
+	 " movl (0), %eax\n"\
 	 "   iret                \n"\
 	 );
-
-void _int14(uint32_t addr, uint32_t errcode) {
-  print_char('\n');
-  print_char('\n');
-  printk("You tried to access the address ");
-  print_uint_hex(addr);
-  print_char('\n');
-  printk("and you got the errorcode ");
-  print_uint_hex(errcode & 7);
-  print_char('\n');
-  printk("It means ");
-  if (errcode & 1)
-    printk("page present ");
-  else
-    printk("not present ");
-
-  if (errcode & 2)
-    printk("on a write ");
-  else
-    printk("on a read ");
-
-  if (errcode & 4)
-    printk("in user mode\n");
-  else
-    printk("in superuser mode\n");
-  print_char('\n');
-
-  printk("int14: Page fault\n");
-  while (1);
-}
-
+#else
+void _page_fault_handler_TRAP();
+__asm__ (\
+	 ".globl _page_fault_handler_TRAP \n"\
+	 "_page_fault_handler_TRAP:       \n"\
+	 "   movl %eax, (0)               \n"\
+	 "   popl %eax                    \n"  /* retrieve error code */\
+         "   pushal                       \n"  /* save all registers */\
+	 "   pushl %eax                   \n"  /* push error code */\
+	 "   movl %cr2, %eax              \n"\
+	 "   pushl %eax                   \n"  /* push faulting address */\
+	 "   call _page_fault_handler     \n"  /* call the ISR handler */\
+	 "   popl %eax                    \n"  /* pop the address */\
+	 "   popl %eax                    \n"  /* pop the error code */\
+	 "   popal                        \n"\
+	 "   movl (0), %eax               \n"\
+	 "   iret                         \n"\
+	 );
+#endif
 
 extern uint32_t currProcess;
 void stupidTrap_handler(int fd, const void *buf, size_t count) {
@@ -118,7 +113,7 @@ void stupidTrap_handler(int fd, const void *buf, size_t count) {
 
 void init_idt() {
   int count = 0;
-  
+
   for (count = 16; count < 256; count++)
     set_vector(int_null, count, D_PRESENT + D_INT);
   
@@ -135,7 +130,7 @@ void init_idt() {
   set_vector(_int10, 10, D_PRESENT + D_INT);
   set_vector(_int12, 12, D_PRESENT + D_INT);
   set_vector(_int13, 13, D_PRESENT + D_INT);
-  set_vector(_int14_ISR, 14, D_PRESENT + D_INT);
+  set_vector(_page_fault_handler_TRAP, 14, D_PRESENT + D_INT);
   set_vector(_int15, 15, D_PRESENT + D_INT);
   set_vector(_int16, 16, D_PRESENT + D_INT);
 

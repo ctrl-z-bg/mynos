@@ -48,7 +48,7 @@ struct loadgdt_st
 
 void _init_gdt() {
   /* alloc a full GDT */
-  gdt_addr = (union DT_entry *)__OS_askPages(GDT_SIZE / PAGE_SIZE);
+  gdt_addr = (union DT_entry *)__OS_askPages((GDT_SIZE / PAGE_SIZE), 1);
   printk("Alloc ");
   print_ulong(GDT_SIZE);
   printk(" bytes (");
