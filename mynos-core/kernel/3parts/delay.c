@@ -204,7 +204,7 @@ unsigned long calibrateDelayLoop(void)
 
     /* Initialise timer interrupt with MILLISECOND ms interval        */
     init_pit(FREQ, 0);
-    set_vector(pit_delay_ISR, M_VEC, (D_INT + D_PRESENT + D_DPL3));
+    set_vector(pit_delay_ISR, M_VEC, (D_INT + D_PRESENT));
     enable_irq(0);
 
     /* Stage 1:  Coarse calibration                                   */

@@ -70,8 +70,8 @@ void init_idt() {
   set_vector(_int15, 15, D_PRESENT + D_INT);
   set_vector(_int16, 16, D_PRESENT + D_INT);
 
-  set_vector(trapScema_TRAP, 0x50, D_PRESENT + D_INT);
-  set_vector(trapScema2_TRAP, 0x51, D_PRESENT + D_INT);
+  set_vector(trapScema_TRAP, 0x50, D_PRESENT + D_INT + D_DPL3);
+  set_vector(trapScema2_TRAP, 0x51, D_PRESENT + D_INT + D_DPL3);
 
   asm("lidt (%0)                 \n"	/* Load the IDT                */
       "pushfl                    \n"	/* Clear the NT flag           */

@@ -158,7 +158,7 @@ void setleds()
 
 void InitKeyboard()
 {
-	set_vector(keyb_ISR, M_VEC+1, D_PRESENT + D_INT + D_DPL3); /* IRQ1 Handler */
+	set_vector(keyb_ISR, M_VEC+1, D_PRESENT + D_INT); /* IRQ1 Handler */
 	enable_irq(1);
 
 	led_status = 0; /* All leds off */

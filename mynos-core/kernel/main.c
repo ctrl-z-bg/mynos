@@ -59,8 +59,6 @@ void tsksw() {
      current process's tssd */
   __asm__ volatile ("ltrw (tssd_addr)\n");
 
-  /* task switching!!! :) */
-  //  __asm__ volatile ("ljmp $88,$0\n");
 }
 
 void mynos_main() {
@@ -89,12 +87,10 @@ void mynos_main() {
 
   printk("Initializing the Intel 8253 Programmable Interval Timer... ");
   init_pit(18.3, 0);
-  set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT + D_DPL3));
+  set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT));
   printk("done.\n");
 
   InitKeyboard();
-  //  enable_irq(1); /* irq1 (keyboard) is interrupt M_VEC+1 (33) */
-  //  enable_irq(0);
 
   init_floppy();
 
@@ -117,8 +113,6 @@ void mynos_main() {
 
   while(1) {
     asm("int $0x51\n");
-    //    printk("I'm the father\n"); 
-    //    delay(1000);
   }
 
   {

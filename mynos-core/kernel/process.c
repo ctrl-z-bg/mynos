@@ -50,18 +50,18 @@ tss_t * spawnProcess(tss_t * tss) {
   if ((currPT = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
   kbzero(currPT, PAGE_SIZE);
   newPD[256]=//_asm_last_page_dir_entry_used + 1] = 
-    LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
+    LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_USER | PF_READWRITE | PF_PRESENT;
 
   if ((currPF = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
 
   ///////////////
-  kmemcpy((void*)currPF, (void*)50000, 1024);
+  kmemcpy((void*)currPF, (void*)50000, 4096);
   /////////////////
 
   currPT[0] = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_USER | PF_PRESENT |
     PF_READWRITE;
   newPD[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
-  newPD[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(lastButOnePT) | PF_PRESENT;
+  newPD[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(lastButOnePT) | PF_USER | PF_READWRITE | PF_PRESENT;
   
   lastPT[0] = LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
   lastPT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
@@ -69,29 +69,30 @@ tss_t * spawnProcess(tss_t * tss) {
   
   lastButOnePT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(newPD) | PF_PRESENT;
   if ((stackFrame = (uint32_t*)__OS_askPages(1)) == NULL) return NULL;
-  lastButOnePT[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_PRESENT;
+  lastButOnePT[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_USER | PF_PRESENT | PF_READWRITE;
 
   /* set the new process tss */
   tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(newPD);
   tss->io_bitmap_offset = 0;
   tss->eip = (uint32_t)0;//(1024*1024*1024);
-  tss->cs = 0x8 * 100;
-  tss->ds = 0x8 * 101;
-  tss->es = 0x8 * 101;
-  tss->fs = 0x8 * 101;
-  tss->gs = 0x8 * 101;
-  tss->ss = 0x8 * 101;
+
+  tss->cs = 0x8 * 100 + 3;
+  tss->ds = 0x8 * 101 + 3;
+  tss->es = 0x8 * 101 + 3;
+  tss->fs = 0x8 * 101 + 3;
+  tss->gs = 0x8 * 101 + 3;
+  tss->ss = 0x8 * 101 + 3;
   tss->ldt = 0;
   tss->eflags = 0x200;
-  tss->esp = tss->ebp = //3*(uint32_t)(1024*1024*1024) - 0x400000 - 4100;
-    (uint32_t)((_asm_last_page_dir_entry_used)*0x400000 - 4100);// - 0x40000000);
+  tss->esp = tss->ebp =
+    (uint32_t)((_asm_last_page_dir_entry_used)*0x400000 - 4100);
   tss->esp0 = tss->esp - 1000;
   tss->esp1 = tss->esp - 1000;
   tss->esp2 = tss->esp - 1000;
-  tss->ss0 = tss->ss1 = tss->ss2 = 0x8 * 101;
+  tss->ss0 = tss->ss1 = tss->ss2 = 0x8 * 3;
 
-  gdt_set_entry(100, 0x40000000, 0xFFF00, (D_CODE + D_BIG + D_BIG_LIM));// + D_DPL3));
-  gdt_set_entry(101, 0x00000000, 0xFFFFF, (D_DATA + D_WRITE + D_BIG + D_BIG_LIM));//+ D_DPL3));
+  gdt_set_entry(100, 0x40000000, 0xFFF00, (D_CODE + D_BIG + D_BIG_LIM + D_DPL3));
+  gdt_set_entry(101, 0x00000000, 0xFFFFF, (D_DATA + D_WRITE + D_BIG + D_BIG_LIM+ D_DPL3));
 
   gdt_set_entry(11, LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)tss),
 		sizeof(tss_t), D_TSS);
