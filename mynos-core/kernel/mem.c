@@ -263,10 +263,12 @@ __asm__ (\
 
 /* the copy-on-write code */
 static void __cowManager(uint32_t * pte, uint32_t addr) {
-    if (pmem_countref((*pte)>>12) == 1) {
 #ifdef DEBUG
-      printk("I'm the last referent\n\n");
+      printk("There are ");
+      print_ulong(pmem_countref((*pte)>>12));
+      printk(" references\n\n");
 #endif
+    if (pmem_countref((*pte)>>12) == 1) {
       *pte = *pte & ~PF_COW;
       *pte |= PF_READWRITE;
       INVALIDATE_THE_CACHE(addr);
