@@ -89,7 +89,7 @@ tss_t * spawnProcess(tss_t * tss) {
   tss->esp0 = tss->esp - 1000;
   tss->esp1 = tss->esp - 1000;
   tss->esp2 = tss->esp - 1000;
-  tss->ss0 = tss->ss1 = tss->ss2 = 0x8 * 3;
+  tss->ss0 = tss->ss1 = tss->ss2 = 0x8 * 2;
 
   gdt_set_entry(100, 0x40000000, 0xFFF00, (D_CODE + D_BIG + D_BIG_LIM + D_DPL3));
   gdt_set_entry(101, 0x00000000, 0xFFFFF, (D_DATA + D_WRITE + D_BIG + D_BIG_LIM+ D_DPL3));

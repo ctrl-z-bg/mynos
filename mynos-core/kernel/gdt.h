@@ -24,8 +24,7 @@
 #include "macro_gdt.h"
 
 #define GDT_OS_CODE_SEL   0x08
-#define GDT_USER_CODE_SEL 0x10
-#define GDT_DATA_SEL      0x18
+#define GDT_OS_DATA_SEL   0x10
 
 void _init_gdt();
 

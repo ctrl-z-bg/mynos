@@ -25,21 +25,19 @@
 #include "kutils.h"
 #include "dynalloc.h"
 
-#define INITIAL_SEGMENTS 4
+#define INITIAL_SEGMENTS 3
 
 #define GDT_SIZE 8192*8
 
 union DT_entry * gdt_addr;
 
-desc_table(GDT, INITIAL_SEGMENTS) { //8192) {
+desc_table(GDT, INITIAL_SEGMENTS) {
   /* dummy descriptor (not used by processor) */
   {dummy:0},
   /* kernel code segment */
-    stnd_desc(0, 0xFFFFF, (D_CODE + D_BIG + D_BIG_LIM)),
-    /* user code segment */
-    stnd_desc(0, 0xFFFFF, (D_CODE + D_READ + D_BIG + D_BIG_LIM)),// + D_DPL3)),
-  /* data segment */
-    stnd_desc(0, 0xFFFFF, (D_DATA + D_WRITE + D_BIG + D_BIG_LIM)),// + D_DPL3)),
+  stnd_desc(0, 0xFFFFF, (D_CODE + D_BIG + D_BIG_LIM)),
+  /* kernel data segment */
+  stnd_desc(0, 0xFFFFF, (D_DATA + D_WRITE + D_BIG + D_BIG_LIM)),
 };
 
 struct loadgdt_st
