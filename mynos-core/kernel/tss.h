@@ -62,6 +62,9 @@ typedef struct {
 
   /* selector of the task's tssd */
   ushort16_t tssd_gdt_selector;
+  uint32_t isAlive;
+  uint32_t ppid;
+  uint32_t pid;
 
 } tss_t;
 

@@ -50,6 +50,7 @@ void pit_handler() {
   static uint32_t count = 1;
   uint32_t p_ts_time = 0;
   struct {long a ,b;} tmp = {0, 0};
+  uint32_t oldProcess = currProcess;
 
   asm("int $0x1C"); /* Extra timer interrupt, 
 		       used by floppy for timeout etc.. */
@@ -58,12 +59,14 @@ void pit_handler() {
   if ((count++) > 2) {
     p_ts_time = 1;
     count = 1;
-    currProcess = (currProcess + 1) % numProcess;
+    do {
+      currProcess = (currProcess + 1) % numProcess;
+    } while (!processTable[currProcess].isAlive);
     tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
   }
 
   outportb(0x20, 0x20);
 
-  if (p_ts_time)
+  if (p_ts_time && (currProcess != oldProcess))
     __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
 }

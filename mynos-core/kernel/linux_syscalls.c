@@ -1,6 +1,9 @@
 #include "global.h"
 #include "video.h"
 #include "mem.h"
+#include "tss.h"
+#include "process.h"
+#include "kutils.h"
 #include "linux_syscalls.h"
 
 extern uint32_t currProcess;
@@ -9,6 +12,8 @@ void _linux_syscalls_trap_TRAP();
 __asm__ (\
 	 ".globl _linux_syscalls_trap_TRAP         \n"\
 	 "_linux_syscalls_trap_TRAP:               \n"\
+	 "   cmpl $2, %eax\n"\
+	 "   je .linux_fork\n"\
 	 "   cmpl $4, %eax\n"\
 	 "   je .linux_write\n"\
 	 "   cmpl $20, %eax\n"\
@@ -17,6 +22,9 @@ __asm__ (\
 	 "   je .linux_mmap\n"\
 	 "   push %eax\n"\
 	 "   call _linux_syscall_NOTIMPLEMENTED\n"\
+	 ".linux_fork:\n"\
+	 "   call _linux_syscall_fork\n"\
+	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_getpid:\n"\
 	 "   call _linux_syscall_getpid\n"\
 	 "   jmp .exit_linux_syscall\n"\
@@ -77,3 +85,98 @@ void * _linux_syscall_mmap(struct mmap_args * args) {
   npages = (args->length - 1) / PAGE_SIZE + 1;
   return __OS_askPages(npages, 0, PF_READWRITE | PF_USER);
 }
+
+/* it returns:
+   1: on success
+   0: error
+   something else: address for the PD image
+*/
+static uint32_t * copy_page_table(uint32_t ptp, uint32_t * ptc) {
+  uint32_t i;
+  uint32_t * pte, flags;
+  uint32_t * pf;
+  uint32_t * ret = (uint32_t*)1;
+
+  /* copy the page table entries */
+  for (i = 0; i < 1024; i++) {
+    pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(ptp, i);
+    if (*pte & (PF_PRESENT | PF_LOGICAL_PRESENT)) {   // this PF is allocated
+      flags = *pte & 0xFFF;
+      if (*pte & PF_PRESENT) {
+	if ((pf = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return 0;
+	ptc[i] = LINEAR_TO_PHYSICAL_ADDRESS(pf) | flags;
+		
+	/* this is the PD image frame */
+	if ((ptp == 1022) && (i == 1023))
+	  ret = pf;
+	else
+	  /* copy the page frame */
+	  kmemcpy((void*)pf, (void*)(*pte & 0xFFFFF000), PAGE_SIZE);
+
+	//DEALLOCATE(pf);
+      } else
+	ptc[i] = flags;
+    } else
+      ptc[i] = 0;
+  }
+  return ret;
+}
+
+int _linux_syscall_fork() {
+  uint32_t i;
+  uint32_t * pde, flags;
+  uint32_t * pdc, *ptc;
+  uint32_t *lastPT;
+  uint32_t new_pid;
+  uint32_t * PDimage;
+
+  if ((pdc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
+  if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
+
+  pdc[1023] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
+
+  /* copy the shared kernel space */ 
+  for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
+    pdc[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
+
+  /* copy the page dir entries, but not the last one (image for PTs...) */
+  for (i = _asm_last_kernel_page_dir_entry_used + 1; i < 1023; i++) {
+    pde = (uint32_t*)__GET_PAGE_DIR_ENTRY(i);
+    /* this if should never be PF_LOGICAL_PRESENT because we don't allocate
+       a page table logically */
+    if (*pde & (PF_PRESENT | PF_LOGICAL_PRESENT)) {   // this PT is allocated
+      flags = *pde & 0xFFF;
+      if (*pde & PF_PRESENT) {
+	if ((ptc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
+	pdc[i] = LINEAR_TO_PHYSICAL_ADDRESS(ptc) | flags;
+	
+	/* copy the page table */
+	if ((PDimage = copy_page_table(i, ptc)) == 0) return -1;
+
+	//DEALLOCATE(ptc);
+      } else
+	pdc[i] = flags;
+    } else
+      pdc[i] = 0;
+
+    /* update the PT image */
+    lastPT[i] = pdc[i];
+  }
+
+  /* copy the PD image */
+  kmemcpy((void*)PDimage, (void*)pdc, PAGE_SIZE);
+
+  //DEALLOCATE(lastPT);
+  //DEALLOCATE(pdc);
+
+  new_pid = numProcess++;
+  processTable[new_pid].pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
+  processTable[new_pid].pid = new_pid;
+  processTable[new_pid].ppid = currProcess;
+  processTable[new_pid].ldt = 0;
+  processTable[new_pid].io_bitmap_offset = 0;
+
+  return 1;
+  // code to return
+}
+

@@ -23,6 +23,8 @@
 
 #include "tss.h"
 
+#define MAXPROCESSES 30
+
 extern tss_t processTable[];
 extern uint32_t numProcess;
 extern uint32_t currProcess;

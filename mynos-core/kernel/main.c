@@ -59,6 +59,7 @@ void tsksw() {
   processTable[0].pgdir = (uint32_t**)0x100000;
   processTable[0].io_bitmap_offset = 0;
   processTable[0].ldt = 0;
+  processTable[0].isAlive = 1;
 
   gdt_index = gdt_get_free_index();
   processTable[0].tssd_gdt_selector = (uint32_t)gdt_index << 3;
@@ -132,6 +133,13 @@ void mynos_main(multiboot_info_t *boot_info) {
   vga_draw_line(50, 160, 60, 170, 15);
   vga_draw_line(120, 170, 130, 160, 15);
 #endif
+
+ {
+   int i;
+
+   for (i = 0; i < MAXPROCESSES; i++)
+     processTable[i].isAlive = 0;
+ }
 
   tsksw();
 

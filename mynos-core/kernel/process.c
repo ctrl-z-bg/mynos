@@ -23,8 +23,7 @@
 #include "gdt.h"
 #include "tss.h"
 #include "kutils.h"
-
-#define MAXPROCESSES 30
+#include "process.h"
 
 tss_t processTable[MAXPROCESSES];
 uint32_t numProcess = 1;
@@ -129,6 +128,8 @@ tss_t * spawnProcess(tss_t * tss) {
   tss->io_bitmap_offset = 0;
   tss->eip = (uint32_t)0x40000000;
 
+  tss->isAlive = 1;
+
   //#define LDT
 #ifdef LDT
   tss->cs = 0x8 * 1 + 7;
@@ -157,15 +158,9 @@ tss_t * spawnProcess(tss_t * tss) {
   tss->eflags = 0x200;
   tss->esp = tss->ebp =
     (uint32_t)((uint32_t)LAST_PAGE_DIR_VALID_INDEX*0x400000 - 4100);
-#define KERNEL_STACK_STANDALONE
-#ifndef KERNEL_STACK_STANDALONE
-  tss->esp0 = tss->esp - numProcess*100;
-  tss->esp1 = tss->esp - 1000;
-  tss->esp2 = tss->esp - 1000;
-#else
   if ((stackFrame = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
-  tss->esp0 = tss->esp1 = tss->esp2 = (uint32_t)stackFrame + 4095;
-#endif
+  currPT[1023] = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_PRESENT;
+  tss->esp0 = tss->esp1 = tss->esp2 = 0x40400000 - 1;//(uint32_t)stackFrame + 4095;
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
 
 #ifdef LDT
