@@ -32,6 +32,7 @@ uint32_t __total_phy_pages;
 
 void init_memory() {
   uint32_t i;
+  uint32_t * tmp;
   uint32_t first_free_phy_page = (_asm_first_free_physical_page_address>>12);
 
   __total_phy_pages = (_asm_global_mem_size*256);
@@ -53,17 +54,33 @@ void init_memory() {
   _init_gdt();
 
   /* let the first (_asm_last_kernel_page_dir_entry_used + 1) PTs 
-     be allocated (to be share by all processes) */
+     be allocated (to be share by all processes).
+     we'll use the kernel space's last PT to map the page tables of
+     another process, so, for the moment, we tag it as allocated.
+  */
   printk("Allocating the first ");
   print_ulong(_asm_last_kernel_page_dir_entry_used + 1);
   printk(" PTs...");
-  for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
+  for (i = 0; i < _asm_last_kernel_page_dir_entry_used; i++)
     if (__IS_PAGE_TABLE_FREE(i)) {
       uint32_t newptaddr = (pmem_findAFreePhysicalPage() << 12);
       __SET_PAGE_DIR_ENTRY(i, newptaddr);
       INIT_PAGE_TABLE(__GET_PAGE_TABLE_ENTRY(i, 0));
     }
+  __SET_PAGE_DIR_ENTRY(_asm_last_kernel_page_dir_entry_used, 0);
   printk(" done\n");
+
+  /*
+    we'll use the kernel space's last but one PT to temporary
+    management tasks:
+      - last entry: to map the page directory of another process
+      - last but one entry: to map the new page for a copy-on-write
+                          option
+  */
+  tmp = __EXTERNAL_PD_PAGE_ENTRY;
+  *tmp = 0x1; // tagged as allocated
+  tmp = __COW_PAGE_ENTRY;
+  *tmp = 0x1; // tagged as allocated
 
   /* create the real physical memory manager*/
   pmem_createPhyMemManager();
@@ -275,14 +292,19 @@ static void __cowManager(uint32_t * pte, uint32_t addr) {
     } else {
       void * dest;
       void * orig;
-      dest = __OS_askPages(1, 1, 0);
+      
+      __SET_PAGE_TABLE_ENTRY_AND_ALLOC(__COW_TABLE,
+				       __COW_ENTRY,
+				       (pmem_findAFreePhysicalPage() << 12),
+				       0);
+
+      dest = (void*)__COW_PAGE;
       orig = (void*)(addr & 0xFFFFF000);
       kmemcpy(dest, orig, PAGE_SIZE);
       pmem_unset((*pte)>>12);
       *pte = LINEAR_TO_PHYSICAL_ADDRESS(dest) | (*pte & 0xFFF);
       *pte = *pte & ~PF_COW;
       *pte |= PF_READWRITE;
-      __OS_releasePages(dest, 1, 0, 0);
       INVALIDATE_THE_CACHE(addr);
     }
 }

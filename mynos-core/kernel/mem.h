@@ -131,6 +131,19 @@
 
 #define __IS_PAGE_FREE(ENTRY) (!__IS_PAGE_PRESENT(ENTRY))
 
+
+/* shortcut to change the external PD mapping */
+#define __EXTERNAL_PD_TABLE (_asm_last_kernel_page_dir_entry_used - 1)
+#define __EXTERNAL_PD_ENTRY (1023)
+#define __EXTERNAL_PD_PAGE_ENTRY ((uint32_t*)(__GET_PAGE_TABLE_ENTRY(__EXTERNAL_PD_TABLE, __EXTERNAL_PD_ENTRY)))
+#define __EXTERNAL_PD_PAGE ((uint32_t*)(__MEM_LINEAR_ADDRESS(__EXTERNAL_PD_TABLE, __EXTERNAL_PD_ENTRY, 0)))
+
+/* shortcut to change the cow page */
+#define __COW_TABLE (_asm_last_kernel_page_dir_entry_used - 1)
+#define __COW_ENTRY (1022)
+#define __COW_PAGE_ENTRY ((uint32_t*)(__GET_PAGE_TABLE_ENTRY(__COW_TABLE, __COW_ENTRY)))
+#define __COW_PAGE ((uint32_t*)(__MEM_LINEAR_ADDRESS(__COW_TABLE, __COW_ENTRY, 0)))
+
 /* reset the entries in a new page directory */
 #define INIT_PAGE_DIR(ADDRESS) \
                      {\

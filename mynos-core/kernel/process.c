@@ -155,7 +155,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 #endif
 
   if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
-  desc->ptsMirror = LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
+  desc->ptsMirror = (void*)LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
   kbzero(lastPT, PAGE_SIZE);
 
   /* allocate the page tables needed for info and stacks */
