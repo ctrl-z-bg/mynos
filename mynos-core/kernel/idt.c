@@ -24,6 +24,7 @@
 #include "idt.h"
 #include "video.h"
 #include "io.h"
+#include "irq.h"
 
 #include "ipc.h"
 
@@ -75,6 +76,9 @@ void init_idt() {
   set_vector(_linux_syscalls_trap_TRAP, 0x80, D_PRESENT + D_INT + D_DPL3);
 
   set_vector(_mynos_syscalls_trap_TRAP, 0x90, D_PRESENT + D_INT + D_DPL3);
+
+  /* this is for the external driver */
+  __OS_initExternalIRQs();
 
   asm("lidt (%0)                 \n"	/* Load the IDT                */
       "pushfl                    \n"	/* Clear the NT flag           */

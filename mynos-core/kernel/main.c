@@ -38,7 +38,6 @@
 #include "kutils.h"
 
 #include "delay.h"
-#include "keyboard.h"
 
 #include "multiboot.h"
 
@@ -129,6 +128,15 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   print_uint(__memory_bitmap_size);
   printk(" bytes allocated for memory map\n");
+
+#if 0  
+  {
+    int i;
+    for ( i =0; i < 10000; i++);
+    outportb(0x3F8, 'H');
+    printk("FATTO!");
+  }
+#endif
 
   printk("Initializing the Intel 8253 Programmable Interval Timer... ");
   init_pit(PIT_FREQ, 0);
@@ -244,7 +252,9 @@ void mynos_main(multiboot_info_t *boot_info) {
     }
   }
 
-  InitKeyboard();
+  //initKeyboard();
+  //initSerial();
+  //enable_irq(4);   /* serial */
 
   printk("\n-----------------------\n");
 
@@ -259,8 +269,10 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   // this is the idle process
   while(1) {
+#if 0
     char a = getch();
     print_char(a);
+    outportb(0x3F8, a);
 #ifdef TRY_VGA
     switch (a) {
     case 'l': a = -1; break;
@@ -273,6 +285,7 @@ void mynos_main(multiboot_info_t *boot_info) {
       
     __OS_ipc_send(1, &a, 1, 1);
 #endif // TRY_VGA
+#endif
   }
 
   KPANIC("\nEND OF KERNEL DEMO");

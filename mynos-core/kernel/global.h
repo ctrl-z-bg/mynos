@@ -25,7 +25,7 @@
 
 //#define ARCH386
 //#define TRY_VGA
-#define DEBUG
+//#define DEBUG
 #define RAMDISK
 
 #define __MEMORY_BITMAP_PHY_ADDRESS 0x32000    /* 200KB */

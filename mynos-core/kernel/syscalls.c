@@ -21,6 +21,7 @@
 #include "global.h"
 #include "video.h"
 #include "syscalls.h"
+#include "pic.h"
 
 extern uint32_t currProcess;
 
@@ -44,6 +45,10 @@ __asm__ (\
 	 "   je .mynos_semInit\n"\
 	 "   cmpl $9, %eax\n"\
 	 "   je .mynos_semFree\n"\
+	 "   cmpl $100, %eax\n"\
+	 "   je .mynos_enableIrq\n"\
+	 "   cmpl $101, %eax\n"\
+	 "   je .mynos_disableIrq\n"\
 	 "   push %eax\n"\
 	 "   call _mynos_syscall_WRONGSYSCALL\n"\
 	 ".mynos_send:\n"\
@@ -104,6 +109,16 @@ __asm__ (\
 	 "   call __OS_sem_freeSemaphore\n"\
 	 "   popl %ebx\n"
 	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_enableIrq:\n"\
+	 "   pushw %bx\n"
+	 "   call _mynos_syscall_enableIrq\n"\
+	 "   popw %bx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_disableIrq:\n"\
+	 "   pushw %bx\n"
+	 "   call _mynos_syscall_disableIrq\n"\
+	 "   popw %bx\n"
+	 "   jmp .exit_mynos_syscall\n"\
 	 ".exit_mynos_syscall:\n"\
 	 "   iret                \n"\
 	 );
@@ -114,4 +129,17 @@ void _mynos_syscall_WRONGSYSCALL(uint32_t syscall_id) {
   print_uint(syscall_id);
   KPANIC(" doesn't exist!!");
 }
+
+int _mynos_syscall_enableIrq(ushort16_t n) {
+  /* perform check ... */
+  enable_irq(n);
+  return 0;
+}
+
+int _mynos_syscall_disableIrq(ushort16_t n) {
+  /* perform check ... */
+  disable_irq(n);
+  return 0;
+}
+
 

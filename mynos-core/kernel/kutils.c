@@ -70,24 +70,3 @@ int kmemcmp(const void *dst, const void *src, size_t count) {
   return 0;
 }
 
-#include "video.h"
-#include "keyboard.h"
-void kgets(char *string)
-{
-	unsigned char c= 0, count = 0;
-	unsigned char tempstring[2];
-	
-	tempstring[1] = 0;
-	
-	while(1)
-	{
-		c = getch();
-		if(c == 10) break;
-		if(c == 8 && count > 0) count-=2;
-		else string[count] = c;
-		tempstring[0] = c;
-		printk(tempstring);
-		count++;
-	}
-	string[count] = '\0';
-}
