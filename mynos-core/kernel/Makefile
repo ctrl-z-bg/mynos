@@ -17,14 +17,16 @@
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
+OTHER_MODULES	= 3parts
+
 CC = gcc
-CFLAGS = -Wall
+CFLAGS = -Wall -I$(OTHER_MODULES)
 LD = ld
 
 AS = nasm
 ASFLAGS = -f elf
 
-.PHONY = kernel all
+.PHONY = kernel all $(OTHER_MODULES)
 
 SRCSC	= 	$(wildcard *.c)
 OFILESC	=	$(SRCSC:%.c=%.o)  
@@ -40,9 +42,11 @@ all: kernel
 ($OFILESAS): $(SRCSC)
 	$(AS) $(ASFLAGS) $<
 
-kernel: $(OFILESC) start.asm #$(OFILESAS)
+kernel: $(OFILESC) start.asm
+	make -C $(OTHER_MODULES)
 	nasm -f elf start.asm -o start.o
-	$(LD) start.o $(OFILESC) -o kernel.bin -oformat binary -Ttext 0x0
+	$(LD) start.o $(OFILESC) $(OTHER_MODULES)/$(OTHER_MODULES)_module.o \
+		-o kernel.bin -oformat binary -Ttext 0x0
 
 clean:
 	rm -f *.o *.bin *~

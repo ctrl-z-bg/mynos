@@ -18,8 +18,8 @@
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __GDT_H
-#define __GDT_H
+#ifndef __MACRO_GDT_H__
+#define __MACRO_GDT_H__
 
 /*
  * The desc_table, stnd_desc and gate_desc macros piece together a descriptor

@@ -21,6 +21,8 @@
 #ifndef __KERNEL_H__
 #define __KERNEL_H__
 
+void cpuSpeed();
+
 /* MyNOS entry point. mem_size is the RAM size in MB */
 void mynos_main();
 

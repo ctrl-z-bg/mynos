@@ -31,6 +31,8 @@
 
 #include "dynalloc.h"
 
+#include <delay.h>
+
 void __print_free_phy_pages() {
   printk("(adesso ci sono ");
   print_uint(__number_of_free_physical_pages);
@@ -131,8 +133,27 @@ void mynos_main() {
   }
 #endif
 
+  //  cpuSpeed();  
+
   enable_irq(1); /* irq1 (keyboard) is interrupt M_VEC+1 (33) */
   enable_irq(0);
 
   KPANIC("\nEND OF KERNEL DEMO");
+}
+
+void cpuSpeed() {
+  uint32_t cpuspeed = 0;
+  ulong32_t delaycount = 0;
+
+  printk("Calibrating delay loop... [");
+  delaycount = calibrateDelayLoop();
+  print_ulong(delaycount);
+  printk("]\n");
+
+  cpuspeed = (uint32_t)(((float)delaycount)/500.0);
+
+  printk("CPU = ");
+  print_ulong(cpuspeed);
+  printk("\n");
+
 }
