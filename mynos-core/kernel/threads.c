@@ -84,6 +84,7 @@ void __OS_threadExit(void * retval) {
   tss_t * prev, * next;
 
   readyQueueExtractThread(currThread);
+  timerQueueExtractThread(currThread);
 
   printk("Thread ");
   print_ulong(currThread->threadID);

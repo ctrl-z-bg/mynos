@@ -27,6 +27,7 @@
 #include "process.h"
 #include "kutils.h"
 #include "sem.h"
+#include "sched.h"
 
 void initIPC() {
   initPortTable();
@@ -114,11 +115,31 @@ int32_t __OS_ipc_send(int32_t c, void * start, uint32_t size,
   return 0;
 }
 
+int32_t kernelChannel(int32_t c, mynos_msg_t * mmsg, 
+		      void * shortmsg, uint32_t flags, uint32_t timeout);
+
+static int32_t isKernelChannel(int32_t c) {
+  return (c < 0);
+}
+
 int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg, 
-		      void * shortmsg, uint32_t flags) {
+		      void * shortmsg, uint32_t flags, uint32_t timeout) {
   unichannel_t * rc;
   msg_t * msg;
+  int timeron = (timeout > 0);
 
+  // kernel channel request
+  if (isKernelChannel(c)) {
+    int32_t ret = kernelChannel(c, mmsg, shortmsg, flags, timeout);
+    if ((ret == 0) && (timeron)){
+      timerQueueInsert(currThread, timeout);
+      privP();
+      return 0;
+    }
+    return ret;
+  }
+
+  // normal request
   rc = getMyReadChannel(c);
   if (rc == NULL) return MYNOS_ERR_INVALID;
 
@@ -138,7 +159,20 @@ int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg,
   if (msg == NULL) {
     if (isChannelBroken(c)) return MYNOS_ERR_BROKEN;
     rc->sem = currThread->privSem;
+    
+    // timer on?
+    if (timeron)
+      timerQueueInsert(currThread, timeout);
+
     privP();
+
+    // if timer expired (so no one sent a message), I'm no longer waiting
+    if (timeron && (timerQueueExtractThread(currThread) == NULL)) {
+      rc->sem = -1;
+      UNLOCK_CHANNEL(rc);
+      return MYNOS_ERR_EXPIRED;
+    }
+
     msg = nextMsg(rc);
   }
 
@@ -168,6 +202,12 @@ int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg,
 
   // unlock the channel
   UNLOCK_CHANNEL(rc);
+
+  return 0;
+}
+
+int32_t kernelChannel(int32_t c, mynos_msg_t * mmsg, 
+		      void * shortmsg, uint32_t flags, uint32_t timeout) {
 
   return 0;
 }

@@ -95,6 +95,7 @@ __asm__ (\
 	 "   popl %esi\n"
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_recv:\n"\
+	 "   pushl %edi\n"
 	 "   pushl %esi\n"
 	 "   pushl %edx\n"
 	 "   pushl %ecx\n"
@@ -104,6 +105,7 @@ __asm__ (\
 	 "   popl %ecx\n"
 	 "   popl %edx\n"
 	 "   popl %esi\n"
+	 "   popl %edi\n"
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_freeChannel:\n"\
 	 "   pushl %ebx\n"

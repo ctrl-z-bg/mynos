@@ -33,7 +33,7 @@ int pqEmpty(process_queue_t * q);
 tss_t * pqExtract(process_queue_t *q);
 tss_t * pqExtractThread(process_queue_t *q, tss_t * p);
 int pqInsert(process_queue_t *q, tss_t * p);
-// this insert a new element order by timeToWake field
+// this insert a new element order by timeToWake field and DOESN'T set p->queue
 int pqInsertOrderByTime(process_queue_t *q, tss_t * p, uint32_t msec);
 // it returns the old first element (now the last one)
 tss_t * pqShiftQueue(process_queue_t * q);

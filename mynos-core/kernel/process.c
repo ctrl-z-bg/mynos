@@ -368,6 +368,7 @@ void killProcess() {
   
   tss = processTable[currProcess]->tss;
   while (tss) {
+    timerQueueExtractThread(tss);
     q = tss->queue;
     if (q) pqExtractThread(q, tss);
     tss = tss->next;

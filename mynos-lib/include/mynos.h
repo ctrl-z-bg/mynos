@@ -29,6 +29,7 @@
 #define MYNOS_ERR_INVALID  (-3)
 #define MYNOS_ERR_DENY     (-4)
 #define MYNOS_ERR_BROKEN   (-5)
+#define MYNOS_ERR_EXPIRED  (-6)
 
 // IPC FLAGS
 #define MYNOS_IPC_SHARED     0x1
@@ -58,7 +59,8 @@ typedef struct {
 /* IPC */
 int mynos_send(int channel, void * buf, unsigned int size,
 	       unsigned int flags);
-int mynos_recv(int channel, mynos_msg_t **pmsg, unsigned int flags);
+int mynos_recv(int channel, mynos_msg_t **pmsg, 
+	       unsigned int flags, unsigned int timeout);
 /* send and receive an empty message */
 void mynos_signalSync(int channel);
 void mynos_waitSync(int channel);

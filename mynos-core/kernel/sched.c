@@ -140,6 +140,11 @@ void sched1() {
 
 void sched() {
   tss_t * oldThread = currThread;
+  tss_t * awaken;
+  
+  // wake the timeout expired processes
+  while ((awaken = timerQueueExtractExpired()) != NULL)
+    privV(awaken);
 
   currThread = readyQueueNext();
   currProcess = currThread->pid;

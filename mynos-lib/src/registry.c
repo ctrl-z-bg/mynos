@@ -48,7 +48,7 @@ int mynos_registryRegister(char * name) {
   mynos_send(channel, &cmd, sizeof(mynos_reg_cmd_t), 0);
 
   /* wait the response */
-  mynos_recv(channel, &msg, 0);
+  mynos_recv(channel, &msg, 0, 0);
 
   port = *((int*)(msg->start));
 
@@ -76,7 +76,7 @@ int mynos_registryLookUp(char * name) {
   strcpy(cmd.name, name);
   
   mynos_send(channel, &cmd, sizeof(mynos_reg_cmd_t), 0);
-  mynos_recv(channel, &msg, 0);
+  mynos_recv(channel, &msg, 0, 0);
   port = *((int*)(msg->start));
   mynos_freeMsg(&msg);
   mynos_freeChannel(channel);

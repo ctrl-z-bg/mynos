@@ -67,7 +67,7 @@ tss_t * pqShiftQueue(process_queue_t * q) {
 
 tss_t * pqExtractThread(process_queue_t *q, tss_t * p) {
   tss_t * ret = (tss_t*)listExtractElem(q, p, NULL);
-  if (ret)
+  if (ret && (ret->queue == q))
     ret->queue = NULL;
   return ret;
 }

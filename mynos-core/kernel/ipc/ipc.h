@@ -28,6 +28,6 @@ void initIPC();
 int32_t __OS_ipc_send(int32_t channel, void * start, uint32_t size,
 		      uint32_t flags);
 int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg, 
-		      void * shortmsg, uint32_t flags);
+		      void * shortmsg, uint32_t flags, uint32_t timeout);
 
 #endif
