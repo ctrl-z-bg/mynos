@@ -23,11 +23,11 @@
 
 #define MYNOS_IPC_FLAGS_NONBLOCK 0x1
 
-int mynos_send(int dest, char * buf, unsigned int size,
+int mynos_send(int dest, void * buf, unsigned int size,
 	       unsigned int flags);
-int mynos_recv(int sender, char * buf, unsigned int maxsize,
+int mynos_recv(int sender, void * buf, unsigned int maxsize,
 	       unsigned int flags);
-int mynos_recvAll(int * sender, char * buf, unsigned int maxsize,
+int mynos_recvAll(int * sender, void * buf, unsigned int maxsize,
 		  unsigned int flags);
 
 #endif

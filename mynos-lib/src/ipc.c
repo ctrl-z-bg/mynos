@@ -20,7 +20,7 @@
 
 #include "../include/mynos.h"
 
-int mynos_send(int dest, char * buf, unsigned int size,
+int mynos_send(int dest, void * buf, unsigned int size,
 	       unsigned int flags) {
   int ret;
   __asm__ volatile("pushal\n");
@@ -35,7 +35,7 @@ int mynos_send(int dest, char * buf, unsigned int size,
   return ret;
 }
 
-int mynos_recv(int sender, char * buf, unsigned int maxsize,
+int mynos_recv(int sender, void * buf, unsigned int maxsize,
 	       unsigned int flags) {
   int ret;
   __asm__ volatile("pushal\n");
@@ -50,7 +50,7 @@ int mynos_recv(int sender, char * buf, unsigned int maxsize,
   return ret;
 }
 
-int mynos_recvAll(int * sender, char * buf, unsigned int maxsize,
+int mynos_recvAll(int * sender, void * buf, unsigned int maxsize,
 		  unsigned int flags) {
   int ret;
   __asm__ volatile("pushal\n");

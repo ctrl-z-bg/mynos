@@ -62,7 +62,7 @@ void memrofs_open(pid_t client, char *fname) {
     response.fd = fd;
     response.status = STATUS_OK;
   }  
-  if ( mynos_send(client, (char *) &response, sizeof(response), 0) < 0 )
+  if ( mynos_send(client, &response, sizeof(response), 0) < 0 )
     // error responding, close the file (if it was open)
     if ( response.status == STATUS_OK ) {
       filedesc[response.fd].pid = 0; // "close" the file
@@ -82,7 +82,7 @@ void memrofs_close(pid_t client, int fd) {
     filedesc[fd].pid = 0;
     status = STATUS_OK;
   }
-  if ( mynos_send(client, (char *) &status, sizeof(status_t), 0) < 0 ) {};
+  if ( mynos_send(client, &status, sizeof(status_t), 0) < 0 ) {};
 }
 
 void memrofs_read(pid_t client, int fd, size_t size) {
@@ -99,7 +99,7 @@ void memrofs_read(pid_t client, int fd, size_t size) {
     response.status = STATUS_OK;
   }
 
-  if ( mynos_send(client, (char *) &response,
+  if ( mynos_send(client, &response,
 		  sizeof(response), MYNOS_IPC_FLAGS_NONBLOCK) < 0 ) {
     // error, nothing to do
   } else {
@@ -136,7 +136,7 @@ int main() {
   int sender;
   request_t request;
 
-  if ( mynos_recv(0 /* kernel! */, (char *) &ramdisk,
+  if ( mynos_recv(0 /* kernel! */, &ramdisk,
 		  sizeof(char *), 0) < 0 ) {
     puts("Could not receive ramdisk pointer.");
     exit(-1);
@@ -159,10 +159,10 @@ int main() {
     strcpy(request.data.fname, "AUTOEXEC.BAT");
     //puts("prereq");
     puts("Opening a text file...");
-    mynos_send(getppid(), (char *) &request, sizeof(request_t),
+    mynos_send(getppid(), &request, sizeof(request_t),
 	       MYNOS_IPC_FLAGS_NONBLOCK);
     //puts("req1");
-    mynos_recv(getppid(), (char *) &open_response, sizeof(open_response_t), 0);
+    mynos_recv(getppid(), &open_response, sizeof(open_response_t), 0);
     if ( open_response.status != STATUS_OK ) {
       puts("Open failed");
       exit(-1);
@@ -172,10 +172,10 @@ int main() {
     request.type = READ;
     request.data.read_data.fd = open_response.fd;
     request.data.read_data.to_read = 999;
-    mynos_send(getppid(), (char *) &request, sizeof(request_t),
+    mynos_send(getppid(), &request, sizeof(request_t),
 	       MYNOS_IPC_FLAGS_NONBLOCK);
     //puts("req2");
-    if ( mynos_recv(getppid(), (char *) &read_response, sizeof(read_response_t), 0) < 0 )
+    if ( mynos_recv(getppid(), &read_response, sizeof(read_response_t), 0) < 0 )
       puts("errore 1");
     //puts("resp2a");
     if ( (read_response.status == STATUS_OK) &&
@@ -198,7 +198,7 @@ int main() {
 #endif /* TEST */
 
   while ( 1 ) {
-    if ( mynos_recvAll(&sender, (char *) &request, sizeof(request_t),
+    if ( mynos_recvAll(&sender, &request, sizeof(request_t),
 		       0) < 0 ) {
       puts("Error receiving request");
       exit(-1);
