@@ -37,16 +37,10 @@ PRIMS=alloc.c array.c compare.c extern.c floats.c gc_ctrl.c hash.c \
 PUBLIC_INCLUDES=alloc.h callback.h config.h custom.h fail.h intext.h \
   memory.h misc.h mlvalues.h
 
-all: elf_ocamlrun
+all: ocamlrun
 
 ocamlrun$(EXE): libcamlrun.a prims.o
 	$(BYTECC) $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) -o ocamlrun$(EXE) \
-	          prims.o libcamlrun.a $(BYTECCLIBS) -static \
-		-Xlinker -static -Xlinker --oformat -Xlinker binary\
-		-Xlinker -Ttext -Xlinker 0x40000000
-
-elf_ocamlrun: libcamlrun.a prims.o
-	$(BYTECC) $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) -o elf_ocamlrun \
 	          prims.o libcamlrun.a $(BYTECCLIBS) -static \
 		-Xlinker -Ttext -Xlinker 0x40000000
 
