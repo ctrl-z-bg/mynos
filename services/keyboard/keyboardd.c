@@ -234,10 +234,12 @@ void keyb_handler(void)
 	{
 		if(key_ascii <= 0xFF)
 		{
-			keyboard_buffer[keyboard_buffer_size] = key_ascii;
-			keyboard_buffer_size++;
-			write(1, &((char)key_ascii), 1);
-			outportb(0x3F8, (char)key_ascii);
+		  char c = (char)key_ascii;
+		  keyboard_buffer[keyboard_buffer_size] = key_ascii;
+		  keyboard_buffer_size++;
+		  write(1, &c, 1);
+		  outportb(0x3F8, 'R');
+		  outportb(0x3F8, c);
 		}
 		else
 		{
