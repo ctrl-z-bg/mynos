@@ -46,3 +46,13 @@ kernel: $(OFILESC) start.asm #$(OFILESAS)
 
 clean:
 	rm -f *.o *.bin *~
+
+depend:
+	$(RM) $(DEPEND)
+	$(CC) -M $(SRCSC) >> $(DEPEND)
+
+DEPEND = Makefile.depend
+
+ifeq ($(wildcard $(DEPEND)),$(DEPEND))
+include $(DEPEND)
+endif

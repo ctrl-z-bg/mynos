@@ -168,15 +168,14 @@ extern uint32_t __number_of_free_physical_pages;
 /* to call in mynos_main() */
 void init_memory();
 
-void * __OS_askPages(unsigned int npages);
-void * __OS_releasePages(void *pageaddr, unsigned int npages);
-void * __OS_askPagesFrom(void * pageaddr, unsigned int npages);
-
 /* return value:
    'pageaddr' on success
    'NULL'     if some problem occours
 */
 void * __OS_askPagesFrom(void * pageaddr, unsigned int npages);
+
+void * __OS_askPages(unsigned int npages);
+void * __OS_releasePages(void *pageaddr, unsigned int npages);
 
 /* return the id of a free physical page */
 uint32_t __pg_find_a_free_physical_page();
