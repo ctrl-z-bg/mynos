@@ -32,10 +32,9 @@ void init_pit(float freq, unsigned char channel) {
   outportb((0x40+channel), (temp>>8));
 }
 
-//ISR_WRAPPER(pit);
-
+/* we can't use ISR_WRAPPER(pit) because it send EOI to pic, but we have to
+   do it inside pit_handler, so we write a special (minimal) pit_ISR */
 void pit_ISR();
-
 __asm__ (\
 	 ".globl pit_ISR         \n"\
 	 "pit_ISR:               \n"\
