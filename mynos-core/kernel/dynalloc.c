@@ -86,10 +86,11 @@ _findFreeBlock(unsigned int sz)
 	if ( _GET_PAGE_ADDRESS(ret + osz - 1) == _GET_PAGE_BLOCK(runner) )
 	  /* end within an allocated page */
 	  npages--;
-	__OS_askPagesFrom(paddr, npages, 1, 0);
-	
-	_insertBlock(ret + _SIZE_SZ, sz, old, runner);
-	return(ret + _SIZE_SZ);
+	if ( __OS_askPagesFrom(paddr, npages, 1, 0) != NULL ) {
+	  /* ok, insert the block and return the address */
+	  _insertBlock(ret + _SIZE_SZ, sz, old, runner);
+	  return(ret + _SIZE_SZ);
+	} /* otherwise, keep scanning */
       }
     }
     
