@@ -23,6 +23,10 @@
 
 #include "global.h"
 
+/* FLAGS for physical pages */
+#define PMEM_SWAPABLE    0x1
+#define PMEM_COPYONWRITE 0x2
+
 /* Physical Page Descriptor Type */
 typedef struct {
   ushort16_t flags;
