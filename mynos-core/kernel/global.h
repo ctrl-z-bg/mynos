@@ -53,6 +53,11 @@ extern int _asm_global_mem_size;
 extern int _asm_last_kernel_page_dir_entry_used;
 extern int _asm_first_free_physical_page_address;
 
+/* PROCESS INFORMATION AND STACKs MEMORY SIZE */
+#define PROCESS_INFO_NPAGES  2
+#define KERNEL_STACK_NPAGES 16
+#define USER_STACK_NPAGES  256
+
 #define MAXMODULES 10
 typedef struct {
   uint32_t * start;

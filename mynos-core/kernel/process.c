@@ -40,13 +40,25 @@ extern uint32_t ramdisk_len;
 extern uint32_t ramdisk_present;
 #endif
 
+/*
+ * Starting from the top of the linear address space, after the PD and
+ * the PTs mapping, we should have a fixed-size space for process
+ * informations (PROCESS_INFO_NPAGES), fixed-space kernel stack
+ * (KERNEL_STACK_NPAGES), and than the user-space stack
+ * (USER_STACK_NPAGES).
+ */
+
+
 tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   uint32_t * newPD;
   uint32_t * lastPT;
   uint32_t * lastButOnePT;
+  uint32_t * infoAndStacksPTs;
+  uint32_t nInfoAndStacksPTs;
   uint32_t * currPT;
   uint32_t * currPF;        /* current page frame */
   uint32_t * stackFrame; 
+  uint32_t * pun;
   uint32_t i;
   ushort16_t tssd_gdt_sel, code_gdt_sel, data_gdt_sel;
   uint32_t npages_for_process;
@@ -54,7 +66,20 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   Elf32_Phdr elf_phdata[ELF_MAXSEG];
   Elf32_Ehdr elf_ex;
   uint32_t entryaddr, curraddr, size, baseaddr, lastaddr;
-  
+
+  /* new process linear addresses for info and stacks */
+  uint32_t pinfoAddr;
+  uint32_t kstackBottomAddr, ustackBottomAddr;
+
+  /* last linear address usable (top - PTs and PD mapping) */
+  uint32_t upperLimit = 0 - (0x400000 + 0x1000);
+
+  pinfoAddr  = upperLimit - PAGE_SIZE * PROCESS_INFO_NPAGES;
+  kstackBottomAddr = pinfoAddr  - PAGE_SIZE * KERNEL_STACK_NPAGES;
+  ustackBottomAddr = kstackBottomAddr - PAGE_SIZE * USER_STACK_NPAGES;
+
+  nInfoAndStacksPTs = 1022 - __ADDRESS_PD_INDEX(ustackBottomAddr) + 1;
+
   elf_ex=*(Elf32_Ehdr *)test_start;
 
   /* Used GRUB as inspiration */
@@ -110,8 +135,12 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(lastPT, PAGE_SIZE);
 
-  if ((lastButOnePT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
-  kbzero(lastButOnePT, PAGE_SIZE);
+  /* allocate the page tables needed for info and stacks */
+  if ((infoAndStacksPTs = 
+       (uint32_t*)__OS_askPages(nInfoAndStacksPTs, 1, 0)) == NULL) return NULL;
+  kbzero(infoAndStacksPTs, PAGE_SIZE * nInfoAndStacksPTs);
+
+  lastButOnePT = infoAndStacksPTs + (PAGE_SIZE / sizeof(uint32_t)) * (nInfoAndStacksPTs - 1);
 
   if ((currPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(currPT, PAGE_SIZE);
@@ -171,8 +200,38 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   printk("Set linear2phis addr....\n");
 
   newPD[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
-  newPD[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(lastButOnePT) | PF_USER | PF_READWRITE | PF_PRESENT;
+  lastPT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
 
+  pun = infoAndStacksPTs;
+
+  /* register the last PTs */
+  for (i = 1022 - nInfoAndStacksPTs + 1; i < 1023; i++) {
+    newPD[i] = LINEAR_TO_PHYSICAL_ADDRESS(pun) | PF_USER | PF_READWRITE | PF_PRESENT;
+    lastPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(pun) | PF_PRESENT;
+    pun += 1024;
+  }
+
+  pun = infoAndStacksPTs + (nInfoAndStacksPTs*1024 - 1 -
+			    (PROCESS_INFO_NPAGES +
+			     KERNEL_STACK_NPAGES +
+			     USER_STACK_NPAGES));// + nInfoAndStacksPTs*1024 - 1;
+
+  /* allocate-on-demand the user stack */
+  for (i = 0; i < USER_STACK_NPAGES; i++)
+    *(pun++) = PF_USER | PF_LOGICAL_PRESENT | PF_READWRITE;
+
+  /* allocate the kernel stack */
+  for (i = 0; i < KERNEL_STACK_NPAGES; i++) {
+    if ((stackFrame = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
+    *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_PRESENT;
+  }
+
+  /* allocate the process info space */
+  for (i = 0; i < PROCESS_INFO_NPAGES; i++) {
+    if ((currPF = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
+    *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_PRESENT;
+  }
+  
   /* copy the first shared entries in the PTs images */
   /* to add to CVS!!! */
   for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
@@ -181,12 +240,9 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
     printk("Copied first shared entries....\n");
   lastPT[_asm_last_kernel_page_dir_entry_used + 1] = 
     LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
-  lastPT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
-  lastPT[1024-2] = LINEAR_TO_PHYSICAL_ADDRESS(lastButOnePT) | PF_PRESENT;
-  
+
+  /* map the page directory in the process linear space */
   lastButOnePT[1024-1] = LINEAR_TO_PHYSICAL_ADDRESS(newPD) | PF_PRESENT;
-  if ((stackFrame = (uint32_t*)__OS_askPages(1, 0, 0)) == NULL) return NULL;
-  lastButOnePT[1024-2] = PF_USER | PF_LOGICAL_PRESENT | PF_READWRITE;
 
   tssd_gdt_sel = gdt_get_free_index();
 
@@ -213,11 +269,8 @@ tss_t * spawnProcess(tss_t * tss, uint32_t * test_start, uint32_t test_len) {
   tss->ldt = 0;
 
   tss->eflags = 0x200;
-  tss->esp = tss->ebp =
-    (uint32_t)((uint32_t)LAST_PAGE_DIR_VALID_INDEX*0x400000 - 4100);
-  if ((stackFrame = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
-  currPT[1023] = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_PRESENT;
-  tss->esp0 = tss->esp1 = tss->esp2 = 0x40400000 - 1;//(uint32_t)stackFrame + 4095;
+  tss->esp = tss->ebp = ustackBottomAddr + PAGE_SIZE * USER_STACK_NPAGES - 4;
+  tss->esp0 = tss->esp1 = tss->esp2 = kstackBottomAddr + PAGE_SIZE * KERNEL_STACK_NPAGES - 4;
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
 
   // IPC

@@ -111,13 +111,13 @@
    page table */
 #define __IS_PAGE_TABLE_PRESENT(ENTRY) \
                      ((*(uint32_t*)(__GET_PAGE_DIR_ENTRY(ENTRY))) & 0x1)
-#define __IS_PAGE_TABLE_FREE(ENTRY) __IS_PAGE_TABLE_PRESENT(ENTRY)
+#define __IS_PAGE_TABLE_FREE(ENTRY) (!__IS_PAGE_TABLE_PRESENT(ENTRY))
 
 /* as above but from the address */
 #define __IS_PAGE_TABLE_PRESENT_GIVEN_LINEAR_ADDRESS(ADDRESS)\
                      __IS_PAGE_TABLE_PRESENT(__ADDRESS_PD_INDEX(ADDRESS))
 #define __IS_PAGE_TABLE_FREE_GIVEN_LINEAR_ADDRESS(ADDRESS)\
-                     __IS_PAGE_TABLE_PRESENT_GIVEN_LINEAR_ADDRESS(ADDRESS)
+                     (!__IS_PAGE_TABLE_PRESENT_GIVEN_LINEAR_ADDRESS(ADDRESS))
 
 /* set a linear page as allocated */
 #define __SET_PAGE_TABLE_ENTRY(TABLE, ENTRY, FLAGS)\
@@ -159,7 +159,7 @@
 				      __PAGE_PT_INDEX(ENTRY)))) & \
                                          (PF_LOGICAL_PRESENT | PF_PRESENT))
 
-#define __IS_PAGE_FREE(ENTRY) __IS_PAGE_PRESENT(ENTRY)
+#define __IS_PAGE_FREE(ENTRY) (!__IS_PAGE_PRESENT(ENTRY))
 
 /* reset the entries in a new page directory */
 #define INIT_PAGE_DIR(ADDRESS) \

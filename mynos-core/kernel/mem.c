@@ -47,6 +47,15 @@ void init_memory() {
 
   _init_gdt();
 
+  /* let the first 256 PTs be allocated (to be share by all processes) */
+  printk("Allocating the first 256 PTs...");
+  for (i = 0; i < 256; i++)
+    if (__IS_PAGE_TABLE_FREE(i)) {
+      uint32_t newptaddr = (__pg_find_a_free_physical_page() << 12);
+      __SET_PAGE_DIR_ENTRY(i, newptaddr);
+      INIT_PAGE_TABLE(__GET_PAGE_TABLE_ENTRY(i, 0));
+    }
+  printk(" done\n");
 }
 
 void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
