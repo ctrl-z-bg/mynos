@@ -84,8 +84,8 @@
 #define _NEXT_BLOCK_PTR(ptr) (*(void **)((ptr) + _BLOCK_SZ(ptr) + _ADDR_SZ))
 
 /* number of pages from bgn to end */
-#define _PAGE_SPAN(bgn, end) ((((unsigned int) (end)) >> 12) - \
-                              (((unsigned int) (bgn)) >> 12) + 1)
+#define _PAGE_SPAN(bgn, end) (((int) (((unsigned int) (end)) >> 12)) - \
+                              ((int) (((unsigned int) (bgn)) >> 12)) + 1)
 
 /* No explanation needed */
 void *
@@ -96,7 +96,7 @@ void
 kfree(void *ptr);
 
 #ifndef NULL
-#define NULL ((void*) 0)
+#define NULL ((void*) 0x0)
 #endif
 
 #endif

@@ -16,10 +16,8 @@ _insertBlock(void * current, unsigned int sz, void *previous, void *next)
 {
   /* first of all, see if the new block is above the current heap,
      in which case the block address is the new address of the heap */
-  /* CHECK!!! */
   if ( (_heap == NULL) || (current < _heap) )
     _heap = current;
-  /* /CHECK!!! */
 
   _BLOCK_SZ(current) = sz;
   _PREV_BLOCK_PTR(current) = previous;
@@ -49,30 +47,30 @@ _findFreeBlock(unsigned int sz)
   unsigned int osz = sz + _OVERHEAD_SZ; 
   void *old, *runner;
  
-/*   /\* first of all, we look for space in the first page of the heap *\/ */
-/*   void *page = _GET_PAGE_BLOCK(_heap); */
-/*   void *block_bgn = _BLOCK_BGN(_heap); */
-/*   if ( block_bgn - page >= osz ) { /\* Alright! Found! *\/ */
-/*     _insertBlock(page + _SIZE_SZ, sz, 0, _heap); */
-/*     _heap = page + _SIZE_SZ; */
-/*     return(_heap); */
-/*   } */
-/* It's not clear why I would treat the first heap page differently */
-/* from the rest. Now it's all nice and clean. */
+  /* first of all, we look for space in the first page of the heap,
+     but ABOVE the address of _heap */
+  void *page = _GET_PAGE_BLOCK(_heap);
+  void *block_bgn = _BLOCK_BGN(_heap);
+  if ( block_bgn - page >= osz ) { /* Alright! Found! */
+    _insertBlock(page + _SIZE_SZ, sz, NULL, _heap);
+    return(_heap); /* returning the new, modified _heap (page + _SIZE_SZ) */
+  }
   
+  /* Otherwise, scans through the list of busy blocks to find sufficient
+     space */
   old = _heap;
   runner = _NEXT_BLOCK_PTR(_heap);
 
   while ( runner ) {
     void *ret = _BLOCK_END(old);
     if ( (_BLOCK_BGN(runner) - ret) >= osz ) { /* found! */
-      /* check for unallocated pages in between, which make the space
-	 unusable */
-      if ( _allPagesAllocatedBetween(ret - 1, _BLOCK_BGN(runner)) ) {
+      /* If all the pages this block spans are allocated, the space
+	 is immediately usable */
+      if ( _allPagesAllocatedBetween(ret, ret + osz - 1) ) {
 	_insertBlock(ret + _SIZE_SZ, sz, old, runner);
-	return(ret);
+	return(ret + _SIZE_SZ);
       } else { /* ask for those pages! */
-	void * paddr = ret;
+	void * paddr = ret; /* address of the 1st page to request */
 	unsigned int npages;
 	if ( ret != _GET_PAGE_ADDRESS(ret) ) { /* not at the beginn. of page */
 	  paddr = _GET_NPAGE_ADDRESS(ret);
@@ -89,7 +87,7 @@ _findFreeBlock(unsigned int sz)
 	  npages--;
 	__OS_askPagesFrom(paddr, npages, 0, 0);
 	_insertBlock(ret + _SIZE_SZ, sz, old, runner);
-	return(ret);
+	return(ret + _SIZE_SZ);
       }
     }
     
@@ -104,7 +102,7 @@ _findFreeBlock(unsigned int sz)
     void *npage = _GET_NPAGE_ADDRESS(bend);
     if ( (npage - bend) >= osz ) { /* space at the end! */
       void *ret = bend + _SIZE_SZ;
-      _insertBlock(ret, sz, old, 0);
+      _insertBlock(ret, sz, old, NULL);
       return(ret);
     }
   }
@@ -121,7 +119,6 @@ _createNewBlock(unsigned int npages, unsigned int sz)
   /* now, find the first block successive to address */
   void *old = NULL;
   void *runner = _heap;
-  
 
   if ( !addr ) /* storage exhausted */
     return(NULL);
@@ -133,7 +130,7 @@ _createNewBlock(unsigned int npages, unsigned int sz)
   /* In case addr is less than _heap, we simply insert the block
      on top (_insertBlock will also modify the value of _heap).
      NOTE: if _heap is NULL, this while is skipped, and old and runner
-     will both be NULL.
+     are both NULL.
   */
   while ( runner && (addr > runner) ) {
     old = runner;
@@ -174,8 +171,9 @@ _removeBlock(void *ptr, void *prev)
   void *next = _NEXT_BLOCK_PTR(ptr);
   void *bgn = _BLOCK_BGN(ptr);
   void *end = _BLOCK_END(ptr);
-  void *firstPage;
-  void *lastPage;
+  void *firstPage = _GET_PAGE_BLOCK(ptr);
+  void *firstPageToRelease;
+  void *lastPageToRelease;
   int nPagesToRelease;
 
   if ( prev )
@@ -183,16 +181,25 @@ _removeBlock(void *ptr, void *prev)
   if ( next )
     _PREV_BLOCK_PTR(next) = prev;
 
-  /* find the first page whose first byte was withing the current block */
-  firstPage =
-    (_GET_PAGE_BLOCK(ptr) == bgn)?_GET_PAGE_BLOCK(ptr):_GET_NPAGE_ADDRESS(ptr);
+  /* find the first page whose first byte was within the current block */
+  /* ...however, perhaps the previous block does not use the page, in which
+     case we can release it */
+  if ( (firstPage == bgn) ||
+       !prev || (firstPage > _GET_PAGE_BLOCK(_BLOCK_END(prev)-1)) )
+    firstPageToRelease = firstPage;
+  else
+    /* skip this busy page: free the successive one */
+    firstPageToRelease = firstPage + ( 1 << 12 );
+
+
   /* same thing, find the last page whose LAST byte was within the block */
-  lastPage = _GET_PAGE_ADDRESS(end);
-  if ( end < lastPage + (1 << 12) - 1)  /* it wasn't at the end of the p. */
-    lastPage -= ( 1 << 12); /* up one page */
+  /* unless the following block begins on the same page, we can release
+     the page, otherwise, the last page is one page up */
+  lastPageToRelease = _GET_PAGE_ADDRESS(end-1);
+  if ( next && (_GET_PAGE_BLOCK(next) == lastPageToRelease) )
+    lastPageToRelease -= ( 1 << 12); /* up one page */
   
-  nPagesToRelease = ((int) (((unsigned int) lastPage) >> 12)) -
-    ((int) (((unsigned int) firstPage) >> 12 ));
+  nPagesToRelease = _PAGE_SPAN(firstPageToRelease, lastPageToRelease);
   
   /* now, ask the OS to release these pages */
   if ( nPagesToRelease > 0 )
