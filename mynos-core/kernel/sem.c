@@ -190,9 +190,10 @@ int __OS_sem_P(int semid) {
 	/* Add in semaphore queue */
 	/* currProcess is not in ReadyQueue, I do not need to remove it
 	   from there */
-	processTable[currProcess].isWaitingOnP = 1;
+      // TODO THREADS (once it was processTable[currProcess])
+	currThread->isWaitingOnP = 1;
 
-	pqInsert(semaphores.list[i].queue, currProcess);
+	pqInsert(semaphores.list[i].queue, currThread);
 
 	__unlock(sm);
 #ifdef DEBUG
@@ -240,7 +241,7 @@ int __OS_sem_tryP(int semid) {
 
 int __OS_sem_V(int semid) {
     uint32_t *sm;
-    pid_t p;
+    tss_t * p;
     uint32_t i=semid%MAXSEM;
     uint32_t tw;
     
@@ -269,13 +270,14 @@ int __OS_sem_V(int semid) {
 	p = pqExtract(semaphores.list[i].queue);
 #ifdef DEBUG
 	printk("*SEM*: V, waking up: ");
-	print_uint(p);
+	print_uint(p->threadID);
 	printk("\n");
 #endif
 
 	/* Wake me up before you go go... */
 	/* pqInsert(ReadyQueue, p); */
-	processTable[p].isWaitingOnP = -1;
+	// TODO THREAD
+	p->isWaitingOnP = -1;
     } else __unlock(sm);
 
     return(0);

@@ -57,6 +57,12 @@ __asm__ (\
 	 "   je .mynos_enableIrq\n"\
 	 "   cmpl $101, %eax\n"\
 	 "   je .mynos_disableIrq\n"\
+	 "   cmpl $200, %eax\n"\
+	 "   je .mynos_createThread\n"\
+	 "   cmpl $201, %eax\n"\
+	 "   je .mynos_exitThread\n"\
+	 "   cmpl $202, %eax\n"\
+	 "   je .mynos_selfThread\n"\
 	 "   push %eax\n"\
 	 "   call _mynos_syscall_WRONGSYSCALL\n"\
 	 ".mynos_send:\n"\
@@ -147,6 +153,23 @@ __asm__ (\
 	 "   pushw %bx\n"
 	 "   call _mynos_syscall_disableIrq\n"\
 	 "   popw %bx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_createThread:\n"\
+	 "   pushl %edx\n"
+	 "   pushl %ecx\n"
+	 "   pushl %ebx\n"
+	 "   call __OS_threadCreate\n"\
+	 "   popl %ebx\n"
+	 "   popl %ecx\n"
+	 "   popl %edx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_exitThread:\n"\
+	 "   pushl %ebx\n"
+	 "   call __OS_threadExit\n"\
+	 "   popl %ebx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_selfThread:\n"\
+	 "   call __OS_threadSelf\n"\
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".exit_mynos_syscall:\n"\
 	 "   iret                \n"\

@@ -56,6 +56,17 @@ typedef struct {
   
   /* End of i386 TSS.  */
 
+  uint32_t threadID;
+
+  uint32_t justForked;
+
+  // SEM
+  int privSem;
+  int isWaitingOnP;
+  // end SEM
+
+  void * next, * prev;
+
 } tss_t;
 
 #endif

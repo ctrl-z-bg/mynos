@@ -285,14 +285,20 @@ static uint32_t copy_page_table(uint32_t ptp, uint32_t * ptc) {
   return 1;
 }
 
+/* copy all threads from current process. it returns the tss
+   corrisponding to current thread, for further changes... see the code! */
+static tss_t * copyThreads(process_descriptor_t * ddest,
+			   process_descriptor_t * dorig,
+			   uint32_t * pdc);
+
 int _linux_syscall_fork() {
   uint32_t i;
   uint32_t * pde, flags;
   uint32_t * pdc, *ptc;
   uint32_t *lastPT;
   pid_t new_pid;
-  int ret;
-  tss_t * new_pid_tss;
+  int ret = 0;
+  tss_t * mirror;  // this is the new process thread corrisponding to current
 
   if ((pdc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
   if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
@@ -333,14 +339,6 @@ int _linux_syscall_fork() {
   //DEALLOCATE(pdc);
 
   new_pid = numProcess++;
-
-  new_pid_tss = (tss_t*)kmalloc(sizeof(tss_t));
-
-  /* the father has the new child's pid in that field */
-  processTable[currProcess].isForking = new_pid;
-  /* (see below for the child's isForking) */
-
-  /* copy the forking process state to the new one */
     
   /* copy the whole structure */
   kmemcpy((void*)&(processTable[new_pid]), 
@@ -348,61 +346,89 @@ int _linux_syscall_fork() {
 	  sizeof(process_descriptor_t));
   
   /* copy the tsses */
-  processTable[new_pid].tss = new_pid_tss;
-  kmemcpy((void*)processTable[new_pid].tss, 
-	  (void*)processTable[currProcess].tss,
-	  sizeof(tss_t));
-  
-  processTable[new_pid].tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
-  
+  mirror = 
+    copyThreads(&processTable[new_pid], &processTable[currProcess], pdc);
+
   processTable[new_pid].pid = new_pid;
   processTable[new_pid].ppid = currProcess;
   processTable[new_pid].isAlive = 1;
-  /* the child take the same as a negative value */
-  processTable[new_pid].isForking = -1 * new_pid;
   // IPC
   processTable[new_pid].isWaitingSender = -1;
   processTable[new_pid].isWaitingReceiver = -1;
   // SEM
-  processTable[new_pid].isWaitingOnP = -1;
-  processTable[new_pid].privSem = __OS_sem_allocateSemaphore(0);
   
   __OS_ipc_initChannelList(&(processTable[new_pid].channels));
   
   /* copy the registers, except eip and esp */
-  asm volatile("movl %%eax, %0":"=m"(processTable[new_pid].tss->eax));
-  asm volatile("movl %%ebx, %0":"=m"(processTable[new_pid].tss->ebx));
-  asm volatile("movl %%ecx, %0":"=m"(processTable[new_pid].tss->ecx));
-  asm volatile("movl %%edx, %0":"=m"(processTable[new_pid].tss->edx));
-  asm volatile("movl %%esi, %0":"=m"(processTable[new_pid].tss->esi));
-  asm volatile("movl %%edi, %0":"=m"(processTable[new_pid].tss->edi));
-  asm volatile("movl %%ebp, %0":"=m"(processTable[new_pid].tss->ebp));
+  asm volatile("movl %%eax, %0":"=m"(mirror->eax));
+  asm volatile("movl %%ebx, %0":"=m"(mirror->ebx));
+  asm volatile("movl %%ecx, %0":"=m"(mirror->ecx));
+  asm volatile("movl %%edx, %0":"=m"(mirror->edx));
+  asm volatile("movl %%esi, %0":"=m"(mirror->esi));
+  asm volatile("movl %%edi, %0":"=m"(mirror->edi));
+  asm volatile("movl %%ebp, %0":"=m"(mirror->ebp));
 
-  asm volatile("movw %%cs, %0":"=m"(processTable[new_pid].tss->cs));
-  asm volatile("movw %%ds, %0":"=m"(processTable[new_pid].tss->ds));
-  asm volatile("movw %%es, %0":"=m"(processTable[new_pid].tss->es));
-  asm volatile("movw %%fs, %0":"=m"(processTable[new_pid].tss->fs));
-  asm volatile("movw %%gs, %0":"=m"(processTable[new_pid].tss->gs));
-  asm volatile("movw %%ss, %0":"=m"(processTable[new_pid].tss->ss));
+  asm volatile("movw %%cs, %0":"=m"(mirror->cs));
+  asm volatile("movw %%ds, %0":"=m"(mirror->ds));
+  asm volatile("movw %%es, %0":"=m"(mirror->es));
+  asm volatile("movw %%fs, %0":"=m"(mirror->fs));
+  asm volatile("movw %%gs, %0":"=m"(mirror->gs));
+  asm volatile("movw %%ss, %0":"=m"(mirror->ss));
 
+  ret = new_pid;
+  mirror->justForked = 1;
+  
   /* copy eip and esp and call the scheduler */
-  processTable[new_pid].tss->esp0 = processTable[currProcess].tss->esp0;
+  mirror->esp0 = currThread->esp0;
   asm volatile (
 		"movl $1f, %0\n\t"\
 		"movl %%esp, %1\n\t"\
 		"call sched\n\t"\
 		"1:\t"\
-		:"=m"(processTable[new_pid].tss->eip),\
-		"=m"(processTable[new_pid].tss->esp):);
+		:"=m"(mirror->eip),\
+		"=m"(mirror->esp):);
 
   /* this process was just forked, restore some register */
-  if (processTable[currProcess].isForking < 0) {
-    processTable[currProcess].isForking = 0;
-    asm volatile("movl %0, %%ebp"::"m"(processTable[currProcess].tss->ebp));
+  if (currThread->justForked) {
+    currThread->justForked = 0;
+    asm volatile("movl %0, %%ebp"::"m"(currThread->ebp));
   }
 
   // back from a task switch...
-  ret = processTable[currProcess].isForking;
-  processTable[currProcess].isForking = 0;
   return ret;
+}
+
+static tss_t * copyThreads(process_descriptor_t * ddest,
+			   process_descriptor_t * dorig,
+			   uint32_t * pdc) {
+  tss_t * orig = processTable[currProcess].tss;
+  tss_t * dest;
+  tss_t * prevDest = NULL;
+  tss_t * mirror;
+  
+  /* the first one */
+  dest = ddest->tss = (tss_t*)kmalloc(sizeof(tss_t));
+  
+  while (dest != NULL) {
+    kmemcpy((void*)dest, 
+	    (void*)orig,
+	    sizeof(tss_t));
+    dest->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
+    dest->isWaitingOnP = -1;
+    dest->privSem = __OS_sem_allocateSemaphore(0);
+    dest->prev = prevDest;
+    prevDest = dest;
+
+    if (orig == currThread) mirror = dest;
+
+    if (orig->next != NULL) {
+      orig = orig->next;
+      dest->next = (tss_t*)kmalloc(sizeof(tss_t));
+      dest = dest->next;
+    } else {
+      dest = dest->next = NULL;
+    }
+  }
+
+  return mirror;
 }

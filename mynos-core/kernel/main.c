@@ -73,17 +73,23 @@ void tsksw() {
   processTable[0].tss->io_bitmap_offset = sizeof(tss_t)<<16;
   processTable[0].tss->ldt = 0;
   processTable[0].isAlive = 1;
-  processTable[0].isForking = 0;
+  processTable[0].tss->justForked = 0;
+
+  processTable[0].numThreads = 1;
+  processTable[0].tss->prev = processTable[0].tss->prev = NULL;
+  processTable[0].tss->threadID = 0;
 
   processTable[0].tss->cs = GDT_OS_CODE_SEL;
   processTable[0].tss->ss0 = GDT_OS_DATA_SEL;
+
+  currThread = processTable[0].tss;
 
   // IPC
   processTable[0].isWaitingSender = -1;
   processTable[0].isWaitingReceiver = -1;
 
   //SEM
-  processTable[0].isWaitingOnP = -1;
+  processTable[0].tss->isWaitingOnP = -1;
 
   gdt_index = gdt_get_free_index();
   tssd_gdt_selector = (uint32_t)gdt_index << 3;

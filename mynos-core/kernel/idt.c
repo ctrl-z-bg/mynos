@@ -141,6 +141,8 @@ void _int5() {
 void _int6() {
   printk("int6: Invalid opcode (process ");
   print_ulong(currProcess);
+  printk(" thread ");
+  print_ulong(currThread->threadID);
   printk(")\n");
   while (1);
 }

@@ -35,6 +35,9 @@
 #define PF_PRESENT         0x1
 #define PF_NOTPRESENT      0x0
 
+/* this is used to allocate kernel pages in user space */
+#define PF_SUPERVISOR_IN_USER_SPACE 0x1000
+
 /*************************************************************************
 *                        MEMORY BITMAP STUFF                             *
 *************************************************************************/

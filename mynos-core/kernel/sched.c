@@ -26,14 +26,18 @@
 #include "softtaskswitch.h"
 
 void sched() {
-  uint32_t oldProcess = currProcess;
+  tss_t * oldThread = currThread;
 
   do {
-    currProcess = (currProcess + 1) % numProcess;
-  }
-  while ((!processTable[currProcess].isAlive) ||
-	 (processTable[currProcess].isWaitingOnP != -1) );
+    if (currThread->next != NULL)
+      currThread = currThread->next;
+    else {
+      currProcess = (currProcess + 1) % numProcess;
+      currThread = processTable[currProcess].tss;
+    }
+  } while ((!processTable[currProcess].isAlive) ||
+	   (currThread->isWaitingOnP != -1) );
 
-  if (currProcess != oldProcess)
-    switchTo(oldProcess, currProcess);
+  if (currThread != oldThread)
+    switchTo(oldThread, currThread);
 }

@@ -23,6 +23,6 @@
 
 #include "global.h"
 
-void switchTo(pid_t old, pid_t new);
+void switchTo(tss_t * old, tss_t * new);
 
 #endif

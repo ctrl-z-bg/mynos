@@ -32,10 +32,10 @@ static tss_t * tss;
 extern tss_t THEtss;
 
 /* a task created with taskSpawn needs to be 'adjusted' */
-void startTask();
+void startThread();
 
-__asm__ (".globl startTask \n" \
-	 "startTask: \n"\
+__asm__ (".globl startThread \n" \
+	 "startThread: \n"\
 	 "  popw %gs\n"\
 	 "  popw %fs\n"\
 	 "  popw %es\n"\
@@ -44,13 +44,13 @@ __asm__ (".globl startTask \n" \
 
 
 
-void switchTo(pid_t old, pid_t new) {
+void switchTo(tss_t * old, tss_t * new) {
   tss = &THEtss;
   
   if (old == new) return;
   
-  prev = processTable[old].tss;
-  next = processTable[new].tss;
+  prev = old;
+  next = new;
 
   tss->esp0 = next->esp0;
 

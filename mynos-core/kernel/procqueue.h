@@ -23,13 +23,14 @@
 #include "process.h"
 #include "global.h"
 #include "procqueue.h"
+#include "tss.h"
 
 typedef struct _process_queue_t {
-    pid_t queue[MAXPROCESSES+1];
-    uint32_t len;
-    uint32_t pres;
-    uint32_t head;
-    uint32_t tail;
+  tss_t * queue[MAXPROCESSES+1];
+  uint32_t len;
+  uint32_t pres;
+  uint32_t head;
+  uint32_t tail;
 } process_queue_t;
 
 #define pqEmpty(q) ( ((q)->tail) == ((q)->head) )
@@ -38,7 +39,7 @@ typedef struct _process_queue_t {
                      (q)->pres = 0; \
                      (q)->len = MAXPROCESSES + 1; }
 
-pid_t pqExtract(process_queue_t *q);
-int pqInsert(process_queue_t *q, pid_t p);
+tss_t * pqExtract(process_queue_t *q);
+int pqInsert(process_queue_t *q, tss_t * p);
 
 #endif

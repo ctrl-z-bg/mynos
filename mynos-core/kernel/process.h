@@ -25,6 +25,7 @@
 
 #define MAXPROCESSES 30
 #define MAXOPENSERVICES 100
+#define INITIAL_EFLAGS (0x3200)
 
 typedef int servicesTable_t;
 
@@ -41,7 +42,8 @@ typedef struct {
   uint32_t isAlive;
   uint32_t ppid;
   uint32_t pid;
-  pid_t isForking;
+
+  uint32_t numThreads;
 
   // IPC
   channelList_t channels;
@@ -50,16 +52,16 @@ typedef struct {
   pid_t isWaitingSender;
   pid_t isWaitingReceiver;
   // end IPC
-  // SEM
-  int privSem;
-  int isWaitingOnP;
-  // end SEM
+
   processData_t * processData;
 } process_descriptor_t;
 
 extern process_descriptor_t processTable[];
 extern uint32_t numProcess;
 extern uint32_t currProcess;
+extern tss_t * currThread;
+
+void initStack(uint32_t s, tss_t * tss);
 
 process_descriptor_t * spawnProcess(process_descriptor_t * desc, 
 				    uint32_t * test_start, uint32_t test_len);

@@ -22,6 +22,7 @@
 #include "gdt.h"
 #include "video.h"
 #include "kutils.h"
+#include "process.h"
 
 byte_t * __memory_bitmap;
 uint32_t __memory_bitmap_size;
@@ -66,9 +67,10 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
   uint32_t last_page;
   uint32_t not_used;
 
-  if (flags & PF_USER) { // it's a user request
+  if ((flags & PF_USER) || (flags & PF_SUPERVISOR_IN_USER_SPACE)) {
     page_addr = ((_asm_last_kernel_page_dir_entry_used+1) * FOURMB)>>12;
     last_page = __LAST_LINEAR_PAGE;
+    flags &= (~PF_SUPERVISOR_IN_USER_SPACE); // remove, if present
   } else {
     page_addr = 0;
     last_page = ((_asm_last_kernel_page_dir_entry_used+1) * FOURMB - 
@@ -297,6 +299,8 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   print_char('\n');
   printk("Process ");
   print_uint(currProcess);
+  printk(" thread ");
+  print_uint(currThread->threadID);
   printk(" tried to access the linear address ");
   print_uint_hex(addr);
   print_char('\n');

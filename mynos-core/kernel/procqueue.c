@@ -19,10 +19,10 @@
 */
 #include "procqueue.h"
 
-pid_t pqExtract(process_queue_t *q) {
-    pid_t r;
+tss_t * pqExtract(process_queue_t *q) {
+    tss_t * r;
     
-    if ( pqEmpty(q) ) return(0);
+    if ( pqEmpty(q) ) return(NULL);
     
     r = q->queue[q->head];
     
@@ -31,7 +31,7 @@ pid_t pqExtract(process_queue_t *q) {
     return(r);
 }
 
-int pqInsert(process_queue_t *q, pid_t p) {
+int pqInsert(process_queue_t *q, tss_t * p) {
   //pid_t r;
     
     if ( pqFull(q) ) return(-1);

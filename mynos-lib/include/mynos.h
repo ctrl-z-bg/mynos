@@ -49,4 +49,10 @@ int mynos_clientRegister(char * name);
 void outportb(unsigned short port,unsigned char value);
 unsigned char inportb(unsigned short port);
 
+/* THREADS STUFF */
+int mynos_threadCreate(void * (*start_routine)(void *), 
+		  void * arg, void * stack, unsigned int flags);
+void mynos_threadExit(void * retval);
+int mynos_threadSelf();
+
 #endif
