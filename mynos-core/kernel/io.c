@@ -18,7 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-unsigned char inportb(unsigned int port)
+unsigned char inportb(unsigned short port)
 {
    unsigned char ret;
 
@@ -26,12 +26,12 @@ unsigned char inportb(unsigned int port)
    return ret;
 }
 
-void outportb(unsigned int port,unsigned char value)
+void outportb(unsigned short port,unsigned char value)
 {
    __asm__ volatile ("outb %%al,%%dx"::"d" (port), "a" (value));
 }
 
-void outportw(unsigned int port,unsigned int value)
+void outportw(unsigned short port,unsigned short value)
 {
    __asm__ volatile ("outw %%ax,%%dx"::"d" (port), "a" (value));
 }

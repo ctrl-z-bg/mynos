@@ -158,15 +158,6 @@ void mynos_main(multiboot_info_t *boot_info) {
   print_uint(__memory_bitmap_size);
   printk(" bytes allocated for memory map\n");
 
-#if 0  
-  {
-    int i;
-    for ( i =0; i < 10000; i++);
-    outportb(0x3F8, 'H');
-    printk("FATTO!");
-  }
-#endif
-
   printk("Initializing the Intel 8253 Programmable Interval Timer... ");
   init_pit(PIT_FREQ, 0);
   set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT));

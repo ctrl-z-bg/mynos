@@ -32,6 +32,8 @@ void init_pit(float freq, unsigned char channel) {
   outportb(PIT_CONTROL_WORD, (channel*0x40) + PIT_CW_RW_BOTH + PIT_CW_MODE3);
   outportb((0x40+channel), (unsigned char)temp);
   outportb((0x40+channel), (unsigned char)(temp>>8));
+  //outportb(0x40, 0x9c);     /* 1193182 / 100  (low word). */
+  //outportb(0x40, 0x2e);     /* 1193182 / 100  (high word). */
 }
 
 /* we can't use ISR_WRAPPER(pit) because it send EOI to pic, but we have to

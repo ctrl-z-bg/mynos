@@ -22,12 +22,12 @@
 #define __IO_H__
 
 /* Input a byte from a port */
-unsigned char inportb(unsigned int port);
+unsigned char inportb(unsigned short port);
 
 /* Output a byte to a port */
-void outportb(unsigned int port, unsigned char value);
+void outportb(unsigned short port, unsigned char value);
 
 /* Output a word to a port */
-void outportw(unsigned int port, unsigned int value);
+void outportw(unsigned short port, unsigned short value);
 
 #endif
