@@ -79,7 +79,7 @@ void serial_handler(void) {
       asd = buffer[bufferin] = inportb(PORT1);
       bufferin++;
       if (bufferin == 1024) bufferin = 0;
-      putchar(asd);
+      write(1, &asd, 1);
     }
   } while (c & 1);
   outportb(0x20, 0x20);

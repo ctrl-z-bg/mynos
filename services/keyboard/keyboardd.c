@@ -236,7 +236,7 @@ void keyb_handler(void)
 		{
 			keyboard_buffer[keyboard_buffer_size] = key_ascii;
 			keyboard_buffer_size++;
-			printf("%c", (char)key_ascii);
+			write(1, &((char)key_ascii), 1);
 			outportb(0x3F8, (char)key_ascii);
 		}
 		else
