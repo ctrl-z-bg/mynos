@@ -23,7 +23,9 @@
 #include "tss.h"
 #include "kutils.h"
 
-tss_t processTable[20];
+#define MAXPROCESSES 30
+
+tss_t processTable[MAXPROCESSES];
 uint32_t numProcess = 1;
 uint32_t currProcess = 0;  /* the first process is the idle process */
 
@@ -76,7 +78,7 @@ tss_t * spawnProcess(tss_t * tss) {
   /* create new segments descriptors */
   code_gdt_sel = gdt_get_free_index();
   gdt_set_entry(code_gdt_sel, 
-		0x40000000, 0xFFF00, 
+		0x00000000, 0xFFFFF, 
 		(D_CODE + D_BIG + D_BIG_LIM + D_DPL3));
   data_gdt_sel = gdt_get_free_index();
   gdt_set_entry(data_gdt_sel, 
@@ -90,7 +92,7 @@ tss_t * spawnProcess(tss_t * tss) {
   /* set the new process tss */
   tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(newPD);
   tss->io_bitmap_offset = 0;
-  tss->eip = (uint32_t)0;//(1024*1024*1024);
+  tss->eip = (uint32_t)0x40000000;
 
   tss->tssd_gdt_selector = tssd_gdt_sel << 3;
 

@@ -10,13 +10,12 @@ romimage: file=/usr/bochs/latest/BIOS-bochs-latest, address=0xf0000
 vgaromimage: /usr/bochs/latest/VGABIOS-elpin-2.40
 
 # what disk images will be used 
-#floppya: 1_44=/dev/fd0, status=inserted
-floppya: 1_44=floppya, status=inserted
-floppyb: 1_44=floppyb, status=inserted
+floppya: 1_44=/dev/fd0, status=inserted
+diskc: file=diskc, cyl=306, heads=4, spt=17
 newharddrivesupport: enabled=1
 
 # choose the boot disk.
-boot: a
+boot: c
 
 # where do we send log messages?
 log: bochsout.txt
