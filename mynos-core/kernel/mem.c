@@ -106,8 +106,8 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
   // TO TEST THE LINEAR SPACE MAP!!!
 #ifdef NEWMEM
   if ((flags & PF_USER) || (flags & PF_SUPERVISOR_IN_USER_SPACE)) {
-    int start = __lmt_allocArea(&(processTable[currProcess].lmemmap), 
-				npages);
+    uint32_t start = __lmt_allocArea(&(processTable[currProcess].lmemmap), 
+				     npages);
     //printk("====   "); print_uint_hex(start);
     return __OS_askPagesFrom((void *)(start<<12), npages, alloc_now,
 			     flags);

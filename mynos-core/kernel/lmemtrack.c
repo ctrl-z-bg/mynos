@@ -20,7 +20,6 @@
 
 #include"lmemtrack.h"
 
-#include "global.h"
 #include "dynalloc.h"
 #include "video.h"
 
@@ -29,14 +28,14 @@
 
 #define PAGESPAN(p) ((p).end - (p).bgn)
 
-#define BLOCKNOTFOUND -1
-#define AREATOOLARGE -1
+#define BLOCKNOTFOUND 1
+#define AREATOOLARGE 1
 
-#define NOTALLOCATED -1
+#define NOTALLOCATED 1
 
 //pdListEl *pdListBgn = NULL;
 
-pdListEl *__lmt_newPdListEl(int bgn, int end, pdListEl* next, pdListEl* prev)
+pdListEl *__lmt_newPdListEl(uint32_t bgn, uint32_t end, pdListEl* next, pdListEl* prev)
 {
   pdListEl *toret = (pdListEl*) myalloc(sizeof(pdListEl));
   toret->bgn = bgn;
@@ -46,7 +45,7 @@ pdListEl *__lmt_newPdListEl(int bgn, int end, pdListEl* next, pdListEl* prev)
   return toret;
 }
 
-pdListEl *__lmt_findArea(pdListEl **pdListBgn, int npages)
+pdListEl *__lmt_findArea(pdListEl **pdListBgn, uint32_t npages)
 {
   pdListEl *runner;
 
@@ -65,10 +64,10 @@ pdListEl *__lmt_findArea(pdListEl **pdListBgn, int npages)
 
 /* returns the page number at which the area begins.
    Adjusts the free space list */
-int __lmt_allocArea(pdListEl **pdListBgn, int npages)
+uint32_t __lmt_allocArea(pdListEl **pdListBgn, uint32_t npages)
 {
   pdListEl *tomod;
-  int toret;
+  uint32_t toret;
 
   if (npages > (USERMAXPAGE-USERMINPAGE)) return AREATOOLARGE;
   
@@ -92,7 +91,7 @@ int __lmt_allocArea(pdListEl **pdListBgn, int npages)
 }
 
 /* frees a block of pages, adjusting the list */
-int __lmt_freeArea(pdListEl **pdListBgn, int fromPage, int npages)
+uint32_t __lmt_freeArea(pdListEl **pdListBgn, uint32_t fromPage, uint32_t npages)
 {
   /* we must find the first block whose 'bgn' is after fromPage+npages */
   pdListEl *runner = *pdListBgn;
@@ -156,7 +155,7 @@ pdListEl *__lmt_copyList(pdListEl *pdListBgn)
   return ret;
 }
 
-int __lmt_forceAllocation(pdListEl **pdListBgn, int fromPage, int npages)
+uint32_t __lmt_forceAllocation(pdListEl **pdListBgn, uint32_t fromPage, uint32_t npages)
 {
   /* we must find the first block whose 'bgn' is after fromPage+npages */
   pdListEl *runner = *pdListBgn;

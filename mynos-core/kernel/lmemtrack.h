@@ -21,16 +21,20 @@
 #ifndef __LMEMTRACK_H__
 #define __LMEMTRACK_H__
 
+#include "global.h"
+
 typedef struct _pdListEl {
-  int bgn, end; /* boundaries *included* */
+  uint32_t bgn, end; /* boundaries *included* */
   struct _pdListEl *next, *prev;
 } pdListEl;
 
 //extern pdListEl *pdListBgn;
 
-int __lmt_allocArea(pdListEl **pdListBgn, int nPages);
-int __lmt_freeArea(pdListEl **pdListBgn, int fromPage, int nPages);
-int __lmt_forceAllocation(pdListEl **pdListBgn, int fromPage, int npages);
+uint32_t __lmt_allocArea(pdListEl **pdListBgn, uint32_t nPages);
+uint32_t __lmt_freeArea(pdListEl **pdListBgn, uint32_t fromPage, 
+			uint32_t nPages);
+uint32_t __lmt_forceAllocation(pdListEl **pdListBgn, uint32_t fromPage, 
+			       uint32_t npages);
 pdListEl *__lmt_copyList(pdListEl *pdListBgn);
 
 #endif
