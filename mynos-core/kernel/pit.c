@@ -36,7 +36,7 @@ ISR_WRAPPER(pit);
 
 void pit_handler() {
   static int count = 0;
-  /*  asm("int $0x1C"); /* Extra timer interrupt, 
+  asm("int $0x1C"); /* Extra timer interrupt, 
 		       used by floppy for timeout etc.. */
 #if 0
   count++;

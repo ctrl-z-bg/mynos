@@ -43,13 +43,13 @@ static DrvGeom geometry = { DG144_HEADS,DG144_TRACKS,DG144_SPT };
 unsigned long tbaddr = 0x80000L;    /* physical address of track buffer located below 1M */
 
 /* prototypes */
-extern void floppy_ISR();
-extern void _int1c();
+ISR_WRAPPER(int1c);
+ISR_WRAPPER(floppy);
 
 void sendbyte(int byte);
 int getbyte();
-void irq6(void);
-void int1c(void);
+void floppy_handler(void);
+void int1c_handler(void);
 BOOL waitfdc(BOOL sensei);
 BOOL fdc_rw(int block,BYTE *blockbuff,BOOL read,unsigned long nosectors);
 
@@ -68,7 +68,7 @@ void init_floppy(void)
 
    enable_irq(6);
 
-   set_vector(_int1c, 0x1c, (D_INT+D_PRESENT+D_DPL1));
+   set_vector(int1c_ISR, 0x1c, (D_INT+D_PRESENT+D_DPL1));
 
    reset();
 
@@ -162,7 +162,7 @@ BOOL waitfdc(BOOL sensei)
 }
 
 /* This is the IRQ6 handler */
-void irq6(void)
+void floppy_handler(void)
 {
    /* signal operation finished */
    done = TRUE;
@@ -172,16 +172,16 @@ void irq6(void)
 }
 
 /* This is the timer (int 1ch) handler */
-void int1c(void)
+void int1c_handler(void)
 {
-   if (tmout) --tmout;     /* bump timeout */
-   
-   if (mtick > 0)
-     --mtick;
-   else if (!mtick && motor) {
-      outportb(FDC_DOR,0x0c);  /* turn off floppy motor */
-      motor = FALSE;
-   }
+  if (tmout) --tmout;     /* bump timeout */
+  
+  if (mtick > 0)
+    --mtick;
+  else if (!mtick && motor) {
+    outportb(FDC_DOR,0x0c);  /* turn off floppy motor */
+    motor = FALSE;
+  }
 }
 
 /*
@@ -207,12 +207,13 @@ void reset(void)
 {
    /* stop the motor and disable IRQ/DMA */
    outportb(FDC_DOR,0);
-   
+
    mtick = 0;
    motor = FALSE;
 
    /* program data rate (500K/s) */
-   outportb(FDC_DRS,0);
+
+   //   outportb(FDC_DRS,0);    MYNOSSSSSSSSSSSSSSSSSSS
 
    /* re-enable interrupts */
    outportb(FDC_DOR,0x0c);
@@ -568,40 +569,3 @@ BOOL format_track(BYTE track,DrvGeom *g)
 }
 
 
-asm (
-   ".globl _int1c        \n"
-   "_int1c:              \n"
-   "   pusha               \n" /* Save all registers               */
-   "   pushw %ds           \n" /* Set up the data segment          */
-   "   pushw %es           \n"
-   "   pushw %ss           \n" /* Note that ss is always valid     */
-   "   pushw %ss           \n"
-   "   popw %ds            \n"
-   "   popw %es            \n"
-   "                       \n"
-   "   call int1c          \n"
-   "                       \n"
-   "   popw %es            \n"
-   "   popw %ds            \n" /* Restore registers                */
-   "   popa                \n"
-   "   iret                \n" /* Exit interrupt                   */
-);
-
-asm (
-   ".globl floppy_ISR        \n"
-   "floppy_ISR:              \n"
-   "   pusha               \n" /* Save all registers               */
-   "   pushw %ds           \n" /* Set up the data segment          */
-   "   pushw %es           \n"
-   "   pushw %ss           \n" /* Note that ss is always valid     */
-   "   pushw %ss           \n"
-   "   popw %ds            \n"
-   "   popw %es            \n"
-   "                       \n"
-   "   call irq6           \n"
-   "                       \n"
-   "   popw %es            \n"
-   "   popw %ds            \n" /* Restore registers                */
-   "   popa                \n"
-   "   iret                \n" /* Exit interrupt                   */
-);

@@ -29,6 +29,7 @@
 #include "idt.h"
 
 #include <delay.h>
+#include <fdc.h>
 
 void __print_free_phy_pages() {
   printk("(adesso ci sono ");
@@ -51,24 +52,38 @@ void mynos_main() {
   init_idt();
   printk("done.\n");
 
+  cpuSpeed();
+
   printk("Physical Memory : ");
   print_uint(_asm_global_mem_size);
-  printk(" MB\n\n");
+  printk(" MB\n");
 
   print_uint(__memory_bitmap_size);
-  printk(" bytes allocated for memory map\n\n");
-
-  cpuSpeed();
+  printk(" bytes allocated for memory map\n");
 
   printk("Initializing the Intel 8253 Programmable Interval Timer... ");
   init_pit(18.3, 0);
   set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT + D_DPL3));
-  printk("done\n.");
+  printk("done.\n");
 
   enable_irq(1); /* irq1 (keyboard) is interrupt M_VEC+1 (33) */
   enable_irq(0);
 
-  //  init_floppy();
+  init_floppy();
+
+  {
+    char buffer[512];
+	if(read_block(0, (unsigned char *) buffer, 1)==FALSE)
+	{
+		printk("Kernel Panic: FDC not responding\n");
+		printk("Press any key to try again\n");
+	} else {
+	  printk("\nLetto dal bootsector : ");
+	  buffer[11] = '\0';
+	  printk(buffer+3);
+	  printk("\n");
+	}
+  }
 
   KPANIC("\nEND OF KERNEL DEMO");
 }
