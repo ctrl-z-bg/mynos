@@ -24,8 +24,34 @@
 #include "tss.h"
 #include "process.h"
 #include "video.h"
+#include "mem.h"
 
 #define MAXCHANNELS 20
+
+/* check the buffer only if the message was sent by an user process */
+#define MUST_CHECK_BUFFER() (currProcess != 0)
+
+#define CHECK_BUFFER(BUF, SIZE, WRITE) {\
+  if (SIZE && MUST_CHECK_BUFFER()) {\
+    uint32_t * pte;\
+    uint32_t addr = (uint32_t)BUF;\
+    /* check if the page table is allocated */\
+    if ((*(uint32_t*)__GET_PAGE_DIR_ENTRY(__ADDRESS_PD_INDEX(addr)) &\
+         PF_PRESENT) == 0)\
+      return -1;\
+    pte = (int*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), \
+	  			       __ADDRESS_PT_INDEX(addr));\
+    /* check if the page is present */\
+    if (!(*pte & (PF_PRESENT | PF_LOGICAL_PRESENT))) \
+      return -1;\
+    /* check if the page is a user's page */\
+    if (!(*pte & PF_USER)) \
+      return -1;\
+    /* check if the page is writable, only for recv and recvAll */\
+    if (WRITE && !(*pte & PF_READWRITE))\
+      return -1;\
+  }\
+}
 
 void __OS_ipc_initChannelList(channelList_t * list) {
   uint32_t i;
@@ -152,6 +178,9 @@ int __OS_ipc_send(pid_t dest, char * buf, uint32_t size, uint32_t flags) {
 
   if ((dest >= MAXPROCESSES) || (dest < 0) || (!processTable[dest].isAlive))
     return -1;
+
+  CHECK_BUFFER(buf, size, 0);
+
   rtss = &(processTable[dest]);
   stss = &(processTable[currProcess]);
   list = &(rtss->channels);
@@ -214,6 +243,8 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
     if ((sender >= MAXPROCESSES) || (sender < 0))
       return -1;
     
+    CHECK_BUFFER(buf, size, 1);
+
     rtss = &(processTable[currProcess]);
     list = &(rtss->channels);
     stss = &(processTable[sender]);
@@ -269,6 +300,8 @@ int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size,
   uint32_t msgsize;
 
   while (!done) {
+    CHECK_BUFFER(buf, size, 1);
+
     rtss = &(processTable[currProcess]);
     list = &(rtss->channels);
     
