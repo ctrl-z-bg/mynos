@@ -149,11 +149,11 @@ int main() {
     // father
   } else {
     // child
-    puts("child.");
     char mybuf[1000];
     request_t request;
     open_response_t open_response;
     read_response_t read_response;
+    puts("child.");
     request.type = OPEN;
     strcpy(request.data.fname, "AUTOEXEC.BAT");
     puts("prereq");
