@@ -65,7 +65,10 @@ unichannel_t * allocUnichannel(pid_t p) {
 int32_t allocChannel(pid_t p1, pid_t p2) {
   channel_t * c = kmalloc(sizeof(channel_t));
   int id = getFreeChannel();
-  if (id < 0) return id;
+  if (id < 0) {
+    kfree(c);
+    return id;
+  }
   c->c1 = allocUnichannel(p1);
   c->c2 = allocUnichannel(p2);
   cTable.table[id] = c;
