@@ -19,6 +19,7 @@
 */
 
 #include <mynos.h>
+#include <stdlib.h>
 
 #define LED_NUM_LOCK		2
 #define LED_SCROLL_LOCK		1
@@ -155,7 +156,7 @@ int main()
 {
   int sem;
 
-  sem = mynos_initSem(0);
+  sem = mynos_driverRegister("keyboard", 1, NULL, NULL);
   printf("keyboardd: sem = %d\n", sem);
 
   mynos_enableIrq(1);
@@ -236,6 +237,7 @@ void keyb_handler(void)
 			keyboard_buffer[keyboard_buffer_size] = key_ascii;
 			keyboard_buffer_size++;
 			printf("%c", (char)key_ascii);
+			outportb(0x3F8, (char)key_ascii);
 		}
 		else
 		{

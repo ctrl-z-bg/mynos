@@ -39,6 +39,9 @@ int mynos_freeSem(int sem);
 int mynos_enableIrq(unsigned short n);
 int mynos_disableIrq(unsigned short n);
 
+int mynos_driverRegister(char * name, unsigned int irq, 
+			 unsigned int * io, unsigned int * mem);
+
 void outportb(unsigned int port,unsigned char value);
 unsigned char inportb(unsigned int port);
 

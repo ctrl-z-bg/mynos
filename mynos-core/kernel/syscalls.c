@@ -22,6 +22,7 @@
 #include "video.h"
 #include "syscalls.h"
 #include "pic.h"
+#include "irq.h"
 
 extern uint32_t currProcess;
 
@@ -45,6 +46,8 @@ __asm__ (\
 	 "   je .mynos_semInit\n"\
 	 "   cmpl $9, %eax\n"\
 	 "   je .mynos_semFree\n"\
+	 "   cmpl $10, %eax\n"\
+	 "   je .mynos_driverRegister\n"\
 	 "   cmpl $100, %eax\n"\
 	 "   je .mynos_enableIrq\n"\
 	 "   cmpl $101, %eax\n"\
@@ -108,6 +111,17 @@ __asm__ (\
 	 "   pushl %ebx\n"
 	 "   call __OS_sem_freeSemaphore\n"\
 	 "   popl %ebx\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_driverRegister:\n"\
+	 "   pushl %esi\n"
+	 "   pushl %edx\n"
+	 "   pushl %ecx\n"
+	 "   pushl %ebx\n"
+	 "   call __OS_driverRegister     \n"\
+	 "   popl %ebx\n"
+	 "   popl %ecx\n"
+	 "   popl %edx\n"\
+	 "   popl %esi\n"
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_enableIrq:\n"\
 	 "   pushw %bx\n"

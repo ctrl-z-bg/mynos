@@ -21,3 +21,5 @@
 /* the init function */
 void __OS_initExternalIRQs();
 
+int __OS_driverRegister(char * name, uint32_t irq, 
+			uint32_t * io, uint32_t * mem);

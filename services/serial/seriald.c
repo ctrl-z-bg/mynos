@@ -19,6 +19,7 @@
 */
 
 #include <mynos.h>
+#include <stdlib.h>
 
 #define PORT1 0x3F8
 
@@ -37,10 +38,9 @@ int main()
 {
   int sem;
 
+  sem = mynos_driverRegister("serial", 4, NULL, NULL);
   initSerial();
-  sem = mynos_initSem(0);
   printf("seriald: sem = %d\n", sem);
-  //printk("--- ");print_ulong(serial_sem = __OS_sem_allocateSemaphore(0));
 
   mynos_enableIrq(4);
 
@@ -54,7 +54,8 @@ int main()
 void initSerial() {
   outportb(PORT1 + 1, 0);     /* turn off interrupts - port 1 */
   outportb(PORT1 + 3, 0x80);    /* set DLAB on */
-  outportb(PORT1 + 0, 0x03);    /* set baud rate to 38400 bps (low byte) */
+  //outportb(PORT1 + 0, 0x03);    /* set baud rate to 38400 bps (low byte) */
+  outportb(PORT1 + 0, 0x30);    /* set baud rate to 2400 bps (low byte) */
   outportb(PORT1 + 1, 0x00);    /* set baud rate to 38400 bps (high byte) */
   outportb(PORT1 + 3, 0x03);    /* 8 bits, no parity, 1 stop bit */
   outportb(PORT1 + 2, 0xC7);    /* FIFO control register */

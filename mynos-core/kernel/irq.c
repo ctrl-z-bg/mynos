@@ -27,26 +27,43 @@
 #include "sem.h"
 #include "irq.h"
 
-/* trap wrappers */
-TRAP_WRAPPER(irq1);
-TRAP_WRAPPER(irq4);
+#define NAMEMAXLEN 10
+#define NUMSEM 20
 
 /* drivers processes semaphores */
-static int irq1_sem = 3;
-static int irq4_sem = 4;
+static int irqSemTable[NUMSEM];
+
+/* trap wrappers */
+TRAP_WRAPPER(irq1);
+TRAP_WRAPPER(irq3);
+TRAP_WRAPPER(irq4);
 
 /* the handlers */
 void irq1_handler() {
-    __OS_sem_V(irq1_sem);
+  __OS_sem_V(irqSemTable[1]);
+}
+
+void irq3_handler() {
+  __OS_sem_V(irqSemTable[3]);
 }
 
 void irq4_handler() {
-  __OS_sem_V(irq4_sem);
+  __OS_sem_V(irqSemTable[4]);
 }
 
 /* the init function */
 void __OS_initExternalIRQs() {
   set_vector(irq1_TRAP, M_VEC+1, D_PRESENT + D_INT); /* IRQ1 Handler */
+  set_vector(irq3_TRAP, M_VEC+3, D_PRESENT + D_INT); /* IRQ4 Handler */
   set_vector(irq4_TRAP, M_VEC+4, D_PRESENT + D_INT); /* IRQ4 Handler */
 }
+
+int __OS_driverRegister(char * name, uint32_t irq, 
+			uint32_t * io, uint32_t * mem) {
+  printk("Driver ");
+  printk(name);
+  printk(" registered\n");
+  return (irqSemTable[irq] = __OS_sem_allocateSemaphore(0));
+}
+
 

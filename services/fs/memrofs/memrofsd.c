@@ -98,7 +98,6 @@ void memrofs_read(pid_t client, int fd, size_t size) {
     response.rd = MIN(fe->size - (filedesc[fd].currpos - fe->start), size);
     response.status = STATUS_OK;
   }
-
   if ( mynos_send(client, &response,
 		  sizeof(response), MYNOS_IPC_FLAGS_NONBLOCK) < 0 ) {
     // error, nothing to do

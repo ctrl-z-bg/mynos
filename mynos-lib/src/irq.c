@@ -42,3 +42,18 @@ int mynos_disableIrq(unsigned short n){
   return ret;    
 }
 
+int mynos_driverRegister(char * name, unsigned int irq, 
+			 unsigned int * io, unsigned int * mem) {
+  int ret;
+  __asm__ volatile("pushal\n");
+  __asm__ volatile("movl $10, %eax\n");
+  __asm__ volatile("movl %0, %%ebx\n"::"m"(name));
+  __asm__ volatile("movl %0, %%ecx\n"::"m"(irq));
+  __asm__ volatile("movl %0, %%edx\n"::"m"(io));
+  __asm__ volatile("movl %0, %%esi\n"::"m"(mem));
+  __asm__ volatile ("int $0x90\n");
+  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
+  __asm__ volatile("popal\n");
+  return ret;
+}
+
