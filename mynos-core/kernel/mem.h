@@ -24,6 +24,7 @@
 #include "global.h"
 
 #define __LAST_LINEAR_PAGE 0xFFFFF
+#define PAGE_SIZE          0x1000
 
 /*************************************************************************
 *                        MEMORY BITMAP STUFF                             *

@@ -49,6 +49,11 @@ void _init_gdt() {
   /* alloc a full GDT */
   gdt_addr = (union DT_entry *)kmalloc(GDT_SIZE); /* 8192 * sizeof(DT_entry) */
 
+  printk("--");
+  print_ulong_hex(((unsigned)gdt_addr>>12)<<12);
+  printk("--\n");
+
+
   /* let's zero it */
   kbzero((void *)gdt_addr, GDT_SIZE);
 
