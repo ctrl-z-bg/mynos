@@ -78,7 +78,7 @@ int main(int argc, char ** argv) {
   /* copy the header */
   memcpy(disk + MAGIC_len, header, headerlen);
 
-  if ((diskFILE = fopen("RAMDISK.dsk", "w")) == NULL) {
+  if ((diskFILE = fopen("ramdisk.dsk", "w")) == NULL) {
     fprintf(stderr, "Unable to create the disk file\n");
     exit(-1);
   }
