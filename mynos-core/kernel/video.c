@@ -122,17 +122,17 @@ void _print_char(char c, char attrib) {
     tmp = tmp * 0xA0;
     tmp += BASE_VIDEO + 0xA0;
     video = (char *)tmp;
-  if (video >= (char*)END_VIDEO) {
-    scroll_screen();
-    video -= 0xA0;
-  }
+    if (video >= (char*)END_VIDEO) {
+      scroll_screen();
+      video -= 0xA0;
+    }
   } else {
     *video = c;
     *(video + 1) = attrib;
     video = video + 2;
   }
   /* move the cursor */
-  cursor = ((uint32_t)(video - BASE_VIDEO) / 2);
+  cursor = (((uint32_t)(video - BASE_VIDEO) / 2));
   update_cursor(cursor / 80, cursor % 80);
 }
 
