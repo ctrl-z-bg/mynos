@@ -34,6 +34,7 @@ void __OS_ipc_initChannelList(channelList_t * list) {
   list->channels = (channel_t**)kmalloc(MAXCHANNELS * sizeof(channel_t*));
   for (i = 0; i < MAXCHANNELS; i++)
     (list->channels)[i] = NULL;
+  list->sender = -1;
 }
 
 void __OS_ipc_destroyChannelList(channelList_t * list) {
@@ -78,7 +79,7 @@ channel_t * __OS_ipc_searchSender(channelList_t * list, pid_t sender) {
   start = list->recIdx;
   do {
     if (((list->channels)[list->recIdx] != NULL) &&
-	((list->channels)[list->recIdx]->sender == sender)) {
+	(!sender || ((list->channels)[list->recIdx]->sender == sender))) {
       found = 1;
       break;
     }
@@ -257,6 +258,59 @@ int __OS_ipc_recv(pid_t sender, char * buf, uint32_t size, uint32_t flags) {
 
 int __OS_ipc_recvAll(pid_t * sender, char * buf, uint32_t size, 
 		     uint32_t flags) {
+  tss_t * rtss;         // receiver tss
+  tss_t * stss;         // sender tss
+  channelList_t * list; // receiver channel list
+  channel_t * c;
+  int32_t done = 0;
+
+  while (!done) {
+    rtss = &(processTable[currProcess]);
+    list = &(rtss->channels);
+    
+    // LOCK rec list
+    if ((rtss->channels).sender != -1) {
+      *sender = (rtss->channels).sender;
+      c = __OS_ipc_searchSender(list, *sender);
+    } else
+      c = __OS_ipc_searchSender(list, 0);
+    
+    /* this should be true only if nobody woke me and the list is empty */
+    if (c == NULL) {
+      /* if I'm not blocking and there is no message for me return err */
+      if (flags & IPC_FLAGS_NOBLOCK) {
+	// UNLOCK rec list
+	return -1;
+      }
+      rtss->isWaitingSender = 0;
+    } else { // c is not null
+      /* the msg is longer than we expected */
+      if (__OS_ipc_readFromChannel(c, buf, size, sender) < 0) {
+	__OS_ipc_destroyChannelIntoList(list, c);
+	// UNLOCK rec list
+	return -1;
+      }
+      __OS_ipc_destroyChannelIntoList(list, c);
+      done = 1;
+
+      if (c->senderBlocked) {
+	stss = &(processTable[*sender]);
+	// LOCK sender list
+	stss->isWaitingReceiver = -1;
+	// UNLOCK sender list
+      }
+    }  
+    
+    // UNLOCK rec list
+    {   // tasksw to idle process
+      struct {long a ,b;} tmp = {0, 0};
+      
+      currProcess = 0;
+      tmp.b = (long)processTable[currProcess].tssd_gdt_selector;
+      __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
+    }
+  }     // while (!done)
+
   return 0;
 }
 
