@@ -58,7 +58,7 @@ void pit_handler() {
   tmp.b = ret;
 
   if (ret)
-    __asm__ volatile ("ljmp %0\n"::"m"(tmp.a));
+    __asm__ volatile ("ljmp *%0\n"::"m"(tmp.a));
 
 }
 
