@@ -21,8 +21,13 @@
 #include "global.h"
 #include "video.h"
 #include "main.h"
+#include "gdt.h"
 #include "io.h"
 #include "mem.h"
+#include "pic.h"
+#include "pit.h"
+
+#include "idt.h"
 
 void __print_free_phy_pages() {
   printk("(adesso ci sono ");
@@ -39,6 +44,11 @@ void mynos_main() {
   init_memory();
 
   clear_screen();
+
+  init_pics();
+  init_idt();
+  init_pit(18.3, 0);
+  set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT + D_DPL3));
 
   printk("paging enabled!!!\n\n");
 
@@ -101,6 +111,9 @@ void mynos_main() {
     printk("Allocate 2 pagine\n");
   __print_free_phy_pages();
   }
+
+  enable_irq(1); // irq1 (keyboard) is interrupt M_VEC+1 (33)
+  enable_irq(0);
 
   KPANIC("\nEND OF KERNEL DEMO");
 }

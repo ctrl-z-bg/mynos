@@ -40,7 +40,7 @@ nTotalSect32		dd	0x00000000
 bBootDrive		db	0x00
 ResvdByte		db	0x00
 ExtBootSig		db	0x29
-nOSSectors		dw	0x20		; c8 = 100KB
+nOSSectors		dw	0xc8		; c8 = 100KB
 ResvdWord		dw	0x0000
 Volname			db	"QUASI  BOOT"
 FatType			db	"FAT12   "
@@ -297,7 +297,8 @@ gdtinfo:
 	dd      gdt_table
 gdt_table:
   null_desc       desc    0,0,0
-  flat_code       desc    0, 0xFFFFF, D_CODE + D_READ + D_BIG + D_BIG_LIM
+  flat_code       desc    0, 0xFFFFF, D_CODE + D_BIG + D_BIG_LIM
+  user_code       desc    0, 0xFFFFF, D_CODE + D_READ + D_BIG + D_BIG_LIM
   flat_data       desc    0, 0xFFFFF, D_DATA + D_WRITE + D_BIG + D_BIG_LIM
 gdtlength equ $ - gdt_table - 1
 

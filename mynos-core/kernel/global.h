@@ -27,11 +27,13 @@
 
 #define KPANIC(MSG) {printk(MSG); while(1){}}
 
-typedef char          byte_t;
-typedef unsigned int  uint32_t;
-typedef int           int32_t;
-typedef unsigned long ulong32_t;
-typedef long          long32_t;
+typedef char           byte_t;
+typedef unsigned int   uint32_t;
+typedef int            int32_t;
+typedef unsigned long  ulong32_t;
+typedef long           long32_t;
+typedef unsigned short ushort16_t;
+typedef short          short16_t;
 
 extern int _asm_global_mem_size;
 extern int _asm_last_page_dir_entry_used;

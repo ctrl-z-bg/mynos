@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "gdt.h"
 #include "mem.h"
 #include "video.h"
 
@@ -30,6 +31,7 @@ void init_memory() {
   uint32_t first_free_phy_page = (_asm_first_free_physical_page_address>>12);
   uint32_t total_phy_pages = (_asm_global_mem_size*256);
 
+  _init_gdt();
   __memory_bitmap = (byte_t*)__MEMORY_BITMAP_PHY_ADDRESS;
   __memory_bitmap_size = total_phy_pages / 8;
 

@@ -1,0 +1,4 @@
+Some code from kernel/idt.[hc], kernel/pic.[hc] is inspired by
+gazos-0.2 written by Gareth Owen. Some functions like enable_irq and
+disable_irq are taken as-is from gazos. Thank you Gareth.
+
