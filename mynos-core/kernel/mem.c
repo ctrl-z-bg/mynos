@@ -159,17 +159,17 @@ void * __OS_releasePages(void *pageaddr, unsigned int npages,
 	((*(uint32_t*)__GET_PAGE_DIR_ENTRY(__ADDRESS_PD_INDEX(addr)) &
 	  PF_PRESENT) == 0))
       return NULL;
-
+    
     /* get the page table entry */
     pte = (int*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), 
 				       __ADDRESS_PT_INDEX(addr));
-
+    
     /* check if the page is an allocated user page */
     if (check &&
 	(!(*pte & (PF_PRESENT | PF_LOGICAL_PRESENT)) ||
 	 !(*pte & PF_USER)))
       return NULL;
-
+    
 #ifdef DEBUG
     printk(__FUNCTION__": releasing page ");
     print_uint_hex(addr);
@@ -190,11 +190,11 @@ void * __OS_releasePages(void *pageaddr, unsigned int npages,
 #endif    
     
     /* let's zero the page table entry */
-   *pte = 0;
-
-   /* invalidate the cache */
-   INVALIDATE_THE_CACHE(addr);
-   addr += PAGE_SIZE;
+    *pte = 0;
+    
+    /* invalidate the cache */
+    INVALIDATE_THE_CACHE(addr);
+    addr += PAGE_SIZE;
   }
 
   return pageaddr;

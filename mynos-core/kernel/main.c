@@ -224,10 +224,9 @@ void mynos_main(multiboot_info_t *boot_info) {
     for (i = 0; i < MAXPROCESSES; i++)
       processTable[i].isAlive = 0;
   }
-  
 
   /* to try the releasePages */
-#if 0
+#if 1
   printk("free pages: ");
   print_uint(__number_of_free_physical_pages);
   print_char('\n');

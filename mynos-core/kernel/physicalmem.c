@@ -99,6 +99,7 @@ void pmem_set(uint32_t page) {
   if (pmemdes.page[page].countref == 0) {
     __SET_MEMORY_BITMAP_PAGE_BIT(page);
     pmemdes.page[page].countref = 1;
+    pmemdes.page[page].flags = 0;
   } else
     pmemdes.page[page].countref++;
 }
