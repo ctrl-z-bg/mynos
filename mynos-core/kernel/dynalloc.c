@@ -172,7 +172,7 @@ void
 _removeBlock(void *ptr, void *prev)
 {
   void *next = _NEXT_BLOCK_PTR(ptr);
-  /* void *bgn = _BLOCK_BGN(ptr); */
+  void *bgn = _BLOCK_BGN(ptr);
   void *end = _BLOCK_END(ptr);
   void *firstPage;
   void *lastPage;
@@ -185,7 +185,7 @@ _removeBlock(void *ptr, void *prev)
 
   /* find the first page whose first byte was withing the current block */
   firstPage =
-    (_GET_PAGE_BLOCK(ptr) == ptr)?_GET_PAGE_BLOCK(ptr):_GET_NPAGE_ADDRESS(ptr);
+    (_GET_PAGE_BLOCK(ptr) == bgn)?_GET_PAGE_BLOCK(ptr):_GET_NPAGE_ADDRESS(ptr);
   /* same thing, find the last page whose LAST byte was within the block */
   lastPage = _GET_PAGE_ADDRESS(end);
   if ( end < lastPage + (1 << 12) - 1)  /* it wasn't at the end of the p. */
