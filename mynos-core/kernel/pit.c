@@ -55,8 +55,7 @@ void pit_handler() {
   uint32_t oldProcess = currProcess;
   pid_t isForking;
 
-  asm("int $0x1C"); /* Extra timer interrupt, 
-		       used by floppy for timeout etc.. */
+  //asm("int $0x1C"); /* Extra timer interrupt, used by floppy for timeout etc.. */
 
   /* a task switch any 55 msec */
   if ((count++) > 1) {
