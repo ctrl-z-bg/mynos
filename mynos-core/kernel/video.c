@@ -21,6 +21,22 @@
 #include "video.h"
 #include "io.h"
 
+/* void update_cursor(int row, int col)
+ * by Dark Fiber
+ * taken from alt.os.development FAQ
+ */
+static void update_cursor(uint32_t row, uint32_t col)
+{
+  ushort16_t position=(row*80) + col;
+  
+  // cursor LOW port to vga INDEX register
+  outportb(0x3D4, 0x0F);
+  outportb(0x3D5, (ubyte_t)(position&0xFF));
+  // cursor HIGH port to vga INDEX register
+  outportb(0x3D4, 0x0E);
+  outportb(0x3D5, (ubyte_t)((position>>8)&0xFF));
+}
+
 /* to print a digit */
 #define ZERO 48
 
@@ -94,7 +110,8 @@ void print_ulong_hex(ulong32_t n) {
 }
  
 void print_char(char c) {
-  if (video > (char*)END_VIDEO) {
+  uint32_t cursor;
+  if (video >= (char*)END_VIDEO) {
     scroll_screen();
     video -= 0xA0;
   }
@@ -105,11 +122,18 @@ void print_char(char c) {
     tmp = tmp * 0xA0;
     tmp += BASE_VIDEO + 0xA0;
     video = (char *)tmp;
+  if (video >= (char*)END_VIDEO) {
+    scroll_screen();
+    video -= 0xA0;
+  }
   } else {
     *video = c;
     *(video + 1) = 0x7;
     video = video + 2;
   }
+  /* move the cursor */
+  cursor = ((uint32_t)(video - BASE_VIDEO) / 2);
+  update_cursor(cursor / 80, cursor % 80);
 }
 
 void clear_screen() {

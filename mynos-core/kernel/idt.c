@@ -76,7 +76,6 @@ void init_idt() {
 
   set_vector(_mynos_syscalls_trap_TRAP, 0x90, D_PRESENT + D_INT + D_DPL3);
 
-
   asm("lidt (%0)                 \n"	/* Load the IDT                */
       "pushfl                    \n"	/* Clear the NT flag           */
       "andl $0xffffbfff,(%%esp)  \n" "popfl                     \n":
