@@ -45,18 +45,19 @@ tss_t procA_tss;
 char * tssd_addr = (char*)(10*8);
 
 void procA() {
-  printk("\nSono il primo processo eseguito ufficilamente da MyNOS!!!\n");
-  printk("Mi chiamo procA e sono una sorta di kernel thread (la mia page\n");
-  printk("directory coincide con quella di mio padre). Il mio codice e'\n");
-  printk("interamente in main.c. Dagli un'occhiata (specialmente al mio tss).\n");
-  printk("Fra una sega e l'altra questo e' il nostro primo task switch! :-)\n");
- asd: goto asd;
+  printk("\n I'm the child\n");
+  while(1) {
+    delay(1000);
+    __asm__ volatile ("ljmp $80,$0\n");
+    printk(" I'm the child\n");
+  }
 }
 
 void tsksw() {
   /* set a tss for the outcoming process */
   idle_tss.pgdir = (uint32_t**)0x100000;
   idle_tss.io_bitmap_offset = 0;
+  idle_tss.ldt = 0;
 
   /* set a tss for the incoming process! */
   procA_tss.pgdir = (uint32_t**)0x100000;
@@ -87,8 +88,8 @@ void tsksw() {
      current process's tssd */
   __asm__ volatile ("ltrw (tssd_addr)\n");
 
-    /* task switching!!! :) */
-    __asm__ volatile ("ljmp $88,$0\n");
+  /* task switching!!! :) */
+  __asm__ volatile ("ljmp $88,$0\n");
 }
 
 
@@ -142,6 +143,12 @@ void mynos_main() {
   }
 
   tsksw();
+
+  while(1) {
+    printk("I'm the father\n"); 
+    delay(1000);
+    __asm__ volatile ("ljmp $88,$0\n");
+  }
 
   {
     while (1)
