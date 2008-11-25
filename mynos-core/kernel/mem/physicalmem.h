@@ -37,7 +37,7 @@ typedef struct {
   ppagedes_t * page;
 } pmemdes_t;
 
-extern pmemdes_t pmemdes;
+//extern pmemdes_t pmemdes;
 
 /* this function creates a physical memory manager. See .c for commments */
 void pmem_createPhyMemManager();

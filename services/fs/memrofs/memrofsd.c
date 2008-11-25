@@ -189,7 +189,7 @@ int main() {
     mynos_send(channel, &request, sizeof(request_t),
 	       MYNOS_IPC_NONBLOCK);
     //puts("req1");
-    mynos_recv(channel, &msg, 0);
+    mynos_recv(channel, &msg, 0, 0);
     memcpy(&open_response, msg->start, sizeof(open_response_t));
     mynos_freeMsg(&msg);
     if ( open_response.status != STATUS_OK ) {
@@ -206,12 +206,12 @@ int main() {
     mynos_send(channel, &request, sizeof(request_t),
 	       MYNOS_IPC_NONBLOCK);
     //puts("req2");
-    if ( mynos_recv(channel, &msg, 0) < 0 )
+    if ( mynos_recv(channel, &msg, 0, 0) < 0 )
       puts("errore 1");
     //puts("resp2a");
     memcpy(&read_response, msg->start, sizeof(read_response_t));
     mynos_freeMsg(&msg);
-    mynos_recv(channel, &msg, 0);
+    mynos_recv(channel, &msg, 0, 0);
     memcpy(mybuf, msg->start, 100);
     mynos_freeMsg(&msg);
     if ( read_response.rd == 0 )
@@ -234,7 +234,7 @@ int main() {
       puts("Error receiving request");
       exit(-1);
     }
-    mynos_recv(channel, &msg, 0);
+    mynos_recv(channel, &msg, 0, 0);
     memcpy(&request, msg->start, sizeof(request_t));
     mynos_freeMsg(&msg);
     process_request(sender, request);

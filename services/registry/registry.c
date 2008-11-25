@@ -90,7 +90,7 @@ void * worker(void * p) {
 
   channel = (int)p;
   msg = (mynos_msg_t*)malloc(sizeof(mynos_msg_t));
-  ret = mynos_recv(channel, &msg, 0);
+  ret = mynos_recv(channel, &msg, 0, 0);
   if (ret < 0) {
     printf("Warning registry: invalid recv (%d)\n", ret);
     mynos_freeChannel(channel);

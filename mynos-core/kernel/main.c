@@ -263,6 +263,12 @@ void mynos_main(multiboot_info_t *boot_info) {
   }
 #endif
 
+  if (boot_info->flags & 0x800)
+    printk("SIIIIIIIIIIIIIIIIII");
+  else
+    printk("NOOOOOOOOOOOOOOOOOO");
+
+
   tsksw();
 
   /* start the elf modules */
