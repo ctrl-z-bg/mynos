@@ -101,10 +101,10 @@ void set_vector(void *handler, unsigned char interrupt,
     (unsigned short) (((unsigned long) handler) >> 16);
 }
 
-asm(".globl int_null        \n" 
+asm(".pushsection .text\n" ".globl int_null        \n" 
     "int_null:              \n" 
     "   iret                \n"	/* Exit interrupt                   */
-    );
+    ".popsection\n");
 
 void _int0() {
   printk("int0: Divide Error\n");

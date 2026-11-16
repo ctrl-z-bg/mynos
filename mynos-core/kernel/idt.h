@@ -23,7 +23,7 @@
 
 #define ISR_WRAPPER(NAME) \
   void NAME##_ISR();\
-  __asm__ (\
+  __asm__ (".pushsection .text\n" \
    ".globl "#NAME"_ISR     \n"\
    #NAME"_ISR:             \n"\
    "   pushal              \n"\
@@ -32,18 +32,18 @@
    "   outb %al, $0x20     \n"\
    "   popal               \n"\
    "   iret                \n"\
-)
+".popsection\n")
 
 #define TRAP_WRAPPER(NAME) \
   void NAME##_TRAP();\
-  __asm__ (\
+  __asm__ (".pushsection .text\n" \
    ".globl "#NAME"_TRAP    \n"\
    #NAME"_TRAP:            \n"\
    "   pushal              \n"\
    "   call "#NAME"_handler\n"     /* call the TRAP handler */\
    "   popal               \n"\
    "   iret                \n"\
-);
+".popsection\n");
 
 void set_vector(void *handler, unsigned char interrupt, unsigned short control_major);
 void init_idt();

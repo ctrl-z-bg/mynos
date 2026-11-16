@@ -46,7 +46,7 @@ void _linux_syscall_times(struct tms *buf) {
 }
 
 void _linux_syscalls_trap_TRAP();
-__asm__ (\
+__asm__ (".pushsection .text\n" \
 	 ".globl _linux_syscalls_trap_TRAP         \n"\
 	 "_linux_syscalls_trap_TRAP:               \n"\
 	 "   cmpl $1, %eax\n"\
@@ -158,7 +158,7 @@ __asm__ (\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".exit_linux_syscall:\n"\
 	 "   iret                \n"\
-	 );
+	 ".popsection\n");
 
 
 void _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id) {

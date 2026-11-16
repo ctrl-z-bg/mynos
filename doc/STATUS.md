@@ -108,9 +108,24 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 
 ### Build and run
 
-- **Not verified on a modern toolchain.** The code was last built around
-  2004–2008 (gcc 3, GRUB legacy). `dietlibc-dev` and `nasm` are installed on
-  the dev machine. Next step: mynos-bo2.
+- **Toolchain.** The November 2008 commits add `-fno-stack-protector`, so
+  the last original state targets gcc ≥ 4.1 (gcc 4.3, Ubuntu 8.10 era). The
+  host (gcc 15, no multilib, x86_64-only dietlibc) cannot build it. Builds run
+  in the **legacy container** (`tools/containers/legacy`): Debian lenny i386
+  with gcc 4.3.2, binutils 2.18, nasm 2.03, dietlibc 0.31, plus OCaml 3.06
+  built from source. A container with a modern toolchain is planned
+  (mynos-aji).
+- **Kernel: builds and boots.** `make -C mynos-core/kernel` in the legacy
+  container, then `tools/run-qemu.sh` (QEMU's multiboot loader, no GRUB).
+  It completes the initialization (GDT, paging, PIC, IDT, delay calibration,
+  PIT, semaphores, services registry) and runs the idle loop with the timer at
+  100 Hz. With gcc 4.3 this needed one fix: top-level `asm` blocks had no
+  section directive and gcc placed some of them in data sections (`pit_ISR`
+  in `.bss`, `int7_TRAP` in `.data`), so the first real timer tick hit an
+  invalid opcode. They now use `.pushsection .text`.
+- `mynos-core/boot/` (floppy bootloader) does not assemble with nasm 2.x
+  (mynos-s96); build `mynos-core/kernel` directly.
+- **Services and ocamlrun: not built yet.** Next step: mynos-bo2.2.
 
 ### Known shortcuts and bugs
 
@@ -165,3 +180,7 @@ Side task: archive the old SourceForge site (mynos-db2).
   full read of the codebase. Opened mynos-bo2, mynos-nxa, mynos-pg9, mynos-jwl.
   Added `README.md`. Planned the roadmap and opened the issues listed under
   "Direction".
+- **2026-11-16** — Legacy build container and `tools/run-qemu.sh`. The kernel
+  builds with the 2008 toolchain and boots in QEMU after fixing the section of
+  top-level asm blocks. Closed mynos-bo2.1, mynos-o7z; opened mynos-aji,
+  mynos-s96.

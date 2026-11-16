@@ -30,7 +30,7 @@
 extern uint32_t currProcess;
 
 void _mynos_syscalls_trap_TRAP();
-__asm__ (\
+__asm__ (".pushsection .text\n" \
 	 ".globl _mynos_syscalls_trap_TRAP         \n"\
 	 "_mynos_syscalls_trap_TRAP:               \n"\
 	 "   cmpl $3, %eax\n"\
@@ -231,7 +231,7 @@ __asm__ (\
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".exit_mynos_syscall:\n"\
 	 "   iret                \n"\
-	 );
+	 ".popsection\n");
 
 
 void _mynos_syscall_WRONGSYSCALL(uint32_t syscall_id) {

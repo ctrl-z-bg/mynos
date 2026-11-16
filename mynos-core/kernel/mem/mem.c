@@ -294,7 +294,7 @@ void SEG_createStandardDescriptor(uint32_t * address,
 
 
 extern void _page_fault_handler_TRAP();
-__asm__ (\
+__asm__ (".pushsection .text\n" \
 	 ".globl _page_fault_handler_TRAP \n"\
 	 "_page_fault_handler_TRAP:       \n"\
 	 "   movl %eax, (0)               \n"\
@@ -309,7 +309,7 @@ __asm__ (\
 	 "   popal                        \n"\
 	 "   movl (0), %eax               \n"\
 	 "   iret                         \n"\
-	 );
+	 ".popsection\n");
 
 /* exported functions for special cases (cow, alloc-on-write) */
 

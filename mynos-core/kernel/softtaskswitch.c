@@ -34,13 +34,13 @@ extern tss_t THEtss;
 /* a task created with taskSpawn needs to be 'adjusted' */
 void startThread();
 
-__asm__ (".globl startThread \n" \
+__asm__ (".pushsection .text\n" ".globl startThread \n" \
 	 "startThread: \n"\
 	 "  popw %gs\n"\
 	 "  popw %fs\n"\
 	 "  popw %es\n"\
 	 "  popw %ds\n"\
-	 "  iret\n");
+	 "  iret\n" ".popsection\n");
 
 
 

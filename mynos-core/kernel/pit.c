@@ -39,14 +39,14 @@ void init_pit(int freq, unsigned char channel) {
 /* we can't use ISR_WRAPPER(pit) because it send EOI to pic, but we have to
    do it inside pit_handler, so we write a special (minimal) pit_ISR */
 void pit_ISR();
-__asm__ (\
+__asm__ (".pushsection .text\n" \
 	 ".globl pit_ISR         \n"\
 	 "pit_ISR:               \n"\
 	 "   pushal              \n"\
 	 "   call pit_handler    \n"     /* call the ISR handler */\
 	 "   popal               \n"\
 	 "   iret                \n"\
-	 );
+	 ".popsection\n");
 
 
 uint32_t timerTicks = 0;

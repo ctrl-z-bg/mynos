@@ -257,7 +257,7 @@ unsigned long calibrateDelayLoop(void)
  * This code is invoked when the PIT finishes its period.
  */
 
-asm (
+asm (".pushsection .text\n" 
    ".globl pit_delay_ISR   \n"
    "pit_delay_ISR:         \n"
    "   pusha               \n"   /* Save all registers             */
@@ -272,7 +272,7 @@ asm (
    "   popw %ds            \n"   /* Restore user code data segment */
    "   popa                \n"   /* Restore registers              */
    "   iret                \n"   /* Return from interrupt          */
-);
+".popsection\n");
 
 /**************************************************************************/
 
