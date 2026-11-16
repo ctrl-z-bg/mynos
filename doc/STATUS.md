@@ -158,6 +158,15 @@ on screen and sent to the serial port.
     library called 10 (`driverRegister`); it is now 13 on both sides.
   - Unknown system calls panicked the kernel; now they fail with `-ENOSYS`
     (Linux) or `MYNOS_ERR_INVALID` (native).
+  - The Linux syscall entry did not preserve registers; multiboot modules
+    above 4 MB were neither reserved nor mapped; pages allocated on first use
+    were not zeroed; the bytecode "file" had no real seek semantics. Found
+    while running modern OCaml runtimes (`doc/JOURNAL.md`).
+- **Modern OCaml runs on the kernel.** In an experiment
+  (`tools/experiments/ocaml-runtime`) the bytecode runtimes of OCaml 4.14.5
+  and 5.5.2, built with musl, run test programs on MyNOS, effect handlers
+  included. Proposal: move user space to musl and adopt OCaml 5.5
+  (`doc/decisions/ocaml-runtime.md`, mynos-4er).
   - `memrofs/tool/createDisk` is a host tool but was built like a MyNOS
     program; now built with plain gcc.
 - **Changes for the modern toolchain:**
@@ -250,3 +259,8 @@ Side task: archive the old SourceForge site (mynos-db2).
   unknown system calls; kernel console mirrored to COM2; added
   `tools/run-tests.sh`, `tests/abi` and `doc/JOURNAL.md`. Closed mynos-jwl,
   mynos-j17.
+- **2026-11-16** — OCaml runtime evaluation: 4.14.5 and 5.5.2 built with musl
+  run on MyNOS. Fixed four kernel bugs found on the way (register
+  preservation, modules above 4 MB, zeroing of new pages, file seeks) and
+  added the Linux calls the runtimes need. Proposal written in
+  `doc/decisions/ocaml-runtime.md`.

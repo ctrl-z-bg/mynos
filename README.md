@@ -21,6 +21,7 @@ high-level language rather than in C.
 | [`mynos-byterun/`](mynos-byterun/) | The OCaml 3.06 bytecode runtime (`ocamlrun`), patched to run on MyNOS |
 | [`doc/STATUS.md`](doc/STATUS.md) | Architecture overview and current state of the project |
 | [`doc/JOURNAL.md`](doc/JOURNAL.md) | Engineering journal: what was found while reviving the code, bug by bug |
+| [`doc/decisions/`](doc/decisions/) | Design decisions, with the evidence behind them |
 
 Low-level design notes from 2002 (memory layout, interrupts, startup) are in
 [`mynos-core/doc/MyNOS-note.txt`](mynos-core/doc/MyNOS-note.txt).

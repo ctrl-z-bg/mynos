@@ -237,3 +237,94 @@ setup assigned `prev` twice instead of `next` and `prev`.
   COM2, so `tools/run-tests.sh` can boot QEMU headless, log the console to a
   file and check the expected lines. `tests/abi` checks the system calls
   above. Both toolchains pass.
+
+---
+
+## 2026-11-16 — Running modern OCaml runtimes on MyNOS
+
+To decide on the runtime (mynos-4er, `doc/decisions/ocaml-runtime.md`) we
+built the bytecode runtimes of OCaml 4.14.5 and 5.5.2 for MyNOS and ran them
+on the kernel. Getting there taught us more about the kernel than about OCaml.
+
+### dietlibc gives up, musl does not
+
+Configuring OCaml with `CC="diet gcc"` failed first on the target triple
+(`i686-pc-linux-dietlibc` is unknown to `config.sub`), then on missing C99
+float functions, then on `fmin`, `isfinite`, `nextafter`, `UINT64_C`...
+Switching to musl (`musl-gcc`, static) built both runtimes unchanged on the
+first try. Linking for MyNOS needed `-Ttext-segment=0x40000000` rather than
+`-Ttext`, because musl's `crti.o` has an `.init` section that `-Ttext` leaves
+at the default address.
+
+### Linux preserves registers; the MyNOS entry point did not
+
+**Symptom.** Right after `set_thread_area`, a user-mode fault writing
+address `0x28`.
+
+**Cause.** musl's `__set_thread_area` keeps a pointer in `%ecx` across
+`int $0x80`, as Linux allows: Linux preserves every register except `%eax`.
+The MyNOS dispatcher pushed only the argument registers it needed, and the C
+handler clobbered `%ecx`. dietlibc never relied on it.
+
+**Fix.** The Linux dispatcher now saves all six argument registers on entry
+and restores them on exit. As a bonus the six pushes are exactly the cdecl
+argument list of every handler, and the `struct mmap_args` of `mmap2`: the
+dispatcher became a plain table.
+
+### The fake bytecode file needed real file semantics
+
+The 2008 kernel served GRUB module 1 for any `open`, and its `_llseek`
+treated every offset as relative to the end of the file and never wrote the
+result back. OCaml 3.06 only ever seeked from the end, so it worked. Newer
+runtimes seek from the start and the current position, and musl uses `lseek`
+and `fstat64` too. The single file now has a position, `lseek`/`_llseek`
+honour `SEEK_SET`/`SEEK_CUR`/`SEEK_END`, and `stat64`/`fstat64` report its
+size. It is still one file (mynos-nxa).
+
+### Modules above 4 MB were invisible and unprotected
+
+**Symptom.** The 5.5 runtime read the right offsets of its bytecode, but the
+16-byte trailer came back as zeros.
+
+**Diagnosis.** gdb showed the kernel copying from `0x412c9f`, inside module
+1 as reported by multiboot, and the memory there was all zeros.
+
+**Cause.** Two bugs. The kernel marks only the first 4 MB of physical memory
+as used, and `start.asm` identity-maps only those 4 MB. A module loaded
+partly above 4 MB (the 5.5 bytecode ends at `0x412caf`) was neither reserved
+(its frames could be handed out by the allocator) nor mapped at its address
+(the kernel read some other page). The old modules were small enough to fit
+below 4 MB.
+
+**Fix.** `mynos_main` registers each module's range before `init_memory`,
+which marks those frames as used and maps them at linear = physical **before
+the first allocation**. The first attempt did the mapping after the GDT was
+allocated, and since the GDT had been given linear `0x400000` the mapping
+replaced it: a reboot loop. Order matters.
+
+### Fresh pages were not zeroed
+
+**Symptom.** The 4.14 runtime died on a `hlt` inside musl's `malloc`.
+
+**Cause.** musl's allocator checks that memory it just obtained from `mmap`
+is zero, as Linux guarantees for anonymous mappings. MyNOS allocates those
+pages on first access and handed out frames with whatever their previous
+owner left there. That was also an information leak between processes.
+
+**Fix.** `__allocateOnUse` clears the page after mapping it.
+
+### Result
+
+With these fixes plus small additions (`writev`, `exit_group`,
+`set_tid_address`, `mprotect` accepted, and for 5.x `sigaltstack`,
+`rt_sigaction`, `rt_sigprocmask` accepted and ignored), **both OCaml 4.14.5
+and 5.5.2 run on MyNOS**, floats included. Effect handlers work out of the
+box; `Domain.spawn` stops at the missing `clone`.
+
+**Lessons.**
+- A complete libc matters more than a small one: musl removed a whole class
+  of problems at once.
+- Every runtime that ran on MyNOS so far was also a kernel test: each one
+  exercised paths the previous ones never touched.
+- "Report the unknown system call and return -ENOSYS" turned the kernel into
+  a measuring instrument: the list of missing calls was the to-do list.
