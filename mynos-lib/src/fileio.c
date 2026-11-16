@@ -73,26 +73,37 @@ static long now_ms(void)
   return ts.sec * 1000 + ts.nsec / 1000000;
 }
 
-/* look a service up once; -1 if it does not exist. Services start together
-   at boot, so give it a second to register. A lookup that takes long means
-   there is no registry at all (the library waits 2 s for it): give up. */
-static int service_port(const char * name, int * cache)
+/* a service's port, looked up once: port -2 before the first lookup, -1
+   while it is not found */
+struct svc { int port; long retry_at; };
+
+/* the port of a service, or -1. Services start together at boot, so the
+   first lookup gives it a second to register; a lookup that takes long
+   means there is no registry at all (the library waits 2 s for it): give
+   up. A service not found is looked up again, once, every 2 s: init may
+   start it later. */
+static int service_port(const char * name, struct svc * cache)
 {
-  if (*cache == -2) {
+  if (cache->port == -2) {
     int tries;
-    *cache = -1;
+    cache->port = -1;
     for (tries = 0; tries < 50; tries++) {
       long t0 = now_ms();
       int p = mynos_registryLookUp((char *)name);
-      if (p >= 0) { *cache = p; break; }
+      if (p >= 0) { cache->port = p; break; }
       if (p != MYNOS_ERR_INVALID || now_ms() - t0 > 1000) break;
       mynos_sleep(20000);
     }
+    cache->retry_at = now_ms() + 2000;
+  } else if (cache->port == -1 && now_ms() >= cache->retry_at) {
+    int p = mynos_registryLookUp((char *)name);
+    if (p >= 0) cache->port = p;
+    cache->retry_at = now_ms() + 2000;
   }
-  return *cache;
+  return cache->port;
 }
 
-static int console_cache = -2;
+static struct svc console_cache = { -2, 0 };
 
 /* one request/reply exchange on a new connection; the channel stays open
    (in *channel_out) for a data message */
@@ -135,7 +146,7 @@ static const char * service_name[NSERVICES] =
   { MEMROFS_SERVICE, TMPFS_SERVICE, FATFS_SERVICE };
 static const char * service_mount[NSERVICES] =
   { "", TMPFS_MOUNT, FATFS_MOUNT };
-static int service_cache[NSERVICES] = { -2, -2, -2 };
+static struct svc service_cache[NSERVICES] = { { -2, 0 }, { -2, 0 }, { -2, 0 } };
 
 static int service(int s)
 {
@@ -371,7 +382,7 @@ ssize_t read(int fd, void * buf, size_t count)
   int slot;
 
   if (fd == 0 && service_port(CONSOLE_SERVICE, &console_cache) >= 0)
-    return console_read(console_cache, buf, count);
+    return console_read(console_cache.port, buf, count);
   slot = file_slot(fd);
   if (slot < 0) return result(sys3(3 /* read */, fd, (long)buf, count));
 

@@ -114,7 +114,8 @@ All services are linked statically against `libmynos` and placed at
 - `keyboard`, `serial`: drivers using `mynos_driverRegister` and port I/O.
 - `console`: the console service (2026). Owns the keyboard, edits the line
   being typed (Backspace; Up/Down or Ctrl-P/Ctrl-N recall the last 64
-  lines, kept in memory) and gives lines to programs reading their standard input,
+  lines, kept in `/disk/.history` when there is a disk, so they survive a
+  reboot) and gives lines to programs reading their standard input,
   through `read` in `mynos-lib/src/fileio.c` (`doc/decisions/terminal.md`).
   It replaces `keyboard` in the demo when built.
 - `fs/memrofs`: a read-only in-memory filesystem. GRUB loads it as a module
@@ -341,9 +342,10 @@ Planned work, in order. Details live in the beads issues.
    through memrofs, a console service, and the OCaml toplevel as the shell.
    Then processes that free their memory (mynos-pg6), init and the first
    OCaml service, threads and domains (mynos-l9h): done.
-4. Later: real external storage, a disk driver and a filesystem as services
-   (mynos-rf4); networking (mynos-4f6), a GUI toolkit (mynos-9lr), distinctive
-   applications (mynos-3h1).
+4. Storage (mynos-rf4, done): the ATA driver and the FAT filesystem, both
+   in OCaml, `/disk` in the shell.
+5. Later: networking (mynos-4f6), a GUI toolkit (mynos-9lr), distinctive
+   applications (mynos-3h1), several CPUs (mynos-awn).
 
 The old SourceForge site is archived in `doc/website/` (mynos-db2).
 
@@ -474,6 +476,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   mtools. Fixed two kernel bugs that hung the test one time in six: the
   ordered list insertion (equal keys) and the heap releasing a page still
   holding a block's pointers. Closed mynos-rf4.3.
+- **2026-11-16** — The console's history is kept on the disk
+  (`/disk/.history`): Up after a reboot recalls the previous session. A
+  service not found is looked up again every 2 s (init starts services in
+  parallel). Closed mynos-rf4.4 and the storage epic mynos-rf4.
 - **2026-11-16** — The original website (mynos.sourceforge.net, from the
   Wayback Machine) archived as static files in `doc/website/`, with the
   2002-2004 news posts and the 2002 and 2004 test packages. Closed

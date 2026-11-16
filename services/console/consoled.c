@@ -22,6 +22,9 @@
  *
  * History: the last HIST_MAX lines typed are kept in memory; Up and Down
  * (or Ctrl-P and Ctrl-N) bring them back for editing, as in a Unix shell.
+ * When there is a disk (/disk, fatfs), the history is kept in
+ * HISTORY_FILE too, read at the first request and appended to by the main
+ * thread, so it survives a reboot.
  *
  * Two threads: the keyboard thread waits for interrupts and builds lines;
  * the main thread serves clients. MyNOS threads share their creator's TLS
@@ -29,9 +32,12 @@
  * MyNOS calls, port I/O and a raw write system call.
  */
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include <mynos.h>
 #include <mynos_console.h>
 #include "../keyboard/keymap.h"
@@ -39,13 +45,16 @@
 #define LINE_MAX 256
 #define QUEUE_MAX 4096
 #define HIST_MAX 64
+#define HISTORY_FILE "/disk/.history"
+#define HISTORY_READ 65536        /* the end of the file that is read */
 
 /* the line being edited (keyboard thread only) */
 static char line[LINE_MAX];
 static int line_len = 0;
 
-/* history (keyboard thread only): a ring of the last HIST_MAX lines, without
-   their newline. hist_pos is the line shown while browsing; hist_count when
+/* history: a ring of the last HIST_MAX lines, without their newline,
+   protected by hist_lock (the keyboard thread edits it, the main thread
+   loads it). hist_pos is the line shown while browsing; hist_count when
    editing a new line, which is kept in scratch meanwhile. */
 static char history[HIST_MAX][LINE_MAX];
 static int history_len[HIST_MAX];
@@ -53,6 +62,11 @@ static int hist_count = 0;       /* lines entered so far (all time) */
 static int hist_pos = 0;
 static char scratch[LINE_MAX];
 static int scratch_len = 0;
+static int hist_lock;
+
+/* lines entered and not yet appended to HISTORY_FILE, under hist_lock */
+static char pending[QUEUE_MAX];
+static int pending_len = 0;
 
 /* keys beyond ASCII (keymap_translate: scan code << 8) */
 #define KEY_UP   0x4800
@@ -103,16 +117,30 @@ static void show_line(const char * s, int n)
   raw_write(line, line_len);
 }
 
-static void history_add(void)
+/* add a line to the ring (under hist_lock); 0 if it repeats the last */
+static int history_push(const char * s, int n)
 {
   int last = (hist_count - 1) % HIST_MAX;
-  if (line_len == 0) return;
-  if (hist_count > 0 && history_len[last] == line_len &&
-      !memcmp(history[last], line, line_len))
-    return;                            /* same as the previous one */
-  memcpy(history[hist_count % HIST_MAX], line, line_len);
-  history_len[hist_count % HIST_MAX] = line_len;
+  if (n == 0 || n > LINE_MAX - 1) return 0;
+  if (hist_count > 0 && history_len[last] == n &&
+      !memcmp(history[last], s, n))
+    return 0;                          /* same as the previous one */
+  memcpy(history[hist_count % HIST_MAX], s, n);
+  history_len[hist_count % HIST_MAX] = n;
   hist_count++;
+  return 1;
+}
+
+static void history_add(void)
+{
+  mynos_P(hist_lock);
+  if (history_push(line, line_len) &&
+      pending_len + line_len + 1 <= QUEUE_MAX) {
+    memcpy(pending + pending_len, line, line_len);
+    pending[pending_len + line_len] = '\n';
+    pending_len += line_len + 1;
+  }
+  mynos_V(hist_lock);
 }
 
 /* move in the history: -1 older, +1 newer */
@@ -121,6 +149,7 @@ static void history_move(int dir)
   int oldest = hist_count > HIST_MAX ? hist_count - HIST_MAX : 0;
   int pos = hist_pos + dir;
   if (pos < oldest || pos > hist_count) return;
+  mynos_P(hist_lock);
   if (hist_pos == hist_count) {        /* leaving the new line: keep it */
     memcpy(scratch, line, line_len);
     scratch_len = line_len;
@@ -130,6 +159,78 @@ static void history_move(int dir)
     show_line(scratch, scratch_len);
   else
     show_line(history[pos % HIST_MAX], history_len[pos % HIST_MAX]);
+  mynos_V(hist_lock);
+}
+
+/* ---- the history file (main thread only: it uses the C library) ---- */
+
+static int history_loaded = 0;
+
+/* the last HIST_MAX lines of HISTORY_FILE into the ring; a file grown past
+   twice that is rewritten with them only */
+static void history_load(void)
+{
+  static char data[HISTORY_READ];
+  int fd, n = 0, i, start, nlines = 0;
+  long size;
+  int begin[HIST_MAX];
+
+  if ((fd = open(HISTORY_FILE, O_RDONLY)) < 0) return;
+  size = lseek(fd, 0, SEEK_END);
+  lseek(fd, size > HISTORY_READ ? size - HISTORY_READ : 0, SEEK_SET);
+  n = read(fd, data, sizeof(data));
+  close(fd);
+  if (n <= 0) return;
+
+  /* the start of each whole line; keep the last HIST_MAX */
+  start = size > HISTORY_READ ? -1 : 0;      /* a cut first line is dropped */
+  for (i = 0; i < n; i++)
+    if (data[i] == '\n') {
+      if (start >= 0 && i > start) {
+	begin[nlines % HIST_MAX] = start;
+	nlines++;
+      }
+      start = i + 1;
+    }
+  mynos_P(hist_lock);
+  for (i = nlines > HIST_MAX ? nlines - HIST_MAX : 0; i < nlines; i++) {
+    int b = begin[i % HIST_MAX], e = b;
+    while (data[e] != '\n') e++;
+    history_push(data + b, e - b);
+  }
+  hist_pos = hist_count;
+  mynos_V(hist_lock);
+
+  if (nlines > 2 * HIST_MAX &&
+      (fd = open(HISTORY_FILE, O_WRONLY | O_TRUNC)) >= 0) {
+    int b = begin[(nlines - HIST_MAX) % HIST_MAX];
+    write(fd, data + b, n - b);
+    close(fd);
+  }
+}
+
+/* load the history once a disk is there, then append the new lines */
+static void history_sync(void)
+{
+  static char out[QUEUE_MAX];
+  struct stat st;
+  int n, fd;
+
+  if (!history_loaded) {
+    if (stat("/disk", &st) != 0) return;     /* no disk (yet) */
+    history_load();
+    history_loaded = 1;
+  }
+  mynos_P(hist_lock);
+  n = pending_len;
+  memcpy(out, pending, n);
+  pending_len = 0;
+  mynos_V(hist_lock);
+  if (n > 0 &&
+      (fd = open(HISTORY_FILE, O_WRONLY | O_CREAT | O_APPEND, 0644)) >= 0) {
+    write(fd, out, n);
+    close(fd);
+  }
 }
 
 static void key_typed(unsigned int c)
@@ -218,6 +319,7 @@ int main()
   char * stack;
 
   lock = mynos_initSem(1);
+  hist_lock = mynos_initSem(1);
   available = mynos_initSem(0);
 
   irq = mynos_driverRegister("keyboard", 1, NULL, NULL);
@@ -255,6 +357,7 @@ int main()
       memcpy(&req, msg->start, sizeof(req));
       if (req.op == CONSOLE_READ) {
 	if (req.len > (int)sizeof(buf)) req.len = sizeof(buf);
+	history_sync();          /* a program is about to read: a good time */
 	n = take_input(buf, req.len);
 	mynos_send(channel, buf, n, 0);
       }

@@ -140,7 +140,11 @@ fi
 
 # seventh boot: the system RAM disk, init starts consoled and the shell (the
 # OCaml toplevel), driven through the keyboard
+history_saved=
 if [ -f system/ramdisk.dsk ]; then
+    # a disk, for /disk and the shell's history: a copy of the FAT16 test image
+    [ -f tests/fat/fat16.img ] && cp tests/fat/fat16.img tests/fat/run-shell.img
+    DISK=$([ -f tests/fat/run-shell.img ] && echo tests/fat/run-shell.img) \
     MEM=256 tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
@@ -174,6 +178,11 @@ if [ -f system/ramdisk.dsk ]; then
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null || true
     wait $qemu || true
     cat "$log7" >> "$log"
+    if [ -f tests/fat/run-shell.img ]; then
+        tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/.history \
+            2>/dev/null | grep -qx '6 \* 7;;' && history_saved=yes
+        rm -f tests/fat/run-shell.img
+    fi
 fi
 
 fail=0
@@ -256,6 +265,11 @@ if [ -f system/ramdisk.dsk ]; then
     expect "- : int = 40000"
     expect "AUTOEXEC.BAT: Read-only file system"
     expect "init: shell.byte (pid"
+    if [ -n "$history_saved" ] || [ ! -f tests/fat/fat16.img ]; then
+        echo "ok    the shell history is saved on /disk"
+    else
+        echo "FAIL  the shell history is saved on /disk"; fail=1
+    fi
     if [ "$(grep -ac 'MyNOS shell. Type' "$log7")" -ge 2 ] &&
        grep -aqx -- '- : int = 5' "$log7"; then
         echo "ok    init restarts the shell after #quit"
