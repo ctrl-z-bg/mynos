@@ -485,3 +485,33 @@ own boot stack first.
   before code.
 - Bisecting by padding (same code, different addresses) separates the two.
 - A recognizable test pattern in corrupted memory names its culprit.
+
+---
+
+## 2026-11-16 — The console service
+
+The terminal design (`doc/decisions/terminal.md`) was accepted with I/O in
+user space: `libmynos` provides its own `read`, `open`, ... which replace
+the C library's at link time and talk IPC to the services.
+
+First piece: `services/console/consoled.c`. It owns the keyboard (the scan
+code tables moved from `keyboardd.c` to a shared `keymap.h`), edits the
+current line (echo, backspace, Ctrl-D for end of file) and hands complete
+lines to clients that ask for input. On the client side,
+`mynos-lib/src/fileio.c` replaces `read`: on descriptor 0 it asks the
+console, otherwise it makes the system call itself, with inline assembly
+so that it does not depend on which libc is underneath. An OCaml program's
+`read_line ()` now goes OCaml → `read` → IPC → `consoled`.
+
+Two design points:
+- `consoled` needs to wait for both interrupts and clients, so it has a
+  keyboard thread and a serving thread. MyNOS threads still share their
+  creator's TLS (mynos-l9h), so the keyboard thread uses no C library
+  function that touches thread state: only MyNOS calls, port I/O, `memcpy`
+  and a raw `write`.
+- The kernel's screen driver learned the backspace (`\b`), so the echo of
+  a deleted character is `\b \b`.
+
+`tools/run-tests.sh` now types on the keyboard: it opens QEMU's monitor and
+sends key presses (`sendkey h`, `sendkey shift-o`, `sendkey backspace`,
+`sendkey ctrl-d`), then checks that the OCaml program saw the right lines.

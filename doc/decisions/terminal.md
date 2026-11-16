@@ -2,7 +2,7 @@
 
 - **Epic:** mynos-a2j (a small demonstrable OS with a terminal)
 - **Date:** 2026-11-16
-- **Status:** proposed
+- **Status:** accepted (2026-11-16): option B
 
 ## Goal
 

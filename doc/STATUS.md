@@ -87,6 +87,10 @@ All services are linked statically against `libmynos` and placed at
 
 - `registry`: maps names to ports, like a name server (`mynos_registry.h`).
 - `keyboard`, `serial`: drivers using `mynos_driverRegister` and port I/O.
+- `console`: the console service (2026). Owns the keyboard, edits the line
+  being typed and gives lines to programs reading their standard input,
+  through `read` in `mynos-lib/src/fileio.c` (`doc/decisions/terminal.md`).
+  It replaces `keyboard` in the demo when built.
 - `fs/memrofs`: a read-only in-memory filesystem. GRUB loads it as a module
   starting with the `.RAMDISK` magic. The image is built on the host with
   `fs/memrofs/tool/createDisk.c`.
@@ -302,3 +306,7 @@ Side task: archive the old SourceForge site (mynos-db2).
   `mynos-runtime`; an OCaml program reads a file from memrofs over IPC.
   Found and fixed the destructive RAM probe of 2002. Design for the terminal
   proposed in `doc/decisions/terminal.md`. Closed mynos-a2j.1.
+- **2026-11-16** — Terminal design accepted (I/O in user space). Console
+  service `consoled` and the `read` replacement in `libmynos`: OCaml's
+  `read_line` reads the keyboard through IPC. Tests type keys through QEMU's
+  monitor. Closed mynos-a2j.3.
