@@ -31,14 +31,20 @@ _insertBlock(void * current, unsigned int sz, void *previous, void *next)
     _PREV_BLOCK_PTR(next) = current;
 }
 
-int
-_allPagesAllocatedBetween(void *begin, void *end)
+/* Can a new block occupy [begin, end] (end included) between two heap
+   blocks without asking for pages? Only if it stays in pages the heap
+   already holds: the page where the previous block ends (begin's page) and
+   the page where the next block starts. Any other page may belong to
+   someone else: __OS_askPages hands out kernel pages for other uses too
+   (page directories...), interleaved with heap pages. The old test (fewer
+   than 3 pages spanned) let a block run into such a page and overwrite it. */
+static int
+_heapOwnsSpan(void *begin, void *end, void *next)
 {
-  /* check if there's a whole free page in between, which would be
-     UNALLOCATED (and therefore unusable, by our current assumptions) */
-  /* NOTE: if, from begin to end, there are 3 pages, then there's a
-     middle, unallocated one (which explains the '3') */
-  return(_PAGE_SPAN(begin, end) < 3 );
+  void *first = _GET_PAGE_ADDRESS(begin);
+  void *last = _GET_PAGE_ADDRESS(end);
+  if (last == first) return 1;
+  return (last == _GET_PAGE_BLOCK(next)) && (last - first == _PAGE_SZ);
 }
 
 /* looks for a free block in the allocated heap */
@@ -67,7 +73,7 @@ _findFreeBlock(unsigned int sz)
     if ( (_BLOCK_BGN(runner) - ret) >= osz ) { /* found! */
       /* If all the pages this block spans are allocated, the space
 	 is immediately usable */
-      if ( _allPagesAllocatedBetween(ret, ret + osz - 1) ) {
+      if ( _heapOwnsSpan(ret, ret + osz - 1, runner) ) {
 	_insertBlock(ret + _SIZE_SZ, sz, old, runner);
 	return(ret + _SIZE_SZ);
       } else { /* ask for those pages! */
@@ -205,8 +211,10 @@ _removeBlock(void *ptr, void *prev)
   nPagesToRelease = _PAGE_SPAN(firstPageToRelease, lastPageToRelease);
   
   /* now, ask the OS to release these pages */
+  /* (it used to release from firstPage, even when that page still held
+     the previous block) */
   if ( nPagesToRelease > 0 )
-    __OS_releasePages(firstPage, (unsigned int) nPagesToRelease, 1, 0);
+    __OS_releasePages(firstPageToRelease, (unsigned int) nPagesToRelease, 1, 0);
     
 }
 
