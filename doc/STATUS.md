@@ -32,7 +32,7 @@ talking through IPC.
 | Directory | What it is |
 |---|---|
 | `mynos-core/` | The microkernel: boot, memory, processes, threads, scheduler, IPC, syscalls |
-| `mynos-lib/` | User-space library wrapping the native MyNOS syscalls (`include/mynos.h`) |
+| `mynos-lib/` | User-space library wrapping the native MyNOS syscalls (`include/mynos.h`), and the OCaml library `Mynos` (`ocaml/`) |
 | `services/` | User-space servers: `registry`, `keyboard`, `serial`, `fs/memrofs` |
 | `mynos-runtime/` | The OCaml 5.5 bytecode runtime for MyNOS: upstream runtime, unchanged, plus a MyNOS `main()` (dev toolchain) |
 | `mynos-byterun/` | The OCaml 3.06 bytecode runtime, patched to run on MyNOS (legacy toolchain) |
@@ -178,6 +178,9 @@ on screen and sent to the serial port.
     library called 10 (`driverRegister`); it is now 13 on both sides.
   - Unknown system calls panicked the kernel; now they fail with `-ENOSYS`
     (Linux) or `MYNOS_ERR_INVALID` (native).
+  - The RAM size probe in `start.asm` (2002) wrote `0x12345678` into the
+    last dword of every megabyte without restoring it, corrupting modules
+    that crossed a megabyte boundary. The size now comes from multiboot.
   - The Linux syscall entry did not preserve registers; multiboot modules
     above 4 MB were neither reserved nor mapped; pages allocated on first use
     were not zeroed; the bytecode "file" had no real seek semantics. Found
@@ -295,3 +298,7 @@ Side task: archive the old SourceForge site (mynos-db2).
   (`mynos_sleep`), Linux clock and sleep calls; the registry client no longer
   spins. Closed mynos-e1k (its first description was wrong: the timer queue
   did work).
+- **2026-11-16** — OCaml bindings: the `Mynos` library and its primitives in
+  `mynos-runtime`; an OCaml program reads a file from memrofs over IPC.
+  Found and fixed the destructive RAM probe of 2002. Design for the terminal
+  proposed in `doc/decisions/terminal.md`. Closed mynos-a2j.1.

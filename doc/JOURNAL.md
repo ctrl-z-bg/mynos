@@ -418,3 +418,70 @@ sleeps instead of spinning.
 
 **Lesson.** Before declaring code dead, search without filters: an
 exclusion meant to hide noise hid the one caller.
+
+---
+
+## 2026-11-16 — OCaml bindings, and a 2002 bug that ate four bytes
+
+### The Mynos library
+
+`mynos-lib/ocaml/mynos.ml` gives OCaml programs the MyNOS API: channels
+and ports, semaphores, sleeping, the registry, statistics. Its primitives
+(`mynos-runtime/mynos_stubs.c`) are thin wrappers over `libmynos`; errors
+raise `Mynos.Error`. To add primitives without touching the OCaml sources,
+`mynos-runtime/gen_prims.sh` regenerates the runtime's primitive table
+from the upstream list (kept in the dev image) plus ours, appended at the
+end. The first test is an OCaml client of the C memrofs service: it looks
+the service up in the registry and reads `AUTOEXEC.BAT` over IPC, building
+the C request structures with `Bytes.set_int32_le`.
+
+Small find on the way: the kernel's `tryP` returns 0 when it took the
+semaphore and 1 when it would block; the stub first treated any
+non-negative value as success.
+
+### The effects test went silent
+
+With the new runtime the effect handler test printed nothing and exited
+with code 0, while hello world kept working.
+
+**Wrong leads.** First suspect: the 2004 `safe_alloc.c` in `libmynos`,
+which replaces `malloc`/`free`/`realloc` with semaphore-protected versions
+on top of the libc's internal ones (with musl that mixes two allocators).
+Linking without it changed nothing. Second suspect: the order of the
+primitive table, since mine sorted our primitives in among the upstream
+ones. Reading `caml_build_primitive_table` showed that bytecode resolves
+primitives by name; appending ours at the end is still the safer choice,
+but it was not the cause.
+
+**The clue.** Building variants of `ocamlrun` showed something odd: the
+same `prims.c`, compiled the same way, worked or not depending on what else
+was linked. Every failing variant had exactly the same file size. Padding
+the working binary with zeros to that size broke it; padding the failing
+one made it work. The code was innocent: *where the next module landed in
+memory* decided.
+
+**Diagnosis.** gdb dumped the bytecode module from memory at the moment
+`ocamlrun` opened it. Against the file, four bytes differed, at module
+offset `0x24ffc`, which is physical `0x3ffffc`: the last four bytes before
+4 MB. They read `78 56 34 12`.
+
+**Cause.** `0x12345678` is the test pattern of the RAM size probe in
+`start.asm`, written in 2002: it stores the pattern in the last dword of
+every megabyte (`0x1ffffc`, `0x2ffffc`, ...) and reads it back, never
+restoring what was there. QEMU loads the modules right after the kernel,
+so any module crossing a megabyte boundary lost four bytes. With small
+modules nothing important happened to sit there; with a 1.7 MB runtime the
+bytecode crossed 4 MB, and the damaged instruction silently ended the
+program.
+
+**Fix.** Take the RAM size from the multiboot information (`mem_upper`),
+which the bootloader provides; without it, probe saving and restoring each
+word. While there: the entry code pushed onto the bootloader's stack, which
+the multiboot specification leaves undefined; the kernel now sets up its
+own boot stack first.
+
+**Lessons.**
+- When behaviour depends on the size of a binary, suspect memory layout
+  before code.
+- Bisecting by padding (same code, different addresses) separates the two.
+- A recognizable test pattern in corrupted memory names its culprit.
