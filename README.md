@@ -18,7 +18,7 @@ high-level language rather than in C.
 | [`mynos-core/`](mynos-core/) | The microkernel: multiboot boot, paging, processes and threads, copy-on-write fork, scheduler, semaphores, port/channel IPC, user-space IRQ delivery, native (`int 0x90`) and Linux-compatible (`int 0x80`) syscalls |
 | [`mynos-lib/`](mynos-lib/) | User-space library for the native syscalls (`include/mynos.h`) |
 | [`services/`](services/) | User-space servers: name registry, keyboard and serial drivers, `memrofs` read-only RAM filesystem |
-| [`mynos-byterun/`](mynos-byterun/) | The OCaml 3.x bytecode runtime (`ocamlrun`), patched to run on MyNOS |
+| [`mynos-byterun/`](mynos-byterun/) | The OCaml 3.06 bytecode runtime (`ocamlrun`), patched to run on MyNOS |
 | [`doc/STATUS.md`](doc/STATUS.md) | Architecture overview and current state of the project |
 
 Low-level design notes from 2002 (memory layout, interrupts, startup) are in

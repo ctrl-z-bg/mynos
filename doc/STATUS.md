@@ -33,7 +33,7 @@ talking through IPC.
 | `mynos-core/` | The microkernel: boot, memory, processes, threads, scheduler, IPC, syscalls |
 | `mynos-lib/` | User-space library wrapping the native MyNOS syscalls (`include/mynos.h`) |
 | `services/` | User-space servers: `registry`, `keyboard`, `serial`, `fs/memrofs` |
-| `mynos-byterun/` | The OCaml 3.x bytecode runtime, patched to run on MyNOS |
+| `mynos-byterun/` | The OCaml 3.06 bytecode runtime, patched to run on MyNOS |
 
 #### mynos-core — the microkernel
 
@@ -83,7 +83,7 @@ and placed at `0x40000000`.
 
 #### mynos-byterun
 
-This is the standard `ocamlrun` from an early 2000s OCaml 3.x release. It is
+This is the standard `ocamlrun` from OCaml 3.06 (imported in October 2002). It is
 built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 
 - `main()` forces `argv` to `"mynos_bytecode"`;
@@ -133,7 +133,7 @@ Planned work, in order. Details live in the beads issues.
 
 1. **Revive** (mynos-bo2): boot the kernel in QEMU, then the services, then a
    hello world bytecode. This is the baseline for everything else.
-2. **Decide on the OCaml runtime** (mynos-4er): stay on 3.x, or move to 4.14
+2. **Decide on the OCaml runtime** (mynos-4er): stay on 3.06, or move to 4.14
    or 5.x.
 3. **A demonstrable OS with a terminal** (mynos-a2j): OCaml bindings for the
    MyNOS API, starting bytecode programs from user space, file I/O through
