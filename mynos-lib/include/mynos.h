@@ -77,7 +77,7 @@ int mynos_freePort(int port);
 
 /* Semaphore */
 int mynos_P(int sem);
-int mynos_tryP(int sem);
+int mynos_tryP(int sem);   /* 0: taken, 1: would block, <0: error */
 int mynos_V(int sem);
 int mynos_initSem(unsigned int n);
 int mynos_freeSem(int sem);

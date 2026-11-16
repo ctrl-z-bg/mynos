@@ -16,5 +16,6 @@ make -C services/fs/memrofs/tool clean
 make -C mynos-byterun/src clean
 make -C mynos-runtime clean
 make -C tests/abi clean
-rm -f tests/hello/hello.byte tests/effects/effects.byte tests/*/*.cm[io] tests/ramdisk/ramdisk.dsk
+make -C mynos-lib/ocaml clean
+rm -f tests/*/*.byte tests/*/*.cm[io] tests/ramdisk/ramdisk.dsk
 ' >/dev/null

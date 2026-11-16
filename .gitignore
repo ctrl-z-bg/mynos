@@ -38,3 +38,5 @@ services/serial/seriald
 tests/abi/abi
 build/
 mynos-runtime/ocamlrun
+mynos-runtime/primitives
+mynos-runtime/prims.c

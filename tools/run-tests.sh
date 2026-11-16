@@ -12,7 +12,8 @@ cd "$root"
 ocamlrun=$(tools/ocamlrun-path.sh)
 log=$(mktemp)
 log2=$(mktemp)
-trap 'rm -f "$log" "$log2"' EXIT
+log3=$(mktemp)
+trap 'rm -f "$log" "$log2" "$log3"' EXIT
 
 timeout "${WAIT:-10}" tools/run-qemu.sh \
     "$ocamlrun" \
@@ -30,6 +31,15 @@ if [ -f tests/effects/effects.byte ]; then
     timeout "${WAIT:-10}" tools/run-qemu.sh "$ocamlrun" tests/effects/effects.byte \
         -- -display none -serial null -serial "file:$log2" || true
     cat "$log2" >> "$log"
+fi
+
+# third boot: the Mynos OCaml library, reading a file through memrofs
+if [ -f tests/mynos-ocaml/mynos_test.byte ]; then
+    timeout "${WAIT:-10}" tools/run-qemu.sh "$ocamlrun" \
+        tests/mynos-ocaml/mynos_test.byte services/registry/registry \
+        services/fs/memrofs/memrofsd tests/ramdisk/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$log3" || true
+    cat "$log3" >> "$log"
 fi
 
 fail=0
@@ -54,6 +64,9 @@ expect "Hello from memrofs!"
 expect "abi: all checks passed"
 if [ -f tests/effects/effects.byte ]; then
     expect "effects ok"
+fi
+if [ -f tests/mynos-ocaml/mynos_test.byte ]; then
+    expect "mynos-ocaml: all checks passed"
 fi
 reject "PANIC"
 reject "page fault (?)"
