@@ -150,7 +150,8 @@ Side task: archive the old SourceForge site (mynos-db2).
   Zavattari (bradstallion), 8 by Tommaso Schiavinotto (Teudimundo), 6 by
   Alessandro Tommasi (aaaaale). The project was hosted on SourceForge under
   GPL v2.
-- 2005, 2008: a few minor commits.
+- 2005, 2008: a few minor commits. The last original commit (2008-11-25) is
+  tagged `legacy-2008`.
 - Originally four CVS modules, later four separate git repositories,
   merged here into one repository. The content and history were verified
   as equivalent on 2026-11-15.
