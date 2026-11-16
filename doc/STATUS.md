@@ -146,3 +146,4 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 - **2026-11-16** — Added `.gitignore`: beads, files generated for agents, editor
   backups and personal notes are kept out of git. Wrote this document after a
   full read of the codebase. Opened mynos-bo2, mynos-nxa, mynos-pg9, mynos-jwl.
+  Added `README.md`.
