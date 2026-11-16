@@ -21,6 +21,8 @@
  *   - READ: a reply with value > 0 is followed by the data;
  *   - WRITE: the client sends the data right after the request, then
  *     receives the reply;
+ *   - RENAME: the client sends the new name (with its final 0) right after
+ *     the request, then receives the reply;
  *   - LIST: a reply with status OK is followed by the name.
  * Names are paths inside the service ("dir/file", no leading slash; "" is
  * its root). memrofs and tmpfs are flat: only their root exists.
@@ -54,6 +56,8 @@
 #define FS_UNLINK 6   /* name (a file)            -> value: 0              */
 #define FS_MKDIR  7   /* name                     -> value: 0              */
 #define FS_RMDIR  8   /* name (an empty directory) -> value: 0             */
+#define FS_RENAME 9   /* name, then the new name  -> value: 0; an existing
+                         file of the new name is replaced */
 
 /* FS_OPEN flags */
 #define FS_O_WRITE   1   /* open for writing (and reading) */

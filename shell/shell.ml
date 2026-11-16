@@ -12,6 +12,7 @@ let help () =
     \  #use \"/tmp/a.ml\";;          run the phrases in a file\n\
     \  rm \"/tmp/a.ml\";;            remove a file\n\
     \  run \"hello.byte\" [];;       start a program and wait for it\n\
+    \  compile \"/disk/a.ml\";;      compile it into /disk/a.byte (ocamlc)\n\
     \  free ();;                   free memory\n\
      The MyNOS system calls are in module Mynos (#show Mynos;;).\n\
      Line editing: Backspace; Up and Down recall previous lines.\n\
@@ -42,13 +43,25 @@ let write file text =
 
 let rm = Sys.remove
 
+(* the environment of the programs the shell starts: the OCaml library is
+   at the root of the RAM disk (for ocamlc) *)
+let env = [| "OCAMLLIB=/" |]
+
 let run prog args =
   let argv =
     if Filename.check_suffix prog ".byte" then "ocamlrun" :: prog :: args
     else prog :: args in
   flush stdout;
-  let pid = Mynos.spawn (List.hd argv) (Array.of_list argv) in
+  let pid = Mynos.spawn ~env (List.hd argv) (Array.of_list argv) in
   Mynos.wait pid
+
+let compile ?output src =
+  let out =
+    match output with
+    | Some o -> o
+    | None -> Filename.remove_extension src ^ ".byte" in
+  (* the runtime's primitives include MyNOS's: programs may use Mynos *)
+  run "ocamlc.byte" [ "-use-prims"; "/primitives"; "mynos.cma"; "-o"; out; src ]
 
 let free () =
   let pages = (Mynos.stats ()).Mynos.free_pages in

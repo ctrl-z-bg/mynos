@@ -12,7 +12,7 @@
 
 let fs_open = 0 and fs_close = 1 and fs_read = 2 and fs_lseek = 3
 and fs_list = 4 and fs_write = 5 and fs_unlink = 6 and fs_mkdir = 7
-and fs_rmdir = 8
+and fs_rmdir = 8 and fs_rename = 9
 
 let o_write = 1 and o_creat = 2 and o_trunc = 4 and o_append = 8
 
@@ -579,6 +579,47 @@ let remove name ~want_dir =
     free_chain e.first;
     flush_fat ()
 
+(* rename (or move) an entry; an existing file of the new name goes *)
+let do_rename name target =
+  let target =
+    match String.index_opt target '\000' with
+    | Some n -> String.sub target 0 n
+    | None -> target in
+  let d, last = parent name in
+  let d2, last2 = parent target in
+  match find (load d) last with
+  | None -> raise (Status not_found)
+  | Some e ->
+    if is_open d e.slot then raise (Status denied);
+    if d = d2 && same last last2 && last = last2 then ()
+    else begin
+      let moving_dir = e.attr land attr_dir <> 0 in
+      (match find (load d2) last2 with
+       | Some t when d = d2 && t.slot = e.slot -> ()   (* only the case *)
+       | Some t when t.attr land attr_dir <> 0 -> raise (Status is_dir)
+       | Some _ when moving_dir -> raise (Status not_dir)
+       | Some _ -> remove target ~want_dir:false
+       | None -> ());
+      (* moving a directory: it must not go inside itself *)
+      if moving_dir && (match d2 with Chain c -> c = e.first | Root16 -> false) then
+        raise (Status invalid);
+      let e = match find (load d) last with Some e -> e | None -> raise (Status not_found) in
+      let slot = add_entry d2 last2 e.attr e.first in
+      let l = load d2 in
+      set_u32 l.data (32 * slot + 28) e.size;
+      store l;
+      let e = match find (load d) last with Some e -> e | None -> raise (Status not_found) in
+      delete_entry d e;
+      (* a directory moved elsewhere: its ".." names the new parent *)
+      if moving_dir && d <> d2 then begin
+        let l = load (Chain e.first) in
+        let p = match d2 with Chain c when c <> root_cluster -> c | _ -> 0 in
+        set_u16 l.data (32 + 20) (p lsr 16);
+        set_u16 l.data (32 + 26) (p land 0xFFFF);
+        store l
+      end
+    end
+
 (* ---- the service ---- *)
 
 let reply ch status value =
@@ -598,7 +639,9 @@ let serve ch =
       | Some n -> String.sub raw 0 n | None -> raw in
     let typ = r.(0) in
     (* WRITE: the data follows the request: take it before replying *)
-    let data = if typ = fs_write then Some (Mynos.recv ~timeout:1.0 ch) else None in
+    let data =
+      if typ = fs_write || typ = fs_rename then Some (Mynos.recv ~timeout:1.0 ch)
+      else None in
     match
       if typ = fs_open then `Value (do_open r name)
       else if typ = fs_close then (ignore (owned r); Hashtbl.remove descs r.(2); `Value 0)
@@ -625,6 +668,7 @@ let serve ch =
       end else if typ = fs_unlink then (remove name ~want_dir:false; `Value 0)
       else if typ = fs_mkdir then (do_mkdir name; `Value 0)
       else if typ = fs_rmdir then (remove name ~want_dir:true; `Value 0)
+      else if typ = fs_rename then (do_rename name (Option.get data); `Value 0)
       else raise (Status invalid)
     with
     | `Value v -> reply ch ok v

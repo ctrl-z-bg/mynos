@@ -142,6 +142,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .linux_fstat64\n"\
 	 "   cmpl $7, %eax\n"\
 	 "   je .linux_waitpid\n"\
+	 "   cmpl $355, %eax\n"\
+	 "   je .linux_getrandom\n"\
 	 "   cmpl $114, %eax\n"\
 	 "   je .linux_wait4\n"\
 	 "   pushl %eax\n"\
@@ -263,6 +265,9 @@ __asm__ (".pushsection .text\n" \
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_fstat64:\n"\
 	 "   call _linux_syscall_fstat64\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_getrandom:\n"\
+	 "   call _linux_syscall_getrandom\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_waitpid:\n"\
 	 "   call _linux_syscall_waitpid\n"\
@@ -501,6 +506,24 @@ int _linux_syscall_wait4(int pid, int * status, int options, void * rusage) {
     /* V'd once for every child that ends: check again then */
     __OS_sem_P(self->childSem);
   }
+}
+
+/* getrandom (355): bytes from a xorshift generator seeded with the
+   processor's time-stamp counter. Not cryptographic: it seeds OCaml's
+   Random and hash tables (which otherwise fall back on the time). */
+int _linux_syscall_getrandom(unsigned char * buf, uint32_t len,
+			     uint32_t flags) {
+  static uint32_t x = 0;
+  uint32_t lo, hi, i;
+  if ((uint32_t)buf < ((uint32_t)USERMINPAGE << 12)) return -14; /* -EFAULT */
+  asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
+  x ^= lo ^ (hi << 16) ^ timerTicks ^ (currProcess << 24);
+  if (x == 0) x = 0x9E3779B9;
+  for (i = 0; i < len; i++) {
+    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+    buf[i] = x >> 24;
+  }
+  return len;
 }
 
 int _linux_syscall_waitpid(int pid, int * status, int options) {

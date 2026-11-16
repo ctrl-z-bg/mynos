@@ -464,6 +464,36 @@ int unlink(const char * path)
   return name_call(path, FS_UNLINK);
 }
 
+/* rename: within one service; the new name comes in a second message */
+int rename(const char * from, const char * to)
+{
+  struct fs_req req;
+  struct fs_reply r;
+  char newname[FS_NAMEMAX];
+  mynos_msg_t * msg;
+  int s, s2, port, channel, ok;
+
+  memset(&req, 0, sizeof(req));
+  if ((s = resolve(from, req.name)) < 0 || (s2 = resolve(to, newname)) < 0)
+    return -1;
+  if (s != s2) { errno = EXDEV; return -1; }
+  if ((port = service(s)) < 0) { errno = ENOENT; return -1; }
+  if (!req.name[0] || !newname[0]) { errno = EBUSY; return -1; }
+  req.type = FS_RENAME;
+  req.client = getpid();
+  if ((channel = mynos_connectToPort(port)) < 0) { errno = EIO; return -1; }
+  ok = mynos_send(channel, &req, sizeof(req), 0) == 0 &&
+       mynos_send(channel, newname, strlen(newname) + 1, 0) == 0 &&
+       mynos_recv(channel, &msg, 0, 0) == 0;
+  mynos_freeChannel(channel);
+  if (!ok) { errno = EIO; return -1; }
+  if (msg->size != sizeof(r)) { mynos_freeMsg(&msg); errno = EIO; return -1; }
+  memcpy(&r, msg->start, sizeof(r));
+  mynos_freeMsg(&msg);
+  if (r.status != FS_OK) { errno = status_errno(r.status); return -1; }
+  return 0;
+}
+
 int mkdir(const char * path, mode_t mode)
 {
   (void)mode;

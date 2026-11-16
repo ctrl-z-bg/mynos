@@ -13,11 +13,18 @@ ocamlrun: ../mynos-runtime/ocamlrun
 consoled: ../services/console/consoled
 	strip -o $@ $<
 
+# the bytecode compiler, to compile programs inside MyNOS
+ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2/bin/ocamlc.byte)
+	cp $< $@
+
 FILES = ../init/init.byte init.rc ocamlrun consoled \
 	../services/tmpfs/tmpfs.byte ../services/ata/ata.byte \
 	../services/fatfs/fatfs.byte \
 	../shell/shell.byte ../shell/shell.cmi ../mynos-lib/ocaml/mynos.cmi \
 	$(wildcard $(STDLIB)/*.cmi) \
+	$(STDLIB)/stdlib.cma $(STDLIB)/std_exit.cmo $(STDLIB)/runtime-launch-info \
+	ocamlc.byte ../mynos-runtime/primitives \
+	../mynos-lib/ocaml/mynos.cma ../mynos-lib/ocaml/block.cmi \
 	../tests/hello/hello.byte ../tests/spawn/child.byte \
 	../tests/ramdisk/AUTOEXEC.BAT
 
@@ -33,4 +40,4 @@ disk.img:
 	rm -f README.TXT
 
 clean:
-	rm -f ocamlrun consoled ramdisk.dsk
+	rm -f ocamlrun consoled ocamlc.byte ramdisk.dsk

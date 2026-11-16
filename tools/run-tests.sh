@@ -164,6 +164,8 @@ if [ -f system/ramdisk.dsk ]; then
                   'write "/tmp/big" (String.make 40000 (Char.chr 97));;\n' \
                   'String.length (In_channel.with_open_bin "/tmp/big" In_channel.input_all);;\n' \
                   'write "AUTOEXEC.BAT" "";;\n' \
+                  'write "/disk/aaa.ml" "let () = print_endline (String.make 3 (Char.chr 65))";;\n' \
+                  'compile "/disk/aaa.ml";;\n' 'run "/disk/aaa.byte" [];;\n' \
                   '#quit;;\n'; do
         tools/type-keys.py "$tmp/mon7" "$phrase"
         sleep 2
@@ -265,6 +267,11 @@ if [ -f system/ramdisk.dsk ]; then
     expect "- : int = 40000"
     expect "AUTOEXEC.BAT: Read-only file system"
     expect "init: shell.byte (pid"
+    if grep -aqx 'AAA' "$log7"; then
+        echo "ok    a program compiled by ocamlc inside MyNOS runs"
+    else
+        echo "FAIL  a program compiled by ocamlc inside MyNOS runs"; fail=1
+    fi
     if [ -n "$history_saved" ] || [ ! -f tests/fat/fat16.img ]; then
         echo "ok    the shell history is saved on /disk"
     else

@@ -158,8 +158,9 @@ static void process_request(int channel, struct fs_req * req)
   case FS_READ:  memrofs_read(channel, req);  break;
   case FS_LSEEK: memrofs_lseek(channel, req); break;
   case FS_LIST:  memrofs_list(channel, req);  break;
-  case FS_WRITE: {                 /* take the data, which the client sends
-				      before it waits for the reply */
+  case FS_WRITE:
+  case FS_RENAME: {                /* take the data (or the new name), sent
+				      before the client waits for the reply */
     mynos_msg_t * data;
     if (mynos_recv(channel, &data, 0, 1000) == 0) mynos_freeMsg(&data);
     reply(channel, FS_READONLY, -1);

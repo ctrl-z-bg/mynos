@@ -951,3 +951,24 @@ than the new one); `_GET_PAGE_ADDRESS` in `_removeBlock`.
   each, and the first bad step names the culprit.
 - The kernel heap allocator of 2003 has now had four fixes; its checker
   stays in the code (`HEAP_CHECK` in `dynalloc.c`), off by default.
+
+## 2026-11-16 — The compiler inside MyNOS
+
+Running `ocamlc` inside MyNOS took less than expected, which says something
+about the layers below: the compiler is just another bytecode program for
+the runtime, and the files it needs are reached through the same file
+functions. What was missing, found by trying:
+- **`rename`**: the linker writes the executable to a temporary file next
+  to it and renames it (`Misc.output_to_file_via_temporary`). The file
+  service protocol got `RENAME` (the new name in a second message, as the
+  data of a `WRITE`); fatfs makes a new entry for the same clusters and
+  deletes the old one, updating `..` when a directory moves.
+- **`runtime-launch-info`**, a file the 5.x linker reads from the
+  standard library directory, which is `Config.standard_library` (a path
+  of the build machine) unless `OCAMLLIB` says otherwise: the shell now
+  starts programs with `OCAMLLIB=/`, the root of the RAM disk, where the
+  library's files are. Spawn's environment, added for this kind of need,
+  got its first use.
+- **`getrandom`**, for `Random.self_init` (it had a fallback, but the
+  kernel reported the missing call): a xorshift seeded with the time-stamp
+  counter, not cryptographic.

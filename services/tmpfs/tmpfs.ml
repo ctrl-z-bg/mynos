@@ -11,7 +11,7 @@
 
 (* request types, open flags, statuses: as in mynos_fs.h *)
 let fs_open = 0 and fs_close = 1 and fs_read = 2 and fs_lseek = 3
-and fs_list = 4 and fs_write = 5 and fs_unlink = 6
+and fs_list = 4 and fs_write = 5 and fs_unlink = 6 and fs_rename = 9
 
 let o_write = 1 and o_creat = 2 and o_trunc = 4 and o_append = 8
 
@@ -177,6 +177,21 @@ let do_unlink ch r =
     reply ch ok 0
   end else reply ch not_found (-1)
 
+let do_rename ch r =
+  (* the new name follows the request *)
+  let data = Mynos.recv ~timeout:1.0 ch in
+  let target =
+    match String.index_opt data '\000' with
+    | Some n -> String.sub data 0 n
+    | None -> data in
+  match Hashtbl.find_opt files r.name with
+  | None -> reply ch not_found (-1)
+  | Some _ when not (valid_name target) -> reply ch invalid (-1)
+  | Some f ->
+    Hashtbl.remove files r.name;
+    Hashtbl.replace files target f;          (* replaces an existing one *)
+    reply ch ok 0
+
 let serve ch =
   let msg = Mynos.recv ~timeout:1.0 ch in
   if String.length msg <> 20 + name_max then reply ch invalid (-1)
@@ -189,6 +204,7 @@ let serve ch =
     else if r.typ = fs_lseek then do_lseek ch r
     else if r.typ = fs_list then do_list ch r
     else if r.typ = fs_unlink then do_unlink ch r
+    else if r.typ = fs_rename then do_rename ch r
     else reply ch invalid (-1)
   end
 

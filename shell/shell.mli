@@ -27,5 +27,9 @@ val run : string -> string list -> Mynos.status
     [args] and waits for its end. A bytecode program ([.byte]) runs on
     [ocamlrun]; anything else must be an ELF program. *)
 
+val compile : ?output:string -> string -> Mynos.status
+(** [compile "/disk/prog.ml"] compiles a program into [/disk/prog.byte]
+    (or [output]) with ocamlc, inside MyNOS; it may use module {!Mynos}. *)
+
 val free : unit -> unit
 (** Print the free memory. *)

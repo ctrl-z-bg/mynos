@@ -145,8 +145,10 @@ All services are linked statically against `libmynos` and placed at
 
 The shell is the OCaml 5.5 toplevel itself (`shell/main.ml` calls
 `Topmain.main`), linked with the `Mynos` library and module `Shell`
-(`help`, `ls`, `cat`, `write`, `rm`, `run`, `free`), which is opened at
-startup. Typed lines come from the console service. Files written under
+(`help`, `ls`, `cat`, `write`, `rm`, `run`, `compile`, `free`), which is
+opened at startup. **Programs can be compiled inside MyNOS**: `ocamlc`
+runs from the RAM disk (`OCAMLLIB=/`), and `compile "/disk/a.ml"` makes
+`/disk/a.byte`, which may use `Mynos`. Typed lines come from the console service. Files written under
 `/tmp` can be run with `#use`.
 
 #### init and the system RAM disk
@@ -321,7 +323,7 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | mynos-09i | `mynos-runtime/` | No OCaml `Thread` module yet (needs systhreads and unix stubs); domains work. |
 | mynos-awn | `mynos-core/kernel/` | One CPU: threads and domains run in turn, not in parallel. |
 | — | `mynos-core/kernel/threads.c` | Native MyNOS threads (`mynos_threadCreate`) share their creator's TLS: code that uses the C library should use pthreads. |
-| — | `mynos-lib/src/fileio.c` | `/` (memrofs) is read-only and flat, `/tmp` (tmpfs) flat and in memory; `/disk` (fatfs) has directories. No `rename`; paths up to 63 characters inside a service. |
+| — | `mynos-lib/src/fileio.c` | `/` (memrofs) is read-only and flat, `/tmp` (tmpfs) flat and in memory; `/disk` (fatfs) has directories. `rename` within one service; paths up to 63 characters inside a service; no current directory yet (mynos-0do.2). |
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
 
 ### Not started
@@ -480,6 +482,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   (`/disk/.history`): Up after a reboot recalls the previous session. A
   service not found is looked up again every 2 s (init starts services in
   parallel). Closed mynos-rf4.4 and the storage epic mynos-rf4.
+- **2026-11-16** — Alternatives recorded in beads: self-hosting (epic
+  mynos-0do), a bash-like shell (mynos-z8v), swap through an external
+  pager (mynos-vzp), kernel robustness (mynos-0fw); networking decided:
+  lwIP in C with a C NE2000 driver in the same service (mynos-4f6).
+- **2026-11-16** — `ocamlc` inside MyNOS: the compiler on the RAM disk,
+  `rename` (file service protocol, fatfs, tmpfs, libmynos; ocamlc writes
+  through a temporary file), `getrandom` in the kernel, `compile` in the
+  shell. A program written, compiled and run in MyNOS is in the tests.
+  Closed mynos-0do.1.
 - **2026-11-16** — The original website (mynos.sourceforge.net, from the
   Wayback Machine) archived as static files in `doc/website/`, with the
   2002-2004 news posts and the 2002 and 2004 test packages. Closed

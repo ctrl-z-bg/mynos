@@ -49,3 +49,4 @@ tests/storage/ocamlrun
 tests/fat/ocamlrun
 tests/fat/content/
 *.img
+system/ocamlc.byte
