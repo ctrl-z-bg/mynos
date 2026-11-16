@@ -62,6 +62,9 @@ struct user_desc {
 
 int _linux_syscall_set_thread_area(struct user_desc * u_info);
 
+/* lthreads.c */
+void futexForget(pid_t pid);
+
 struct iovec {
   void * iov_base;
   size_t iov_len;

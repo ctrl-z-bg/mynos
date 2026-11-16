@@ -29,6 +29,12 @@ int32_t __OS_threadCreate(uint32_t entry_point,
 			   uint32_t flags);
 
 void __OS_threadExit(void * retval);
+
+#include "tss.h"
+/* a new thread of the current process, copy of the current one; then
+   threadStart makes it run (see threads.c) */
+tss_t * threadAlloc(void);
+void threadStart(tss_t * tss);
 uint32_t __OS_threadSelf();
 
 #endif

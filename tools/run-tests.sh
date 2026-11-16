@@ -13,7 +13,7 @@ ocamlrun=$(tools/ocamlrun-path.sh)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 log=$tmp/log1 log2=$tmp/log2 log3=$tmp/log3 log4=$tmp/log4 log5=$tmp/log5
-log6=$tmp/log6 log7=$tmp/log7
+log6=$tmp/log6 log7=$tmp/log7 log8=$tmp/log8
 
 timeout "${WAIT:-10}" tools/run-qemu.sh \
     "$ocamlrun" \
@@ -31,6 +31,14 @@ if [ -f tests/effects/effects.byte ]; then
     timeout "${WAIT:-10}" tools/run-qemu.sh "$ocamlrun" tests/effects/effects.byte \
         -- -display none -serial null -serial "file:$log2" || true
     cat "$log2" >> "$log"
+fi
+
+# eighth boot: domains, i.e. Linux threads (clone, futex)
+if [ -f tests/domains/domains.byte ]; then
+    MEM=128 timeout "${WAIT:-15}" tools/run-qemu.sh "$ocamlrun" \
+        tests/domains/domains.byte \
+        -- -display none -serial null -serial "file:$log8" || true
+    cat "$log8" >> "$log"
 fi
 
 # third boot: the Mynos OCaml library, reading a file through memrofs
@@ -144,6 +152,9 @@ expect "Hello from memrofs!"
 expect "abi: all checks passed"
 if [ -f tests/effects/effects.byte ]; then
     expect "effects ok"
+fi
+if [ -f tests/domains/domains.byte ]; then
+    expect "domains: all checks passed"
 fi
 if [ -f tests/mynos-ocaml/mynos_test.byte ]; then
     expect "mynos-ocaml: all checks passed"

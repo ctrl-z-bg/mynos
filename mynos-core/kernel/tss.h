@@ -83,6 +83,12 @@ typedef struct {
   // thread, whose stack is in the process's top area), kept for reuse
   uint32_t kstack;
 
+  // Linux thread id (gettid): the pid for a process's first thread; and
+  // the address cleared and woken (futex) when the thread exits
+  // (CLONE_CHILD_CLEARTID, set_tid_address)
+  int32_t tid;
+  int32_t * clearTid;
+
 } tss_t;
 
 #endif

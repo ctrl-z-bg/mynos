@@ -34,6 +34,7 @@
 #include "ipc/channel.h"
 #include "mynos.h"
 #include "mem/externalmem.h"
+#include "linux_syscalls.h"
 #include "mem/physicalmem.h"
 
 /* the arguments of a process started without any (GRUB modules) */
@@ -475,6 +476,8 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   desc->memFreed = 0;
   desc->nextZombie = NULL;
   tss->kstack = 0;
+  tss->tid = 0;            /* the pid, set by createProcess */
+  tss->clearTid = NULL;
 
   /* drop the kernel aliases (the frames stay, mapped in the process) */
   for (i = 0; i < nAliases; i++)
@@ -523,6 +526,7 @@ int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
     return MYNOS_ERR_INVALID;
   }
   desc->tss->pid = pid;
+  desc->tss->tid = pid;
   processTable[pid] = desc;
   return pid;
 }
@@ -572,6 +576,9 @@ void killProcess(int status) {
     __OS_ipc_freeChannel(channel);
   }
 
+
+  /* threads waiting on futexes */
+  futexForget(currProcess);
 
   /* semaphores: the threads' private ones and the children's */
   for (tss = self->tss; tss; tss = tss->next)

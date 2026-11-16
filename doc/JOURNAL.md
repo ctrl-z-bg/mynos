@@ -833,3 +833,48 @@ suspicion.
 - A change in one binary can move data in another that links the same
   library. When results contradict the code, rebuild everything and vary
   one thing at a time.
+
+## 2026-11-16 — Threads and OCaml domains
+
+**Goal.** `Domain.spawn` is `pthread_create`, which in musl is the Linux
+`clone` call, with futexes behind every lock and condition, and
+`CLONE_CHILD_CLEARTID` behind `pthread_join`.
+
+**Design** (`mynos-core/kernel/lthreads.c`):
+- **clone** makes a MyNOS thread in the calling process. The child must
+  come back from the system call as if it had made it: `eax = 0`, the new
+  stack, and every other register as the parent's, because musl's
+  `__clone` keeps the function to call in `ebp`. The kernel's thread start
+  (`startThread`) only restored segment registers; `startClonedThread`
+  also pops the general ones (`popal`) before the `iret`. The parent's
+  return address and flags are read from its own system call frame, just
+  above the six registers the entry code pushes. The TLS comes from the
+  `user_desc` passed with `CLONE_SETTLS`: each thread has its own, loaded
+  in the GDT at every switch, as `set_thread_area` already did.
+- **exit** (1) now ends only the calling thread, clearing and waking its
+  `clear_child_tid` (that is how `pthread_join` learns); `exit_group` (252)
+  ends the process. A process's last thread ending ends the process, so
+  dietlibc's `_exit`, which uses 1, still works.
+- **futex**: a table of waiters keyed by process and address. A waiter
+  blocks on its private semaphore, with an optional timer. One subtlety: a
+  waiter woken by its timer must not also be woken by a `FUTEX_WAKE`
+  before it runs, or its private semaphore stays at 1 and its next
+  blocking call (an IPC receive...) returns at once. A wake therefore
+  signals a timed waiter only if it can still take it off the timer
+  queue. `REQUEUE`/`CMP_REQUEUE` move waiters (musl's condition variables
+  use them); `WAIT_BITSET` takes an absolute time.
+- Thread ids: a process's first thread has its pid, the others ids above
+  the pid range. `set_tid_address`, `gettid`, and `tkill` on one's own
+  threads.
+
+**Result.** The domains test (results through `join`, an atomic counter,
+a producer and a consumer with `Mutex` and `Condition`, `Domain.DLS`, an
+exception through `join`, a full major GC with three domains allocating)
+passed at the first run, as did `Domain.spawn` in the shell. One CPU:
+domains take turns (SMP is mynos-awn). The `Thread` module needs more of
+the runtime (mynos-09i).
+
+**Lesson.** A thread born inside a system call has to be built to look
+exactly like a thread returning from one: knowing the caller's
+conventions (here, which registers musl's `__clone` relies on) decides
+what the kernel must restore.

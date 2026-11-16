@@ -62,7 +62,11 @@ talking through IPC.
   software (`softtaskswitch.c`). The scheduler (`sched.c`) is a round robin
   run on the PIT at 100 Hz and whenever a thread blocks; the idle thread
   (process 0, `hlt`) runs only when nothing else is ready. Threads are
-  supported (`threads.c`). Processes are created from
+  supported (`threads.c`): MyNOS's native ones (`mynos_threadCreate`,
+  sharing their creator's TLS) and, since 2026, Linux threads through
+  `clone`, each with its own TLS, with `futex` behind the C library's
+  pthreads (`lthreads.c`); OCaml 5's domains run on them. All threads share
+  one CPU (SMP: mynos-awn). Processes are created from
   an ELF image (`createProcess` in `process.c`): at boot from the GRUB
   modules, and since 2026 by a process through the native `spawn` call,
   with real `argv`/`envp` on the Linux initial stack. A parent collects a
@@ -92,8 +96,9 @@ talking through IPC.
     `llseek`; musl and modern OCaml added `set_thread_area` (TLS), `mmap2`,
     `writev`, `lseek`, `stat64`, `fstat64`, `exit_group`,
     `set_tid_address`, `mprotect`, the signal calls (accepted, no delivery
-    yet), `kill`/`tkill`/`tgkill` on oneself, `waitpid`/`wait4`, and the
-    clock and sleep calls
+    yet), `kill`/`tkill`/`tgkill` on oneself, `waitpid`/`wait4`, threads
+    (`clone`, `exit` of a thread, `futex`, `gettid`, `sched_yield`), and
+    the clock and sleep calls
     (`kernel/time.c`: PIT ticks plus the CMOS clock read at boot). Unknown
     calls return `-ENOSYS`.
 
@@ -153,7 +158,9 @@ links it with a short `main()` that picks the bytecode file to open
 `init.byte` from the RAM disk, otherwise GRUB module 1. Programs start other
 programs with `Mynos.spawn "ocamlrun" [| "ocamlrun"; "prog.byte"; … |]`
 and `Mynos.wait`. Bytecode is compiled with `ocamlc` 5.5.2.
-Effect handlers work; `Domain` and `Thread` need `clone` (mynos-l9h).
+Effect handlers and domains work (`tests/effects`, `tests/domains`, and
+`Domain.spawn` in the shell); the `Thread` module needs the systhreads and
+unix stubs in the runtime (mynos-09i).
 Decision and evidence: `doc/decisions/ocaml-runtime.md`.
 
 #### mynos-byterun (OCaml 3.06, legacy)
@@ -300,7 +307,9 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | Issue | Where | Problem |
 |---|---|---|
 | mynos-pg9 | `mynos-byterun/src/floats.c` | `frexp()`/`modf()` return 1.0 (legacy 3.06 runtime only; the 5.5 runtime uses musl's libm). |
-| mynos-l9h | `mynos-core/kernel/threads.c` | Threads share their creator's TLS; no `clone`, so no OCaml `Thread` or `Domain`. |
+| mynos-09i | `mynos-runtime/` | No OCaml `Thread` module yet (needs systhreads and unix stubs); domains work. |
+| mynos-awn | `mynos-core/kernel/` | One CPU: threads and domains run in turn, not in parallel. |
+| — | `mynos-core/kernel/threads.c` | Native MyNOS threads (`mynos_threadCreate`) share their creator's TLS: code that uses the C library should use pthreads. |
 | — | `mynos-lib/src/fileio.c` | Two flat directories: `/` (memrofs, read-only) and `/tmp` (tmpfs, in memory). No persistent storage (mynos-rf4); no `rename`. |
 
 ### Not started
@@ -319,8 +328,8 @@ Planned work, in order. Details live in the beads issues.
 3. **A demonstrable OS with a terminal** (mynos-a2j, done): OCaml bindings
    for the MyNOS API, starting bytecode programs from user space, file I/O
    through memrofs, a console service, and the OCaml toplevel as the shell.
-   Then processes that free their memory (mynos-pg6, done). Next: threads
-   and domains (mynos-l9h).
+   Then processes that free their memory (mynos-pg6), init and the first
+   OCaml service, threads and domains (mynos-l9h): done.
 4. Later: real external storage, a disk driver and a filesystem as services
    (mynos-rf4); networking (mynos-4f6), a GUI toolkit (mynos-9lr), distinctive
    applications (mynos-3h1).
@@ -435,3 +444,7 @@ Side task: archive the old SourceForge site (mynos-db2).
   too many into the receiver, leaked. Closed mynos-gcv.
 - **2026-11-16** — `tools/run-qemu.sh` without modules boots the standard
   system instead of a bare kernel that runs nothing.
+- **2026-11-16** — Linux threads: `clone`, thread `exit`, `futex` (wait,
+  wake, requeue, timeouts), `gettid`, `sched_yield`; OCaml 5 domains work,
+  in tests (`tests/domains`) and in the shell. Closed mynos-l9h; opened
+  mynos-09i (`Thread` module) and mynos-awn (SMP).

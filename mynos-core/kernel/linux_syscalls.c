@@ -61,7 +61,17 @@ __asm__ (".pushsection .text\n" \
 	 "   pushl %ecx\n"\
 	 "   pushl %ebx\n"\
 	 "   cmpl $1, %eax\n"\
-	 "   je .linux_exit\n"\
+	 "   je .linux_exit_thread\n"\
+	 "   cmpl $120, %eax\n"\
+	 "   je .linux_clone\n"\
+	 "   cmpl $240, %eax\n"\
+	 "   je .linux_futex\n"\
+	 "   cmpl $422, %eax\n"\
+	 "   je .linux_futex_time64\n"\
+	 "   cmpl $224, %eax\n"\
+	 "   je .linux_gettid\n"\
+	 "   cmpl $158, %eax\n"\
+	 "   je .linux_sched_yield\n"\
 	 "   cmpl $2, %eax\n"\
 	 "   je .linux_fork\n"\
 	 "   cmpl $3, %eax\n"\
@@ -140,6 +150,24 @@ __asm__ (".pushsection .text\n" \
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_exit:\n"\
 	 "   call _linux_syscall_exit\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_exit_thread:\n"\
+	 "   call _linux_syscall_exit_thread\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_clone:\n"\
+	 "   call _linux_syscall_clone\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_futex:\n"\
+	 "   call _linux_syscall_futex\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_futex_time64:\n"\
+	 "   call _linux_syscall_futex_time64\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_gettid:\n"\
+	 "   call _linux_syscall_gettid\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_sched_yield:\n"\
+	 "   call _linux_syscall_sched_yield\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_fork:\n"\
 	 "   call _linux_syscall_fork\n"\
@@ -349,8 +377,12 @@ int _linux_syscall_clock_nanosleep64(uint32_t clock, int flags,
    the default action of a fatal signal would; signal 0 only checks that
    the target exists. Signals to other processes are not supported. */
 int _linux_syscall_kill(int pid, int sig) {
-  if (pid != 0 && pid != (int)currProcess)
-    return -1; /* -EPERM */
+  /* oneself: the process (pid) or one of its threads (tkill, tgkill) */
+  if (pid != 0 && pid != (int)currProcess) {
+    tss_t * t;
+    for (t = processTable[currProcess]->tss; t && t->tid != pid; t = t->next) ;
+    if (!t) return -1; /* -EPERM */
+  }
   if (sig == 0)
     return 0;
   printk("process ");
@@ -379,11 +411,6 @@ int _linux_syscall_mprotect(void * addr, size_t len, int prot) {
   return 0;
 }
 
-/* set_tid_address (258): called by musl at startup; one thread per
-   process from Linux's point of view, so the tid is the pid */
-int _linux_syscall_set_tid_address(int * tidptr) {
-  return currProcess;
-}
 
 /* Thread-local storage: a single GDT slot (GDT_TLS_INDEX) shared by all
    threads, rewritten from the incoming thread's tss on every switch. */
@@ -867,6 +894,8 @@ static tss_t * copyThreads(process_descriptor_t * ddest,
 	    sizeof(tss_t));
     dest->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
     dest->privSem = __OS_sem_allocateSemaphore(0);
+    dest->tid = pid;          /* only the calling thread will run */
+    dest->clearTid = NULL;
     dest->prev = prevDest;
     prevDest = dest;
     dest->pid = pid;

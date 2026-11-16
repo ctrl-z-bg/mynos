@@ -11,6 +11,7 @@
 #   mynos-byterun/src/ocamlrun       the OCaml 3.06 runtime (legacy)
 #   tests/hello/hello.byte           OCaml test program
 #   tests/effects/effects.byte       effect handlers test (OCaml 5 only)
+#   tests/domains/domains.byte       domains test: threads, futexes (OCaml 5 only)
 #   mynos-lib/ocaml/mynos.cma        the Mynos OCaml library (dev only)
 #   tests/mynos-ocaml/mynos_test.byte  test of the Mynos library (dev only)
 #   tests/console/echo.byte          reads lines from the console (dev only)
@@ -43,7 +44,8 @@ if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
 fi
 (cd tests/hello && ocamlc -o hello.byte hello.ml)
 case $(ocamlc -version) in
-  5.*) (cd tests/effects && ocamlc -o effects.byte effects.ml) ;;
+  5.*) (cd tests/effects && ocamlc -o effects.byte effects.ml)
+       (cd tests/domains && ocamlc -o domains.byte domains.ml) ;;
 esac
 (cd tests/ramdisk && ../../services/fs/memrofs/tool/createDisk AUTOEXEC.BAT)
 if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
