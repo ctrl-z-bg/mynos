@@ -13,6 +13,7 @@ let help () =
     \  #use \"/tmp/a.ml\";;          run the phrases in a file\n\
     \  rm \"/tmp/a.ml\";;            remove a file\n\
     \  run \"hello.byte\" [];;       start a program and wait for it\n\
+    \  edit \"/disk/a.ml\";;         edit a file (full screen)\n\
     \  compile \"/disk/a.ml\";;      compile it into /disk/a.byte (ocamlc)\n\
     \  free ();;                   free memory\n\
      The MyNOS system calls are in module Mynos (#show Mynos;;).\n\
@@ -75,6 +76,8 @@ let compile ?output src =
     | None -> Filename.remove_extension src ^ ".byte" in
   (* the runtime's primitives include MyNOS's: programs may use Mynos *)
   run "ocamlc.byte" [ "-use-prims"; "/primitives"; "mynos.cma"; "-o"; out; src ]
+
+let edit file = ignore (run "edit.byte" [ file ])
 
 let free () =
   let pages = (Mynos.stats ()).Mynos.free_pages in

@@ -122,3 +122,12 @@ val driver_register : string -> int -> int
     one). The process acknowledges the interrupt controller itself. *)
 
 val enable_irq : int -> unit
+
+(** {1 Console} *)
+
+val console_mode : canon:bool -> echo:bool -> ?vmin:int -> ?vtime:int -> unit -> unit
+(** The console's input mode, as termios: [canon] for line editing (else
+    keys come one by one, the arrows and editing keys as VT100 sequences),
+    [echo] to show typed characters; for raw input, [vmin] and [vtime] as
+    termios VMIN and VTIME. The raw mode ends when another process reads
+    the console. The screen is 80x25 and understands VT100 sequences. *)

@@ -270,6 +270,11 @@ static void alternate(int on)
     saved_screen_row = row;
     saved_screen_col = col;
     on_alternate = 1;
+    {                                 /* the alternate screen starts clear */
+      int r;
+      for (r = 0; r < ROWS; r++) erase(r, 0, COLUMNS);
+      row = col = 0;
+    }
   } else if (!on && on_alternate) {
     kmemcpy((char *)BASE_VIDEO, saved_screen, sizeof(saved_screen));
     row = saved_screen_row;
@@ -363,6 +368,11 @@ static void term_char(char c)
       nparams = 0;
       private_mark = 0;
       params[0] = 0;
+    } else if (c == 'E') newline();               /* NEL: next line */
+    else if (c == 'D') {                           /* IND: down, scrolling */
+      if (row == ROWS - 1) scroll_up(0, 1); else row++;
+    } else if (c == 'M') {                         /* RI: up, scrolling */
+      if (row == 0) scroll_down(0, 1); else row--;
     } else if (c == '7') { saved_row = row; saved_col = col; }
     else if (c == '8') { row = saved_row; col = saved_col; }
     else if (c == 'c') { clear_screen(); fg = 7; bg = 0; bold = reverse = 0; update_attr(); }

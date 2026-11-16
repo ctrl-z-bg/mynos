@@ -39,6 +39,8 @@ talking through IPC.
 | `init/` | `init`, in OCaml: starts the services and the shell listed in `init.rc` |
 | `shell/` | The shell: the OCaml toplevel (`shell.byte`) and module `Shell` (commands) |
 | `system/` | The system RAM disk: `init`, `init.rc`, services, the shell, interfaces, programs |
+| `editor/` | `edit`, the text editor, in OCaml on Notty |
+| `third_party/` | kilo (C editor), Notty and uutf (OCaml terminal UI), with their licenses and MyNOS changes |
 | `mynos.mk` | Toolchain variables for user-space programs (`MYNOS_CC`, `MYNOS_LDFLAGS`) |
 
 #### mynos-core — the microkernel
@@ -145,8 +147,11 @@ All services are linked statically against `libmynos` and placed at
 
 The shell is the OCaml 5.5 toplevel itself (`shell/main.ml` calls
 `Topmain.main`), linked with the `Mynos` library and module `Shell`
-(`help`, `ls`, `cd`, `pwd`, `cat`, `write`, `rm`, `run`, `compile`,
-`free`), which is opened at startup. **Programs can be compiled inside MyNOS**: `ocamlc`
+(`help`, `ls`, `cd`, `pwd`, `cat`, `write`, `rm`, `edit`, `run`,
+`compile`, `free`), which is opened at startup. **MyNOS is self-hosting
+for OCaml programs**: `edit "/disk/a.ml"` (a full-screen editor in OCaml,
+`editor/`, on the Notty library with a MyNOS backend), `compile`, `run`;
+the files stay on `/disk`. **Programs can be compiled inside MyNOS**: `ocamlc`
 runs from the RAM disk (`OCAMLLIB=/`), and `compile "/disk/a.ml"` makes
 `/disk/a.byte`, which may use `Mynos`. Typed lines come from the console service. Files written under
 `/tmp` can be run with `#use`.
@@ -506,6 +511,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   driver, raw input mode in consoled, termios and window size in
   libmynos. kilo, a small editor in C, works on it (tested: it saves a
   file on /disk). Part of mynos-0do.3.
+- **2026-11-16** — `edit`, a full-screen text editor in OCaml, on Notty
+  (`third_party/notty`, with a MyNOS backend replacing `Notty_unix`);
+  `Mynos.console_mode`; the terminal learned `ESC E` (Notty's newline)
+  and a cleared alternate screen. Edit, compile and run without the host.
+  Closed mynos-0do.3 and the epic mynos-0do.
 - **2026-11-16** — The original website (mynos.sourceforge.net, from the
   Wayback Machine) archived as static files in `doc/website/`, with the
   2002-2004 news posts and the 2002 and 2004 test packages. Closed

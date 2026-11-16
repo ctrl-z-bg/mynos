@@ -38,5 +38,9 @@ val compile : ?output:string -> string -> Mynos.status
 (** [compile "/disk/prog.ml"] compiles a program into [/disk/prog.byte]
     (or [output]) with ocamlc, inside MyNOS; it may use module {!Mynos}. *)
 
+val edit : string -> unit
+(** Edit a file, full screen: Ctrl-S saves, Ctrl-Q quits, Ctrl-F finds,
+    Ctrl-K cuts a line, Ctrl-U pastes it. *)
+
 val free : unit -> unit
 (** Print the free memory. *)

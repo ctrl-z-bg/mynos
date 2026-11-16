@@ -1004,3 +1004,22 @@ from 8 to 24 bytes), the shell hung at its first command. Only `libmynos`
 and the services had been rebuilt, not the runtime that links it, and
 the service silently dropped requests of the old size. A full rebuild
 fixed it; the lesson is to rebuild everything after a protocol change.
+
+### The editor, on Notty
+
+With the terminal in place, the editor is an OCaml program on
+[Notty](https://github.com/pqwy/notty), a declarative library for terminal
+interfaces, pure OCaml apart from its Unix backend. MyNOS's backend
+(`third_party/notty/notty_mynos.ml`, 60 lines) does what `Notty_unix.Term`
+does without the Unix library: raw console mode through a new
+`Mynos.console_mode`, output to stdout, input from stdin decoded by Notty's
+own `Unescape`. Two details: Notty 0.2.3 predates the `out_width` field
+OCaml 5.2 added to `Format`'s output functions (one line), and the console
+sends Enter as CR, which Notty only understands as LF (on Unix, termios's
+`ICRNL` translates it): the backend maps it.
+
+The first full-screen frame came out as one long line: Notty ends lines
+with `ESC E` (NEL), which the terminal ignored, and assumed that the
+alternate screen starts blank, as in real terminals. Both added, `edit`
+worked, and the loop closed: write a program in MyNOS, compile it with
+`ocamlc` in MyNOS, run it, find it again after a reboot.

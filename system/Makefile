@@ -21,7 +21,7 @@ ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2
 
 FILES = ../init/init.byte init.rc ocamlrun consoled kilo \
 	../services/tmpfs/tmpfs.byte ../services/ata/ata.byte \
-	../services/fatfs/fatfs.byte \
+	../services/fatfs/fatfs.byte ../editor/edit.byte \
 	../shell/shell.byte ../shell/shell.cmi ../mynos-lib/ocaml/mynos.cmi \
 	$(wildcard $(STDLIB)/*.cmi) \
 	$(STDLIB)/stdlib.cma $(STDLIB)/std_exit.cmo $(STDLIB)/runtime-launch-info \

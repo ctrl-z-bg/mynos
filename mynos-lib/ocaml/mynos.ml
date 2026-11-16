@@ -80,3 +80,8 @@ external outsw : int -> string -> unit = "caml_mynos_outsw"
 external driver_register : string -> int -> int = "caml_mynos_driver_register"
 external enable_irq_raw : int -> int = "caml_mynos_enable_irq"
 let enable_irq n = ignore (enable_irq_raw n)
+
+external console_mode_raw : bool -> bool -> int -> int -> unit
+  = "caml_mynos_console_mode"
+let console_mode ~canon ~echo ?(vmin = 1) ?(vtime = 0) () =
+  console_mode_raw canon echo vmin vtime
