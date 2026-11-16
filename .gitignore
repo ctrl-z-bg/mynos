@@ -37,3 +37,4 @@ services/serial/seriald
 *.dsk
 tests/abi/abi
 build/
+mynos-runtime/ocamlrun

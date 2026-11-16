@@ -9,11 +9,13 @@ set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 
+ocamlrun=$(tools/ocamlrun-path.sh)
 log=$(mktemp)
-trap 'rm -f "$log"' EXIT
+log2=$(mktemp)
+trap 'rm -f "$log" "$log2"' EXIT
 
 timeout "${WAIT:-8}" tools/run-qemu.sh \
-    mynos-byterun/src/ocamlrun \
+    "$ocamlrun" \
     tests/hello/hello.byte \
     services/registry/registry \
     services/fs/memrofs/memrofsd \
@@ -22,6 +24,13 @@ timeout "${WAIT:-8}" tools/run-qemu.sh \
     tests/abi/abi \
     tests/ramdisk/ramdisk.dsk \
     -- -display none -serial null -serial "file:$log" || true
+
+# second boot: effect handlers (OCaml 5 only)
+if [ -f tests/effects/effects.byte ]; then
+    timeout "${WAIT:-8}" tools/run-qemu.sh "$ocamlrun" tests/effects/effects.byte \
+        -- -display none -serial null -serial "file:$log2" || true
+    cat "$log2" >> "$log"
+fi
 
 fail=0
 expect() {
@@ -43,6 +52,9 @@ expect "Service keyboard registered"
 expect "Service serial registered"
 expect "Hello from memrofs!"
 expect "abi: all checks passed"
+if [ -f tests/effects/effects.byte ]; then
+    expect "effects ok"
+fi
 reject "PANIC"
 reject "page fault (?)"
 reject "FAIL"

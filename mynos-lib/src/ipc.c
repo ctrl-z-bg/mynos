@@ -45,7 +45,7 @@ static int  __mynos_recv(int channel, mynos_msg_t * msg,
   return ret;
 }
 
-int32_t mynos_recv(int channel, mynos_msg_t **pmsg, 
+int mynos_recv(int channel, mynos_msg_t **pmsg, 
 		   unsigned int flags, unsigned int timeout) {
   void * shortmsg = malloc(MYNOS_SHORT_MESSAGE_SIZE);
   (*pmsg) = (mynos_msg_t*)malloc(sizeof(mynos_msg_t));

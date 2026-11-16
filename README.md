@@ -18,7 +18,8 @@ high-level language rather than in C.
 | [`mynos-core/`](mynos-core/) | The microkernel: multiboot boot, paging, processes and threads, copy-on-write fork, scheduler, semaphores, port/channel IPC, user-space IRQ delivery, native (`int 0x90`) and Linux-compatible (`int 0x80`) syscalls |
 | [`mynos-lib/`](mynos-lib/) | User-space library for the native syscalls (`include/mynos.h`) |
 | [`services/`](services/) | User-space servers: name registry, keyboard and serial drivers, `memrofs` read-only RAM filesystem |
-| [`mynos-byterun/`](mynos-byterun/) | The OCaml 3.06 bytecode runtime (`ocamlrun`), patched to run on MyNOS |
+| [`mynos-runtime/`](mynos-runtime/) | The OCaml 5.5 bytecode runtime for MyNOS: the upstream runtime, unchanged, plus a MyNOS `main()` |
+| [`mynos-byterun/`](mynos-byterun/) | The original OCaml 3.06 bytecode runtime (`ocamlrun`), patched to run on MyNOS (legacy toolchain) |
 | [`doc/STATUS.md`](doc/STATUS.md) | Architecture overview and current state of the project |
 | [`doc/JOURNAL.md`](doc/JOURNAL.md) | Engineering journal: what was found while reviving the code, bug by bug |
 | [`doc/decisions/`](doc/decisions/) | Design decisions, with the evidence behind them |
@@ -40,8 +41,9 @@ See [`doc/STATUS.md`](doc/STATUS.md) for details.
 
 ## Building
 
-The system is 32-bit and needs dietlibc for i386 and OCaml 3.06, which
-current distributions don't provide for the host. Builds run in containers
+The system is 32-bit: user programs are static Linux i386 binaries (musl)
+and the OCaml runtime is 5.5, built for that target. Current distributions
+don't provide this for an x86_64 host. Builds run in containers
 with [podman](https://podman.io/); QEMU runs on the host.
 
 ```sh
@@ -51,9 +53,9 @@ tools/run-demo.sh                        # boot the whole system in QEMU
 ```
 
 There are two build environments: `dev` (default) with a modern toolchain
-(gcc 14, Debian trixie i386), and `legacy` with the toolchain of the original
-project (gcc 4.3, Debian lenny i386), kept to compare behaviour with the
-original. Pass the name to the scripts, e.g. `tools/build-all.sh legacy`;
+(gcc 14, musl, OCaml 5.5, Debian trixie i386), and `legacy` with the
+toolchain of the original project (gcc 4.3, dietlibc, OCaml 3.06, Debian
+lenny i386), kept to compare behaviour with the original. Pass the name to the scripts, e.g. `tools/build-all.sh legacy`;
 run `tools/clean-all.sh` first when switching between them.
 
 `tools/run-tests.sh` boots the system headless and checks its output.
@@ -66,8 +68,9 @@ details.
 
 Development stopped at the end of 2004, after the IPC, threads, copy-on-write
 and the bytecode interpreter port were in place. In 2026 the original system
-was rebuilt, ported to a modern toolchain and runs again in QEMU. No OCaml
-services exist yet, and the way the bytecode is loaded is a shortcut. The current state, known issues and a
+was rebuilt, ported to a modern toolchain and moved to OCaml 5.5; it runs
+again in QEMU. No OCaml services exist yet, and the way the bytecode is
+loaded is a shortcut. The current state, known issues and a
 work log are kept in [`doc/STATUS.md`](doc/STATUS.md).
 
 ## Authors

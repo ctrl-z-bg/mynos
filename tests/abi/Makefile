@@ -1,7 +1,8 @@
 # ABI checks, built like the services (dietlibc, libmynos, 0x40000000)
-CC = diet gcc
+include ../../mynos.mk
+CC = $(MYNOS_CC)
 CFLAGS = -Wall -I../../mynos-lib/include
-LDFLAGS = -L../../mynos-lib/lib/ -lmynos -static -Xlinker -Ttext -Xlinker 0x40000000 -Wl,--build-id=none -Wl,-N
+LDFLAGS = -L../../mynos-lib/lib/ -lmynos $(MYNOS_LDFLAGS)
 
 all: abi
 

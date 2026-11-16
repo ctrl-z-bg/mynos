@@ -25,6 +25,23 @@
 #include <unistd.h>
 #include <string.h>
 
+/* All services start together at boot, so a client can run before the
+   registry has opened its port: retry for a while. The kernel has no sleep
+   yet (its timer queue never fires), so wait by spinning: the scheduler is
+   preemptive and the registry gets the CPU meanwhile. */
+static int connectToRegistry(void) {
+  int channel, tries;
+  for (tries = 0; tries < 200; tries++) {
+    volatile int spin;
+    channel = mynos_connectToPort(MYNOS_PORT_REGISTRY);
+    if (channel != MYNOS_ERR_INVALID)
+      return channel;
+    for (spin = 0; spin < 200000; spin++)
+      ;
+  }
+  return channel;
+}
+
 int mynos_registryRegister(char * name) {
   mynos_reg_cmd_t cmd;
   int channel;
@@ -37,7 +54,7 @@ int mynos_registryRegister(char * name) {
   }
 
   /* get a channel connecting to the registry server */
-  channel = mynos_connectToPort(MYNOS_PORT_REGISTRY);
+  channel = connectToRegistry();
   if (channel < 0) return channel;
 
   cmd.cmd = MYNOS_REGISTRY_REGISTER;
@@ -69,7 +86,7 @@ int mynos_registryLookUp(char * name) {
     return MYNOS_ERR_INVALID;
   }
 
-  channel = mynos_connectToPort(MYNOS_PORT_REGISTRY);
+  channel = connectToRegistry();
   if (channel < 0) return channel;
 
   cmd.cmd = MYNOS_REGISTRY_LOOKUP;

@@ -17,7 +17,8 @@
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
 
-CC = diet gcc
+include ../../mynos.mk
+CC = $(MYNOS_CC)
 CFLAGS = -DMYNOS -Wall -I../include
 LD = ld
 MAKE	= make

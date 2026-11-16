@@ -11,8 +11,10 @@ set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 
+ocamlrun=$(tools/ocamlrun-path.sh)
+
 exec tools/run-qemu.sh \
-    mynos-byterun/src/ocamlrun \
+    "$ocamlrun" \
     tests/hello/hello.byte \
     services/registry/registry \
     services/fs/memrofs/memrofsd \

@@ -7,8 +7,10 @@
 #   mynos-core/kernel/kernel.elf     the kernel
 #   mynos-lib/lib/libmynos.a         user-space library
 #   services/...                     registry, keyboardd, seriald, memrofsd
-#   mynos-byterun/src/ocamlrun       the OCaml bytecode runtime
-#   tests/hello/hello.byte           OCaml test program (ocamlc 3.06)
+#   mynos-runtime/ocamlrun           the OCaml 5.5 runtime (dev), or
+#   mynos-byterun/src/ocamlrun       the OCaml 3.06 runtime (legacy)
+#   tests/hello/hello.byte           OCaml test program
+#   tests/effects/effects.byte       effect handlers test (OCaml 5 only)
 #   tests/abi/abi                    system call checks
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 set -eu
@@ -21,8 +23,11 @@ mkdir -p mynos-lib/lib
 make -C mynos-core/kernel
 make -C mynos-lib
 make -C services
-make -C mynos-byterun/src
+make -C ${MYNOS_RUNTIME:-mynos-byterun/src}
 make -C tests/abi
 (cd tests/hello && ocamlc -o hello.byte hello.ml)
+case $(ocamlc -version) in
+  5.*) (cd tests/effects && ocamlc -o effects.byte effects.ml) ;;
+esac
 (cd tests/ramdisk && ../../services/fs/memrofs/tool/createDisk AUTOEXEC.BAT)
 '
