@@ -106,7 +106,8 @@ All services are linked statically against `libmynos` and placed at
   request).
 - `keyboard`, `serial`: drivers using `mynos_driverRegister` and port I/O.
 - `console`: the console service (2026). Owns the keyboard, edits the line
-  being typed and gives lines to programs reading their standard input,
+  being typed (Backspace; Up/Down or Ctrl-P/Ctrl-N recall the last 64
+  lines, kept in memory) and gives lines to programs reading their standard input,
   through `read` in `mynos-lib/src/fileio.c` (`doc/decisions/terminal.md`).
   It replaces `keyboard` in the demo when built.
 - `fs/memrofs`: a read-only in-memory filesystem. GRUB loads it as a module
@@ -390,3 +391,6 @@ Side task: archive the old SourceForge site (mynos-db2).
   requests, channel ids, registry thread stacks). Twenty programs in a
   row now leave the free memory unchanged (`tests/spawn`). Closed
   mynos-pg6.
+- **2026-11-16** — Line history in the console service: Up/Down recall
+  previous lines in the shell and in every program reading the console.
+  `tools/type-keys.py` sends special keys (`{up}`).

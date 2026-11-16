@@ -9,7 +9,8 @@ let help () =
     \  run \"hello.byte\" [];;      start a program and wait for it\n\
     \  free ();;                  free memory\n\
      The MyNOS system calls are in module Mynos (#show Mynos;;).\n\
-     Line editing: Backspace. #quit;; or Ctrl-D ends the shell.\n";
+     Line editing: Backspace; Up and Down recall previous lines.\n\
+     #quit;; or Ctrl-D ends the shell.\n";
   flush stdout
 
 let size name =

@@ -98,7 +98,8 @@ if [ -f shell/ramdisk.dsk ] && [ -f services/console/consoled ]; then
     done
     for phrase in '1 + 2;;\n' 'List.map (fun x -> x * x) [1; 2; 3];;\n' \
                   'cat "AUTOEXEC.BAT";;\n' 'ls ();;\n' \
-                  'run "child.byte" ["4"];;\n' '1 + "one";;\n'; do
+                  'run "child.byte" ["4"];;\n' '1 + "one";;\n' \
+                  '6 * 7;;\n' '{up}\n' '1 + 1;;\n' 'x{up}{up}{down}\n'; do
         tools/type-keys.py "$tmp/mon7" "$phrase"
         sleep 2
     done
@@ -150,6 +151,13 @@ if [ -f shell/ramdisk.dsk ] && [ -f services/console/consoled ]; then
     expect "args [4]"
     expect "- : Mynos.status = Mynos.Exited 4"
     expect "Error: "
+    # history: Up recalls "6 * 7;;"; Up, Up, Down recalls "1 + 1;;"
+    if [ "$(grep -acx -- '- : int = 42' "$log7")" -ge 2 ] &&
+       [ "$(grep -acx -- '- : int = 2' "$log7")" -ge 2 ]; then
+        echo "ok    shell history (Up, Down)"
+    else
+        echo "FAIL  shell history (Up, Down)"; fail=1
+    fi
 fi
 if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     expect 'console: line 1: "hi"'

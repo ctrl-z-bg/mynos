@@ -20,6 +20,9 @@
  *   request: struct console_req { int op; int len; }, op CONSOLE_READ
  *   reply:   up to len bytes of input; 0 bytes means end of file
  *
+ * History: the last HIST_MAX lines typed are kept in memory; Up and Down
+ * (or Ctrl-P and Ctrl-N) bring them back for editing, as in a Unix shell.
+ *
  * Two threads: the keyboard thread waits for interrupts and builds lines;
  * the main thread serves clients. MyNOS threads share their creator's TLS
  * (mynos-l9h), so the keyboard thread never calls the C library: only
@@ -35,10 +38,27 @@
 
 #define LINE_MAX 256
 #define QUEUE_MAX 4096
+#define HIST_MAX 64
 
 /* the line being edited (keyboard thread only) */
 static char line[LINE_MAX];
 static int line_len = 0;
+
+/* history (keyboard thread only): a ring of the last HIST_MAX lines, without
+   their newline. hist_pos is the line shown while browsing; hist_count when
+   editing a new line, which is kept in scratch meanwhile. */
+static char history[HIST_MAX][LINE_MAX];
+static int history_len[HIST_MAX];
+static int hist_count = 0;       /* lines entered so far (all time) */
+static int hist_pos = 0;
+static char scratch[LINE_MAX];
+static int scratch_len = 0;
+
+/* keys beyond ASCII (keymap_translate: scan code << 8) */
+#define KEY_UP   0x4800
+#define KEY_DOWN 0x5000
+#define CTRL_P   0x10
+#define CTRL_N   0x0E
 
 /* completed input waiting for readers, protected by `lock` */
 static char queue[QUEUE_MAX];
@@ -67,10 +87,61 @@ static void queue_input(const char * s, int n, int eof)
   mynos_V(available);
 }
 
+/* replace the line on screen and in the buffer */
+static void show_line(const char * s, int n)
+{
+  static char erase[3 * LINE_MAX];
+  int i;
+  for (i = 0; i < line_len; i++) {
+    erase[3 * i] = '\b';
+    erase[3 * i + 1] = ' ';
+    erase[3 * i + 2] = '\b';
+  }
+  raw_write(erase, 3 * line_len);
+  memcpy(line, s, n);
+  line_len = n;
+  raw_write(line, line_len);
+}
+
+static void history_add(void)
+{
+  int last = (hist_count - 1) % HIST_MAX;
+  if (line_len == 0) return;
+  if (hist_count > 0 && history_len[last] == line_len &&
+      !memcmp(history[last], line, line_len))
+    return;                            /* same as the previous one */
+  memcpy(history[hist_count % HIST_MAX], line, line_len);
+  history_len[hist_count % HIST_MAX] = line_len;
+  hist_count++;
+}
+
+/* move in the history: -1 older, +1 newer */
+static void history_move(int dir)
+{
+  int oldest = hist_count > HIST_MAX ? hist_count - HIST_MAX : 0;
+  int pos = hist_pos + dir;
+  if (pos < oldest || pos > hist_count) return;
+  if (hist_pos == hist_count) {        /* leaving the new line: keep it */
+    memcpy(scratch, line, line_len);
+    scratch_len = line_len;
+  }
+  hist_pos = pos;
+  if (pos == hist_count)
+    show_line(scratch, scratch_len);
+  else
+    show_line(history[pos % HIST_MAX], history_len[pos % HIST_MAX]);
+}
+
 static void key_typed(unsigned int c)
 {
-  if (c == '\n' || c == '\r') {
+  if (c == KEY_UP || c == CTRL_P) {
+    history_move(-1);
+  } else if (c == KEY_DOWN || c == CTRL_N) {
+    history_move(+1);
+  } else if (c == '\n' || c == '\r') {
     raw_write("\n", 1);
+    history_add();
+    hist_pos = hist_count;
     line[line_len++] = '\n';
     queue_input(line, line_len, 0);
     line_len = 0;
@@ -96,13 +167,25 @@ static void key_typed(unsigned int c)
 static void * keyboard_thread(void * arg)
 {
   int irq = (int)arg;
+  int extended = 0;
   while (1) {
     unsigned int key, c;
     mynos_P(irq);
     key = inportb(0x60);
-    c = keymap_translate(key);
+    if (key == 0xE0) {                 /* prefix of the grey keys */
+      extended = 1;
+      outportb(0x20, 0x20);
+      continue;
+    }
+    /* grey arrows are arrows even with Num Lock on (keypad 8 and 2 share
+       their scan codes) */
+    if (extended && (key == 0x48 || key == 0x50))
+      c = key << 8;
+    else
+      c = keymap_translate(key);
+    extended = 0;
     outportb(0x20, 0x20);
-    if (c != 0 && c <= 0xFF)
+    if (c != 0 && (c <= 0xFF || c == KEY_UP || c == KEY_DOWN))
       key_typed(c);
   }
   return NULL;

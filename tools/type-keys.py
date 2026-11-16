@@ -2,9 +2,11 @@
 """Type text on a MyNOS machine through the QEMU monitor (sendkey).
 
 Usage: tools/type-keys.py MONITOR_SOCKET TEXT...
-       Each TEXT is typed in turn; "\\n" in it is Enter, "^D" is Ctrl-D.
+       Each TEXT is typed in turn; "\\n" in it is Enter, "^D" is Ctrl-D,
+       "{name}" is the QEMU key name (e.g. {up}, {down}).
 The keyboard is a US layout (services/keyboard/keymap.h).
 """
+import re
 import socket
 import sys
 import time
@@ -24,6 +26,10 @@ PLAIN = {
 }
 
 
+# {up}, {down}, {ctrl-p}...: a QEMU key name; "{ x = 1 }" is just text
+KEYNAME = re.compile(r'\{([a-z0-9_-]+)\}')
+
+
 def keys(text):
     i = 0
     while i < len(text):
@@ -31,6 +37,11 @@ def keys(text):
         if text.startswith('^D', i):
             yield 'ctrl-d'
             i += 2
+            continue
+        m = KEYNAME.match(text, i)
+        if m:
+            yield m.group(1)
+            i = m.end()
             continue
         if c.isascii() and c.isalpha():
             yield ('shift-' + c.lower()) if c.isupper() else c
