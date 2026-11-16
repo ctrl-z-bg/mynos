@@ -222,8 +222,10 @@ IPC; typed keys are echoed on screen and sent to the serial port.
   port, unless the kernel command line says `verbose` (`VERBOSE=1
   tools/run-qemu.sh`). Panics always show.
 - **Booting.** `tools/run-qemu.sh` uses QEMU's multiboot loader, no GRUB.
-  Modules are passed in order; module 1 must be the OCaml bytecode.
-  `tools/run-demo.sh` passes the standard set. The kernel is built with `-g`,
+  Modules are passed in order, with their arguments (`"path args"`); with
+  no RAM disk, module 1 is the OCaml bytecode. `tools/run-demo.sh` passes
+  the standard set, and so does `tools/run-qemu.sh` without modules
+  (`KERNEL_ONLY=1` for the bare kernel). The kernel is built with `-g`,
   so `qemu-system-i386 -s -S` plus `gdb mynos-core/kernel/kernel.elf` gives
   source-level debugging.
 - **Bugs hidden by the old compilers**, fixed:
@@ -431,3 +433,5 @@ Side task: archive the old SourceForge site (mynos-db2).
   `unlink` in `libmynos`; shell commands `write`, `rm`, `ls ~dir`. Fixed an
   IPC bug from 2004: a message ending at a page boundary mapped one page
   too many into the receiver, leaked. Closed mynos-gcv.
+- **2026-11-16** — `tools/run-qemu.sh` without modules boots the standard
+  system instead of a bare kernel that runs nothing.

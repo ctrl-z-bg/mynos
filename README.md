@@ -80,8 +80,8 @@ run `tools/clean-all.sh` first when switching between them.
 `tools/run-tests.sh` boots the system headless and checks its output.
 `tools/in-container.sh dev` opens a shell in the build environment, or runs
 the command given after it. `tools/run-qemu.sh` boots the kernel with any
-list of modules (module 1 is the OCaml bytecode); see the scripts for
-details.
+list of modules (`"path args"` passes arguments); without modules it boots
+the standard system, like `tools/run-demo.sh`. See the scripts for details.
 
 ## Status
 
