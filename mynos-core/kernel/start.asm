@@ -84,23 +84,39 @@ _start:
 
 multiboot_entry:
 
+	;; the bootloader leaves esp undefined (multiboot spec): use our own
+	;; small boot stack before the first push
+	mov	esp, boot_stack_top
+
 	;; save multiboot information pointer on stack
 	push ebx
 
-;;; now we calculate the amount of RAM you have by a read-back test
-;;; the result, in eax, is in MB
+;;; Amount of RAM, in MB. The multiboot information has it (flags bit 0:
+;;; mem_upper, in KB above 1MB). Without it, probe the last DWORD of each MB
+;;; with a read-back test that restores the original value: the bootloader
+;;; may have loaded modules there (the old probe wrote 0x12345678 into
+;;; them, corrupting any module that crossed a MB boundary).
+	test	DWORD [ebx], 1
+	jz	.probe
+	mov	eax, [ebx + 8]	; mem_upper (KB)
+	shr	eax, 10		; MB above the first one
+	add	eax, 1
+	jmp	.memdone
+.probe:
 	mov	ebx, 0x1FFFFC	; last DWORD of the second MB
 	xor	eax, eax	; the counter
 .count:	
+	mov	edx, [ebx]	; save the original value
 	mov	ecx, 0x12345678	; test number
-	mov	DWORD [ebx], 0
 	mov	[ebx], ecx	; write the test number in memory
-	xor	ecx, ecx
 	mov	ecx, [ebx]	; read the test number from memory
+	mov	[ebx], edx	; restore the original value
 	add	ebx, ONE_M
 	add	eax, 1
 	cmp	ecx, 0x12345678	; test if the test number was really there
 	jz	.count
+	mov	ebx, [esp]	; restore the multiboot pointer
+.memdone:
 	mov	[_asm_global_mem_size], eax 
 
 ;;; ENABLE PAGING
@@ -221,6 +237,11 @@ clear_page_table:
 ;;; amount of ram
 global				_asm_global_mem_size
 _asm_global_mem_size:			dd	0
+
+	;; boot stack, used until paging is enabled
+	align	16
+boot_stack:	times 1024 db 0
+boot_stack_top:
 
 global				_asm_last_kernel_page_dir_entry_used
 _asm_last_kernel_page_dir_entry_used:	dd	KLAST_PAGE_DIR_ENTRY_USED
