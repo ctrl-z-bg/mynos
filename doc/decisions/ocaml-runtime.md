@@ -2,7 +2,7 @@
 
 - **Issue:** mynos-4er
 - **Date:** 2026-11-16
-- **Status:** proposed
+- **Status:** accepted and implemented (2026-11-16, mynos-3rz)
 - **Experiment:** `tools/experiments/ocaml-runtime/run.sh`
 
 ## Question

@@ -328,3 +328,66 @@ box; `Domain.spawn` stops at the missing `clone`.
   exercised paths the previous ones never touched.
 - "Report the unknown system call and return -ENOSYS" turned the kernel into
   a measuring instrument: the list of missing calls was the to-do list.
+
+---
+
+## 2026-11-16 — Moving to musl and OCaml 5.5
+
+Decision accepted (`doc/decisions/ocaml-runtime.md`). The dev container now
+builds OCaml 5.5.2 twice: the compiler for the build host, and the bytecode
+runtime with musl. MyNOS's `mynos-runtime/` holds only a ten-line `main()`
+and a Makefile that links it with the upstream `libcamlrun.a`: no OCaml
+sources in the repository, so a new OCaml release is a version bump. The
+user-space Makefiles read `MYNOS_CC` and `MYNOS_LDFLAGS` from `mynos.mk`;
+the dev container sets them to musl, the legacy one keeps dietlibc.
+
+The hello world ran at once. The whole system did not, and each failure was
+a kernel or library bug that dietlibc and the small 3.06 runtime had never
+exercised.
+
+- **Another 4 MB victim.** The 5.5 `ocamlrun` is 1.7 MB, so the modules after
+  it land above 4 MB. `mynos_main` looked for the `.RAMDISK` signature in
+  every module *before* `init_memory` had mapped them: an early kernel page
+  fault and a reboot loop. The check now runs after `init_memory`.
+- **The RAM disk was invisible to the linear space map.** The kernel maps
+  the RAM disk at `0x40400000` in every process but did not record it in the
+  per-process map that `mmap` allocates from. OCaml 5 reserves a large area
+  for its minor heaps at startup; the map offered addresses overlapping the
+  RAM disk and the allocation failed: `Not enough heap memory to reserve
+  minor heaps`. The 4 MB slot is now reserved in the map.
+- **A crashing program stopped the whole machine.** CPU exception handlers
+  were `while (1)` loops with interrupts off. OCaml's fatal error called
+  `abort()`, musl tried `tkill`, then executed a privileged instruction on
+  purpose, and the kernel froze. Now an exception or an invalid access in
+  user mode prints the cause and terminates only that process, and `kill`,
+  `tkill`, `tgkill` aimed at oneself terminate it as a fatal signal would.
+  First attempt forgot that `killProcess()` returns: `exit` calls `sched()`
+  after it to switch away, and so must every other path.
+- **Boot race.** Services start together; memrofs asked the registry for a
+  port before the registry had opened its own, and got `-3`. With dietlibc
+  the timing happened to be right. The registry client now retries.
+  Sleeping was not possible: the kernel's timer queue is never checked, so
+  the retry spins (mynos-e1k).
+- **Threads without TLS.** The registry serves each request in a thread
+  created with `mynos_threadCreate`. musl's `malloc` reads the stack canary
+  at `%gs:0x14`; the new thread started with `%gs` set to the plain data
+  segment and read address `0x14`. New threads now start with their
+  creator's TLS segment (shared, until threads get their own: mynos-l9h).
+- **The fork child had the wrong `%gs`.** musl makes system calls through
+  `call *%gs:0x10`. A forked child resumes inside `_linux_syscall_fork`, not
+  through `switchTo`'s segment pops, so `%gs` still cached the previous
+  thread's TLS base: the child called address 0. The child now reloads
+  `%gs` before returning to user space.
+- `mynos_recv` was defined as `int32_t` but declared `int`; dietlibc's
+  headers had hidden the missing `<stdint.h>`.
+
+**Result.** With musl and OCaml 5.5 the whole test suite passes, plus an
+effect handler test; the legacy toolchain still passes too.
+
+**Lessons.**
+- A new libc is a new test of the kernel: musl relies on the Linux ABI more
+  strictly (TLS everywhere, the vsyscall pointer, registers preserved).
+- Hardware state that is not saved explicitly (here the segment descriptor
+  caches) bites on paths that skip the usual code, like a fork child.
+- A user program must never be able to stop the kernel: that one fix made
+  every later failure readable.

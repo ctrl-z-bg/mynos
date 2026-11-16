@@ -34,7 +34,9 @@ talking through IPC.
 | `mynos-core/` | The microkernel: boot, memory, processes, threads, scheduler, IPC, syscalls |
 | `mynos-lib/` | User-space library wrapping the native MyNOS syscalls (`include/mynos.h`) |
 | `services/` | User-space servers: `registry`, `keyboard`, `serial`, `fs/memrofs` |
-| `mynos-byterun/` | The OCaml 3.06 bytecode runtime, patched to run on MyNOS |
+| `mynos-runtime/` | The OCaml 5.5 bytecode runtime for MyNOS: upstream runtime, unchanged, plus a MyNOS `main()` (dev toolchain) |
+| `mynos-byterun/` | The OCaml 3.06 bytecode runtime, patched to run on MyNOS (legacy toolchain) |
+| `mynos.mk` | Toolchain variables for user-space programs (`MYNOS_CC`, `MYNOS_LDFLAGS`) |
 
 #### mynos-core — the microkernel
 
@@ -65,16 +67,22 @@ talking through IPC.
 - **Two syscall interfaces:**
   - `int 0x90`: the native MyNOS API (send/recv, ports, semaphores, IRQs,
     threads, timer, stats). See `kernel/syscalls.c` and `mynos-lib`.
-  - `int 0x80`: a small **Linux-compatible** subset (`exit`, `fork`, `read`,
-    `write`, `open`, `close`, `getpid`, `getppid`, `pause`, `times`, `mmap`,
-    `munmap`, `llseek`) in `kernel/linux_syscalls.c`. This lets programs built
-    with **dietlibc** for Linux, statically linked, run unmodified, so MyNOS
-    needs no libc of its own.
+  - `int 0x80`: a **Linux-compatible** subset in `kernel/linux_syscalls.c`.
+    This lets static Linux i386 programs run unmodified, so MyNOS needs no
+    libc of its own: they were built with **dietlibc** originally, with
+    **musl** today. In 2008 it covered `exit`, `fork`, `read`, `write`,
+    `open`, `close`, `getpid`, `getppid`, `pause`, `times`, `mmap`, `munmap`,
+    `llseek`; musl and modern OCaml added `set_thread_area` (TLS), `mmap2`,
+    `writev`, `lseek`, `stat64`, `fstat64`, `exit_group`,
+    `set_tid_address`, `mprotect`, the signal calls (accepted, no delivery
+    yet) and `kill`/`tkill`/`tgkill` on oneself. Unknown calls return
+    `-ENOSYS`.
 
 #### services
 
-All services are built with `diet gcc`, linked statically against `libmynos`
-and placed at `0x40000000`.
+All services are linked statically against `libmynos` and placed at
+`0x40000000`: with musl in the dev toolchain, with dietlibc in the legacy one
+(`mynos.mk`).
 
 - `registry`: maps names to ports, like a name server (`mynos_registry.h`).
 - `keyboard`, `serial`: drivers using `mynos_driverRegister` and port I/O.
@@ -82,7 +90,16 @@ and placed at `0x40000000`.
   starting with the `.RAMDISK` magic. The image is built on the host with
   `fs/memrofs/tool/createDisk.c`.
 
-#### mynos-byterun
+#### mynos-runtime (OCaml 5.5)
+
+The upstream OCaml 5.5.2 bytecode runtime, **unchanged**: the dev container
+builds it with musl (`/opt/ocaml-runtime-musl`), and `mynos-runtime/Makefile`
+links it with a ten-line `main()` that gives it the bytecode file name to
+open (`mynos-runtime/main.c`). Bytecode is compiled with `ocamlc` 5.5.2.
+Effect handlers work; `Domain` and `Thread` need `clone` (mynos-l9h).
+Decision and evidence: `doc/decisions/ocaml-runtime.md`.
+
+#### mynos-byterun (OCaml 3.06, legacy)
 
 This is the standard `ocamlrun` from OCaml 3.06 (imported in October 2002). It is
 built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
@@ -120,13 +137,15 @@ on screen and sent to the serial port.
 - **Toolchains.** Builds run in containers; the host (gcc 15, no multilib,
   x86_64-only dietlibc) is not used.
   - **dev** (`tools/containers/dev`, default): Debian trixie i386, gcc 14.2,
-    binutils 2.44, nasm 2.16, dietlibc 0.34.
+    binutils 2.44, nasm 2.16, **musl** 1.2.5 for user space, **OCaml 5.5.2**
+    (compiler, and the runtime built with musl).
   - **legacy** (`tools/containers/legacy`): Debian lenny i386, gcc 4.3.2,
-    binutils 2.18, nasm 2.03, dietlibc 0.31: what the November 2008 commits
-    expect (they add `-fno-stack-protector`, gcc ≥ 4.1). Kept to compare
-    behaviour with the original.
-  - Both include OCaml 3.06 built from source on sarge, to produce bytecode
-    for the 3.06 runtime.
+    binutils 2.18, nasm 2.03, dietlibc 0.31, OCaml 3.06 built from source on
+    sarge: what the November 2008 commits expect (they add
+    `-fno-stack-protector`, gcc ≥ 4.1). Kept to compare behaviour with the
+    original.
+  - Between the two, the dev toolchain went through dietlibc 0.34 with
+    OCaml 3.06 (see the journal); that is where the Linux ABI work began.
 - **Tests.** `tools/run-tests.sh` boots the whole system headless and checks
   the console output, which the kernel mirrors to COM2. `tests/abi` checks
   the system call fixes. Both toolchains pass.
@@ -162,11 +181,11 @@ on screen and sent to the serial port.
     above 4 MB were neither reserved nor mapped; pages allocated on first use
     were not zeroed; the bytecode "file" had no real seek semantics. Found
     while running modern OCaml runtimes (`doc/JOURNAL.md`).
-- **Modern OCaml runs on the kernel.** In an experiment
-  (`tools/experiments/ocaml-runtime`) the bytecode runtimes of OCaml 4.14.5
-  and 5.5.2, built with musl, run test programs on MyNOS, effect handlers
-  included. Proposal: move user space to musl and adopt OCaml 5.5
-  (`doc/decisions/ocaml-runtime.md`, mynos-4er).
+- **OCaml 5.5 and musl (dev toolchain).** User space is built with musl and
+  the runtime is OCaml 5.5.2 (`mynos-runtime/`), as decided in
+  `doc/decisions/ocaml-runtime.md`. `tools/run-tests.sh` also runs an effect
+  handlers test. The legacy toolchain keeps dietlibc and OCaml 3.06.
+  Known glitch: `Problems releasing pages` messages with musl (mynos-dha).
   - `memrofs/tool/createDisk` is a host tool but was built like a MyNOS
     program; now built with plain gcc.
 - **Changes for the modern toolchain:**
@@ -190,7 +209,7 @@ on screen and sent to the serial port.
 | Issue | Where | Problem |
 |---|---|---|
 | mynos-nxa | `mynos-core/kernel/linux_syscalls.c` | `open()` always returns 5; `read()` copies from GRUB module 1 whatever the fd. memrofs is not used by the runtime. |
-| mynos-pg9 | `mynos-byterun/src/floats.c` | `frexp()`/`modf()` return 1.0. |
+| mynos-pg9 | `mynos-byterun/src/floats.c` | `frexp()`/`modf()` return 1.0 (legacy 3.06 runtime only; the 5.5 runtime uses musl's libm). |
 
 ### Not started
 
@@ -264,3 +283,9 @@ Side task: archive the old SourceForge site (mynos-db2).
   preservation, modules above 4 MB, zeroing of new pages, file seeks) and
   added the Linux calls the runtimes need. Proposal written in
   `doc/decisions/ocaml-runtime.md`.
+- **2026-11-16** — Implemented the runtime decision: dev toolchain on musl and
+  OCaml 5.5.2 (`mynos-runtime/`, `mynos.mk`), effect handler test. Fixed the
+  kernel and library bugs musl exposed (modules above 4 MB at boot, RAM disk
+  in the linear map, user faults now kill only the process, boot race with
+  the registry, TLS for threads and fork children). Closed mynos-3rz,
+  mynos-4er, mynos-pg9; opened mynos-l9h, mynos-e1k, mynos-dha.
