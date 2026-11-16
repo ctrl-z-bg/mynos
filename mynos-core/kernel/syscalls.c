@@ -72,6 +72,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .mynos_changePortOwner\n"\
 	 "   cmpl $30, %eax\n"\
 	 "   je .mynos_spawn\n"\
+	 "   cmpl $31, %eax\n"\
+	 "   je .mynos_log\n"\
 	 "   cmpl $100, %eax\n"\
 	 "   je .mynos_enableIrq\n"\
 	 "   cmpl $101, %eax\n"\
@@ -210,6 +212,13 @@ __asm__ (".pushsection .text\n" \
 	 "   popl %edx\n"\
 	 "   popl %esi\n"
 	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_log:\n"\
+	 "   pushl %ecx\n"
+	 "   pushl %ebx\n"
+	 "   call _mynos_syscall_log\n"\
+	 "   popl %ebx\n"
+	 "   popl %ecx\n"
+	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_enableIrq:\n"\
 	 "   pushw %bx\n"
 	 "   call _mynos_syscall_enableIrq\n"\
@@ -274,6 +283,17 @@ int _mynos_syscall_spawn(uint32_t * elf, uint32_t len, char ** argv,
       (envp && (uint32_t)envp < ((uint32_t)USERMINPAGE << 12)))
     return MYNOS_ERR_INVALID;
   return createProcess(elf, len, argv, envp, currProcess);
+}
+
+/* log (31): write a message of a program to the kernel log (the log port,
+   and the screen only while kernel messages are shown there) */
+int _mynos_syscall_log(const char * s, uint32_t len) {
+  uint32_t i;
+  if ((uint32_t)s < ((uint32_t)USERMINPAGE << 12)) return MYNOS_ERR_INVALID;
+  if (len > 1024) len = 1024;
+  for (i = 0; i < len; i++)
+    print_char(s[i]);
+  return 0;
 }
 
 int32_t _mynos_syscall_setTimer(ulong32_t usec) {

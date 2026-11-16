@@ -165,16 +165,16 @@ static void self_test(void)
   char buf[200];
   int fd, n;
 
-  puts("Opening a text file...");
+  mynos_log("%s", "Opening a text file...");
   fd = open("AUTOEXEC.BAT", O_RDONLY);
-  if (fd < 0) { puts("Open failed"); exit(-1); }
-  puts("Reading the file content...");
+  if (fd < 0) { mynos_log("%s", "Open failed"); exit(-1); }
+  mynos_log("%s", "Reading the file content...");
   n = read(fd, buf, sizeof(buf) - 1);
   close(fd);
-  if (n <= 0) { puts(n == 0 ? "EOF" : "Some error."); exit(-1); }
+  if (n <= 0) { mynos_log("%s", n == 0 ? "EOF" : "Some error."); exit(-1); }
   buf[n] = 0;
-  puts("Show the content:");
-  fputs(buf, stdout);
+  mynos_log("%s", "Show the content:");
+  mynos_log("%s", buf);
   exit(0);
 }
 
@@ -185,7 +185,7 @@ int main() {
   filesystem = (fileentry_t *)(ramdisk + strlen(MAGIC));
 
   port = mynos_registryRegister(MEMROFS_SERVICE);
-  printf("memrofs service port: %d\n", port);
+  mynos_log("memrofs service port: %d\n", port);
   if (port < 0) exit(-1);
 
   if (fork() == 0)
@@ -197,7 +197,7 @@ int main() {
     int channel = mynos_listenPort(port);
 
     if (channel < 0) {
-      puts("Error receiving request");
+      mynos_log("%s", "Error receiving request");
       exit(-1);
     }
     if (mynos_recv(channel, &msg, 0, 0) == 0) {

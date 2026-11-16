@@ -131,6 +131,21 @@ modinfo_t bytecode;
 /* used in soft reset to restore the original multiboot data */
 //multiboot_info_t * boot_info_global;
 
+/* the kernel command line (multiboot), copied before memory is set up */
+static char kernel_cmdline[256];
+
+/* does the kernel command line contain this word? */
+static int cmdline_has(const char * word) {
+  int n = kstrlen(word), i, j;
+  for (i = 0; kernel_cmdline[i]; i++) {
+    for (j = 0; j < n && kernel_cmdline[i + j] == word[j]; j++) ;
+    if (j == n && (i == 0 || kernel_cmdline[i - 1] == ' ') &&
+	(kernel_cmdline[i + n] == ' ' || kernel_cmdline[i + n] == 0))
+      return 1;
+  }
+  return 0;
+}
+
 void mynos_main(multiboot_info_t *boot_info) {
   module_t * module;
   modinfo_t modinfo[MAXMODULES];
@@ -146,6 +161,12 @@ void mynos_main(multiboot_info_t *boot_info) {
   /* NB: I do that right now because the memory bitmap allocation can
      reset the grub information
   */
+  if (boot_info->flags & 0x4) {         /* a command line */
+    char * s = (char *)boot_info->cmdline;
+    for (i = 0; s[i] && i < (int)sizeof(kernel_cmdline) - 1; i++)
+      kernel_cmdline[i] = s[i];
+    kernel_cmdline[i] = 0;
+  }
   module = (module_t *)boot_info->mods_addr;
   nmodules = boot_info->mods_count;
   for (i = 0; i < boot_info->mods_count; i++) {
@@ -273,10 +294,8 @@ void mynos_main(multiboot_info_t *boot_info) {
   }
 #endif
 
-  if (boot_info->flags & 0x800)
-    printk("SIIIIIIIIIIIIIIIIII");
-  else
-    printk("NOOOOOOOOOOOOOOOOOO");
+  /* (a 2004 debug print showed here whether the boot loader passed VBE
+     graphics information, as SIIII... or NOOOO...) */
 
 
   tsksw();
@@ -300,6 +319,11 @@ void mynos_main(multiboot_info_t *boot_info) {
   initIPC();
 
   printk("\n-----------------------\n");
+
+  /* from now on the screen belongs to the programs: kernel messages go to
+     the log port only (tools/run-tests.sh reads it), unless "verbose" */
+  if (!cmdline_has("verbose"))
+    kernel_on_screen = 0;
 
 
 #if 0

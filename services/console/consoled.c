@@ -222,7 +222,7 @@ int main()
 
   irq = mynos_driverRegister("keyboard", 1, NULL, NULL);
   if (irq < 0) {
-    printf("consoled: cannot get the keyboard (%d)\n", irq);
+    mynos_log("consoled: cannot get the keyboard (%d)\n", irq);
     return 1;
   }
   led_status = 0;
@@ -234,10 +234,10 @@ int main()
 
   port = mynos_registryRegister(CONSOLE_SERVICE);
   if (port < 0) {
-    printf("consoled: cannot register (%d)\n", port);
+    mynos_log("consoled: cannot register (%d)\n", port);
     return 1;
   }
-  printf("consoled: console service on port %d\n", port);
+  mynos_log("consoled: console service on port %d\n", port);
 
   while (1) {
     int channel = mynos_listenPort(port);

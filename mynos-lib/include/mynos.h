@@ -108,6 +108,11 @@ int mynos_setTimer(unsigned long usec);  /* old name of mynos_sleep */
 /* STATS */
 void mynos_stats(mynos_stats_t * st);
 
+/* LOG */
+/* write a line (printf format) to the kernel log: the serial log port, not
+   the screen, once the system has started. For services' messages. */
+void mynos_log(const char * fmt, ...);
+
 /* PROCESSES */
 /* start the ELF program in file path as a child process, with arguments
    and environment (NULL-terminated, either may be NULL); returns its pid

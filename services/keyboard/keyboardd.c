@@ -33,7 +33,7 @@ int main()
   int sem;
 
   sem = mynos_driverRegister("keyboard", 1, NULL, NULL);
-  printf("keyboardd: sem = %d\n", sem);
+  mynos_log("keyboardd: sem = %d\n", sem);
 
   mynos_enableIrq(1);
 

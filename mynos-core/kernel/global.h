@@ -36,7 +36,9 @@
 #define USERMINPAGE (0x40000)
 #define USERMAXPAGE (0xFFFFF)
 
-#define KPANIC(MSG) {printk(MSG); while(1){}}
+/* kernel messages go to the screen too (see video.c); a panic always does */
+extern int kernel_on_screen;
+#define KPANIC(MSG) {kernel_on_screen = 1; printk(MSG); while(1){}}
 
 typedef char           byte_t;
 typedef unsigned char  ubyte_t;

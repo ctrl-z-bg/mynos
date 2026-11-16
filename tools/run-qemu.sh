@@ -11,6 +11,8 @@
 # Environment:
 #   KERNEL   kernel image (default: mynos-core/kernel/kernel.elf)
 #   MEM      RAM in MB (default 32)
+#   VERBOSE  if set, kernel messages stay on screen after boot (they always
+#            go to the second serial port)
 #   SHOT     if set, run headless, save a PNG of the screen to $SHOT after
 #            $WAIT seconds (default 3), then stop QEMU
 set -eu
@@ -25,7 +27,8 @@ while [ $# -gt 0 ] && [ "$1" != "--" ]; do
 done
 [ "${1:-}" = "--" ] && shift
 
-set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "${MEM:-32}" "$@"
+set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "${MEM:-32}" \
+    ${VERBOSE:+-append verbose} "$@"
 
 if [ -z "${SHOT:-}" ]; then
     exec qemu-system-i386 "$@"

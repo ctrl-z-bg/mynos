@@ -45,6 +45,12 @@ static void update_cursor(uint32_t row, uint32_t col)
 
 char *video = (char *)BASE_VIDEO;
 
+/* Kernel messages (printk) are written to the log port and, while this is
+   set, on the screen. It is cleared once user space is started, unless the
+   kernel command line says "verbose": the screen then belongs to the
+   programs (the shell). Programs' output (write) is always shown. */
+int kernel_on_screen = 1;
+
 
 void printk(char * s) {
   while (*s) {
@@ -132,6 +138,8 @@ static void log_char(char c) {
 void _print_char(char c, char attrib) {
   uint32_t cursor;
   log_char(c);
+  if (attrib == CHAR_KERNEL_ATTRIB && !kernel_on_screen)
+    return;
   if (video >= (char*)END_VIDEO) {
     scroll_screen();
     video -= 0xA0;

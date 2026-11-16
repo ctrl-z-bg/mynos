@@ -129,6 +129,7 @@ static void exception(const char * what, uint32_t eip, uint32_t cs) {
     killProcess(SIGNAL_STATUS(SIGSEGV));
     sched();         /* switches to another process, never returns */
   }
+  kernel_on_screen = 1;
   printk((char *)what);
   printk(" in the kernel at ");
   print_ulong_hex(eip);

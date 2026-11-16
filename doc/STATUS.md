@@ -197,6 +197,11 @@ IPC; typed keys are echoed on screen and sent to the serial port.
   the `Mynos` library, files, the console, spawning programs
   (`tests/spawn`) and the shell, typing phrases through QEMU's monitor
   (`tools/type-keys.py`). Both toolchains pass.
+- **Screen and log.** Once user space starts, the screen belongs to the
+  programs: kernel messages, and services' messages (`mynos_log`, native
+  call 31, `Mynos.log` in OCaml), go only to the log on the second serial
+  port, unless the kernel command line says `verbose` (`VERBOSE=1
+  tools/run-qemu.sh`). Panics always show.
 - **Booting.** `tools/run-qemu.sh` uses QEMU's multiboot loader, no GRUB.
   Modules are passed in order; module 1 must be the OCaml bytecode.
   `tools/run-demo.sh` passes the standard set. The kernel is built with `-g`,
@@ -394,3 +399,7 @@ Side task: archive the old SourceForge site (mynos-db2).
 - **2026-11-16** — Line history in the console service: Up/Down recall
   previous lines in the shell and in every program reading the console.
   `tools/type-keys.py` sends special keys (`{up}`).
+- **2026-11-16** — Clean boot screen: after boot, kernel and service
+  messages go to the serial log only (`verbose` keeps them on screen);
+  native call 31 `log`. The 2004 VBE debug print is gone (closes
+  mynos-tuy). Closed mynos-2g3.

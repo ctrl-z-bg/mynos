@@ -39,7 +39,7 @@ int main()
 
   sem = mynos_driverRegister("serial", 4, NULL, NULL);
   initSerial();
-  printf("seriald: sem = %d\n", sem);
+  mynos_log("seriald: sem = %d\n", sem);
 
   mynos_enableIrq(4);
 

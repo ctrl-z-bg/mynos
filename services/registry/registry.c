@@ -94,13 +94,13 @@ static void serve(int channel) {
   /* a client that connects and sends nothing must not stop the registry */
   ret = mynos_recv(channel, &msg, 0, 1000);
   if (ret < 0) {
-    printf("Warning registry: invalid recv (%d)\n", ret);
+    mynos_log("Warning registry: invalid recv (%d)\n", ret);
     mynos_freeChannel(channel);
     return;
   }
   
   if (msg->size != sizeof(mynos_reg_cmd_t)) {
-    printf("Warning registry: invalid message size\n");
+    mynos_log("Warning registry: invalid message size\n");
     ret = MYNOS_ERR_INVALID;
     mynos_send(channel, &ret, sizeof(int), 0);
     mynos_freeMsg(&msg);
@@ -122,13 +122,13 @@ static void serve(int channel) {
 	port = mynos_allocPort();
 	ret = port;
 	if (port < 0) {
-	  printf("Warning registry: allocPort result is %d\n", port);
+	  mynos_log("Warning registry: allocPort result is %d\n", port);
 	  break;
 	}
 	mynos_changePortOwner(port, cmd->arg1);
 	insertIntoRegistry(cmd->name, port);
       } else {
-	printf("Warning registry: name %s is already present\n", cmd->name);
+	mynos_log("Warning registry: name %s is already present\n", cmd->name);
 	ret = MYNOS_ERR_INVALID;
       }
       break;
@@ -150,20 +150,20 @@ int main() {
 
   initRegistry();
 
-  printf("Registry: registering my port\n");
+  mynos_log("Registry: registering my port\n");
   port = mynos_allocPortP(MYNOS_PORT_REGISTRY);
   if (port < 0) {
-    printf("Error registry allocating port: %d\n", port);
+    mynos_log("Error registry allocating port: %d\n", port);
     exit(-1);
   }
 
-  printf("Registry: waiting requests\n");
+  mynos_log("Registry: waiting requests\n");
   while (1) {
     req++;
     // wait for connection
     channel = mynos_listenPort(port);
     if (channel < 0)
-      printf("Warning registry listening port: %d\n", channel);
+      mynos_log("Warning registry listening port: %d\n", channel);
     else {
       serve(channel);
     }

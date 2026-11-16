@@ -14,6 +14,7 @@ let () =
     | _ -> None)
 
 external getpid : unit -> int = "caml_mynos_getpid"
+external log : string -> unit = "caml_mynos_log"
 external sleep_us : int -> unit = "caml_mynos_sleep_us"
 let sleep s = if s > 0. then sleep_us (int_of_float (s *. 1e6))
 

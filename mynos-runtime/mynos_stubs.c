@@ -264,3 +264,11 @@ CAMLprim value caml_mynos_wait(value pid)
   Store_field(r, 1, Val_int(status));
   CAMLreturn(r);
 }
+
+/* ---- log ---- */
+
+CAMLprim value caml_mynos_log(value msg)
+{
+  mynos_log("%s", String_val(msg));
+  return Val_unit;
+}

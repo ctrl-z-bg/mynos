@@ -5,10 +5,12 @@ OCAMLC = ocamlc -use-prims ../../mynos-runtime/primitives -I ../../mynos-lib/oca
 
 all: ramdisk.dsk
 
-init.byte: spawn.ml
+MYNOS = ../../mynos-lib/ocaml/mynos.cma ../../mynos-runtime/primitives
+
+init.byte: spawn.ml $(MYNOS)
 	$(OCAMLC) mynos.cma -o $@ spawn.ml
 
-child.byte: child.ml
+child.byte: child.ml $(MYNOS)
 	$(OCAMLC) mynos.cma -o $@ child.ml
 
 # the runtime without its debugging information: 0.5 MB instead of 1.7

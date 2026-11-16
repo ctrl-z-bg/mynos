@@ -17,6 +17,10 @@ val error_name : int -> string
 
 val getpid : unit -> int
 
+val log : string -> unit
+(** Write a line to the kernel log: the serial log port, and not the screen
+    once the system has started. For services' messages. *)
+
 val sleep : float -> unit
 (** Block for at least this many seconds (10 ms resolution). *)
 
