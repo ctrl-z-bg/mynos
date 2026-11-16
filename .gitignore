@@ -16,3 +16,10 @@ CLAUDE.md
 
 # Personal notes
 NOTE*
+
+# Build outputs
+*.o
+*.a
+*.elf
+*.bin
+Makefile.depend

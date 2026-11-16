@@ -38,17 +38,24 @@ See [`doc/STATUS.md`](doc/STATUS.md) for details.
 
 ## Building
 
-> **Not yet verified on a modern toolchain.** The code was last built with
-> gcc 3 and GRUB legacy. Getting it to build and boot in QEMU again is the
-> current goal; see `doc/STATUS.md`.
-
-Requirements: `gcc` with 32-bit support, `ld`, `nasm`, `dietlibc` (the
-`diet` wrapper), GNU `make`.
-
-The Makefiles expect this order:
+The code needs a 2008-era 32-bit toolchain (gcc 4.3, dietlibc for i386) and
+OCaml 3.06, which current systems don't provide. Builds run in a container
+with [podman](https://podman.io/); QEMU runs on the host.
 
 ```sh
-make -C mynos-core            # -> mynos-core/kernel/kernel.elf
+tools/containers/build-image.sh legacy             # once: build the image
+tools/in-container.sh legacy make -C mynos-core/kernel
+tools/run-qemu.sh                                  # boot kernel.elf in QEMU
+```
+
+`tools/in-container.sh legacy` with no command opens a shell in the build
+environment. `tools/run-qemu.sh` takes modules as arguments (module 1 is the
+OCaml bytecode); see the script for details.
+
+So far only the kernel has been rebuilt and booted. The rest of the system is
+built in this order, still to be verified:
+
+```sh
 mkdir -p mynos-lib/lib        # not in the repository; ar needs it
 make -C mynos-lib             # -> mynos-lib/lib/libmynos.a
 make -C services              # -> registry, keyboardd, seriald, memrofsd
