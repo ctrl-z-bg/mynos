@@ -878,3 +878,76 @@ the runtime (mynos-09i).
 exactly like a thread returning from one: knowing the caller's
 conventions (here, which registers musl's `__clone` relies on) decides
 what the kernel must restore.
+
+## 2026-11-16 — Storage in OCaml: an ATA driver and a FAT filesystem
+
+### The design
+
+Storage is two OCaml programs, ordinary MyNOS processes:
+- **`ata`** (`services/ata`), the disk driver: the processor runs MyNOS
+  processes with I/O privilege, so the driver talks to the IDE controller
+  through `Mynos.inb`/`outb` and moves sectors with `insw`/`outsw` (`rep
+  insw` in the runtime's stubs). PIO, LBA28, polling, controller interrupts
+  off. It serves sectors over IPC (`mynos_block.h`; OCaml client: module
+  `Block`).
+- **`fatfs`** (`services/fatfs`), a FAT16/FAT32 filesystem (the format was
+  chosen, with the owner, to be standard and simple: images are made and
+  checked with `mkfs.fat`, mtools and `fsck.fat`, no root needed). It reads
+  the disk through `ata`, keeps the whole FAT in memory and writes it back
+  to every copy after each change; directories, 8.3 names with the
+  lower-case flags of Windows NT, VFAT long names read and written. It
+  speaks the same file service protocol as memrofs and tmpfs, extended with
+  paths, `MKDIR` and `RMDIR`; `libmynos` mounts it at `/disk`, normalizes
+  paths and replaces `mkdir` and `rmdir`.
+
+The test writes and reads through OCaml's standard library only
+(`open_out`, `Sys.readdir`, `Sys.mkdir`...), on a FAT16 and a FAT32
+image; afterwards `fsck.fat -n` must find the images consistent and
+mtools must read what MyNOS wrote.
+
+A detail of OCaml on i386: `int` has 31 bits, so 32-bit fields with high
+bits set (FAT32 entries keep 4 reserved high bits, the FSInfo signature
+`0x41615252`) are handled as two 16-bit halves.
+
+### A test that failed one time in six
+
+**Symptom.** The FAT test hung about one run in six (FAT32: almost
+always): the driver and the registry each accepted a connection on
+which no request ever came ("recv: expired"), and nothing moved again.
+
+**Diagnosis.** gdb attached to QEMU's gdbstub while hung: the timer queue
+held garbage (a "thread" whose pid and wake-up time were real-mode
+interrupt vectors, i.e. read from address 0), so no sleeping thread was
+ever woken. A trace of the last timer-queue operations, checked after
+each one, showed the first bad state: right after a thread was inserted,
+its node could not be found in the queue. On the way, two more checks
+were built: a consistency check of the kernel heap's block list at every
+`kmalloc`/`kfree`, which found a real bug (below), and a check that the
+reaper never frees a frame the kernel still maps, which found none.
+
+**Causes.**
+1. `listInsertOrdered` (`list.c`, 2002): inserting an element whose key
+   equals the head's (two receive timeouts started in the same tick)
+   went through the "insert in the middle" branch, which stopped at the
+   head, wrote through its NULL `prev`, and linked the new node before
+   the head without updating `q->head`. The node was unreachable, the head
+   had a wrong `prev`, and when the head was later extracted `q->head` was
+   left pointing to freed memory. It also allocated, and dropped, an extra
+   node at every insertion at the tail.
+2. `_removeBlock` (`dynalloc.c`, 2003): to know whether the previous block
+   still used the first page of the freed block, it took the page of
+   `_BLOCK_END(prev) - 1` with `_GET_PAGE_BLOCK`, a macro meant for blocks
+   that steps back 4 bytes over the size field. When the previous block
+   ended in the first 4 bytes of a page (its list pointers), that page was
+   given back while still in use.
+
+**Fix.** A rewritten ordered insertion (after every element not greater
+than the new one); `_GET_PAGE_ADDRESS` in `_removeBlock`.
+
+**Lessons.**
+- Ties are where ordered structures break: test with equal keys.
+- A bug that depends on timing is still deterministic for a given order of
+  events: trace the operations on the corrupted structure, check it after
+  each, and the first bad step names the culprit.
+- The kernel heap allocator of 2003 has now had four fixes; its checker
+  stays in the code (`HEAP_CHECK` in `dynalloc.c`), off by default.

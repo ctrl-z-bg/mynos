@@ -11,8 +11,9 @@
 
 /*
  * Protocol of the file services: memrofs, the read-only RAM disk
- * (services/fs/memrofs), and tmpfs, a writable filesystem in memory
- * written in OCaml (services/tmpfs), mounted at /tmp. Programs use it
+ * (services/fs/memrofs); tmpfs, a writable filesystem in memory written in
+ * OCaml (services/tmpfs), mounted at /tmp; fatfs, the FAT filesystem of
+ * the disk, in OCaml (services/fatfs), mounted at /disk. Programs use them
  * through the file functions of libmynos (mynos-lib/src/fileio.c).
  *
  * One connection per request: the client sends a struct fs_req and
@@ -21,7 +22,8 @@
  *   - WRITE: the client sends the data right after the request, then
  *     receives the reply;
  *   - LIST: a reply with status OK is followed by the name.
- * Namespaces are flat: one directory per service.
+ * Names are paths inside the service ("dir/file", no leading slash; "" is
+ * its root). memrofs and tmpfs are flat: only their root exists.
  *
  * Only fixed-size types, so that the layout is the same with every libc
  * (and in OCaml: 84 bytes, little endian).
@@ -33,6 +35,8 @@
 #define MEMROFS_SERVICE  "memrofs"
 #define TMPFS_SERVICE    "tmpfs"
 #define TMPFS_MOUNT      "tmp"      /* /tmp/NAME is NAME on tmpfs */
+#define FATFS_SERVICE    "fatfs"
+#define FATFS_MOUNT      "disk"     /* /disk/PATH is PATH on fatfs */
 
 #define FS_NAMEMAX  64       /* file names, including the final 0 */
 #define FS_IOMAX    16384    /* largest READ or WRITE */
@@ -43,10 +47,13 @@
 #define FS_READ   2   /* fd, arg1: max            -> value: n, then data   */
 #define FS_LSEEK  3   /* fd, arg1: offset, arg2: whence (0/1/2)
                                                   -> value: new position   */
-#define FS_LIST   4   /* arg1: index              -> value: size of the
-                         index-th file, then its name (NOT_FOUND past the end) */
+#define FS_LIST   4   /* name: directory, arg1: index -> value: size of the
+                         index-th entry (-1: a directory), then its name
+                         (NOT_FOUND past the end) */
 #define FS_WRITE  5   /* fd, arg1: n, then the data -> value: n written     */
-#define FS_UNLINK 6   /* name                     -> value: 0              */
+#define FS_UNLINK 6   /* name (a file)            -> value: 0              */
+#define FS_MKDIR  7   /* name                     -> value: 0              */
+#define FS_RMDIR  8   /* name (an empty directory) -> value: 0             */
 
 /* FS_OPEN flags */
 #define FS_O_WRITE   1   /* open for writing (and reading) */
@@ -63,6 +70,10 @@
 #define FS_INVALID    5
 #define FS_READONLY   6   /* writing on a read-only file or service */
 #define FS_NO_SPACE   7
+#define FS_IS_DIR     8   /* opening or unlinking a directory */
+#define FS_NOT_EMPTY  9
+#define FS_EXISTS    10
+#define FS_NOT_DIR   11
 
 struct fs_req {
   int type;

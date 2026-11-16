@@ -5,7 +5,8 @@ let help () =
     "This shell is the OCaml toplevel: type OCaml phrases ended by ;;\n\
      Commands (module Shell, already open):\n\
     \  ls ();;                     list the files of the RAM disk\n\
-    \  ls ~dir:\"/tmp\" ();;         list /tmp, the writable directory\n\
+    \  ls ~dir:\"/tmp\" ();;         list /tmp (in memory)\n\
+    \  ls ~dir:\"/disk\" ();;        list /disk (the FAT disk: it stays)\n\
     \  cat \"AUTOEXEC.BAT\";;        print a file\n\
     \  write \"/tmp/a.ml\" \"1+1;;\";; write a file\n\
     \  #use \"/tmp/a.ml\";;          run the phrases in a file\n\

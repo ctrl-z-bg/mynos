@@ -33,7 +33,7 @@ talking through IPC.
 |---|---|
 | `mynos-core/` | The microkernel: boot, memory, processes, threads, scheduler, IPC, syscalls |
 | `mynos-lib/` | User-space library wrapping the native MyNOS syscalls (`include/mynos.h`), and the OCaml library `Mynos` (`ocaml/`) |
-| `services/` | User-space servers: `registry`, `console`, `keyboard`, `serial`, `fs/memrofs`, and `tmpfs` (OCaml) |
+| `services/` | User-space servers: `registry`, `console`, `keyboard`, `serial`, `fs/memrofs`; in OCaml: `tmpfs`, `ata` (disk driver), `fatfs` |
 | `mynos-runtime/` | The OCaml 5.5 bytecode runtime for MyNOS: upstream runtime, unchanged, plus a MyNOS `main()` (dev toolchain) |
 | `mynos-byterun/` | The OCaml 3.06 bytecode runtime, patched to run on MyNOS (legacy toolchain) |
 | `init/` | `init`, in OCaml: starts the services and the shell listed in `init.rc` |
@@ -128,6 +128,12 @@ All services are linked statically against `libmynos` and placed at
   the first ATA disk, PIO with LBA28, polling, through the I/O ports; it
   serves sectors as the block service `ata0` (`mynos_block.h`; the OCaml
   client is module `Block` of the `Mynos` library).
+- `fatfs` (2026): **the FAT filesystem of the disk, in OCaml**
+  (`services/fatfs/fatfs.ml`), mounted at `/disk`: FAT16 and FAT32 as made
+  by `mkfs.fat`, directories, 8.3 and VFAT long names, read and written,
+  on top of the `ata` block service. The whole FAT is kept in memory and
+  written to every copy after each change. The demo's disk is
+  `system/disk.img` (FAT32, 64 MB, made once and kept).
 - `tmpfs` (2026): **the first MyNOS service written in OCaml**
   (`services/tmpfs/tmpfs.ml`), a writable filesystem in memory. It speaks
   the same protocol, which has `WRITE` and `UNLINK` too; `fileio.c` sends
@@ -314,7 +320,8 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | mynos-09i | `mynos-runtime/` | No OCaml `Thread` module yet (needs systhreads and unix stubs); domains work. |
 | mynos-awn | `mynos-core/kernel/` | One CPU: threads and domains run in turn, not in parallel. |
 | — | `mynos-core/kernel/threads.c` | Native MyNOS threads (`mynos_threadCreate`) share their creator's TLS: code that uses the C library should use pthreads. |
-| — | `mynos-lib/src/fileio.c` | Two flat directories: `/` (memrofs, read-only) and `/tmp` (tmpfs, in memory). No persistent storage (mynos-rf4); no `rename`. |
+| — | `mynos-lib/src/fileio.c` | `/` (memrofs) is read-only and flat, `/tmp` (tmpfs) flat and in memory; `/disk` (fatfs) has directories. No `rename`; paths up to 63 characters inside a service. |
+| — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
 
 ### Not started
 
@@ -461,6 +468,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `mynos_block.h`, client module `Block`). `tools/run-qemu.sh` takes a
   disk image (`DISK=`); the storage test writes to it and the host checks
   the image. Closed mynos-rf4.2.
+- **2026-11-16** — `fatfs`, the FAT filesystem in OCaml, mounted at
+  `/disk`; started by init with the ATA driver, on `system/disk.img`.
+  Tests on FAT16 and FAT32 images, checked on the host with `fsck.fat` and
+  mtools. Fixed two kernel bugs that hung the test one time in six: the
+  ordered list insertion (equal keys) and the heap releasing a page still
+  holding a block's pointers. Closed mynos-rf4.3.
 - **2026-11-16** — The original website (mynos.sourceforge.net, from the
   Wayback Machine) archived as static files in `doc/website/`, with the
   2002-2004 news posts and the 2002 and 2004 test packages. Closed

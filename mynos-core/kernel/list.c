@@ -128,43 +128,29 @@ void * listExtractElem(list_t *q, void * p, int (*eq)(void*, void*)) {
 
 // insert at the end of the queue
 int listInsertOrdered(list_t *q, void * p, int (*cmp)(void*, void*)) {
-  list_elem_t * el;  
-  list_elem_t * tmp_next;
-  list_elem_t * tmp_prev;
+  list_elem_t * el;
+  list_elem_t * next;
+
+  /* after every element that is not greater than p (equal ones too: the
+     2002 version mishandled an element equal to the head, leaving the new
+     node unreachable and the head's links wrong; it also allocated a node
+     it then dropped, at every insertion at the tail) */
+  next = q->head;
+  while (next && !(*cmp)(p, next->elem))
+    next = next->next;
+  if (next == NULL)
+    return listInsert(q, p);
 
   el = kmalloc(sizeof(list_elem_t));
   el->elem = p;
-
-  // check if the queue is empty
-  if (listEmpty(q))
-    return listInsert(q, p);
-
-  // check the tail case
-  if ((*cmp)(q->tail->elem, p))
-    return listInsert(q, p);
-
-  // check the head case
-  if ((*cmp)(p, q->head->elem)) {
-    el->prev = NULL;
-    el->next = q->head;
-    q->head->prev = el;
+  el->next = next;
+  el->prev = next->prev;
+  if (next->prev)
+    next->prev->next = el;
+  else
     q->head = el;
-    q->nelem++;
-    return 0;
-  }
-
-  // insert inside the list
-  tmp_next = q->head;
-  while ((*cmp)(tmp_next->elem, p))
-    tmp_next = tmp_next->next;
-  tmp_prev = tmp_next->prev;
-
-  tmp_prev->next = tmp_next->prev = el;
-  el->next = tmp_next;
-  el->prev = tmp_prev;
-  
+  next->prev = el;
   q->nelem++;
-
   return(0);
 }
 

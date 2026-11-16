@@ -159,8 +159,37 @@ _createNewBlock(unsigned int npages, unsigned int sz)
   return(addr);
 }
 
-void *
-kmalloc(unsigned int sz)
+/* #define HEAP_CHECK: check the block list at every kmalloc/kfree */
+#ifdef HEAP_CHECK
+#include "video.h"
+/* debug: the block list is ordered, blocks do not overlap, links agree */
+static void heapCheck(const char * where, void * caller)
+{
+  void *b = _heap, *prev = NULL;
+  int n = 0;
+  while (b) {
+    if (_PREV_BLOCK_PTR(b) != prev ||
+        (prev && _BLOCK_BGN(b) < _BLOCK_END(prev))) {
+      printk("HEAP CORRUPT after ");
+      printk((char *)where);
+      printk(" caller ");
+      print_ulong_hex((uint32_t)caller);
+      printk(" block ");
+      print_ulong_hex((uint32_t)b);
+      printk(" prev ");
+      print_ulong_hex((uint32_t)prev);
+      print_char('\n');
+      while (1);
+    }
+    prev = b;
+    b = _NEXT_BLOCK_PTR(b);
+    if (++n > 1000000) { printk("HEAP LOOP\n"); while (1); }
+  }
+}
+#endif
+
+static void *
+kmalloc_real(unsigned int sz)
 {
   void *ret = NULL;
 
@@ -201,7 +230,11 @@ _removeBlock(void *ptr, void *prev)
   /* ...however, perhaps the previous block does not use the page, in which
      case we can release it */
   if ( (firstPage == bgn) ||
-       !prev || (firstPage > _GET_PAGE_BLOCK(_BLOCK_END(prev)-1)) )
+       !prev || (firstPage > _GET_PAGE_ADDRESS(_BLOCK_END(prev)-1)) )
+    /* (the page of the previous block's last byte; _GET_PAGE_BLOCK, used
+       here before, takes a block and steps back over its size field: it
+       released the page holding the last 4 bytes of the previous block,
+       which are its list pointers) */
     firstPageToRelease = firstPage;
   else
     /* skip this busy page: free the successive one */
@@ -225,8 +258,8 @@ _removeBlock(void *ptr, void *prev)
     
 }
 
-void
-kfree(void *ptr)
+static void
+kfree_real(void *ptr)
 {
   void *runner;
 
@@ -261,3 +294,20 @@ kfree(void *ptr)
   return;
 }
 
+
+#ifdef HEAP_CHECK
+void * kmalloc(unsigned int sz)
+{
+  void * r = kmalloc_real(sz);
+  heapCheck("kmalloc", __builtin_return_address(0));
+  return r;
+}
+void kfree(void * p)
+{
+  kfree_real(p);
+  heapCheck("kfree", __builtin_return_address(0));
+}
+#else
+void * kmalloc(unsigned int sz) { return kmalloc_real(sz); }
+void kfree(void * p) { kfree_real(p); }
+#endif

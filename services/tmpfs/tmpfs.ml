@@ -162,6 +162,7 @@ let do_lseek ch r =
     | _ -> reply ch invalid (-1)
 
 let do_list ch r =
+  if r.name <> "" then reply ch not_found (-1) else (* one flat directory *)
   let names = Hashtbl.fold (fun n _ acc -> n :: acc) files [] in
   match List.nth_opt (List.sort compare names) r.arg1 with
   | Some n when r.arg1 >= 0 ->

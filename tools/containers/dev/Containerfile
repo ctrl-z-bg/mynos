@@ -60,6 +60,7 @@ ARG OCAML_VERSION
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       gcc libc6-dev make binutils nasm musl-tools musl-dev \
+      dosfstools mtools \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=ocaml /opt/ocaml-${OCAML_VERSION} /opt/ocaml-${OCAML_VERSION}
 COPY --from=ocaml /opt/ocaml-runtime-musl /opt/ocaml-runtime-musl

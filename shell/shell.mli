@@ -8,17 +8,19 @@ val help : unit -> unit
 (** Print a short guide. *)
 
 val ls : ?dir:string -> unit -> unit
-(** List the files of a directory ([/], the RAM disk, by default; [/tmp] is
-    the writable one), with their sizes. *)
+(** List the files of a directory, with their sizes: [/] (the RAM disk) by
+    default; [/tmp] is writable, in memory; [/disk] is the FAT disk, whose
+    files stay. *)
 
 val cat : string -> unit
 (** Print a file. *)
 
 val write : string -> string -> unit
-(** [write file text] makes [file] contain [text] (only under [/tmp]). *)
+(** [write file text] makes [file] contain [text] (under [/tmp] or
+    [/disk]). *)
 
 val rm : string -> unit
-(** Remove a file (only under [/tmp]). *)
+(** Remove a file (under [/tmp] or [/disk]). *)
 
 val run : string -> string list -> Mynos.status
 (** [run prog args] starts the program in file [prog] with arguments

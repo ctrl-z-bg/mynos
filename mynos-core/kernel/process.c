@@ -645,17 +645,18 @@ static int isRamdiskPT(uint32_t frame) {
  */
 static void freeAddressSpace(process_descriptor_t * d) {
   uint32_t pdFrame = d->pgdirPhys >> 12;
-  uint32_t * pd, * w, saved, unused, i, j;
+  uint32_t * w, saved, unused, i, j;
   int pdSeen = 0;
 
-  if ((pd = kmalloc(PAGE_SIZE)) == NULL) return;   /* leak, rather */
+  /* one window: map the directory to read an entry, then its table */
   w = __mem_mapFrame(pdFrame, &saved);
-  kmemcpy(pd, w, PAGE_SIZE);
-
   for (i = _asm_last_kernel_page_dir_entry_used + 1; i < LAST_PDPT_INDEX;
        i++) {
-    uint32_t ptFrame = pd[i] >> 12;
-    if (!(pd[i] & PF_PRESENT) || isRamdiskPT(ptFrame)) continue;
+    uint32_t pde, ptFrame;
+    w = __mem_mapFrame(pdFrame, &unused);
+    pde = w[i];
+    ptFrame = pde >> 12;
+    if (!(pde & PF_PRESENT) || isRamdiskPT(ptFrame)) continue;
     w = __mem_mapFrame(ptFrame, &unused);
     for (j = 0; j < PDPT_ENTRIES; j++)
       if (w[j] & PF_PRESENT) {
@@ -669,7 +670,6 @@ static void freeAddressSpace(process_descriptor_t * d) {
 
   if (!pdSeen) unsetFrame(pdFrame);
   unsetFrame(((uint32_t)d->ptsMirror) >> 12);
-  kfree(pd);
 }
 
 /*

@@ -23,6 +23,8 @@ make -C init clean
 make -C services/tmpfs clean
 make -C services/ata clean
 make -C tests/storage clean
+make -C services/fatfs clean
+make -C tests/fat clean
 make -C shell clean
 make -C system clean
 ' >/dev/null

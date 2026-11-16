@@ -357,3 +357,11 @@ CAMLprim value caml_mynos_enable_irq(value irq)
 {
   return check("enable_irq", mynos_enableIrq(Int_val(irq)));
 }
+
+/* seconds since 1970 (CLOCK_REALTIME: the CMOS clock read at boot) */
+CAMLprim value caml_mynos_time(value unit)
+{
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  return caml_copy_double(ts.tv_sec + ts.tv_nsec / 1e9);
+}

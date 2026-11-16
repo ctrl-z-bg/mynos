@@ -13,7 +13,7 @@ ocamlrun=$(tools/ocamlrun-path.sh)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 log=$tmp/log1 log2=$tmp/log2 log3=$tmp/log3 log4=$tmp/log4 log5=$tmp/log5
-log6=$tmp/log6 log7=$tmp/log7 log8=$tmp/log8 log9=$tmp/log9
+log6=$tmp/log6 log7=$tmp/log7 log8=$tmp/log8 log9=$tmp/log9 logf=$tmp/logf
 
 timeout "${WAIT:-10}" tools/run-qemu.sh \
     "$ocamlrun" \
@@ -52,6 +52,31 @@ with open(sys.argv[1], "wb") as f:
 import sys
 d = open(sys.argv[1], "rb").read()
 print(d[1000 * 512:1000 * 512 + 16].decode("latin-1"))' "$tmp/disk.img")
+fi
+
+# tenth and eleventh boots: fatfs (OCaml) on FAT16 and FAT32 images made by
+# mkfs.fat and mtools; afterwards fsck.fat must find them consistent, and
+# mtools must read what MyNOS wrote
+fat_checks=
+if [ -f tests/fat/ramdisk.dsk ]; then
+    for img in fat16 fat32; do
+        cp tests/fat/$img.img tests/fat/run-$img.img
+        DISK=tests/fat/run-$img.img MEM=64 timeout "${WAIT:-20}" tools/run-qemu.sh "$ocamlrun" \
+            services/registry/registry services/fs/memrofs/memrofsd \
+            tests/fat/ramdisk.dsk \
+            -- -display none -serial null -serial "file:$logf" || true
+        sed "s/^fat: /fat ($img): /" "$logf" >> "$log"
+        if fsck.fat -n tests/fat/run-$img.img >/dev/null 2>&1; then
+            fat_checks="$fat_checks $img:fsck-ok"
+        fi
+        if [ "$(tools/in-container.sh dev mtype -i tests/fat/run-$img.img ::/new.ml 2>/dev/null)" = \
+             "$(printf 'let answer = 42\nlet more = 1')" ] &&
+           tools/in-container.sh dev mdir -i tests/fat/run-$img.img ::/projects 2>/dev/null |
+             grep -q "A Longer Name Than Eight.txt"; then
+            fat_checks="$fat_checks $img:mtools-ok"
+        fi
+        rm -f tests/fat/run-$img.img
+    done
 fi
 
 # eighth boot: domains, i.e. Linux threads (clone, futex)
@@ -176,6 +201,16 @@ if [ -f tests/effects/effects.byte ]; then
 fi
 if [ -f tests/domains/domains.byte ]; then
     expect "domains: all checks passed"
+fi
+if [ -f tests/fat/ramdisk.dsk ]; then
+    expect "fat (fat16): all checks passed"
+    expect "fat (fat32): all checks passed"
+    for c in fat16:fsck-ok fat32:fsck-ok fat16:mtools-ok fat32:mtools-ok; do
+        case " $fat_checks " in
+            *" $c "*) echo "ok    host check $c" ;;
+            *) echo "FAIL  host check $c"; fail=1 ;;
+        esac
+    done
 fi
 if [ -f tests/storage/ramdisk.dsk ]; then
     expect "ata: disk of 2048 sectors"

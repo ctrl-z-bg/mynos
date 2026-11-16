@@ -18,10 +18,10 @@
  * and pass the rest to the kernel:
  *   - standard input (fd 0) is read from the console service;
  *   - files live on the file services (protocol: mynos_fs.h) and get
- *     descriptors from FD_BASE up. /tmp/NAME is NAME on tmpfs, writable;
- *     any other path is on memrofs, the read-only RAM disk. Each has one
- *     flat directory: "/" (or "." or "") and "/tmp", which opendir/readdir
- *     list;
+ *     descriptors from FD_BASE up. /tmp/NAME is NAME on tmpfs (writable,
+ *     in memory), /disk/PATH is PATH on fatfs (the FAT disk); any other
+ *     path is on memrofs, the read-only RAM disk, whose root also lists
+ *     the mount points;
  *   - everything else (stdout, stderr, and the kernel's own single file
  *     when there is no memrofs) goes to the kernel.
  * The C library's internal I/O (fopen, ...) may bypass these functions;
@@ -130,37 +130,69 @@ static ssize_t console_read(int port, void * buf, size_t count)
 
 /* ---- file services ---- */
 
-enum { MEMROFS, TMPFS, NSERVICES };
-static const char * service_name[NSERVICES] = { MEMROFS_SERVICE, TMPFS_SERVICE };
-static int service_cache[NSERVICES] = { -2, -2 };
+enum { MEMROFS, TMPFS, FATFS, NSERVICES };
+static const char * service_name[NSERVICES] =
+  { MEMROFS_SERVICE, TMPFS_SERVICE, FATFS_SERVICE };
+static const char * service_mount[NSERVICES] =
+  { "", TMPFS_MOUNT, FATFS_MOUNT };
+static int service_cache[NSERVICES] = { -2, -2, -2 };
 
 static int service(int s)
 {
   return service_port(service_name[s], &service_cache[s]);
 }
 
-/* a path without leading "/" and "./" ("" for the directory itself) */
-static const char * flat_name(const char * path)
+/* the path, cleaned: no leading, trailing or doubled "/", no "." and ".."
+   components (there is no current directory: a relative path starts at
+   the root). -1 if it does not fit. */
+static int clean_path(const char * path, char * out, int size)
 {
-  while (1) {
-    if (path[0] == '/') path++;
-    else if (path[0] == '.' && path[1] == '/') path += 2;
-    else if (path[0] == '.' && path[1] == 0) path++;
-    else return path;
+  int len = 0;
+  while (*path) {
+    const char * c;
+    int n;
+    while (*path == '/') path++;
+    c = path;
+    while (*path && *path != '/') path++;
+    n = path - c;
+    if (n == 0 || (n == 1 && c[0] == '.')) continue;
+    if (n == 2 && c[0] == '.' && c[1] == '.') {   /* drop the last one */
+      while (len > 0 && out[len - 1] != '/') len--;
+      if (len > 0) len--;
+      continue;
+    }
+    if (len + (len > 0) + n >= size) return -1;
+    if (len > 0) out[len++] = '/';
+    memcpy(out + len, c, n);
+    len += n;
   }
+  out[len] = 0;
+  return 0;
 }
 
-/* where a path lives: the service, and the name there ("" for its
-   directory) */
-static int resolve(const char * path, const char ** name)
+/* where a path lives: the service, and the path inside it, in name
+   (FS_NAMEMAX bytes; "" for its root). -1 (errno set) if too long. */
+static int resolve(const char * path, char * name)
 {
-  path = flat_name(path);
-  if (!strncmp(path, TMPFS_MOUNT, strlen(TMPFS_MOUNT)) &&
-      (path[strlen(TMPFS_MOUNT)] == 0 || path[strlen(TMPFS_MOUNT)] == '/')) {
-    *name = flat_name(path + strlen(TMPFS_MOUNT));
-    return TMPFS;
+  char clean[2 * FS_NAMEMAX];
+  int s;
+
+  if (clean_path(path, clean, sizeof(clean)) < 0) {
+    errno = ENAMETOOLONG;
+    return -1;
   }
-  *name = path;
+  for (s = 1; s < NSERVICES; s++) {
+    int n = strlen(service_mount[s]);
+    if (!strncmp(clean, service_mount[s], n) &&
+	(clean[n] == 0 || clean[n] == '/')) {
+      const char * rest = clean[n] ? clean + n + 1 : clean + n;
+      if (strlen(rest) >= FS_NAMEMAX) { errno = ENAMETOOLONG; return -1; }
+      strcpy(name, rest);
+      return s;
+    }
+  }
+  if (strlen(clean) >= FS_NAMEMAX) { errno = ENAMETOOLONG; return -1; }
+  strcpy(name, clean);
   return MEMROFS;
 }
 
@@ -201,8 +233,29 @@ static int status_errno(int status)
   case FS_NOT_OPEN:  return EBADF;
   case FS_READONLY:  return EROFS;
   case FS_NO_SPACE:  return ENOSPC;
+  case FS_IS_DIR:    return EISDIR;
+  case FS_NOT_EMPTY: return ENOTEMPTY;
+  case FS_EXISTS:    return EEXIST;
+  case FS_NOT_DIR:   return ENOTDIR;
   default:           return EINVAL;
   }
+}
+
+/* a request on a name (UNLINK, MKDIR, RMDIR): 0 or -1 with errno */
+static int name_call(const char * path, int type)
+{
+  struct fs_req req;
+  struct fs_reply r;
+  int s;
+
+  memset(&req, 0, sizeof(req));
+  if ((s = resolve(path, req.name)) < 0) return -1;
+  if (service(s) < 0) { errno = ENOENT; return -1; }
+  if (!req.name[0]) { errno = s == MEMROFS ? EROFS : EBUSY; return -1; }
+  req.type = type;
+  if (fs_call(s, &req, &r, NULL) < 0) { errno = EIO; return -1; }
+  if (r.status != FS_OK) { errno = status_errno(r.status); return -1; }
+  return 0;
 }
 
 /* ---- the replaced functions ---- */
@@ -211,7 +264,6 @@ int open(const char * path, int flags, ...)
 {
   struct fs_req req;
   struct fs_reply r;
-  const char * name;
   int slot, mode = 0, s;
 
   if (flags & O_CREAT) {
@@ -221,27 +273,25 @@ int open(const char * path, int flags, ...)
     va_end(ap);
   }
 
-  s = resolve(path, &name);
+  memset(&req, 0, sizeof(req));
+  if ((s = resolve(path, req.name)) < 0) return -1;
   if (service(s) < 0) {
     if (s == MEMROFS)    /* no filesystem: the kernel's own file */
       return result(sys3(5 /* open */, (long)path, flags, mode));
     errno = ENOENT;
     return -1;
   }
-  if (!name[0]) { errno = EISDIR; return -1; }
-  if (strlen(name) >= FS_NAMEMAX) { errno = ENAMETOOLONG; return -1; }
+  if (!req.name[0]) { errno = EISDIR; return -1; }
 
-  memset(&req, 0, sizeof(req));
   req.type = FS_OPEN;
   if ((flags & O_ACCMODE) != O_RDONLY) req.arg1 |= FS_O_WRITE;
   if (flags & O_CREAT)  req.arg1 |= FS_O_CREAT;
   if (flags & O_TRUNC)  req.arg1 |= FS_O_TRUNC;
   if (flags & O_APPEND) req.arg1 |= FS_O_APPEND;
-  strcpy(req.name, name);
   if (fs_call(s, &req, &r, NULL) < 0) { errno = EIO; return -1; }
   if (r.status != FS_OK) {
     if (s == MEMROFS && r.status == FS_NOT_FOUND &&
-	!strcmp(name, KERNEL_BYTECODE))
+	!strcmp(req.name, KERNEL_BYTECODE))
       return result(sys3(5, (long)path, flags, 0));
     errno = status_errno(r.status);
     return -1;
@@ -249,9 +299,10 @@ int open(const char * path, int flags, ...)
   for (slot = 0; slot < FD_MAX && files[slot].used; slot++)
     ;
   if (slot == FD_MAX) {
+    int fd = r.value;
     memset(&req, 0, sizeof(req));
     req.type = FS_CLOSE;
-    req.fd = r.value;
+    req.fd = fd;
     fs_call(s, &req, &r, NULL);
     errno = EMFILE;
     return -1;
@@ -399,20 +450,18 @@ off_t lseek(int fd, off_t offset, int whence)
 
 int unlink(const char * path)
 {
-  struct fs_req req;
-  struct fs_reply r;
-  const char * name;
-  int s = resolve(path, &name);
+  return name_call(path, FS_UNLINK);
+}
 
-  if (service(s) < 0) { errno = ENOENT; return -1; }
-  if (!name[0]) { errno = EISDIR; return -1; }
-  if (strlen(name) >= FS_NAMEMAX) { errno = ENAMETOOLONG; return -1; }
-  memset(&req, 0, sizeof(req));
-  req.type = FS_UNLINK;
-  strcpy(req.name, name);
-  if (fs_call(s, &req, &r, NULL) < 0) { errno = EIO; return -1; }
-  if (r.status != FS_OK) { errno = status_errno(r.status); return -1; }
-  return 0;
+int mkdir(const char * path, mode_t mode)
+{
+  (void)mode;
+  return name_call(path, FS_MKDIR);
+}
+
+int rmdir(const char * path)
+{
+  return name_call(path, FS_RMDIR);
 }
 
 /* Linux i386 struct stat64, as the kernel fills it */
@@ -455,7 +504,7 @@ int fstat(int fd, struct stat * st)
     off_t size = lseek(fd, 0, SEEK_END);
     if (cur < 0 || size < 0) return -1;
     lseek(fd, cur, SEEK_SET);
-    st->st_mode = S_IFREG | (files[slot].service == TMPFS ? 0644 : 0444);
+    st->st_mode = S_IFREG | (files[slot].service == MEMROFS ? 0444 : 0644);
     st->st_nlink = 1;
     st->st_size = size;
     st->st_blksize = 4096;
@@ -464,19 +513,31 @@ int fstat(int fd, struct stat * st)
   }
 }
 
+static void dir_stat(struct stat * st, int writable)
+{
+  memset(st, 0, sizeof(*st));
+  st->st_mode = S_IFDIR | (writable ? 0755 : 0555);
+  st->st_nlink = 2;
+}
+
 int stat(const char * path, struct stat * st)
 {
-  const char * name;
-  int fd, ret, s = resolve(path, &name);
+  char name[FS_NAMEMAX];
+  int fd, ret, s;
 
-  if (!name[0] && service(s) >= 0) {
-    memset(st, 0, sizeof(*st));          /* a service's directory */
-    st->st_mode = S_IFDIR | (s == TMPFS ? 0755 : 0555);
-    st->st_nlink = 2;
+  if ((s = resolve(path, name)) < 0) return -1;
+  if (!name[0] && service(s) >= 0) {   /* a service's root */
+    dir_stat(st, s != MEMROFS);
     return 0;
   }
   fd = open(path, O_RDONLY);
-  if (fd < 0) return -1;
+  if (fd < 0) {
+    if (errno == EISDIR) {             /* a directory inside a service */
+      dir_stat(st, s != MEMROFS);
+      return 0;
+    }
+    return -1;
+  }
   ret = fstat(fd, st);
   close(fd);
   return ret;
@@ -487,32 +548,35 @@ int lstat(const char * path, struct stat * st)
   return stat(path, st);
 }
 
-/* ---- directories: one per file service ---- */
+/* ---- directories ---- */
 
 struct __dirstream {
   int service;
-  int index;               /* next file to list */
-  int mounts_listed;       /* "/" also lists "tmp", once */
+  char name[FS_NAMEMAX];   /* the directory inside the service */
+  int index;               /* next entry to list */
+  int mounts_listed;       /* "/" also lists the mount points, after */
   struct dirent entry;
 };
 
 DIR * opendir(const char * path)
 {
-  const char * name;
-  int s = resolve(path, &name);
+  char name[FS_NAMEMAX];
+  int s;
   DIR * d;
 
+  if ((s = resolve(path, name)) < 0) return NULL;
   if (service(s) < 0) {
     errno = s == MEMROFS ? ENOSYS : ENOENT;
     return NULL;
   }
   if (name[0]) {
     struct stat st;
-    errno = stat(path, &st) == 0 ? ENOTDIR : ENOENT;
-    return NULL;
+    if (stat(path, &st) < 0) return NULL;
+    if (!S_ISDIR(st.st_mode)) { errno = ENOTDIR; return NULL; }
   }
   if ((d = calloc(1, sizeof(*d))) == NULL) { errno = ENOMEM; return NULL; }
   d->service = s;
+  strcpy(d->name, name);
   return d;
 }
 
@@ -533,6 +597,17 @@ static struct dirent * dir_entry(DIR * d, const char * name, int len,
   return &d->entry;
 }
 
+/* the root of memrofs also shows the mount points of the other services */
+static struct dirent * next_mount(DIR * d)
+{
+  while (d->mounts_listed < NSERVICES - 1) {
+    int s = ++d->mounts_listed;
+    if (service(s) >= 0)
+      return dir_entry(d, service_mount[s], strlen(service_mount[s]), 1);
+  }
+  return NULL;
+}
+
 struct dirent * readdir(DIR * d)
 {
   struct fs_req req;
@@ -541,16 +616,15 @@ struct dirent * readdir(DIR * d)
   struct dirent * e;
   int channel;
 
+  if (d->mounts_listed) return next_mount(d);
   memset(&req, 0, sizeof(req));
   req.type = FS_LIST;
   req.arg1 = d->index;
+  strcpy(req.name, d->name);
   if (fs_call(d->service, &req, &r, &channel) < 0) { errno = EIO; return NULL; }
   if (r.status != FS_OK) {               /* the end: errno unchanged */
     mynos_freeChannel(channel);
-    if (d->service == MEMROFS && !d->mounts_listed && service(TMPFS) >= 0) {
-      d->mounts_listed = 1;
-      return dir_entry(d, TMPFS_MOUNT, strlen(TMPFS_MOUNT), 1);
-    }
+    if (d->service == MEMROFS && !d->name[0]) return next_mount(d);
     return NULL;
   }
   if (mynos_recv(channel, &msg, 0, 0) < 0) {
@@ -562,7 +636,7 @@ struct dirent * readdir(DIR * d)
     const char * name = msg->start;
     int len = 0;
     while (len < (int)msg->size && name[len]) len++;
-    e = dir_entry(d, name, len, 0);
+    e = dir_entry(d, name, len, r.value == -1);
   }
   mynos_freeMsg(&msg);
   mynos_freeChannel(channel);

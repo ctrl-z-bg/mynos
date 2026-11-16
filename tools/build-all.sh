@@ -18,6 +18,7 @@
 #   tests/files/ramdisk.dsk          RAM disk with init.byte, a file I/O test (dev only)
 #   tests/spawn/ramdisk.dsk          RAM disk with the runtime and a spawn test (dev only)
 #   tests/storage/ramdisk.dsk        RAM disk with the ATA driver and a disk test (dev only)
+#   tests/fat/ramdisk.dsk, fat*.img  fatfs test: RAM disk, FAT16 and FAT32 images (dev only)
 #   system/ramdisk.dsk               the system RAM disk: init, consoled, the shell
 #                                    (the OCaml toplevel), programs (dev only)
 #   tests/abi/abi                    system call checks
@@ -53,7 +54,9 @@ if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
   make -C init
   make -C services/tmpfs
   make -C services/ata
+  make -C services/fatfs
   make -C tests/storage
+  make -C tests/fat
   make -C shell
   make -C system
 fi
