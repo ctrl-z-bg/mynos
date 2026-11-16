@@ -43,30 +43,22 @@ OCaml 3.06, which current systems don't provide. Builds run in a container
 with [podman](https://podman.io/); QEMU runs on the host.
 
 ```sh
-tools/containers/build-image.sh legacy             # once: build the image
-tools/in-container.sh legacy make -C mynos-core/kernel
-tools/run-qemu.sh                                  # boot kernel.elf in QEMU
+tools/containers/build-image.sh legacy   # once: build the image
+tools/build-all.sh                       # build everything in the container
+tools/run-demo.sh                        # boot the whole system in QEMU
 ```
 
-`tools/in-container.sh legacy` with no command opens a shell in the build
-environment. `tools/run-qemu.sh` takes modules as arguments (module 1 is the
-OCaml bytecode); see the script for details.
-
-So far only the kernel has been rebuilt and booted. The rest of the system is
-built in this order, still to be verified:
-
-```sh
-mkdir -p mynos-lib/lib        # not in the repository; ar needs it
-make -C mynos-lib             # -> mynos-lib/lib/libmynos.a
-make -C services              # -> registry, keyboardd, seriald, memrofsd
-make -C mynos-byterun/src     # -> ocamlrun
-```
+`tools/in-container.sh legacy` opens a shell in the build environment, or
+runs the command given after it. `tools/run-qemu.sh` boots the kernel with
+any list of modules (module 1 is the OCaml bytecode); see the scripts for
+details.
 
 ## Status
 
 Development stopped at the end of 2004, after the IPC, threads, copy-on-write
-and the bytecode interpreter port were in place. No OCaml programs or services
-were written yet, and the way the bytecode is loaded is a shortcut. The current state, known issues and a
+and the bytecode interpreter port were in place. In 2026 the original system
+was rebuilt with its period toolchain and runs again in QEMU. No OCaml
+services exist yet, and the way the bytecode is loaded is a shortcut. The current state, known issues and a
 work log are kept in [`doc/STATUS.md`](doc/STATUS.md).
 
 ## Authors

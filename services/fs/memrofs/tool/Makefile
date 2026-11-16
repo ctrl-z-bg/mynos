@@ -18,13 +18,14 @@
 
 .PHONY  : all clean
 
-CC = diet gcc
+# createDisk runs on the build host, not on MyNOS
+CC = gcc
 
 SRC     =       $(wildcard *.c)
 OFILES  =       $(SRC:%.c=%.o)
 
 CFLAGS = -I../../../../mynos-lib/include -I..
-LDFLAGS = -L../../../../mynos-lib/lib/ -lmynos -static -Xlinker -Ttext -Xlinker 0x40000000
+LDFLAGS =
 
 DEPEND = Makefile.depend
 

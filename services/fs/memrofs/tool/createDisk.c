@@ -25,6 +25,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include "../memrofs.h"
 
 int main(int argc, char ** argv) {

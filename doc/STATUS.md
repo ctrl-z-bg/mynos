@@ -108,6 +108,13 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 
 ### Build and run
 
+**The original system builds and runs again**, as it did in 2004–2008:
+`tools/build-all.sh` then `tools/run-demo.sh`. In QEMU it boots the kernel,
+runs a test OCaml program (`tests/hello`) on `ocamlrun`, starts the registry,
+the keyboard and serial drivers and memrofs, and memrofs's built-in test reads
+a file from the RAM disk over IPC. Typed keys are echoed on screen and sent to
+the serial port.
+
 - **Toolchain.** The November 2008 commits add `-fno-stack-protector`, so
   the last original state targets gcc ≥ 4.1 (gcc 4.3, Ubuntu 8.10 era). The
   host (gcc 15, no multilib, x86_64-only dietlibc) cannot build it. Builds run
@@ -115,17 +122,22 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
   with gcc 4.3.2, binutils 2.18, nasm 2.03, dietlibc 0.31, plus OCaml 3.06
   built from source. A container with a modern toolchain is planned
   (mynos-aji).
-- **Kernel: builds and boots.** `make -C mynos-core/kernel` in the legacy
-  container, then `tools/run-qemu.sh` (QEMU's multiboot loader, no GRUB).
-  It completes the initialization (GDT, paging, PIC, IDT, delay calibration,
-  PIT, semaphores, services registry) and runs the idle loop with the timer at
-  100 Hz. With gcc 4.3 this needed one fix: top-level `asm` blocks had no
-  section directive and gcc placed some of them in data sections (`pit_ISR`
-  in `.bss`, `int7_TRAP` in `.data`), so the first real timer tick hit an
-  invalid opcode. They now use `.pushsection .text`.
+- **Booting.** `tools/run-qemu.sh` uses QEMU's multiboot loader, no GRUB.
+  Modules are passed in order; module 1 must be the OCaml bytecode.
+  `tools/run-demo.sh` passes the standard set.
+- **Fixes needed to get here** (bugs hidden by the old compilers):
+  - Top-level `asm` blocks (interrupt, trap and syscall entry points) had no
+    section directive; gcc 4.3 placed `pit_ISR` in `.bss` and `int7_TRAP` in
+    `.data`, so the first timer tick hit an invalid opcode. They now use
+    `.pushsection .text`.
+  - `spawnProcess` (`process.c`) used `baseaddr` uninitialized when sizing
+    the process image; with gcc 4.3 it asked for about 1 GB of pages and
+    hung. Now initialized to 0.
+  - `memrofs/tool/createDisk` is a host tool but was built like a MyNOS
+    program (dietlibc, libmynos, `0x40000000`) and crashed on Linux. Now
+    built with plain gcc.
 - `mynos-core/boot/` (floppy bootloader) does not assemble with nasm 2.x
-  (mynos-s96); build `mynos-core/kernel` directly.
-- **Services and ocamlrun: not built yet.** Next step: mynos-bo2.2.
+  (mynos-s96); the build uses `mynos-core/kernel` directly.
 
 ### Known shortcuts and bugs
 
@@ -137,9 +149,9 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 
 ### Not started
 
-- No OCaml program, service or driver exists yet: there are no `.ml` files in
-  the repository. The "OS based on a high-level language" part never went
-  beyond running the bytecode interpreter.
+- No OCaml service or driver exists yet; the only OCaml code is the test
+  program `tests/hello/hello.ml`. The "OS based on a high-level language"
+  part never went beyond running the bytecode interpreter.
 - Nothing on "new language definition".
 
 ### Direction
@@ -184,3 +196,8 @@ Side task: archive the old SourceForge site (mynos-db2).
   builds with the 2008 toolchain and boots in QEMU after fixing the section of
   top-level asm blocks. Closed mynos-bo2.1, mynos-o7z; opened mynos-aji,
   mynos-s96.
+- **2026-11-16** — Whole system built in the legacy container and running in
+  QEMU: OCaml bytecode, registry, keyboard, serial, memrofs. Fixed an
+  uninitialized variable in `spawnProcess` and made `createDisk` a host tool.
+  Added `tools/build-all.sh`, `tools/run-demo.sh` and `tests/`. Closed
+  mynos-bo2 (with bo2.2, bo2.3); opened mynos-tuy.

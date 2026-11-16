@@ -100,7 +100,8 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
   Elf32_Phdr elf_phdata[ELF_MAXSEG];
   Elf32_Ehdr elf_ex;
-  uint32_t entryaddr, curraddr, size, baseaddr, lastaddr;
+  uint32_t entryaddr, curraddr, size;
+  uint32_t baseaddr = 0, lastaddr = 0;
 
   /* new process linear addresses for info and stacks */
   uint32_t pinfoAddr;
