@@ -448,3 +448,7 @@ Side task: archive the old SourceForge site (mynos-db2).
   wake, requeue, timeouts), `gettid`, `sched_yield`; OCaml 5 domains work,
   in tests (`tests/domains`) and in the shell. Closed mynos-l9h; opened
   mynos-09i (`Thread` module) and mynos-awn (SMP).
+- **2026-11-16** — Storage (mynos-rf4), decided: a standard filesystem,
+  FAT, served by OCaml services. First step: port I/O and driver
+  registration in `Mynos` (`inb`, `outb`, `inw`, `outw`, `insw`, `outsw`,
+  `driver_register`, `enable_irq`). Closed mynos-rf4.1.

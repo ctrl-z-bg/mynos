@@ -55,6 +55,14 @@ let () =
   ok &&& check "semaphore v/p/free" true;
   Mynos.sleep 0.1;
   ok &&& check "sleep" true;
+  (* port I/O from OCaml: the CMOS clock's seconds (BCD) and its status
+     register A, whose low bits are the rate divider set by the BIOS *)
+  Mynos.outb 0x70 0x00;
+  let sec = Mynos.inb 0x71 in
+  Mynos.outb 0x70 0x0A;
+  let rega = Mynos.inb 0x71 in
+  ok &&& check "port I/O (CMOS clock)"
+    (sec lsr 4 < 6 && sec land 0xF < 10 && rega land 0x0F <> 0);
   (match Mynos.lookup "nosuchservice" with
    | _ -> ok &&& check "lookup of a missing service fails" false
    | exception Mynos.Error (_, _) ->

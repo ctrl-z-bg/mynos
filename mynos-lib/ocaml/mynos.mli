@@ -90,3 +90,30 @@ val wait : int -> status
 
 val wait_any : unit -> int * status
 (** Wait for the end of any child process: its pid and status. *)
+
+(** {1 Drivers}
+
+    MyNOS processes may use the I/O ports directly (the processor runs them
+    with I/O privilege level 3), and receive interrupts as [V]s on a
+    semaphore. *)
+
+val inb : int -> int
+val outb : int -> int -> unit
+(** [outb port byte] *)
+
+val inw : int -> int
+val outw : int -> int -> unit
+
+val insw : int -> int -> string
+(** [insw port n] reads [n] 16-bit words from [port]: [2 n] bytes, the
+    first byte of each word first (a disk sector is [insw port 256]). *)
+
+val outsw : int -> string -> unit
+(** Write the bytes of a string to a port, 16 bits at a time. *)
+
+val driver_register : string -> int -> int
+(** [driver_register name irq] makes this process the driver of [irq]:
+    returns a semaphore that is [V]ed at each interrupt ({!sem_p} waits for
+    one). The process acknowledges the interrupt controller itself. *)
+
+val enable_irq : int -> unit

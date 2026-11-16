@@ -69,3 +69,13 @@ let decode s = if s land 0x7f = 0 then Exited ((s lsr 8) land 0xff)
                else Signaled (s land 0x7f)
 let wait pid = decode (snd (wait_raw pid))
 let wait_any () = let pid, s = wait_raw (-1) in (pid, decode s)
+
+external inb : int -> int = "caml_mynos_inb"
+external outb : int -> int -> unit = "caml_mynos_outb"
+external inw : int -> int = "caml_mynos_inw"
+external outw : int -> int -> unit = "caml_mynos_outw"
+external insw : int -> int -> string = "caml_mynos_insw"
+external outsw : int -> string -> unit = "caml_mynos_outsw"
+external driver_register : string -> int -> int = "caml_mynos_driver_register"
+external enable_irq_raw : int -> int = "caml_mynos_enable_irq"
+let enable_irq n = ignore (enable_irq_raw n)

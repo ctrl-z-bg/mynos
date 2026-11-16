@@ -281,3 +281,79 @@ CAMLprim value caml_mynos_uptime(value unit)
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return caml_copy_double(ts.tv_sec + ts.tv_nsec / 1e9);
 }
+
+/* ---- drivers: port I/O and interrupts ----
+   MyNOS processes run with IOPL 3: in and out work in user space. */
+
+CAMLprim value caml_mynos_inb(value port)
+{
+  unsigned char v;
+  __asm__ volatile ("inb %w1, %0" : "=a"(v) : "Nd"((unsigned short)Int_val(port)));
+  return Val_int(v);
+}
+
+CAMLprim value caml_mynos_outb(value port, value v)
+{
+  __asm__ volatile ("outb %b0, %w1"
+		    : : "a"((unsigned char)Int_val(v)),
+		        "Nd"((unsigned short)Int_val(port)));
+  return Val_unit;
+}
+
+CAMLprim value caml_mynos_inw(value port)
+{
+  unsigned short v;
+  __asm__ volatile ("inw %w1, %0" : "=a"(v) : "Nd"((unsigned short)Int_val(port)));
+  return Val_int(v);
+}
+
+CAMLprim value caml_mynos_outw(value port, value v)
+{
+  __asm__ volatile ("outw %w0, %w1"
+		    : : "a"((unsigned short)Int_val(v)),
+		        "Nd"((unsigned short)Int_val(port)));
+  return Val_unit;
+}
+
+/* n 16-bit words from a port (rep insw), as a string of 2n bytes */
+CAMLprim value caml_mynos_insw(value port, value n)
+{
+  CAMLparam2(port, n);
+  CAMLlocal1(s);
+  int words = Int_val(n);
+  void * buf;
+  if (words < 0) caml_invalid_argument("Mynos.insw");
+  s = caml_alloc_string(2 * words);
+  buf = Bytes_val(s);
+  __asm__ volatile ("cld; rep insw"
+		    : "+D"(buf), "+c"(words)
+		    : "d"((unsigned short)Int_val(port)) : "memory");
+  CAMLreturn(s);
+}
+
+/* the bytes of a string (even length) to a port, 16 bits at a time */
+CAMLprim value caml_mynos_outsw(value port, value s)
+{
+  const void * buf = String_val(s);
+  int words = caml_string_length(s) / 2;
+  __asm__ volatile ("cld; rep outsw"
+		    : "+S"(buf), "+c"(words)
+		    : "d"((unsigned short)Int_val(port)) : "memory");
+  return Val_unit;
+}
+
+/* register as the driver of an IRQ: returns the semaphore the kernel V's
+   at each interrupt */
+CAMLprim value caml_mynos_driver_register(value name, value irq)
+{
+  int ret;
+  char * n = caml_stat_strdup(String_val(name));
+  ret = mynos_driverRegister(n, Int_val(irq), NULL, NULL);
+  caml_stat_free(n);
+  return check("driver_register", ret);
+}
+
+CAMLprim value caml_mynos_enable_irq(value irq)
+{
+  return check("enable_irq", mynos_enableIrq(Int_val(irq)));
+}
