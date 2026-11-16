@@ -140,7 +140,7 @@ fi
 
 # seventh boot: the system RAM disk, init starts consoled and the shell (the
 # OCaml toplevel), driven through the keyboard
-history_saved= kilo_saved= edit_saved=
+history_saved= kilo_saved= edit_saved= sh_saved=
 if [ -f system/ramdisk.dsk ]; then
     # a disk, for /disk and the shell's history: a copy of the FAT16 test image
     [ -f tests/fat/fat16.img ] && cp tests/fat/fat16.img tests/fat/run-shell.img
@@ -171,6 +171,8 @@ if [ -f system/ramdisk.dsk ]; then
                   'ignore (compile "w.ml"); run "w.byte" [];;\n' \
                   'run "kilo" ["/disk/k.txt"];;\n' 'typed in kilo' '{ctrl-s}' '{ctrl-q}' \
                   'edit "/disk/e.txt";;\n' '' 'second\n{up}first {ctrl-k}{ctrl-u}{ctrl-u}' '{ctrl-s}' '{ctrl-q}' \
+                  'sh ();;\n' 'cd /disk; echo from sh > s.txt; X=4; echo "v$X" >> s.txt; cat s.txt | cat\n' \
+                  'exit\n' \
                   '#quit;;\n'; do
         tools/type-keys.py "$tmp/mon7" "$phrase"
         sleep 2
@@ -192,6 +194,8 @@ if [ -f system/ramdisk.dsk ]; then
           "typed in kilo" ] && kilo_saved=yes
         [ "$(tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/e.txt 2>/dev/null)" = \
           "$(printf 'first second\nfirst second\n')" ] && edit_saved=yes
+        [ "$(tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/s.txt 2>/dev/null)" = \
+          "$(printf 'from sh\nv4\n')" ] && sh_saved=yes
         rm -f tests/fat/run-shell.img
     fi
 fi
@@ -276,6 +280,11 @@ if [ -f system/ramdisk.dsk ]; then
     expect "- : int = 40000"
     expect "AUTOEXEC.BAT: Read-only file system"
     expect "init: shell.byte (pid"
+    if [ -n "$sh_saved" ] || [ ! -f tests/fat/fat16.img ]; then
+        echo "ok    sh: variables, redirections, a pipe, on /disk"
+    else
+        echo "FAIL  sh: variables, redirections, a pipe, on /disk"; fail=1
+    fi
     if [ -n "$edit_saved" ] || [ ! -f tests/fat/fat16.img ]; then
         echo "ok    edit (OCaml, Notty) saves a file on /disk"
     else

@@ -1023,3 +1023,23 @@ with `ESC E` (NEL), which the terminal ignored, and assumed that the
 alternate screen starts blank, as in real terminals. Both added, `edit`
 worked, and the loop closed: write a program in MyNOS, compile it with
 `ocamlc` in MyNOS, run it, find it again after a reboot.
+
+## 2026-11-16 — sh, and redirections without file descriptors
+
+A command shell needs redirections, and on Unix they work because a child
+inherits its parent's file descriptors. MyNOS processes inherit none: a
+descriptor of `libmynos` is an index into a table of the process, standing
+for a descriptor of a file service owned by that pid. Rather than adding
+descriptor passing to the kernel and the services, the redirection
+travels in the child's environment (`MYNOS_STDOUT=/disk/out.txt`, with
+`>>` to append), and `libmynos` opens the file at the first use of fd 0,
+1 or 2. It then rewrites the variable to append, so that the child's own
+children add to the file instead of truncating it. Pipes, without
+concurrent descriptors either, run their commands one after the other
+through a file in `/tmp`, as on MS-DOS: enough for `cat *.txt | cat > all`,
+not for a producer that never ends.
+
+One shell bug worth noting: the first version expanded variables while
+reading the line, so `X=5; echo $X` printed nothing and `$?` was always
+the status before the line. Words now keep their parts (quoted text,
+unquoted text, variables) and are expanded when their command runs.

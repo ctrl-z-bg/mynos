@@ -54,6 +54,7 @@ if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
   make -C third_party/kilo
   make -C third_party/notty
   make -C editor
+  make -C sh
   make -C init
   make -C services/tmpfs
   make -C services/ata

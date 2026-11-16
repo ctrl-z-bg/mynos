@@ -42,5 +42,9 @@ val edit : string -> unit
 (** Edit a file, full screen: Ctrl-S saves, Ctrl-Q quits, Ctrl-F finds,
     Ctrl-K cuts a line, Ctrl-U pastes it. *)
 
+val sh : unit -> unit
+(** The command shell (bash-like: ls, cd, cp, mv, programs by name,
+    redirections, pipes); its "exit" comes back here. *)
+
 val free : unit -> unit
 (** Print the free memory. *)

@@ -40,6 +40,7 @@ talking through IPC.
 | `shell/` | The shell: the OCaml toplevel (`shell.byte`) and module `Shell` (commands) |
 | `system/` | The system RAM disk: `init`, `init.rc`, services, the shell, interfaces, programs |
 | `editor/` | `edit`, the text editor, in OCaml on Notty |
+| `sh/` | `sh`, a bash-like command shell, in OCaml |
 | `third_party/` | kilo (C editor), Notty and uutf (OCaml terminal UI), with their licenses and MyNOS changes |
 | `mynos.mk` | Toolchain variables for user-space programs (`MYNOS_CC`, `MYNOS_LDFLAGS`) |
 
@@ -151,7 +152,19 @@ The shell is the OCaml 5.5 toplevel itself (`shell/main.ml` calls
 `compile`, `free`), which is opened at startup. **MyNOS is self-hosting
 for OCaml programs**: `edit "/disk/a.ml"` (a full-screen editor in OCaml,
 `editor/`, on the Notty library with a MyNOS backend), `compile`, `run`;
-the files stay on `/disk`. **Programs can be compiled inside MyNOS**: `ocamlc`
+the files stay on `/disk`.
+
+#### sh
+
+`sh` (`sh/sh.ml`) is a small bash-like command shell, next to the
+toplevel (`sh ();;` starts it, `exit` comes back; `ocaml` in it starts a
+toplevel): quotes, variables (expanded when each command runs), `;`, `&&`,
+`||`, `<`, `>`, `>>`, `|`, `*`/`?`, built-in file commands, programs
+found in `PATH` (`/disk/bin:/`, also as `NAME.byte`), scripts (`sh FILE`,
+`source`). MyNOS programs inherit no file descriptors, so a program's
+redirections travel in its environment (`MYNOS_STDIN`, `MYNOS_STDOUT`),
+which `libmynos` applies to fds 0-2; a pipe runs its commands one after
+the other through a file in `/tmp`. **Programs can be compiled inside MyNOS**: `ocamlc`
 runs from the RAM disk (`OCAMLLIB=/`), and `compile "/disk/a.ml"` makes
 `/disk/a.byte`, which may use `Mynos`. Typed lines come from the console service. Files written under
 `/tmp` can be run with `#use`.
@@ -336,6 +349,7 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | — | `mynos-core/kernel/threads.c` | Native MyNOS threads (`mynos_threadCreate`) share their creator's TLS: code that uses the C library should use pthreads. |
 | — | `mynos-lib/src/fileio.c` | `/` (memrofs) is read-only and flat, `/tmp` (tmpfs) flat and in memory; `/disk` (fatfs) has directories. `rename` within one service; paths up to 63 characters inside a service. |
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
+| — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently; the stdio of C programs (musl's direct system calls) is not redirected. |
 
 ### Not started
 
@@ -516,6 +530,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `Mynos.console_mode`; the terminal learned `ESC E` (Notty's newline)
   and a cleared alternate screen. Edit, compile and run without the host.
   Closed mynos-0do.3 and the epic mynos-0do.
+- **2026-11-16** — `sh`, a bash-like command shell in OCaml; redirections
+  of a program's standard input and output through its environment,
+  applied by libmynos; `Mynos.environment`. Closed mynos-z8v.
 - **2026-11-16** — The original website (mynos.sourceforge.net, from the
   Wayback Machine) archived as static files in `doc/website/`, with the
   2002-2004 news posts and the 2002 and 2004 test packages. Closed

@@ -14,6 +14,7 @@ let help () =
     \  rm \"/tmp/a.ml\";;            remove a file\n\
     \  run \"hello.byte\" [];;       start a program and wait for it\n\
     \  edit \"/disk/a.ml\";;         edit a file (full screen)\n\
+    \  sh ();;                     a command shell (ls, cp, mv...; exit: back)\n\
     \  compile \"/disk/a.ml\";;      compile it into /disk/a.byte (ocamlc)\n\
     \  free ();;                   free memory\n\
      The MyNOS system calls are in module Mynos (#show Mynos;;).\n\
@@ -78,6 +79,8 @@ let compile ?output src =
   run "ocamlc.byte" [ "-use-prims"; "/primitives"; "mynos.cma"; "-o"; out; src ]
 
 let edit file = ignore (run "edit.byte" [ file ])
+
+let sh () = ignore (run "sh.byte" [])
 
 let free () =
   let pages = (Mynos.stats ()).Mynos.free_pages in

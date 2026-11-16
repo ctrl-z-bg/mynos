@@ -376,3 +376,19 @@ CAMLprim value caml_mynos_console_mode(value canon, value echo, value vmin,
 		    Int_val(vtime));
   return Val_unit;
 }
+
+/* ---- environment ---- */
+
+extern char ** environ;
+
+/* our environment, as "NAME=value" strings */
+CAMLprim value caml_mynos_environment(value unit)
+{
+  CAMLparam1(unit);
+  CAMLlocal1(r);
+  int n = 0, i;
+  while (environ && environ[n]) n++;
+  r = caml_alloc(n, 0);
+  for (i = 0; i < n; i++) Store_field(r, i, caml_copy_string(environ[i]));
+  CAMLreturn(r);
+}

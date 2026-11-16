@@ -195,6 +195,8 @@ int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
 #define IOCTL_REQ int
 #endif
 
+static int std_fd(int fd);
+
 int ioctl(int fd, IOCTL_REQ req, ...)
 {
   va_list ap;
@@ -202,6 +204,10 @@ int ioctl(int fd, IOCTL_REQ req, ...)
   va_start(ap, req);
   arg = va_arg(ap, void *);
   va_end(ap);
+  if (fd >= 0 && fd <= 2 && std_fd(fd) != fd) {   /* redirected to a file */
+    errno = ENOTTY;
+    return -1;
+  }
   if (fd >= 0 && fd <= 2 && service_port(CONSOLE_SERVICE, &console_cache) >= 0) {
     switch (req) {
     case TCGETS:
@@ -435,6 +441,66 @@ static int name_call(const char * path, int type)
   return 0;
 }
 
+/* ---- redirections of fds 0-2 ----
+   A shell redirects a program's standard input or output through its
+   environment: MYNOS_STDIN=path, MYNOS_STDOUT=path (">>path" appends),
+   MYNOS_STDERR=path. The first use of fd 0, 1 or 2 opens the file, and the
+   fd stands for it from then on. The variable is then rewritten to append,
+   so that the program's own children add to the file. (C programs' stdio
+   writes with direct system calls and is not redirected.) */
+
+static int redirected[3] = { -1, -1, -1 };
+static int redir_ready = 0;
+
+int open(const char * path, int flags, ...);
+int close(int fd);
+
+static void redir_close(void)
+{
+  int i;
+  for (i = 0; i < 3; i++)
+    if (redirected[i] >= 0) { close(redirected[i]); redirected[i] = -1; }
+}
+
+static void redir_init(void)
+{
+  static const char * vars[3] = { "MYNOS_STDIN", "MYNOS_STDOUT", "MYNOS_STDERR" };
+  int i, any = 0;
+  if (redir_ready) return;
+  redir_ready = 1;
+  for (i = 0; i < 3; i++) {
+    const char * v = getenv(vars[i]);
+    int append;
+    if (!v || !v[0]) continue;
+    append = v[0] == '>' && v[1] == '>';
+    if (append) v += 2;
+    if (i == 0)
+      redirected[0] = open(v, O_RDONLY);
+    else
+      redirected[i] = open(v, O_WRONLY | O_CREAT |
+			   (append ? O_APPEND : O_TRUNC), 0644);
+    if (i > 0 && redirected[i] >= 0 && !append) {
+      char * a = malloc(strlen(v) + 3);
+      if (a) {
+	strcpy(a, ">>");
+	strcat(a, v);
+	setenv(vars[i], a, 1);       /* our children add to it */
+	free(a);
+      }
+    }
+    if (redirected[i] >= 0) any = 1;
+  }
+  if (any) atexit(redir_close);
+}
+
+/* fd, or the file standing for it when it is a redirected 0, 1 or 2 */
+static int std_fd(int fd)
+{
+  if (fd < 0 || fd > 2) return fd;
+  redir_init();
+  return redirected[fd] >= 0 ? redirected[fd] : fd;
+}
+
 /* ---- the replaced functions ---- */
 
 int open(const char * path, int flags, ...)
@@ -494,7 +560,14 @@ int close(int fd)
 {
   struct fs_req req;
   struct fs_reply r;
-  int slot = file_slot(fd);
+  int slot;
+
+  if (fd >= 0 && fd <= 2 && std_fd(fd) != fd) {
+    int f = redirected[fd];
+    redirected[fd] = -1;
+    return close(f);
+  }
+  slot = file_slot(fd);
 
   if (slot < 0) return result(sys3(6 /* close */, fd, 0, 0));
   files[slot].used = 0;
@@ -547,6 +620,7 @@ ssize_t read(int fd, void * buf, size_t count)
   size_t done = 0;
   int slot;
 
+  fd = std_fd(fd);
   if (fd == 0 && service_port(CONSOLE_SERVICE, &console_cache) >= 0)
     return console_read(console_cache.port, buf, count);
   slot = file_slot(fd);
@@ -596,7 +670,10 @@ static ssize_t fs_write(int slot, const char * buf, size_t count)
 ssize_t write(int fd, const void * buf, size_t count)
 {
   size_t done = 0;
-  int slot = file_slot(fd);
+  int slot;
+
+  fd = std_fd(fd);
+  slot = file_slot(fd);
 
   if (slot < 0) return result(sys3(4 /* write */, fd, (long)buf, count));
   while (done < count) {
@@ -612,7 +689,10 @@ off_t lseek(int fd, off_t offset, int whence)
 {
   struct fs_req req;
   struct fs_reply r;
-  int slot = file_slot(fd);
+  int slot;
+
+  fd = std_fd(fd);
+  slot = file_slot(fd);
 
   if (slot < 0) return result(sys3(19 /* lseek */, fd, (long)offset, whence));
   memset(&req, 0, sizeof(req));
@@ -693,7 +773,9 @@ struct kstat64 {
 
 int fstat(int fd, struct stat * st)
 {
-  int slot = file_slot(fd);
+  int slot;
+  fd = std_fd(fd);
+  slot = file_slot(fd);
   memset(st, 0, sizeof(*st));
   if (slot < 0) {
     struct kstat64 k;

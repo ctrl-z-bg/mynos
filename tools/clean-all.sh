@@ -23,6 +23,7 @@ make -C init clean
 make -C third_party/kilo clean
 make -C third_party/notty clean
 make -C editor clean
+make -C sh clean
 make -C services/tmpfs clean
 make -C services/ata clean
 make -C tests/storage clean

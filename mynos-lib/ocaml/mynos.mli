@@ -90,6 +90,12 @@ val spawn : ?env:string array -> string -> string array -> int
     started through the runtime:
     [spawn "ocamlrun" [| "ocamlrun"; "prog.byte"; "arg" |]]. *)
 
+val environment : unit -> string array
+(** Our environment, as ["NAME=value"] strings. A child gets it unless
+    {!spawn} is given another one; [PWD] is set to the current directory,
+    and [MYNOS_STDIN], [MYNOS_STDOUT] ([">>path"] to append) and
+    [MYNOS_STDERR] redirect its standard input and output to files. *)
+
 val wait : int -> status
 (** Wait for the end of this child process. *)
 
