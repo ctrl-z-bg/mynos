@@ -9,7 +9,8 @@ This document has two parts. **Architecture** describes how the system is
 built and changes rarely. **Current state** describes what works, what
 doesn't, and the known shortcuts. It changes as work progresses.
 Actionable work is tracked in beads (`bd list`); this document refers to
-issues by ID instead of keeping its own TODO lists.
+issues by ID instead of keeping its own TODO lists. The story of what was
+found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
 Last updated: 2026-11-16
 
@@ -126,6 +127,9 @@ on screen and sent to the serial port.
     behaviour with the original.
   - Both include OCaml 3.06 built from source on sarge, to produce bytecode
     for the 3.06 runtime.
+- **Tests.** `tools/run-tests.sh` boots the whole system headless and checks
+  the console output, which the kernel mirrors to COM2. `tests/abi` checks
+  the system call fixes. Both toolchains pass.
 - **Booting.** `tools/run-qemu.sh` uses QEMU's multiboot loader, no GRUB.
   Modules are passed in order; module 1 must be the OCaml bytecode.
   `tools/run-demo.sh` passes the standard set. The kernel is built with `-g`,
@@ -148,6 +152,12 @@ on screen and sent to the serial port.
   - `pqNElem` called itself forever; `main.c` set `prev` twice instead of
     `next` and `prev`; `_insertBlock` was a non-static `inline` (no external
     definition in C99).
+  - `keyboardd` tracked the Alt key only when no other modifier was held
+    (`!` vs `&` precedence).
+  - `semFree` shared syscall number 9 with `semInit` in the kernel, and the
+    library called 10 (`driverRegister`); it is now 13 on both sides.
+  - Unknown system calls panicked the kernel; now they fail with `-ENOSYS`
+    (Linux) or `MYNOS_ERR_INVALID` (native).
   - `memrofs/tool/createDisk` is a host tool but was built like a MyNOS
     program; now built with plain gcc.
 - **Changes for the modern toolchain:**
@@ -161,7 +171,8 @@ on screen and sent to the serial port.
     minimally (mynos-51c).
   - Small C fixes: a K&R parameter, missing `<unistd.h>`, `errno`
     declaration, a `return` without value.
-  - Remaining warnings: mynos-j17.
+  - Remaining warnings are expected: RWX segments (from `-N`) and a few in
+    the unchanged OCaml 3.06 runtime sources.
 - `mynos-core/boot/` (floppy bootloader) does not assemble with nasm 2.x
   (mynos-s96); the build uses `mynos-core/kernel` directly.
 
@@ -171,7 +182,6 @@ on screen and sent to the serial port.
 |---|---|---|
 | mynos-nxa | `mynos-core/kernel/linux_syscalls.c` | `open()` always returns 5; `read()` copies from GRUB module 1 whatever the fd. memrofs is not used by the runtime. |
 | mynos-pg9 | `mynos-byterun/src/floats.c` | `frexp()`/`modf()` return 1.0. |
-| mynos-jwl | `mynos-core/kernel/syscalls.c` | Syscall id 9 is used for both semInit and semFree, so semFree is never reached. |
 
 ### Not started
 
@@ -236,3 +246,7 @@ Side task: archive the old SourceForge site (mynos-db2).
   the old compilers hid, added `set_thread_area`, `mmap2` and a Linux
   initial stack. `tools/build-all.sh` now defaults to `dev`. Closed
   mynos-v8s; opened mynos-j17, mynos-51c.
+- **2026-11-16** — Fixed the Alt key, `semFree` numbering and kernel panics on
+  unknown system calls; kernel console mirrored to COM2; added
+  `tools/run-tests.sh`, `tests/abi` and `doc/JOURNAL.md`. Closed mynos-jwl,
+  mynos-j17.

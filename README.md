@@ -20,6 +20,7 @@ high-level language rather than in C.
 | [`services/`](services/) | User-space servers: name registry, keyboard and serial drivers, `memrofs` read-only RAM filesystem |
 | [`mynos-byterun/`](mynos-byterun/) | The OCaml 3.06 bytecode runtime (`ocamlrun`), patched to run on MyNOS |
 | [`doc/STATUS.md`](doc/STATUS.md) | Architecture overview and current state of the project |
+| [`doc/JOURNAL.md`](doc/JOURNAL.md) | Engineering journal: what was found while reviving the code, bug by bug |
 
 Low-level design notes from 2002 (memory layout, interrupts, startup) are in
 [`mynos-core/doc/MyNOS-note.txt`](mynos-core/doc/MyNOS-note.txt).
@@ -54,6 +55,7 @@ project (gcc 4.3, Debian lenny i386), kept to compare behaviour with the
 original. Pass the name to the scripts, e.g. `tools/build-all.sh legacy`;
 run `tools/clean-all.sh` first when switching between them.
 
+`tools/run-tests.sh` boots the system headless and checks its output.
 `tools/in-container.sh dev` opens a shell in the build environment, or runs
 the command given after it. `tools/run-qemu.sh` boots the kernel with any
 list of modules (module 1 is the OCaml bytecode); see the scripts for

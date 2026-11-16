@@ -9,6 +9,7 @@
 #   services/...                     registry, keyboardd, seriald, memrofsd
 #   mynos-byterun/src/ocamlrun       the OCaml bytecode runtime
 #   tests/hello/hello.byte           OCaml test program (ocamlc 3.06)
+#   tests/abi/abi                    system call checks
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 set -eu
 
@@ -21,6 +22,7 @@ make -C mynos-core/kernel
 make -C mynos-lib
 make -C services
 make -C mynos-byterun/src
+make -C tests/abi
 (cd tests/hello && ocamlc -o hello.byte hello.ml)
 (cd tests/ramdisk && ../../services/fs/memrofs/tool/createDisk AUTOEXEC.BAT)
 '

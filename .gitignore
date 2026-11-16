@@ -35,3 +35,4 @@ services/serial/seriald
 *.cm[io]
 *.byte
 *.dsk
+tests/abi/abi
