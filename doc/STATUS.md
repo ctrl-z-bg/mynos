@@ -229,7 +229,8 @@ Planned work, in order. Details live in the beads issues.
 3. **A demonstrable OS with a terminal** (mynos-a2j): OCaml bindings for the
    MyNOS API, starting bytecode programs from user space, file I/O through
    memrofs, a console service, and the OCaml toplevel as the shell.
-4. Later: networking (mynos-4f6), a GUI toolkit (mynos-9lr), distinctive
+4. Later: real external storage, a disk driver and a filesystem as services
+   (mynos-rf4); networking (mynos-4f6), a GUI toolkit (mynos-9lr), distinctive
    applications (mynos-3h1).
 
 Side task: archive the old SourceForge site (mynos-db2).
