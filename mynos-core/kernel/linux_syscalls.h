@@ -70,6 +70,8 @@ struct iovec {
 int _linux_syscall_writev(int fd, const struct iovec * iov, int iovcnt);
 int _linux_syscall_mprotect(void * addr, size_t len, int prot);
 int _linux_syscall_nosignals();
+int _linux_syscall_kill(int pid, int sig);
+int _linux_syscall_tgkill(int tgid, int tid, int sig);
 int _linux_syscall_set_tid_address(int * tidptr);
 
 /* load the TLS segment of thread t into the GDT_TLS_INDEX descriptor */

@@ -151,13 +151,6 @@ void mynos_main(multiboot_info_t *boot_info) {
     modinfo[i].start = (uint32_t*)module[i].mod_start;
     modinfo[i].len = module[i].mod_end - module[i].mod_start;
     mem_reserveAtBoot(module[i].mod_start, modinfo[i].len);
-#ifdef RAMDISK
-    if (!kmemcmp((uint32_t*)modinfo[i].start, ".RAMDISK", 8)) {
-      ramdisk = (void *)modinfo[i].start;
-      ramdisk_len = modinfo[i].len;
-      ramdisk_present = i;
-    }
-#endif
   }
 
 
@@ -166,6 +159,16 @@ void mynos_main(multiboot_info_t *boot_info) {
   clear_screen();
 
   init_memory();
+
+#ifdef RAMDISK
+  /* modules above 4MB are readable only after init_memory has mapped them */
+  for (i = 0; i < nmodules; i++)
+    if (!kmemcmp((uint32_t*)modinfo[i].start, ".RAMDISK", 8)) {
+      ramdisk = (void *)modinfo[i].start;
+      ramdisk_len = modinfo[i].len;
+      ramdisk_present = i;
+    }
+#endif
 
   initProcessTable();
   initScheduler();

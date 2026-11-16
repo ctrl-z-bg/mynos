@@ -50,23 +50,23 @@ void init_idt();
 
 void int_null();
 
-void _int0();
-void _int1();
+void _int0(uint32_t cs);
+void _int1(uint32_t cs);
 void _int2();
-void _int3();
-void _int4();
-void _int5();
-void _int6();
+void _int3(uint32_t cs);
+void _int4(uint32_t cs);
+void _int5(uint32_t cs);
+void _int6(uint32_t cs);
 void _int7();
 void _int8();
 void _int9();
-void _int10();
-void _int11();
-void _int12();
-void _int13();
+void _int10(uint32_t eip, uint32_t cs);
+void _int11(uint32_t eip, uint32_t cs);
+void _int12(uint32_t eip, uint32_t cs);
+void _int13(uint32_t eip, uint32_t cs);
 void _int14(uint32_t addr, uint32_t errcode);
 extern void _page_fault_handler(uint32_t addr, uint32_t errcode);
 void _int15();
-void _int16();
+void _int16(uint32_t cs);
 
 #endif

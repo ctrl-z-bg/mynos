@@ -99,6 +99,12 @@ __asm__ (".pushsection .text\n" \
 	 "   je .linux_set_tid_address\n"\
 	 "   cmpl $19, %eax\n"\
 	 "   je .linux_lseek\n"\
+	 "   cmpl $37, %eax\n"\
+	 "   je .linux_kill\n"\
+	 "   cmpl $238, %eax\n"\
+	 "   je .linux_tkill\n"\
+	 "   cmpl $270, %eax\n"\
+	 "   je .linux_tgkill\n"\
 	 "   cmpl $174, %eax\n"\
 	 "   je .linux_nosignals\n"\
 	 "   cmpl $175, %eax\n"\
@@ -169,6 +175,15 @@ __asm__ (".pushsection .text\n" \
 	 ".linux_set_tid_address:\n"\
 	 "   call _linux_syscall_set_tid_address\n"\
 	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_kill:\n"\
+	 "   call _linux_syscall_kill\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_tkill:\n"\
+	 "   call _linux_syscall_kill\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_tgkill:\n"\
+	 "   call _linux_syscall_tgkill\n"\
+	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_nosignals:\n"\
 	 "   call _linux_syscall_nosignals\n"\
 	 "   jmp .exit_linux_syscall\n"\
@@ -201,6 +216,29 @@ int _linux_syscall_writev(int fd, const struct iovec * iov, int iovcnt) {
     total += n;
   }
   return total;
+}
+
+/* kill (37), tkill (238), tgkill (270). No signal delivery yet: a signal a
+   process sends to itself (what abort() and raise() do) terminates it, as
+   the default action of a fatal signal would; signal 0 only checks that
+   the target exists. Signals to other processes are not supported. */
+int _linux_syscall_kill(int pid, int sig) {
+  if (pid != 0 && pid != (int)currProcess)
+    return -1; /* -EPERM */
+  if (sig == 0)
+    return 0;
+  printk("process ");
+  print_ulong(currProcess);
+  printk(" killed by signal ");
+  print_int(sig);
+  print_char('\n');
+  killProcess();
+  sched();         /* switches to another process, never returns */
+  return 0;
+}
+
+int _linux_syscall_tgkill(int tgid, int tid, int sig) {
+  return _linux_syscall_kill(tid, sig);
 }
 
 /* rt_sigaction (174), rt_sigprocmask (175), sigaltstack (186): MyNOS
@@ -619,6 +657,13 @@ int _linux_syscall_fork() {
   /* this process was just forked, restore some register */
   if (currThread->justForked) {
     currThread->justForked = 0;
+    /* the child did not come back through switchTo's segment pops: %gs
+       still caches the previous thread's descriptor. Reload it, so that its
+       TLS (set_thread_area, copied from the parent) is in effect. */
+    if (currThread->tls_base || currThread->tls_limit)
+      asm volatile("movw %w0, %%gs" :: "r"((GDT_TLS_INDEX << 3) | 3));
+    else
+      asm volatile("movw %w0, %%gs" :: "r"(GDT_USER_DATA_SEL + 3));
     asm volatile("movl %0, %%ebp"::"m"(currThread->ebp));
   }
 

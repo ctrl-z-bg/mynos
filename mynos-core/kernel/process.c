@@ -363,6 +363,12 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
 #ifdef RAMDISK
   if (ramdisk_present) {
+    /* the RAM disk takes a whole page directory entry (4MB) right after the
+       program: record it in the linear space map, or mmap could hand out
+       addresses overlapping it */
+    __lmt_forceAllocation(&(desc->lmemmap),
+			  (_asm_last_kernel_page_dir_entry_used + 2) * PDPT_ENTRIES,
+			  PDPT_ENTRIES);
     if ((currPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
     kbzero(currPT, PAGE_SIZE);
     newPD[_asm_last_kernel_page_dir_entry_used + 2] = 
@@ -434,7 +440,13 @@ void initStack(uint32_t s, tss_t * tss) {
   stack->ds = GDT_USER_DATA_SEL + 3;
   stack->es = GDT_USER_DATA_SEL + 3;
   stack->fs = GDT_USER_DATA_SEL + 3;
-  stack->gs = GDT_USER_DATA_SEL + 3;
+  /* a thread created by a thread that has a TLS segment (set_thread_area)
+     starts with that segment too: the creator's TLS block is shared until
+     threads get their own (mynos-51c, mynos-l9h) */
+  if (tss->tls_base || tss->tls_limit)
+    stack->gs = (GDT_TLS_INDEX << 3) | 3;
+  else
+    stack->gs = GDT_USER_DATA_SEL + 3;
   
   tss->esp = tss->esp0;
   tss->eip = (uint32_t)startThread;

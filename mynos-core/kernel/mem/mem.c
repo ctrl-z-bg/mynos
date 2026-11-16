@@ -25,6 +25,7 @@
 #include "video.h"
 #include "kutils.h"
 #include "process.h"
+#include "sched.h"
 #include "physicalmem.h"
 
 byte_t * __memory_bitmap;
@@ -454,6 +455,17 @@ static void __allocateOnUse(uint32_t * pte, uint32_t addr) {
 }
 
 //#define DEBUG
+/* an invalid access from user mode terminates the process (SIGSEGV) */
+static void __userSegfault(uint32_t addr) {
+  printk("process ");
+  print_ulong(currProcess);
+  printk(" killed: invalid memory access at ");
+  print_ulong_hex(addr);
+  print_char('\n');
+  killProcess();
+  sched();         /* switches to another process, never returns */
+}
+
 void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   uint32_t * pte;
 
@@ -489,8 +501,10 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
 
   /* check if the page table is allocated */
   if ((*(uint32_t*)__GET_PAGE_DIR_ENTRY(__ADDRESS_PD_INDEX(addr)) &
-       PF_PRESENT) == 0)
+       PF_PRESENT) == 0) {
+    if (errcode & 4) __userSegfault(addr);
     KPANIC("page fault (?)");
+  }
 
   pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), 
 					  __ADDRESS_PT_INDEX(addr));
@@ -502,8 +516,10 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
 #endif
 
   if (!((*pte) & PF_LOGICAL_PRESENT) &&
-      !((*pte) & PF_COW)) // not allocated & not cow
+      !((*pte) & PF_COW)) { // not allocated & not cow
+    if (errcode & 4) __userSegfault(addr);
     KPANIC("page fault");
+  }
   if (__number_of_free_physical_pages == 0)
     KPANIC("full memory!");
 

@@ -27,6 +27,7 @@
 #include "irq.h"
 
 #include "process.h"
+#include "sched.h"
 
 extern void int_null();
 
@@ -106,14 +107,43 @@ asm(".pushsection .text\n" ".globl int_null        \n"
     "   iret                \n"	/* Exit interrupt                   */
     ".popsection\n");
 
-void _int0() {
-  printk("int0: Divide Error\n");
+/*
+ * CPU exceptions. The handlers are installed directly in the IDT (no
+ * wrapper), so on entry the stack holds what the CPU pushed: for exceptions
+ * without an error code, [eip, cs, ...], which a C function sees as its
+ * return address and first argument; with an error code, [error, eip, cs]:
+ * eip and cs are its first and second arguments.
+ *
+ * An exception raised in user mode (cs & 3) terminates that process, as a
+ * fatal signal would on Unix. An exception in the kernel stops the system.
+ */
+static void exception(const char * what, uint32_t eip, uint32_t cs) {
+  if ((cs & 3) == 3) {
+    printk("process ");
+    print_ulong(currProcess);
+    printk(" killed: ");
+    printk((char *)what);
+    printk(" at ");
+    print_ulong_hex(eip);
+    print_char('\n');
+    killProcess();
+    sched();         /* switches to another process, never returns */
+  }
+  printk((char *)what);
+  printk(" in the kernel at ");
+  print_ulong_hex(eip);
+  printk(" (process ");
+  print_ulong(currProcess);
+  printk(")\n");
   while (1);
 }
 
-void _int1() {
-  printk("int1: Debug exception\n");
-  while (1);
+void _int0(uint32_t cs) {
+  exception("int0: Divide Error", (uint32_t)__builtin_return_address(0), cs);
+}
+
+void _int1(uint32_t cs) {
+  exception("int1: Debug exception", (uint32_t)__builtin_return_address(0), cs);
 }
 
 void _int2() {
@@ -121,28 +151,20 @@ void _int2() {
   while (1);
 }
 
-void _int3() {
-  printk("int3: Breakpoint\n");
-  while (1);
+void _int3(uint32_t cs) {
+  exception("int3: Breakpoint", (uint32_t)__builtin_return_address(0), cs);
 }
 
-void _int4() {
-  printk("int4: Overflow\n");
-  while (1);
+void _int4(uint32_t cs) {
+  exception("int4: Overflow", (uint32_t)__builtin_return_address(0), cs);
 }
 
-void _int5() {
-  printk("int 5: Bounds check\n");
-  while (1);
+void _int5(uint32_t cs) {
+  exception("int5: Bounds check", (uint32_t)__builtin_return_address(0), cs);
 }
 
-void _int6() {
-  printk("int6: Invalid opcode (process ");
-  print_ulong(currProcess);
-  printk(" thread ");
-  print_ulong(currThread->threadID);
-  printk(")\n");
-  while (1);
+void _int6(uint32_t cs) {
+  exception("int6: Invalid opcode", (uint32_t)__builtin_return_address(0), cs);
 }
 
 /*
@@ -162,24 +184,20 @@ void _int9() {
   while (1);
 }
 
-void _int10() {
-  printk("int10: Invalid TSS\n");
-  while (1);
+void _int10(uint32_t eip, uint32_t cs) {
+  exception("int10: Invalid TSS", eip, cs);
 }
 
-void _int11() {
-  printk("int11: Segment not present\n");
-  while (1);
+void _int11(uint32_t eip, uint32_t cs) {
+  exception("int11: Segment not present", eip, cs);
 }
 
-void _int12() {
-  printk("int12: Stack exception\n");
-  while (1);
+void _int12(uint32_t eip, uint32_t cs) {
+  exception("int12: Stack exception", eip, cs);
 }
 
-void _int13() {
-  printk("int13: General Protection\n");
-  while (1);
+void _int13(uint32_t eip, uint32_t cs) {
+  exception("int13: General Protection", eip, cs);
 }
 
 /*
@@ -194,7 +212,6 @@ void _int15() {
   while (1);
 }
 
-void _int16() {
-  printk("int16: Coprocessor error\n");
-  while (1);
+void _int16(uint32_t cs) {
+  exception("int16: Coprocessor error", (uint32_t)__builtin_return_address(0), cs);
 }
