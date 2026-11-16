@@ -93,7 +93,9 @@ All services are linked statically against `libmynos` and placed at
   It replaces `keyboard` in the demo when built.
 - `fs/memrofs`: a read-only in-memory filesystem. GRUB loads it as a module
   starting with the `.RAMDISK` magic. The image is built on the host with
-  `fs/memrofs/tool/createDisk.c`.
+  `fs/memrofs/tool/createDisk.c`. Protocol (2026):
+  `mynos-lib/include/mynos_memrofs.h`. Programs reach it through `open`,
+  `read`, `lseek`, `stat`, ... of `mynos-lib/src/fileio.c`.
 
 #### mynos-runtime (OCaml 5.5)
 
@@ -121,8 +123,9 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
    services registry.
 3. Every module that is an ELF file is started as a process: the services and
    `ocamlrun`.
-4. **Module 1 is treated as the OCaml bytecode to execute.** When `ocamlrun`
-   opens and reads its "file", the Linux `read` reads from that module.
+4. `ocamlrun` runs `init.byte` from the RAM disk if there is one (through
+   memrofs). Otherwise, as originally, **module 1 is treated as the OCaml
+   bytecode to execute**: the kernel serves it as the single file it knows.
 5. After that, the kernel runs the idle loop.
 
 ---
@@ -182,6 +185,9 @@ on screen and sent to the serial port.
     library called 10 (`driverRegister`); it is now 13 on both sides.
   - Unknown system calls panicked the kernel; now they fail with `-ENOSYS`
     (Linux) or `MYNOS_ERR_INVALID` (native).
+  - The kernel heap allocator (`dynalloc.c`, 2003) could place a block
+    across the end of a heap page into a page owned by something else (a
+    process's page directory), and freed pages still in use.
   - The RAM size probe in `start.asm` (2002) wrote `0x12345678` into the
     last dword of every megabyte without restoring it, corrupting modules
     that crossed a megabyte boundary. The size now comes from multiboot.
@@ -216,7 +222,6 @@ on screen and sent to the serial port.
 
 | Issue | Where | Problem |
 |---|---|---|
-| mynos-nxa | `mynos-core/kernel/linux_syscalls.c` | `open()` always returns 5; `read()` copies from GRUB module 1 whatever the fd. memrofs is not used by the runtime. |
 | mynos-pg9 | `mynos-byterun/src/floats.c` | `frexp()`/`modf()` return 1.0 (legacy 3.06 runtime only; the 5.5 runtime uses musl's libm). |
 
 ### Not started
@@ -310,3 +315,7 @@ Side task: archive the old SourceForge site (mynos-db2).
   service `consoled` and the `read` replacement in `libmynos`: OCaml's
   `read_line` reads the keyboard through IPC. Tests type keys through QEMU's
   monitor. Closed mynos-a2j.3.
+- **2026-11-16** — Files: `libmynos` file functions over memrofs, new
+  memrofs protocol, `ocamlrun` runs `init.byte` from the RAM disk. Fixed two
+  bugs of the kernel heap allocator that corrupted a page directory. Closed
+  mynos-nxa.

@@ -515,3 +515,71 @@ Two design points:
 `tools/run-tests.sh` now types on the keyboard: it opens QEMU's monitor and
 sends key presses (`sendkey h`, `sendkey shift-o`, `sendkey backspace`,
 `sendkey ctrl-d`), then checks that the OCaml program saw the right lines.
+
+---
+
+## 2026-11-16 — Files, and a kernel heap that wrote into its neighbours
+
+### Files through memrofs
+
+`libmynos` now also replaces `open`, `close`, `read`, `lseek`, `fstat`,
+`stat` and `lstat`: paths are opened on memrofs over IPC and get
+descriptors from 20 up; the rest still goes to the kernel. `read` on such
+a descriptor loops until it has everything asked for, like a regular file
+on Linux: the OCaml runtime reads whole bytecode sections in one call and
+treats a short read as `truncated bytecode file`.
+
+memrofs got a new protocol (`mynos-lib/include/mynos_memrofs.h`), because
+the 2002 one had several problems: open files were owned by the client's
+*channel number* (reads worked only because channel numbers get reused),
+its structures used `off_t`, whose size differs between dietlibc and musl,
+`LSEEK` was an empty case, `READ` subtracted an offset from a pointer and
+read past the end of short files, and data was sent straight from the RAM
+disk pages, which a client's `munmap` could release to the allocator.
+
+`ocamlrun` now runs `init.byte` from the RAM disk when it exists, so a
+system can boot with no bytecode module at all; without it the kernel's
+module 1 is still used. `tests/files` reads files with `open_in`,
+`input_line`, `seek_in`, `in_channel_length` and `Sys.file_exists`.
+
+### The page directory that got overwritten
+
+**Symptom.** As soon as the runtime read its bytecode in 16 KB chunks, the
+machine rebooted: a page fault in `switchTo`, then a double fault.
+
+**Diagnosis**, step by step with gdb:
+1. The fault wrote to the outgoing thread's `tss`, a kernel heap address,
+   right after loading the incoming thread's page directory. Logging every
+   context switch showed the incoming process was `ocamlrun`, whose page
+   directory had worked a few switches earlier.
+2. A conditional breakpoint could not even read that page directory
+   through its recursive mapping: the page was no longer a page directory.
+3. A watchpoint on the kernel's shared page table entry for the page never
+   fired, so the mapping was intact: the *contents* of the page changed.
+4. Watchpoints on the page directory itself, through the kernel address it
+   had when `spawnProcess` allocated it, caught the writer:
+   `_insertBlock`, inside `kmalloc`.
+
+**Cause.** Two bugs in the kernel heap allocator (`mem/dynalloc.c`, 2003):
+- To place a block in the gap between two heap blocks, it treated any page
+  within reach as heap memory if the block spanned fewer than three pages.
+  But kernel pages are also handed out by `__OS_askPages` for other uses,
+  such as page directories, interleaved with heap pages. A 40-byte block
+  crossing the end of a heap page wrote its header into the next page:
+  `ocamlrun`'s page directory.
+- When freeing a block it computed the first page it could release, then
+  released from the block's first page anyway, possibly freeing a page
+  still holding the previous block.
+Larger IPC messages made the kernel allocate more often, which made the
+first bug hit.
+
+**Fix.** A block may only use the page where the previous block ends and
+the page where the next one starts; anything else is requested from the
+page allocator, which refuses pages that are taken. Free from the right
+page.
+
+**Lessons.**
+- When memory changes but its mapping does not, watch the memory, through
+  any address that reaches it.
+- Allocators that share an address space must agree on who owns each
+  page; "adjacent to mine, so mine" is not a rule.
