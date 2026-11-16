@@ -241,7 +241,8 @@ CAMLprim value caml_mynos_spawn(value path, value argv, value env)
   char ** a = c_strings(argv);
   char ** e = c_strings(env);
   caml_enter_blocking_section();
-  ret = mynos_spawn(p, a, e);
+  /* no environment given: the child gets ours */
+  ret = mynos_spawn(p, a, Wosize_val(env) ? e : NULL);
   caml_leave_blocking_section();
   caml_stat_free(p);
   free_strings(a);

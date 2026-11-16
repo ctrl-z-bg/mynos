@@ -141,6 +141,8 @@ static ssize_t console_read(int port, void * buf, size_t count)
 
 /* ---- file services ---- */
 
+int stat(const char * path, struct stat * st);
+
 enum { MEMROFS, TMPFS, FATFS, NSERVICES };
 static const char * service_name[NSERVICES] =
   { MEMROFS_SERVICE, TMPFS_SERVICE, FATFS_SERVICE };
@@ -181,17 +183,89 @@ static int clean_path(const char * path, char * out, int size)
   return 0;
 }
 
+/* ---- the current directory ---- */
+
+/* the current directory, absolute and clean ("/", "/disk/src"...). A
+   process starts in the directory named by PWD in its environment, which
+   mynos_spawn sets to its parent's. */
+#define CWD_MAX (3 * FS_NAMEMAX)
+static char cwd[CWD_MAX] = "/";
+static int cwd_ready = 0;
+
+static void cwd_init(void)
+{
+  const char * pwd;
+  char clean[CWD_MAX];
+  if (cwd_ready) return;
+  cwd_ready = 1;
+  pwd = getenv("PWD");
+  if (pwd && pwd[0] == '/' && clean_path(pwd, clean, sizeof(clean)) == 0) {
+    cwd[0] = '/';
+    strcpy(cwd + 1, clean);
+  }
+}
+
+const char * mynos_cwd(void)
+{
+  cwd_init();
+  return cwd;
+}
+
+/* a path made absolute (against the current directory) and clean, without
+   its leading "/"; -1 (errno set) if too long */
+static int absolute(const char * path, char * out, int size)
+{
+  char full[2 * CWD_MAX];
+  if (path[0] != '/') {
+    int n, m = strlen(path);
+    cwd_init();
+    n = strlen(cwd);
+    if (n + 1 + m >= (int)sizeof(full)) { errno = ENAMETOOLONG; return -1; }
+    memcpy(full, cwd, n);
+    full[n] = '/';
+    memcpy(full + n + 1, path, m + 1);
+    path = full;
+  }
+  if (clean_path(path, out, size) < 0) { errno = ENAMETOOLONG; return -1; }
+  return 0;
+}
+
+char * getcwd(char * buf, size_t size)
+{
+  int n;
+  cwd_init();
+  n = strlen(cwd) + 1;
+  if (!buf) {
+    if (size == 0) size = n;
+    if ((buf = malloc(size)) == NULL) { errno = ENOMEM; return NULL; }
+  }
+  if ((int)size < n) { errno = ERANGE; return NULL; }
+  memcpy(buf, cwd, n);
+  return buf;
+}
+
+int chdir(const char * path)
+{
+  char clean[CWD_MAX];
+  struct stat st;
+  if (absolute(path, clean, sizeof(clean)) < 0) return -1;
+  if (stat(path, &st) < 0) return -1;
+  if (!S_ISDIR(st.st_mode)) { errno = ENOTDIR; return -1; }
+  cwd[0] = '/';
+  strcpy(cwd + 1, clean);
+  cwd_ready = 1;
+  return 0;
+}
+
 /* where a path lives: the service, and the path inside it, in name
-   (FS_NAMEMAX bytes; "" for its root). -1 (errno set) if too long. */
+   (FS_NAMEMAX bytes; "" for its root). A relative path starts at the
+   current directory. -1 (errno set) if too long. */
 static int resolve(const char * path, char * name)
 {
-  char clean[2 * FS_NAMEMAX];
+  char clean[CWD_MAX];
   int s;
 
-  if (clean_path(path, clean, sizeof(clean)) < 0) {
-    errno = ENAMETOOLONG;
-    return -1;
-  }
+  if (absolute(path, clean, sizeof(clean)) < 0) return -1;
   for (s = 1; s < NSERVICES; s++) {
     int n = strlen(service_mount[s]);
     if (!strncmp(clean, service_mount[s], n) &&

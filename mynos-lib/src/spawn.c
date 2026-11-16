@@ -18,6 +18,7 @@
 
 #include <fcntl.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <mynos.h>
@@ -28,14 +29,44 @@ int mynos_spawnImage(void * elf, unsigned int len, char ** argv, char ** envp)
   return __mynos_syscall(30, (int)elf, (int)len, (int)argv, (int)envp, 0);
 }
 
+const char * mynos_cwd(void);   /* fileio.c */
+extern char ** environ;
+
+/* the environment of a child: the caller's, with PWD set to our current
+   directory (the child starts there) */
+static char ** child_env(char ** envp, char * pwd_var)
+{
+  int n = 0, i, k = 0;
+  char ** env;
+  for (i = 0; envp && envp[i]; i++) n++;
+  if ((env = malloc((n + 2) * sizeof(char *))) == NULL) return NULL;
+  for (i = 0; envp && envp[i]; i++)
+    if (strncmp(envp[i], "PWD=", 4)) env[k++] = envp[i];
+  strcpy(pwd_var, "PWD=");
+  strncat(pwd_var, mynos_cwd(), 250);
+  env[k++] = pwd_var;
+  env[k] = NULL;
+  return env;
+}
+
 int mynos_spawn(const char * path, char ** argv, char ** envp)
 {
   struct stat st;
   char * image;
+  char ** env;
+  char pwd_var[256];
   int fd, pid;
   unsigned int done = 0;
 
-  if ((fd = open(path, O_RDONLY)) < 0) return MYNOS_ERR_INVALID;
+  /* a bare name is a system program, at the root of the RAM disk, else a
+     file of the current directory */
+  fd = -1;
+  if (!strchr(path, '/')) {
+    char sys[256] = "/";
+    strncat(sys, path, sizeof(sys) - 2);
+    fd = open(sys, O_RDONLY);
+  }
+  if (fd < 0 && (fd = open(path, O_RDONLY)) < 0) return MYNOS_ERR_INVALID;
   if (fstat(fd, &st) < 0 || st.st_size <= 0 ||
       (image = malloc(st.st_size)) == NULL) {
     close(fd);
@@ -51,7 +82,10 @@ int mynos_spawn(const char * path, char ** argv, char ** envp)
     free(image);
     return MYNOS_ERR_INVALID;
   }
-  pid = mynos_spawnImage(image, done, argv, envp);
+  if (!envp) envp = environ;      /* by default, our own environment */
+  env = child_env(envp, pwd_var);
+  pid = mynos_spawnImage(image, done, argv, env ? env : envp);
+  free(env);
   free(image);
   return pid;
 }

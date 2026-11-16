@@ -115,8 +115,11 @@ void mynos_log(const char * fmt, ...);
 
 /* PROCESSES */
 /* start the ELF program in file path as a child process, with arguments
-   and environment (NULL-terminated, either may be NULL); returns its pid
-   or a MYNOS_ERR_* code. Wait for it with waitpid. */
+   and environment (NULL-terminated; argv may be NULL, envp NULL means our
+   own environment); returns its pid or a MYNOS_ERR_* code. A bare name is
+   looked for at the root of the RAM disk, then in the current directory;
+   the child starts in our current directory (PWD). Wait for it with
+   waitpid. */
 int mynos_spawn(const char * path, char ** argv, char ** envp);
 /* the same, from an ELF image in memory */
 int mynos_spawnImage(void * elf, unsigned int len, char ** argv, char ** envp);

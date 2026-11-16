@@ -166,6 +166,9 @@ if [ -f system/ramdisk.dsk ]; then
                   'write "AUTOEXEC.BAT" "";;\n' \
                   'write "/disk/aaa.ml" "let () = print_endline (String.make 3 (Char.chr 65))";;\n' \
                   'compile "/disk/aaa.ml";;\n' 'run "/disk/aaa.byte" [];;\n' \
+                  'Sys.mkdir "/disk/src" 0o755; cd "/disk/src";;\n' \
+                  'write "w.ml" "let () = print_endline (Sys.getcwd ())";;\n' \
+                  'ignore (compile "w.ml"); run "w.byte" [];;\n' \
                   '#quit;;\n'; do
         tools/type-keys.py "$tmp/mon7" "$phrase"
         sleep 2
@@ -267,6 +270,11 @@ if [ -f system/ramdisk.dsk ]; then
     expect "- : int = 40000"
     expect "AUTOEXEC.BAT: Read-only file system"
     expect "init: shell.byte (pid"
+    if grep -aqx '/disk/src' "$log7"; then
+        echo "ok    cd: a program compiled and run in /disk/src"
+    else
+        echo "FAIL  cd: a program compiled and run in /disk/src"; fail=1
+    fi
     if grep -aqx 'AAA' "$log7"; then
         echo "ok    a program compiled by ocamlc inside MyNOS runs"
     else

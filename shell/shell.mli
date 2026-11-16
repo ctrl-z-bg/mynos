@@ -8,9 +8,15 @@ val help : unit -> unit
 (** Print a short guide. *)
 
 val ls : ?dir:string -> unit -> unit
-(** List the files of a directory, with their sizes: [/] (the RAM disk) by
-    default; [/tmp] is writable, in memory; [/disk] is the FAT disk, whose
-    files stay. *)
+(** List the files of a directory, with their sizes: the current one by
+    default. [/] is the RAM disk; [/tmp] is writable, in memory; [/disk] is
+    the FAT disk, whose files stay. *)
+
+val cd : string -> unit
+(** Change the current directory (programs started later start there). *)
+
+val pwd : unit -> unit
+(** Print the current directory. *)
 
 val cat : string -> unit
 (** Print a file. *)
@@ -24,7 +30,8 @@ val rm : string -> unit
 
 val run : string -> string list -> Mynos.status
 (** [run prog args] starts the program in file [prog] with arguments
-    [args] and waits for its end. A bytecode program ([.byte]) runs on
+    [args] and waits for its end. A name without a directory is looked for
+    in the current directory, then at the root of the RAM disk. A bytecode program ([.byte]) runs on
     [ocamlrun]; anything else must be an ELF program. *)
 
 val compile : ?output:string -> string -> Mynos.status

@@ -4,7 +4,8 @@ let help () =
   print_string
     "This shell is the OCaml toplevel: type OCaml phrases ended by ;;\n\
      Commands (module Shell, already open):\n\
-    \  ls ();;                     list the files of the RAM disk\n\
+    \  ls ();;                     list the current directory (/: the RAM disk)\n\
+    \  cd \"/disk\";; pwd ();;       change, show the current directory\n\
     \  ls ~dir:\"/tmp\" ();;         list /tmp (in memory)\n\
     \  ls ~dir:\"/disk\" ();;        list /disk (the FAT disk: it stays)\n\
     \  cat \"AUTOEXEC.BAT\";;        print a file\n\
@@ -24,7 +25,7 @@ let size name =
   | ic -> let n = in_channel_length ic in close_in ic; n
   | exception Sys_error _ -> -1
 
-let ls ?(dir = "/") () =
+let ls ?(dir = ".") () =
   let files = Sys.readdir dir in
   Array.sort compare files;
   Array.iter (fun f ->
@@ -47,7 +48,19 @@ let rm = Sys.remove
    at the root of the RAM disk (for ocamlc) *)
 let env = [| "OCAMLLIB=/" |]
 
+let cd dir = Sys.chdir dir
+
+let pwd () = print_endline (Sys.getcwd ())
+
+(* a program named without a directory: in the current one, else a system
+   program at the root of the RAM disk *)
+let find prog =
+  if String.contains prog '/' || Sys.file_exists prog then prog
+  else if Sys.file_exists ("/" ^ prog) then "/" ^ prog
+  else prog
+
 let run prog args =
+  let prog = if Filename.check_suffix prog ".byte" then find prog else prog in
   let argv =
     if Filename.check_suffix prog ".byte" then "ocamlrun" :: prog :: args
     else prog :: args in
