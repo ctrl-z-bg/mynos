@@ -78,7 +78,7 @@ static char * parse_ld_conf(void)
   int ldconf, nread;
 
 #ifdef MYNOS
-  return;
+  return NULL;
 #endif
 
   stdlib = getenv("OCAMLLIB");

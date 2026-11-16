@@ -28,7 +28,7 @@ OFILES  =       $(SRC:%.c=%.o)
 DEPEND = Makefile.depend
 
 CFLAGS = -Wall -I../../../mynos-lib/include
-LDFLAGS = -L../../../mynos-lib/lib/ -lmynos -static -Xlinker -Ttext -Xlinker 0x40000000
+LDFLAGS = -L../../../mynos-lib/lib/ -lmynos -static -Xlinker -Ttext -Xlinker 0x40000000 -Wl,--build-id=none -Wl,-N
 
 all: memrofsd
 	for i in $(DIRS) ; do \

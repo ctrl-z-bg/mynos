@@ -19,26 +19,17 @@
 */
 
 #include "../include/mynos.h"
+#include "syscall.h"
 
 int mynos_serviceRegister(char * name) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $11, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(name));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(11, (int)name, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_clientRegister(char * name) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $12, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(name));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(12, (int)name, 0, 0, 0, 0);
   return ret;    
 }
 

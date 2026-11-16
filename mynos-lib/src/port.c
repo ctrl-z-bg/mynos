@@ -19,76 +19,45 @@
 */
 
 #include "../include/mynos.h"
+#include "syscall.h"
 
 #include <unistd.h>
 
 int mynos_allocPort() {
   int ret;
   pid_t pid = getpid();
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $20, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(pid));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(20, (int)pid, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_allocPortP(int port) {
   int ret;
   pid_t pid = getpid();
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $21, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(port));
-  __asm__ volatile("movl %0, %%ecx\n"::"m"(pid));
-  __asm__ volatile("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(21, (int)port, (int)pid, 0, 0, 0);
   return ret;
 }
 
 int mynos_connectToPort(int port) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $22, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(port));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(22, (int)port, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_listenPort(int port) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $23, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(port));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(23, (int)port, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_freePort(int port) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $24, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(port));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(24, (int)port, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_changePortOwner(int port, int newpid) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $25, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(port));
-  __asm__ volatile("movl %0, %%ecx\n"::"m"(newpid));
-  __asm__ volatile("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(25, (int)port, (int)newpid, 0, 0, 0);
   return ret;
 }
 

@@ -54,9 +54,7 @@
 #include "ui.h"
 #endif
 
-#ifndef _WIN32
-extern int errno;
-#endif
+/* errno comes from <errno.h>: it is thread-local in modern libcs */
 
 #ifdef HAS_STRERROR
 

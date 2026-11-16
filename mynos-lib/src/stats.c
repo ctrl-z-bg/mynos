@@ -19,12 +19,9 @@
 */
 
 #include "../include/mynos.h"
+#include "syscall.h"
 
 void mynos_stats(mynos_stats_t * st) {
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $400, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(st));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("popal\n");
+  __mynos_syscall(400, (int)st, 0, 0, 0, 0);
 }
 

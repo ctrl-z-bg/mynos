@@ -43,7 +43,7 @@ ocamlrun$(EXE): libcamlrun.a prims.o
 	$(BYTECC) $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) -o ocamlrun$(EXE) \
 	          prims.o libcamlrun.a $(BYTECCLIBS) \
 		-L../../mynos-lib/lib/ -lmynos -static \
-		-Xlinker -Ttext -Xlinker 0x40000000
+		-Xlinker -Ttext -Xlinker 0x40000000 -Wl,--build-id=none -Wl,-N
 
 ocamlrund$(EXE): libcamlrund.a prims.o
 	$(BYTECC) -g $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) -o ocamlrund$(EXE) \

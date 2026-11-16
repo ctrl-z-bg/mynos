@@ -17,9 +17,7 @@
 
 #include "config.h"
 
-#ifdef HAS_UNISTD
-#include <unistd.h>
-#endif
+#include <unistd.h>  /* read(): needed even without HAS_UNISTD */
 
 #include "debugger.h"
 #include "fix_code.h"

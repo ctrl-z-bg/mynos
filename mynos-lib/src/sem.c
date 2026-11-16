@@ -19,60 +19,36 @@
 */
 
 #include "../include/mynos.h"
+#include "syscall.h"
 
 int mynos_P(int sem) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $6, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(sem));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(6, (int)sem, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_tryP(int sem) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $7, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(sem));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(7, (int)sem, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_V(int sem) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $8, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(sem));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(8, (int)sem, 0, 0, 0, 0);
   return ret;    
 }
 
 
 int mynos_initSem(unsigned int n) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $9, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(n));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(9, (int)n, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_freeSem(int sem) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $10, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(sem));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(10, (int)sem, 0, 0, 0, 0);
   return ret;    
 }
 

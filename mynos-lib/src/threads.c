@@ -19,6 +19,7 @@
 */
 
 #include "../include/mynos.h"
+#include "syscall.h"
 
 int mynos_threadCreate(void * (*start_routine)(void *), 
 		       void * arg, void * stack, unsigned int flags) {
@@ -29,31 +30,16 @@ int mynos_threadCreate(void * (*start_routine)(void *),
   /* set the return address */
   stack -= sizeof(void*);
   *(unsigned int *)(stack) = (unsigned int)mynos_threadExit;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $200, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(start_routine));
-  __asm__ volatile("movl %0, %%ecx\n"::"m"(stack));
-  __asm__ volatile("movl %0, %%edx\n"::"m"(flags));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(200, (int)start_routine, (int)stack, (int)flags, 0, 0);
   return ret;
 }
 
 void mynos_threadExit(void * retval) {
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $201, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(retval));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("popal\n");
+  __mynos_syscall(201, (int)retval, 0, 0, 0, 0);
 }
 
 int mynos_threadSelf() {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $202, %eax\n");
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(202, 0, 0, 0, 0, 0);
   return ret;
 }

@@ -18,11 +18,10 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "syscall.h"
+
 int mynos_setTimer(unsigned long usec) {
   int ret;
-  __asm__ volatile("movl $300, %eax");
-  __asm__ volatile("movl %0, %%ebx"::"m"(usec));
-  __asm__ volatile("int $0x90");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
+  ret = __mynos_syscall(300, (int)usec, 0, 0, 0, 0);
   return ret;
 }

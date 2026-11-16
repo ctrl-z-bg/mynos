@@ -19,41 +19,24 @@
 */
 
 #include "../include/mynos.h"
+#include "syscall.h"
 
 int mynos_enableIrq(unsigned short n) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $100, %eax\n");
-  __asm__ volatile("movw %0, %%bx\n"::"m"(n));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(100, (int)n, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_disableIrq(unsigned short n){
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $101, %eax\n");
-  __asm__ volatile("movw %0, %%bx\n"::"m"(n));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(101, (int)n, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_driverRegister(char * name, unsigned int irq, 
 			 unsigned int * io, unsigned int * mem) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $10, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(name));
-  __asm__ volatile("movl %0, %%ecx\n"::"m"(irq));
-  __asm__ volatile("movl %0, %%edx\n"::"m"(io));
-  __asm__ volatile("movl %0, %%esi\n"::"m"(mem));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(10, (int)name, (int)irq, (int)io, (int)mem, 0);
   return ret;
 }
 

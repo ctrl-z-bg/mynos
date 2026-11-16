@@ -139,7 +139,6 @@ void process_request(pid_t client, request_t request) {
 }
 
 int main() {
-  int sender;
   request_t request;
   int port;
   int channel;
@@ -237,7 +236,8 @@ int main() {
     mynos_recv(channel, &msg, 0, 0);
     memcpy(&request, msg->start, sizeof(request_t));
     mynos_freeMsg(&msg);
-    process_request(sender, request);
+    /* reply on the channel the request came from (sender was never set) */
+    process_request(channel, request);
     mynos_freeChannel(channel);
   }
 

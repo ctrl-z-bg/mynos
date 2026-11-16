@@ -19,6 +19,7 @@
 */
 
 #include "../include/mynos.h"
+#include "syscall.h"
 
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -26,15 +27,7 @@
 int mynos_send(int channel, void * buf, unsigned int size,
 	       unsigned int flags) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $3, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(channel));
-  __asm__ volatile("movl %0, %%ecx\n"::"m"(buf));
-  __asm__ volatile("movl %0, %%edx\n"::"m"(size));
-  __asm__ volatile("movl %0, %%esi\n"::"m"(flags));
-  __asm__ volatile("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(3, (int)channel, (int)buf, (int)size, (int)flags, 0);
   return ret;
 }
 
@@ -42,16 +35,7 @@ static int  __mynos_recv(int channel, mynos_msg_t * msg,
 			 void * shortmsg, unsigned int flags,
 			 unsigned int timeout) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $4, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(channel));
-  __asm__ volatile("movl %0, %%ecx\n"::"m"(msg));
-  __asm__ volatile("movl %0, %%edx\n"::"m"(shortmsg));
-  __asm__ volatile("movl %0, %%esi\n"::"m"(flags));
-  __asm__ volatile("movl %0, %%edi\n"::"m"(timeout));
-  __asm__ volatile("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(4, (int)channel, (int)msg, (int)shortmsg, (int)flags, (int)timeout);
   if (ret < 0) {
     if (shortmsg != NULL) free(shortmsg);
     if (msg != NULL) free(msg);
@@ -78,12 +62,7 @@ void mynos_waitSync(int channel) {
 
 int mynos_freeChannel(int c) {
   int ret;
-  __asm__ volatile("pushal\n");
-  __asm__ volatile("movl $5, %eax\n");
-  __asm__ volatile("movl %0, %%ebx\n"::"m"(c));
-  __asm__ volatile ("int $0x90\n");
-  __asm__ volatile("movl %%eax, %0":"=m"(ret):);
-  __asm__ volatile("popal\n");
+  ret = __mynos_syscall(5, (int)c, 0, 0, 0, 0);
   return ret;    
 }
 
