@@ -127,6 +127,22 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
   beyond running the bytecode interpreter.
 - Nothing on "new language definition".
 
+### Direction
+
+Planned work, in order. Details live in the beads issues.
+
+1. **Revive** (mynos-bo2): boot the kernel in QEMU, then the services, then a
+   hello world bytecode. This is the baseline for everything else.
+2. **Decide on the OCaml runtime** (mynos-4er): stay on 3.x, or move to 4.14
+   or 5.x.
+3. **A demonstrable OS with a terminal** (mynos-a2j): OCaml bindings for the
+   MyNOS API, starting bytecode programs from user space, file I/O through
+   memrofs, a console service, and the OCaml toplevel as the shell.
+4. Later: networking (mynos-4f6), a GUI toolkit (mynos-9lr), distinctive
+   applications (mynos-3h1).
+
+Side task: archive the old SourceForge site (mynos-db2).
+
 ### History
 
 - 2002-02 → 2004-12: active development. The busiest period is June–November
@@ -146,4 +162,5 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 - **2026-11-16** — Added `.gitignore`: beads, files generated for agents, editor
   backups and personal notes are kept out of git. Wrote this document after a
   full read of the codebase. Opened mynos-bo2, mynos-nxa, mynos-pg9, mynos-jwl.
-  Added `README.md`.
+  Added `README.md`. Planned the roadmap and opened the issues listed under
+  "Direction".
