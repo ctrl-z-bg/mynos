@@ -108,7 +108,8 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 
 ### Build and run
 
-**The original system builds and runs again**, as it did in 2004–2008:
+**The original system builds and runs again**, as it did in 2004–2008
+(tag `revival-baseline`):
 `tools/build-all.sh` then `tools/run-demo.sh`. In QEMU it boots the kernel,
 runs a test OCaml program (`tests/hello`) on `ocamlrun`, starts the registry,
 the keyboard and serial drivers and memrofs, and memrofs's built-in test reads
