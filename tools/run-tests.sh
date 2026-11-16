@@ -12,7 +12,7 @@ cd "$root"
 ocamlrun=$(tools/ocamlrun-path.sh)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-log=$tmp/log1 log2=$tmp/log2 log3=$tmp/log3 log4=$tmp/log4
+log=$tmp/log1 log2=$tmp/log2 log3=$tmp/log3 log4=$tmp/log4 log5=$tmp/log5
 
 timeout "${WAIT:-10}" tools/run-qemu.sh \
     "$ocamlrun" \
@@ -39,6 +39,16 @@ if [ -f tests/mynos-ocaml/mynos_test.byte ]; then
         services/fs/memrofs/memrofsd tests/ramdisk/ramdisk.dsk \
         -- -display none -serial null -serial "file:$log3" || true
     cat "$log3" >> "$log"
+fi
+
+# fifth boot: no bytecode module; ocamlrun loads init.byte from the RAM disk
+# and it reads files through the standard library
+if [ -f tests/files/ramdisk.dsk ]; then
+    timeout "${WAIT:-10}" tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        tests/files/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$log5" || true
+    cat "$log5" >> "$log"
 fi
 
 # fourth boot: typing on the keyboard, read by OCaml through consoled
@@ -88,6 +98,9 @@ if [ -f tests/effects/effects.byte ]; then
 fi
 if [ -f tests/mynos-ocaml/mynos_test.byte ]; then
     expect "mynos-ocaml: all checks passed"
+fi
+if [ -f tests/files/ramdisk.dsk ]; then
+    expect "files: all checks passed"
 fi
 if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     expect 'console: line 1: "hi"'

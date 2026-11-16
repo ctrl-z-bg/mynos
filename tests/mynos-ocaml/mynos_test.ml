@@ -5,11 +5,13 @@ let check what ok =
   Printf.printf "mynos-ocaml: %-34s %s\n%!" what (if ok then "ok" else "FAIL");
   ok
 
-(* memrofs protocol (services/fs/memrofs/memrofs.h): a 24-byte request_t
-   { int type; union { char fname[20]; struct { int fd; size_t n; } } } *)
+(* memrofs protocol (mynos-lib/include/mynos_memrofs.h): a 40-byte
+   struct memrofs_req { int type, client, fd, arg1, arg2; char name[20]; }
+   and an 8-byte struct memrofs_reply { int status, value; } *)
 let request typ fill =
-  let b = Bytes.make 24 '\000' in
+  let b = Bytes.make 40 '\000' in
   Bytes.set_int32_le b 0 (Int32.of_int typ);
+  Bytes.set_int32_le b 4 (Int32.of_int (Mynos.getpid ()));
   fill b; Bytes.to_string b
 let int32_at s i = Int32.to_int (String.get_int32_le s i)
 
@@ -23,15 +25,15 @@ let read_file name =
   let port = Mynos.lookup "memrofs" in
   (* OPEN *)
   let ch, r = memrofs_call port (request 0 (fun b ->
-    Bytes.blit_string name 0 b 4 (String.length name))) in
+    Bytes.blit_string name 0 b 20 (String.length name))) in
   Mynos.free_channel ch;
-  let fd = int32_at r 0 and status = int32_at r 4 in
+  let status = int32_at r 0 and fd = int32_at r 4 in
   if status <> 0 then failwith (Printf.sprintf "open: status %d" status);
-  (* READ: a reply { size_t rd; status_t status }, then the data *)
+  (* READ: a reply { status; n }, then the data *)
   let ch, r = memrofs_call port (request 2 (fun b ->
-    Bytes.set_int32_le b 4 (Int32.of_int fd);
-    Bytes.set_int32_le b 8 100l)) in
-  let rd = int32_at r 0 and status = int32_at r 4 in
+    Bytes.set_int32_le b 8 (Int32.of_int fd);
+    Bytes.set_int32_le b 12 100l)) in
+  let status = int32_at r 0 and rd = int32_at r 4 in
   if status <> 0 then failwith (Printf.sprintf "read: status %d" status);
   let data = Mynos.recv ~timeout:2.0 ch in
   Mynos.free_channel ch;

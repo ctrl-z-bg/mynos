@@ -21,11 +21,18 @@
 #include <mynos.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include "memrofs.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/*
+ * memrofs: read-only filesystem on the RAM disk that GRUB loads as a module
+ * (".RAMDISK" image, see tool/createDisk.c). The kernel maps the image at
+ * 0x40400000 in every process. Protocol: mynos-lib/include/mynos_memrofs.h.
+ */
 
 char * MAGIC = ".RAMDISK";
 
@@ -35,209 +42,158 @@ char *ramdisk;
 
 #define MIN(a, b) (((a)<(b))?(a):(b))
 
-int isBusy(filedescriptor_t fdscr) {
-  return(fdscr.pid);
+static int find_file(const char * name)
+{
+  int i;
+  for (i = 0; i < MAXFILES && filesystem[i].filename[0]; i++)
+    if (!strncmp(filesystem[i].filename, name, FILENAMEMAXLEN))
+      return i;
+  return -1;
 }
 
-void memrofs_open(pid_t client, char *fname) {
-  int curr = 0;
-  int found = 0;
-  int fd = 3;
-  open_response_t response;
-
-  do {
-    if ( !strncmp(filesystem[curr].filename, fname, FILENAMEMAXLEN) ) {
-      found = 1;
-      while ( isBusy(filedesc[fd]) && (fd < MAXOPENFILES) ) fd++;
-      filedesc[fd].currpos = ramdisk + (int) filesystem[curr].start;
-      filedesc[fd].fileidx = curr;
-      filedesc[fd].pid = client;
-    }
-    curr++;
-  } while ( (!found) && (curr<MAXFILES) );
-
-  if ( curr >= MAXFILES ) { // file not found
-    response.fd = -1;
-    response.status = STATUS_NOT_FOUND;
-  } else if ( fd >= MAXOPENFILES ) { // too many open files
-    response.fd = -1;
-    response.status = STATUS_TOO_MANY;
-  } else { // OK
-    response.fd = fd;
-    response.status = STATUS_OK;
-  }  
-  if ( mynos_send(client, &response, 
-		  sizeof(response), 0) < 0 )
-    // error responding, close the file (if it was open)
-    if ( response.status == STATUS_OK ) {
-      filedesc[response.fd].pid = 0; // "close" the file
-    }
+/* the open file `fd` of `client`, or NULL with *status set */
+static filedescriptor_t * owned(int fd, int client, int * status)
+{
+  if (fd < 3 || fd >= MAXOPENFILES) { *status = MEMROFS_INVALID; return NULL; }
+  if (!filedesc[fd].pid) { *status = MEMROFS_NOT_OPEN; return NULL; }
+  if (filedesc[fd].pid != client) { *status = MEMROFS_DENIED; return NULL; }
+  *status = MEMROFS_OK;
+  return &filedesc[fd];
 }
 
-void memrofs_close(pid_t client, int fd) {
-  status_t status;
-  if ( fd > MAXOPENFILES ) 
-    status = STATUS_TOO_MANY;
-  else if ( !(filedesc[fd].pid) )
-    status = STATUS_NOT_OPEN;
-  else if ( filedesc[fd].pid != client ) // not owner
-    status = STATUS_PERMISSION_DENIED;
-  else { // ok, close
-    filedesc[fd].pid = 0;
-    status = STATUS_OK;
-  }
-  if ( mynos_send(client, &status, 
-		  sizeof(status_t), 0) < 0 ) {};
+static void reply(int channel, int status, int value)
+{
+  struct memrofs_reply r;
+  r.status = status;
+  r.value = value;
+  mynos_send(channel, &r, sizeof(r), 0);
 }
 
-void memrofs_read(pid_t client, int fd, size_t size) {
-  read_response_t response;
+static void memrofs_open(int channel, struct memrofs_req * req)
+{
+  int idx, fd;
+  req->name[MEMROFS_NAMEMAX - 1] = 0;
+  /* names are flat; accept an optional leading slash */
+  idx = find_file(req->name[0] == '/' ? req->name + 1 : req->name);
+  if (idx < 0) { reply(channel, MEMROFS_NOT_FOUND, -1); return; }
+  for (fd = 3; fd < MAXOPENFILES && filedesc[fd].pid; fd++)
+    ;
+  if (fd >= MAXOPENFILES) { reply(channel, MEMROFS_TOO_MANY, -1); return; }
+  filedesc[fd].pid = req->client;
+  filedesc[fd].fileidx = idx;
+  filedesc[fd].pos = 0;
+  reply(channel, MEMROFS_OK, fd);
+}
 
-  response.rd = 0;
-  if ( fd > MAXOPENFILES )
-    response.status = STATUS_TOO_MANY;
-  else if ( filedesc[fd].pid != client )
-    response.status = STATUS_PERMISSION_DENIED;
-  else { // actually read
-    fileentry_t *fe = &filesystem[filedesc[fd].fileidx];
-    response.rd = MIN(fe->size - (filedesc[fd].currpos - fe->start), size);
-    response.status = STATUS_OK;
-  }
-  if ( mynos_send(client, &response,
-		  sizeof(response), 
-		  MYNOS_IPC_NONBLOCK) < 0 ) {
-    // error, nothing to do
-  } else {
-    if ( (response.status == STATUS_OK) &&
-	 (mynos_send(client, filedesc[fd].currpos, 
-		     response.rd, 0) < 0) ) {
-      // error, nothing to do
-    } else {
-      filedesc[fd].currpos += response.rd; // advance the pointer
-    }
+static void memrofs_close(int channel, struct memrofs_req * req)
+{
+  int status;
+  filedescriptor_t * f = owned(req->fd, req->client, &status);
+  if (f) f->pid = 0;
+  reply(channel, status, 0);
+}
+
+static void memrofs_read(int channel, struct memrofs_req * req)
+{
+  static char buf[MEMROFS_READMAX];
+  int status, n;
+  fileentry_t * fe;
+  filedescriptor_t * f = owned(req->fd, req->client, &status);
+
+  if (!f) { reply(channel, status, 0); return; }
+  fe = &filesystem[f->fileidx];
+  n = f->pos < fe->size ? fe->size - f->pos : 0;
+  n = MIN(n, MIN(req->arg1, MEMROFS_READMAX));
+  if (n < 0) n = 0;
+  reply(channel, MEMROFS_OK, n);
+  if (n > 0) {
+    /* copy first: sending straight from the RAM disk would map its frames
+       into the client, which may free them when it unmaps the message */
+    memcpy(buf, ramdisk + (uint32_t)fe->start + f->pos, n);
+    mynos_send(channel, buf, n, 0);
+    f->pos += n;
   }
 }
 
-void process_request(pid_t client, request_t request) {
-  switch ( request.type ) {
-  case OPEN:
-    memrofs_open(client, request.data.fname);
-    break;
-  case CLOSE:
-    memrofs_close(client, request.data.fd);
-    break;
-  case READ:
-    memrofs_read(client, request.data.read_data.fd,
-		 request.data.read_data.to_read);
-    break;
-  case LSEEK:
-    break;
-    // default:
-    // something (signal error?)
-  }
+static void memrofs_lseek(int channel, struct memrofs_req * req)
+{
+  int status;
+  long long pos;
+  filedescriptor_t * f = owned(req->fd, req->client, &status);
 
+  if (!f) { reply(channel, status, -1); return; }
+  switch (req->arg2) {
+  case 0: pos = req->arg1; break;
+  case 1: pos = (long long)f->pos + req->arg1; break;
+  case 2: pos = (long long)filesystem[f->fileidx].size + req->arg1; break;
+  default: reply(channel, MEMROFS_INVALID, -1); return;
+  }
+  if (pos < 0) { reply(channel, MEMROFS_INVALID, -1); return; }
+  f->pos = (uint32_t)pos;
+  reply(channel, MEMROFS_OK, f->pos);
+}
+
+static void process_request(int channel, struct memrofs_req * req)
+{
+  switch (req->type) {
+  case MEMROFS_OPEN:  memrofs_open(channel, req);  break;
+  case MEMROFS_CLOSE: memrofs_close(channel, req); break;
+  case MEMROFS_READ:  memrofs_read(channel, req);  break;
+  case MEMROFS_LSEEK: memrofs_lseek(channel, req); break;
+  default:            reply(channel, MEMROFS_INVALID, -1);
+  }
+}
+
+/* self test, in a child process: read a file through the file functions of
+   libmynos (open/read/close), which talk to this service */
+static void self_test(void)
+{
+  char buf[200];
+  int fd, n;
+
+  puts("Opening a text file...");
+  fd = open("AUTOEXEC.BAT", O_RDONLY);
+  if (fd < 0) { puts("Open failed"); exit(-1); }
+  puts("Reading the file content...");
+  n = read(fd, buf, sizeof(buf) - 1);
+  close(fd);
+  if (n <= 0) { puts(n == 0 ? "EOF" : "Some error."); exit(-1); }
+  buf[n] = 0;
+  puts("Show the content:");
+  fputs(buf, stdout);
+  exit(0);
 }
 
 int main() {
-  request_t request;
   int port;
-  int channel;
-  mynos_msg_t * msg;
 
-  {
-    int i;
-    for (i = 0; i < 10000; i++);
-  }
-
-  port = mynos_registryRegister("memrofs");
-  printf("memrofs service port: %d\n", port);
-
-#if 0
-  if ( mynos_recv(0 /* kernel! */, &ramdisk,
-		  sizeof(char *), 0) < 0 ) {
-    puts("Could not receive ramdisk pointer.");
-    exit(-1);
-  }
-#else
   ramdisk = (char*)0x40400000;
-#endif
-
   filesystem = (fileentry_t *)(ramdisk + strlen(MAGIC));
-#define TEST
-#ifdef TEST
-  if ( fork() ) {
-    //puts("father.");
-    // father
-  } else {
-    // child
-    char mybuf[1000];
-    request_t request;
-    open_response_t open_response;
-    read_response_t read_response;
-    int i;
-    /* wait a bit to let the father's init */
-    for (i = 0; i < 100000; i++);
 
-    channel = mynos_connectToPort(port);
+  port = mynos_registryRegister(MEMROFS_SERVICE);
+  printf("memrofs service port: %d\n", port);
+  if (port < 0) exit(-1);
 
-    //puts("child.");
-    request.type = OPEN;
-    strcpy(request.data.fname, "AUTOEXEC.BAT");
-    //puts("prereq");
-    puts("Opening a text file...");
-    mynos_send(channel, &request, sizeof(request_t),
-	       MYNOS_IPC_NONBLOCK);
-    //puts("req1");
-    mynos_recv(channel, &msg, 0, 0);
-    memcpy(&open_response, msg->start, sizeof(open_response_t));
-    mynos_freeMsg(&msg);
-    if ( open_response.status != STATUS_OK ) {
-      puts("Open failed");
-      exit(-1);
-    }
-    //puts("resp1");
-    mynos_freeChannel(channel);
-    channel = mynos_connectToPort(port);
-    puts("Reading the file content...");
-    request.type = READ;
-    request.data.read_data.fd = open_response.fd;
-    request.data.read_data.to_read = 100;
-    mynos_send(channel, &request, sizeof(request_t),
-	       MYNOS_IPC_NONBLOCK);
-    //puts("req2");
-    if ( mynos_recv(channel, &msg, 0, 0) < 0 )
-      puts("errore 1");
-    //puts("resp2a");
-    memcpy(&read_response, msg->start, sizeof(read_response_t));
-    mynos_freeMsg(&msg);
-    mynos_recv(channel, &msg, 0, 0);
-    memcpy(mybuf, msg->start, 100);
-    mynos_freeMsg(&msg);
-    if ( read_response.rd == 0 )
-      if ( read_response.status != STATUS_OK )
-	puts("Some error.");
-      else
-	puts("EOF");
-    else {
-      mybuf[read_response.rd] = 0;
-      puts("Show the content:");
-      puts(mybuf);
-    }
-    
-    exit(0);
-  }
-#endif /* TEST */
+  if (fork() == 0)
+    self_test();
 
-  while ( 1 ) {
-    if ((channel = mynos_listenPort(port)) < 0) {
+  while (1) {
+    mynos_msg_t * msg;
+    struct memrofs_req req;
+    int channel = mynos_listenPort(port);
+
+    if (channel < 0) {
       puts("Error receiving request");
       exit(-1);
     }
-    mynos_recv(channel, &msg, 0, 0);
-    memcpy(&request, msg->start, sizeof(request_t));
-    mynos_freeMsg(&msg);
-    /* reply on the channel the request came from (sender was never set) */
-    process_request(channel, request);
+    if (mynos_recv(channel, &msg, 0, 0) == 0) {
+      if (msg->size == sizeof(req)) {
+	memcpy(&req, msg->start, sizeof(req));
+	process_request(channel, &req);
+      } else
+	reply(channel, MEMROFS_INVALID, -1);
+      mynos_freeMsg(&msg);
+    }
     mynos_freeChannel(channel);
   }
 

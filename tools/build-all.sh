@@ -14,6 +14,7 @@
 #   mynos-lib/ocaml/mynos.cma        the Mynos OCaml library (dev only)
 #   tests/mynos-ocaml/mynos_test.byte  test of the Mynos library (dev only)
 #   tests/console/echo.byte          reads lines from the console (dev only)
+#   tests/files/ramdisk.dsk          RAM disk with init.byte, a file I/O test (dev only)
 #   tests/abi/abi                    system call checks
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 set -eu
@@ -33,6 +34,8 @@ if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
   (cd tests/mynos-ocaml && ocamlc -use-prims ../../mynos-runtime/primitives \
      -I ../../mynos-lib/ocaml mynos.cma -o mynos_test.byte mynos_test.ml)
   (cd tests/console && ocamlc -o echo.byte echo.ml)
+  (cd tests/files && ocamlc -o init.byte files.ml && cp ../ramdisk/AUTOEXEC.BAT . &&
+     ../../services/fs/memrofs/tool/createDisk init.byte AUTOEXEC.BAT >/dev/null)
 fi
 (cd tests/hello && ocamlc -o hello.byte hello.ml)
 case $(ocamlc -version) in

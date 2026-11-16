@@ -19,17 +19,23 @@
  * bytecode runtime, unchanged (libcamlrun.a, built with musl in the dev
  * container).
  *
- * The kernel has no filesystem behind open() yet (mynos-nxa): any file opens
- * the bytecode passed as GRUB module 1. So, as mynos-byterun/src/main.c did
- * for OCaml 3.06, give the runtime a bytecode file name to open.
+ * The program to run: the first argument if there is one; otherwise
+ * init.byte from the RAM disk (memrofs, through the file functions of
+ * libmynos); otherwise the bytecode the kernel serves as "mynos_bytecode"
+ * (GRUB module 1), as in the original MyNOS.
  */
+
+#include <sys/stat.h>
 
 extern void caml_main(char **argv);
 extern void caml_do_exit(int retcode);
 
 int main(int argc, char **argv)
 {
-  char *args[] = { "ocamlrun", "mynos_bytecode", 0 };
+  struct stat st;
+  char *prog = argc > 1 ? argv[1]
+    : stat("init.byte", &st) == 0 ? "init.byte" : "mynos_bytecode";
+  char *args[] = { "ocamlrun", prog, 0 };
   caml_main(args);
   caml_do_exit(0);
   return 0;
