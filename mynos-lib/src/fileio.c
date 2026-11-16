@@ -36,6 +36,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <termios.h>
 #include <mynos.h>
 #include <mynos_console.h>
 #include <mynos_fs.h>
@@ -130,13 +132,103 @@ static ssize_t console_read(int port, void * buf, size_t count)
   mynos_msg_t * msg;
   int n;
 
+  memset(&req, 0, sizeof(req));
   req.op = CONSOLE_READ;
   req.len = count;
+  req.pid = getpid();
   if (call(port, &req, sizeof(req), &msg, NULL) < 0) { errno = EIO; return -1; }
   n = msg->size < count ? msg->size : count;
   memcpy(buf, msg->start, n);
   mynos_freeMsg(&msg);
   return n;
+}
+
+/* the terminal settings of fds 0-2 (termios), kept here: consoled gets
+   what it uses (line editing, echo, VMIN, VTIME) */
+static struct termios tio;
+static int tio_ready = 0;
+
+static void tio_init(void)
+{
+  if (tio_ready) return;
+  tio_ready = 1;
+  memset(&tio, 0, sizeof(tio));
+  tio.c_iflag = ICRNL;
+  tio.c_oflag = OPOST | ONLCR;
+  tio.c_cflag = CS8 | CREAD;
+  tio.c_lflag = ICANON | ECHO | ECHOE | ISIG | IEXTEN;
+  tio.c_cc[VMIN] = 1;
+  tio.c_cc[VTIME] = 0;
+  tio.c_cc[VEOF] = 4;
+  tio.c_cc[VERASE] = 127;
+  tio.c_cc[VINTR] = 3;
+}
+
+/* set the console's mode: line editing and echo, and for raw reads VMIN
+   and VTIME; -1 without a console */
+int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
+{
+  struct console_req req;
+  mynos_msg_t * msg;
+  if (service_port(CONSOLE_SERVICE, &console_cache) < 0) return -1;
+  memset(&req, 0, sizeof(req));
+  req.op = CONSOLE_MODE;
+  req.pid = getpid();
+  req.mode = (canon ? CONSOLE_CANON : 0) | (echo ? CONSOLE_ECHO : 0);
+  req.vmin = vmin;
+  req.vtime = vtime;
+  if (call(console_cache.port, &req, sizeof(req), &msg, NULL) < 0) return -1;
+  mynos_freeMsg(&msg);
+  tio_init();
+  if (canon) tio.c_lflag |= ICANON; else tio.c_lflag &= ~ICANON;
+  if (echo) tio.c_lflag |= ECHO; else tio.c_lflag &= ~ECHO;
+  tio.c_cc[VMIN] = vmin;
+  tio.c_cc[VTIME] = vtime;
+  return 0;
+}
+
+/* ioctl: the terminal requests on fds 0-2 (tcgetattr, tcsetattr, the
+   window size), the rest to the kernel */
+#ifdef __dietlibc__
+#define IOCTL_REQ long int        /* as each C library declares ioctl */
+#else
+#define IOCTL_REQ int
+#endif
+
+int ioctl(int fd, IOCTL_REQ req, ...)
+{
+  va_list ap;
+  void * arg;
+  va_start(ap, req);
+  arg = va_arg(ap, void *);
+  va_end(ap);
+  if (fd >= 0 && fd <= 2 && service_port(CONSOLE_SERVICE, &console_cache) >= 0) {
+    switch (req) {
+    case TCGETS:
+      tio_init();
+      memcpy(arg, &tio, sizeof(tio));
+      return 0;
+    case TCSETS: case TCSETSW: case TCSETSF: {
+      const struct termios * t = arg;
+      if (mynos_consoleMode((t->c_lflag & ICANON) != 0, (t->c_lflag & ECHO) != 0,
+			    t->c_cc[VMIN], t->c_cc[VTIME]) < 0) {
+	errno = EIO;
+	return -1;
+      }
+      tio_init();
+      tio = *t;
+      return 0;
+    }
+    case TIOCGWINSZ: {
+      struct winsize * w = arg;
+      memset(w, 0, sizeof(*w));
+      w->ws_row = CONSOLE_ROWS;
+      w->ws_col = CONSOLE_COLS;
+      return 0;
+    }
+    }
+  }
+  return result(sys3(54 /* ioctl */, fd, req, (long)arg));
 }
 
 /* ---- file services ---- */

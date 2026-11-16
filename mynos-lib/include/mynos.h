@@ -108,6 +108,11 @@ int mynos_setTimer(unsigned long usec);  /* old name of mynos_sleep */
 /* STATS */
 void mynos_stats(mynos_stats_t * st);
 
+/* CONSOLE */
+/* the console's input mode: canon (line editing) and echo, and for raw
+   input VMIN and VTIME as termios (tcsetattr does the same) */
+int mynos_consoleMode(int canon, int echo, int vmin, int vtime);
+
 /* LOG */
 /* write a line (printf format) to the kernel log: the serial log port, not
    the screen, once the system has started. For services' messages. */

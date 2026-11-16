@@ -20,6 +20,7 @@
 
 #include "video.h"
 #include "io.h"
+#include "kutils.h"
 
 /* void update_cursor(int row, int col)
  * by Dark Fiber
@@ -43,7 +44,6 @@ static void update_cursor(uint32_t row, uint32_t col)
 /* to convert a number to a string */
 #define MAX_INT_LEN 11
 
-char *video = (char *)BASE_VIDEO;
 
 /* Kernel messages (printk) are written to the log port and, while this is
    set, on the screen. It is cleared once user space is started, unless the
@@ -135,69 +135,277 @@ static void log_char(char c) {
   outportb(LOG_PORT, c);
 }
 
-void _print_char(char c, char attrib) {
-  uint32_t cursor;
-  log_char(c);
-  if (attrib == CHAR_KERNEL_ATTRIB && !kernel_on_screen)
-    return;
-  if (video >= (char*)END_VIDEO) {
-    scroll_screen();
-    video -= 0xA0;
+/* ---- the screen: a VT100-like terminal ----
+   Programs' output (write) goes through a small terminal emulator: the
+   control characters and the ANSI/VT100 escape sequences that text user
+   interfaces use (cursor moves, erasing, colours, an alternate screen).
+   Kernel messages are written plainly, in their own colour. */
+
+#define CELL(r, c) ((char *)BASE_VIDEO + 2 * ((r) * COLUMNS + (c)))
+
+static int row = 0, col = 0;          /* the cursor */
+static int wrap_pending = 0;          /* the last column was written */
+static int saved_row = 0, saved_col = 0;
+static int cursor_on = 1;
+
+/* attribute of programs' text: VGA colours, from SGR */
+static int fg = 7, bg = 0, bold = 0, reverse = 0;
+static char attr = CHAR_USER_ATTRIB;
+
+/* escape sequence parser */
+static int esc_state = 0;             /* 0: text, 1: after ESC, 2: CSI */
+static int params[8], nparams, private_mark;
+
+/* the screen saved by the alternate screen (CSI ?1049h / ?47h) */
+static char saved_screen[2 * COLUMNS * ROWS];
+static int saved_screen_row, saved_screen_col, on_alternate = 0;
+
+static void show_cursor(void)
+{
+  if (cursor_on) update_cursor(row, col);
+  else update_cursor(ROWS, 0);        /* off the screen */
+}
+
+static void erase(int r, int c0, int c1)    /* row r, columns c0..c1-1 */
+{
+  int c;
+  for (c = c0; c < c1; c++) {
+    *CELL(r, c) = ' ';
+    *(CELL(r, c) + 1) = attr;
   }
-  if (c == '\n') {
-    uint32_t tmp = (uint32_t)video;
-    tmp -= BASE_VIDEO;
-    tmp = tmp / 0xA0;
-    tmp = tmp * 0xA0;
-    tmp += BASE_VIDEO + 0xA0;
-    video = (char *)tmp;
-    if (video >= (char*)END_VIDEO) {
-      scroll_screen();
-      video -= 0xA0;
+}
+
+static void scroll_up(int top, int n)       /* lines top.. move up by n */
+{
+  int r;
+  for (r = top; r < ROWS; r++) {
+    if (r + n < ROWS) kmemcpy(CELL(r, 0), CELL(r + n, 0), 2 * COLUMNS);
+    else erase(r, 0, COLUMNS);
+  }
+}
+
+static void scroll_down(int top, int n)     /* lines top.. move down by n */
+{
+  int r;
+  for (r = ROWS - 1; r >= top; r--) {
+    if (r - n >= top) kmemcpy(CELL(r, 0), CELL(r - n, 0), 2 * COLUMNS);
+    else erase(r, 0, COLUMNS);
+  }
+}
+
+static void newline(void)
+{
+  col = 0;
+  wrap_pending = 0;
+  if (++row >= ROWS) {
+    scroll_up(0, 1);
+    row = ROWS - 1;
+  }
+}
+
+static void put(char c, char a)
+{
+  if (wrap_pending) newline();
+  *CELL(row, col) = c;
+  *(CELL(row, col) + 1) = a;
+  if (col == COLUMNS - 1) wrap_pending = 1;
+  else col++;
+}
+
+/* control characters common to kernel and programs' text */
+static int control(char c)
+{
+  switch (c) {
+  case '\n': newline(); return 1;
+  case '\r': col = 0; wrap_pending = 0; return 1;
+  case '\b': if (col > 0) col--; wrap_pending = 0; return 1;
+  case '\t':
+    col = (col + 8) & ~7;
+    if (col >= COLUMNS) col = COLUMNS - 1;
+    return 1;
+  case '\a': return 1;
+  }
+  return 0;
+}
+
+static void update_attr(void)
+{
+  int f = fg | (bold ? 8 : 0), b = bg;
+  if (reverse) { int t = f & 7; f = b | (f & 8); b = t; }
+  attr = (char)((b << 4) | f);
+}
+
+static void sgr(void)
+{
+  /* ANSI colour number -> VGA colour */
+  static const int vga[8] = { 0, 4, 2, 6, 1, 5, 3, 7 };
+  int i;
+  if (nparams == 0) params[nparams++] = 0;
+  for (i = 0; i < nparams; i++) {
+    int p = params[i];
+    if (p == 0) { fg = 7; bg = 0; bold = 0; reverse = 0; }
+    else if (p == 1) bold = 1;
+    else if (p == 22) bold = 0;
+    else if (p == 7) reverse = 1;
+    else if (p == 27) reverse = 0;
+    else if (p >= 30 && p <= 37) fg = vga[p - 30];
+    else if (p == 39) fg = 7;
+    else if (p >= 40 && p <= 47) bg = vga[p - 40];
+    else if (p == 49) bg = 0;
+    else if (p >= 90 && p <= 97) fg = vga[p - 90] | 8;
+    else if (p >= 100 && p <= 107) bg = vga[p - 100];
+  }
+  update_attr();
+}
+
+static int param(int i, int dflt)
+{
+  return (i < nparams && params[i] > 0) ? params[i] : dflt;
+}
+
+static void alternate(int on)
+{
+  if (on && !on_alternate) {
+    kmemcpy(saved_screen, (char *)BASE_VIDEO, sizeof(saved_screen));
+    saved_screen_row = row;
+    saved_screen_col = col;
+    on_alternate = 1;
+  } else if (!on && on_alternate) {
+    kmemcpy((char *)BASE_VIDEO, saved_screen, sizeof(saved_screen));
+    row = saved_screen_row;
+    col = saved_screen_col;
+    on_alternate = 0;
+  }
+}
+
+static void csi(char final)
+{
+  int n = param(0, 1), r, c;
+  wrap_pending = 0;
+  if (private_mark) {                 /* CSI ? ... h / l */
+    int on = final == 'h';
+    if (final != 'h' && final != 'l') return;
+    for (r = 0; r < nparams; r++) {
+      if (params[r] == 25) cursor_on = on;
+      if (params[r] == 1049 || params[r] == 47 || params[r] == 1047)
+	alternate(on);
     }
-  } else if (c == '\b') {           /* back one cell (not past the line) */
-    if (((uint32_t)video - BASE_VIDEO) % 0xA0 != 0)
-      video -= 2;
-  } else {
-    *video = c;
-    *(video + 1) = attrib;
-    video = video + 2;
+    return;
   }
-  /* move the cursor */
-  cursor = (((uint32_t)(video - BASE_VIDEO) / 2));
-  update_cursor(cursor / 80, cursor % 80);
+  switch (final) {
+  case 'A': row -= n; break;
+  case 'B': row += n; break;
+  case 'C': col += n; break;
+  case 'D': col -= n; break;
+  case 'E': row += n; col = 0; break;
+  case 'F': row -= n; col = 0; break;
+  case 'G': col = n - 1; break;
+  case 'd': row = n - 1; break;
+  case 'H': case 'f': row = param(0, 1) - 1; col = param(1, 1) - 1; break;
+  case 'J':
+    switch (param(0, 0)) {
+    case 0:
+      erase(row, col, COLUMNS);
+      for (r = row + 1; r < ROWS; r++) erase(r, 0, COLUMNS);
+      break;
+    case 1:
+      for (r = 0; r < row; r++) erase(r, 0, COLUMNS);
+      erase(row, 0, col + 1);
+      break;
+    default:
+      for (r = 0; r < ROWS; r++) erase(r, 0, COLUMNS);
+    }
+    break;
+  case 'K':
+    switch (param(0, 0)) {
+    case 0: erase(row, col, COLUMNS); break;
+    case 1: erase(row, 0, col + 1); break;
+    default: erase(row, 0, COLUMNS);
+    }
+    break;
+  case 'L': scroll_down(row, n); break;
+  case 'M': scroll_up(row, n); break;
+  case 'P':                           /* delete n characters */
+    for (c = col; c < COLUMNS; c++) {
+      if (c + n < COLUMNS) {
+	*CELL(row, c) = *CELL(row, c + n);
+	*(CELL(row, c) + 1) = *(CELL(row, c + n) + 1);
+      } else erase(row, c, c + 1);
+    }
+    break;
+  case '@':                           /* insert n blanks */
+    for (c = COLUMNS - 1; c >= col; c--) {
+      if (c - n >= col) {
+	*CELL(row, c) = *CELL(row, c - n);
+	*(CELL(row, c) + 1) = *(CELL(row, c - n) + 1);
+      } else erase(row, c, c + 1);
+    }
+    break;
+  case 'X': erase(row, col, col + n < COLUMNS ? col + n : COLUMNS); break;
+  case 'm': sgr(); break;
+  case 's': saved_row = row; saved_col = col; break;
+  case 'u': row = saved_row; col = saved_col; break;
+  default: break;                     /* r (scroll region), n, ... */
+  }
+  if (row < 0) row = 0;
+  if (row >= ROWS) row = ROWS - 1;
+  if (col < 0) col = 0;
+  if (col >= COLUMNS) col = COLUMNS - 1;
+}
+
+/* a character of a program's output */
+static void term_char(char c)
+{
+  if (esc_state == 1) {               /* after ESC */
+    esc_state = 0;
+    if (c == '[') {
+      esc_state = 2;
+      nparams = 0;
+      private_mark = 0;
+      params[0] = 0;
+    } else if (c == '7') { saved_row = row; saved_col = col; }
+    else if (c == '8') { row = saved_row; col = saved_col; }
+    else if (c == 'c') { clear_screen(); fg = 7; bg = 0; bold = reverse = 0; update_attr(); }
+    return;
+  }
+  if (esc_state == 2) {               /* CSI parameters, then the final */
+    if (c >= '0' && c <= '9') {
+      if (nparams == 0) nparams = 1;
+      params[nparams - 1] = params[nparams - 1] * 10 + (c - '0');
+    } else if (c == ';') {
+      if (nparams == 0) nparams = 1;
+      if (nparams < 8) params[nparams++] = 0;
+    } else if (c == '?' || c == '>' || c == '=') {
+      private_mark = 1;
+    } else if (c >= 0x40 && c <= 0x7E) {
+      esc_state = 0;
+      csi(c);
+    }
+    return;
+  }
+  if (c == 0x1B) { esc_state = 1; return; }
+  if (!control(c) && (unsigned char)c >= ' ') put(c, attr);
+}
+
+void _print_char(char c, char attrib) {
+  log_char(c);
+  if (attrib == CHAR_KERNEL_ATTRIB) {
+    if (!kernel_on_screen)
+      return;
+    if (!control(c)) put(c, attrib);
+  } else
+    term_char(c);
+  show_cursor();
 }
 
 void clear_screen() {
-  char * i;
-  for (i = (char*)BASE_VIDEO; i <= (char*)END_VIDEO; i++) {
-    *(i++) = ' ';
-    *i = 0x7;
-  }
-  video = (char*)BASE_VIDEO;
-  outportb(0x3d4, 0x0f);		/* Set the cursor to the	*/
-  outportb(0x3d5, 0);			/* upper-left corner of the	*/
-  outportw(0x3d4, 0x0e);		/* screen			*/
-  outportb(0x3d5, 0);
+  int r;
+  for (r = 0; r < ROWS; r++) erase(r, 0, COLUMNS);
+  row = col = 0;
+  wrap_pending = 0;
+  show_cursor();
 }
 
 void scroll_screen() {
-  uint32_t i;
-  char * dest = (char*)BASE_VIDEO;
-  char * source = (char*)BASE_VIDEO + 0xA0;
-  uint32_t nchars = COLUMNS*ROWS;
-
-  for (i = 0; i < nchars; i++) {
-    *dest = *source;
-    *(dest+1) = *(source+1);
-    dest += 2;
-    source += 2;
-  }
-
-  /* now dest points to the last row */
-  for (i = 0; i < COLUMNS; i++) {
-    *dest = ' ';
-    dest += 2;
-  }
+  scroll_up(0, 1);
 }
-

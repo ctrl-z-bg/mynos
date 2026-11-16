@@ -16,12 +16,25 @@
 
 #define CONSOLE_SERVICE "console"
 
-#define CONSOLE_READ 1
+#define CONSOLE_READ 1   /* len: max bytes -> up to len bytes of input
+                            (0 bytes: end of file, or a VTIME timeout) */
+#define CONSOLE_MODE 2   /* mode, vmin, vtime -> 0 bytes */
 
-/* request; the reply is up to len bytes of input, 0 bytes at end of file */
+/* mode bits (as termios ICANON and ECHO, which libmynos translates) */
+#define CONSOLE_CANON 1  /* line editing: input comes by whole lines */
+#define CONSOLE_ECHO  2  /* typed characters are shown */
+
+/* the screen (the kernel's terminal, VT100-like) */
+#define CONSOLE_ROWS 25
+#define CONSOLE_COLS 80
+
 struct console_req {
   int op;
   int len;
+  int pid;               /* the client: a raw mode belongs to its process */
+  int mode;
+  int vmin;              /* raw mode: as termios VMIN and VTIME (tenths of */
+  int vtime;             /* a second); VMIN 0 with VTIME > 0 may return 0 */
 };
 
 #endif

@@ -236,6 +236,12 @@ IPC; typed keys are echoed on screen and sent to the serial port.
   the `Mynos` library, files, the console, spawning programs
   (`tests/spawn`) and the shell, typing phrases through QEMU's monitor
   (`tools/type-keys.py`). Both toolchains pass.
+- **Terminal.** The kernel's screen driver is a small VT100-like terminal
+  for programs' output: cursor moves, erasing, colours, an alternate
+  screen. The console service has a raw input mode (keys one by one, the
+  arrows and editing keys as escape sequences) that `libmynos` maps from
+  termios (`tcgetattr`, `tcsetattr`), with the window size (80x25). kilo
+  (`third_party/kilo`) runs on it.
 - **Screen and log.** Once user space starts, the screen belongs to the
   programs: kernel messages, and services' messages (`mynos_log`, native
   call 31, `Mynos.log` in OCaml), go only to the log on the second serial
@@ -496,6 +502,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   gets its parent's environment by default; bare program names are looked
   for at the root of the RAM disk. `cd` and `pwd` in the shell. Closed
   mynos-0do.2.
+- **2026-11-16** — A terminal: VT100 sequences in the kernel's screen
+  driver, raw input mode in consoled, termios and window size in
+  libmynos. kilo, a small editor in C, works on it (tested: it saves a
+  file on /disk). Part of mynos-0do.3.
 - **2026-11-16** — The original website (mynos.sourceforge.net, from the
   Wayback Machine) archived as static files in `doc/website/`, with the
   2002-2004 news posts and the 2002 and 2004 test packages. Closed

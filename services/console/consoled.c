@@ -16,9 +16,13 @@
  * standard input (see mynos-lib/src/fileio.c). Output still goes straight
  * to the kernel's screen driver.
  *
- * Protocol, port registered as "console", one connection per request:
- *   request: struct console_req { int op; int len; }, op CONSOLE_READ
- *   reply:   up to len bytes of input; 0 bytes means end of file
+ * Protocol (mynos_console.h), port registered as "console", one connection
+ * per request: CONSOLE_READ returns up to len bytes of input (0 bytes: end
+ * of file); CONSOLE_MODE switches between line editing ("canonical") and
+ * raw input, key by key, as termios does: libmynos turns tcsetattr into
+ * it. In raw mode Enter is \r, Backspace DEL, the arrows and the editing
+ * keys VT100 sequences (ESC [ A...); the raw mode belongs to the process
+ * that set it, and a read from another process ends it.
  *
  * History: the last HIST_MAX lines typed are kept in memory; Up and Down
  * (or Ctrl-P and Ctrl-N) bring them back for editing, as in a Unix shell.
@@ -68,9 +72,20 @@ static int hist_lock;
 static char pending[QUEUE_MAX];
 static int pending_len = 0;
 
+/* the input mode (CONSOLE_MODE) */
+static int canon = 1, echo = 1, vmin = 1, vtime = 0, mode_owner = 0;
+
 /* keys beyond ASCII (keymap_translate: scan code << 8) */
-#define KEY_UP   0x4800
-#define KEY_DOWN 0x5000
+#define KEY_UP     0x4800
+#define KEY_DOWN   0x5000
+#define KEY_LEFT   0x4B00
+#define KEY_RIGHT  0x4D00
+#define KEY_HOME   0x4700
+#define KEY_END    0x4F00
+#define KEY_PGUP   0x4900
+#define KEY_PGDN   0x5100
+#define KEY_INSERT 0x5200
+#define KEY_DELETE 0x5300
 #define CTRL_P   0x10
 #define CTRL_N   0x0E
 
@@ -233,8 +248,41 @@ static void history_sync(void)
   }
 }
 
+/* raw mode: the key goes to the program at once, as a terminal sends it */
+static void raw_key(unsigned int c)
+{
+  const char * seq = NULL;
+  char b;
+  switch (c) {
+  case KEY_UP:     seq = "\033[A"; break;
+  case KEY_DOWN:   seq = "\033[B"; break;
+  case KEY_RIGHT:  seq = "\033[C"; break;
+  case KEY_LEFT:   seq = "\033[D"; break;
+  case KEY_HOME:   seq = "\033[H"; break;
+  case KEY_END:    seq = "\033[F"; break;
+  case KEY_PGUP:   seq = "\033[5~"; break;
+  case KEY_PGDN:   seq = "\033[6~"; break;
+  case KEY_INSERT: seq = "\033[2~"; break;
+  case KEY_DELETE: seq = "\033[3~"; break;
+  }
+  if (seq) {
+    queue_input(seq, strlen(seq), 0);
+    return;
+  }
+  if (c > 0xFF) return;
+  b = (char)c;
+  if (b == '\n') b = '\r';
+  else if (b == 0x08) b = 0x7F;
+  queue_input(&b, 1, 0);
+  if (echo && b >= ' ' && b < 0x7F) raw_write(&b, 1);
+}
+
 static void key_typed(unsigned int c)
 {
+  if (!canon) {
+    raw_key(c);
+    return;
+  }
   if (c == KEY_UP || c == CTRL_P) {
     history_move(-1);
   } else if (c == KEY_DOWN || c == CTRL_N) {
@@ -278,25 +326,36 @@ static void * keyboard_thread(void * arg)
       outportb(0x20, 0x20);
       continue;
     }
-    /* grey arrows are arrows even with Num Lock on (keypad 8 and 2 share
-       their scan codes) */
-    if (extended && (key == 0x48 || key == 0x50))
+    /* the grey keys are themselves even with Num Lock on (the keypad
+       shares their scan codes) */
+    if (extended && (key == 0x48 || key == 0x50 || key == 0x4B ||
+		     key == 0x4D || key == 0x47 || key == 0x4F ||
+		     key == 0x49 || key == 0x51 || key == 0x52 || key == 0x53))
       c = key << 8;
     else
       c = keymap_translate(key);
     extended = 0;
     outportb(0x20, 0x20);
-    if (c != 0 && (c <= 0xFF || c == KEY_UP || c == KEY_DOWN))
+    if (c != 0)
       key_typed(c);
   }
   return NULL;
 }
 
-/* take up to n bytes of queued input; 0 = end of file */
-static int take_input(char * buf, int n)
+/* take up to n bytes of queued input; 0 = end of file, or no input
+   within timeout_ms (if > 0) */
+static int take_input(char * buf, int n, int timeout_ms)
 {
   int got;
-  mynos_P(available);
+  if (timeout_ms > 0) {
+    int waited = 0;
+    while (mynos_tryP(available) != 0) {
+      if (waited >= timeout_ms) return 0;
+      mynos_sleep(10000);
+      waited += 10;
+    }
+  } else
+    mynos_P(available);
   mynos_P(lock);
   if (queue_len == 0 && eof_pending) {
     eof_pending = 0;
@@ -357,9 +416,23 @@ int main()
       memcpy(&req, msg->start, sizeof(req));
       if (req.op == CONSOLE_READ) {
 	if (req.len > (int)sizeof(buf)) req.len = sizeof(buf);
+	if (!canon && req.pid != mode_owner) {
+	  canon = echo = 1;      /* its program is gone (or did not restore) */
+	  vmin = 1;
+	  vtime = 0;
+	}
 	history_sync();          /* a program is about to read: a good time */
-	n = take_input(buf, req.len);
+	n = take_input(buf, req.len,
+		       (!canon && vmin == 0 && vtime > 0) ? vtime * 100 : 0);
 	mynos_send(channel, buf, n, 0);
+      } else if (req.op == CONSOLE_MODE) {
+	canon = (req.mode & CONSOLE_CANON) != 0;
+	echo = (req.mode & CONSOLE_ECHO) != 0;
+	vmin = req.vmin;
+	vtime = req.vtime;
+	mode_owner = req.pid;
+	if (canon) line_len = 0;
+	mynos_send(channel, buf, 0, 0);
       }
     }
     mynos_freeMsg(&msg);

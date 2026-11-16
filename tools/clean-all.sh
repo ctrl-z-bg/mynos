@@ -20,6 +20,7 @@ make -C mynos-lib/ocaml clean
 rm -f tests/*/*.byte tests/*/*.cm[io] tests/*/ramdisk.dsk tests/files/AUTOEXEC.BAT \
   tests/spawn/ocamlrun
 make -C init clean
+make -C third_party/kilo clean
 make -C services/tmpfs clean
 make -C services/ata clean
 make -C tests/storage clean

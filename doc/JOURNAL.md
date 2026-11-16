@@ -972,3 +972,35 @@ functions. What was missing, found by trying:
 - **`getrandom`**, for `Random.self_init` (it had a fallback, but the
   kernel reported the missing call): a xorshift seeded with the time-stamp
   counter, not cryptographic.
+
+## 2026-11-16 — A terminal for text user interfaces
+
+The plan was to move the screen from the kernel to the console service, so
+that the terminal would be a user-space service like the others. It ran
+into musl: its stdio writes `stdout` and `stderr` with direct `writev`
+system calls, which `libmynos` cannot replace, so C programs' output would
+have reached the screen behind the service's back and the cursor would
+have drifted. The terminal emulator went into the kernel's screen driver
+instead, where every output already arrives: about 300 lines for the
+VT100 subset text interfaces use (cursor moves and positioning, erasing,
+SGR colours, a hidden cursor, an alternate screen that saves and restores
+the shell's screen, inserting and deleting lines and characters). It can
+move to a service once the kernel forwards writes.
+
+Input stays in the console service: a raw mode (keys one by one, Enter as
+`\r`, Backspace as DEL, the arrows and editing keys as `ESC [` sequences,
+VMIN/VTIME reads), which `libmynos` maps from termios: it replaces
+`ioctl` for `TCGETS`, `TCSETS*` and `TIOCGWINSZ`. musl's `isatty` asks the
+kernel directly, so the kernel answers `TIOCGWINSZ` for fds 0-2. A raw
+mode belongs to the process that set it: a read from another process
+(the shell, after an editor that crashed) brings line editing back.
+
+kilo, Salvatore Sanfilippo's 1000-line editor, was the test: it needed
+two changes, both for the same reason as above (musl's stdio reads files
+with direct system calls), and then worked, full screen.
+
+One trap on the way: after changing the console protocol (the request grew
+from 8 to 24 bytes), the shell hung at its first command. Only `libmynos`
+and the services had been rebuilt, not the runtime that links it, and
+the service silently dropped requests of the old size. A full rebuild
+fixed it; the lesson is to rebuild everything after a protocol change.

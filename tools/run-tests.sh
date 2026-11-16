@@ -140,7 +140,7 @@ fi
 
 # seventh boot: the system RAM disk, init starts consoled and the shell (the
 # OCaml toplevel), driven through the keyboard
-history_saved=
+history_saved= kilo_saved=
 if [ -f system/ramdisk.dsk ]; then
     # a disk, for /disk and the shell's history: a copy of the FAT16 test image
     [ -f tests/fat/fat16.img ] && cp tests/fat/fat16.img tests/fat/run-shell.img
@@ -169,6 +169,7 @@ if [ -f system/ramdisk.dsk ]; then
                   'Sys.mkdir "/disk/src" 0o755; cd "/disk/src";;\n' \
                   'write "w.ml" "let () = print_endline (Sys.getcwd ())";;\n' \
                   'ignore (compile "w.ml"); run "w.byte" [];;\n' \
+                  'run "kilo" ["/disk/k.txt"];;\n' 'typed in kilo' '{ctrl-s}' '{ctrl-q}' \
                   '#quit;;\n'; do
         tools/type-keys.py "$tmp/mon7" "$phrase"
         sleep 2
@@ -186,6 +187,8 @@ if [ -f system/ramdisk.dsk ]; then
     if [ -f tests/fat/run-shell.img ]; then
         tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/.history \
             2>/dev/null | grep -qx '6 \* 7;;' && history_saved=yes
+        [ "$(tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/k.txt 2>/dev/null)" = \
+          "typed in kilo" ] && kilo_saved=yes
         rm -f tests/fat/run-shell.img
     fi
 fi
@@ -270,6 +273,11 @@ if [ -f system/ramdisk.dsk ]; then
     expect "- : int = 40000"
     expect "AUTOEXEC.BAT: Read-only file system"
     expect "init: shell.byte (pid"
+    if [ -n "$kilo_saved" ] || [ ! -f tests/fat/fat16.img ]; then
+        echo "ok    kilo (terminal: VT100, raw mode) saves a file on /disk"
+    else
+        echo "FAIL  kilo (terminal: VT100, raw mode) saves a file on /disk"; fail=1
+    fi
     if grep -aqx '/disk/src' "$log7"; then
         echo "ok    cd: a program compiled and run in /disk/src"
     else

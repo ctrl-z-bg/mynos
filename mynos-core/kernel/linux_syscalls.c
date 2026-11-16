@@ -144,6 +144,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .linux_waitpid\n"\
 	 "   cmpl $355, %eax\n"\
 	 "   je .linux_getrandom\n"\
+	 "   cmpl $54, %eax\n"\
+	 "   je .linux_ioctl\n"\
 	 "   cmpl $114, %eax\n"\
 	 "   je .linux_wait4\n"\
 	 "   pushl %eax\n"\
@@ -265,6 +267,9 @@ __asm__ (".pushsection .text\n" \
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_fstat64:\n"\
 	 "   call _linux_syscall_fstat64\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_ioctl:\n"\
+	 "   call _linux_syscall_ioctl\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_getrandom:\n"\
 	 "   call _linux_syscall_getrandom\n"\
@@ -506,6 +511,20 @@ int _linux_syscall_wait4(int pid, int * status, int options, void * rusage) {
     /* V'd once for every child that ends: check again then */
     __OS_sem_P(self->childSem);
   }
+}
+
+/* ioctl (54): only the window size of the screen, for fds 0-2 (isatty
+   asks it). The terminal settings are libmynos's (fileio.c), with the
+   console service. */
+int _linux_syscall_ioctl(int fd, uint32_t req, unsigned short * arg) {
+  if (fd >= 0 && fd <= 2 && req == 0x5413 /* TIOCGWINSZ */) {
+    if ((uint32_t)arg < ((uint32_t)USERMINPAGE << 12)) return -14;
+    arg[0] = 25;          /* rows */
+    arg[1] = 80;          /* columns */
+    arg[2] = arg[3] = 0;
+    return 0;
+  }
+  return -25;             /* -ENOTTY */
 }
 
 /* getrandom (355): bytes from a xorshift generator seeded with the

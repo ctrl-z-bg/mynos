@@ -50,3 +50,5 @@ tests/fat/ocamlrun
 tests/fat/content/
 *.img
 system/ocamlc.byte
+third_party/kilo/kilo
+system/kilo
