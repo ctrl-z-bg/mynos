@@ -52,9 +52,10 @@ if [ -f tests/files/ramdisk.dsk ]; then
     cat "$log5" >> "$log"
 fi
 
-# sixth boot: init.byte starts other programs from the RAM disk
+# sixth boot: init.byte starts other programs from the RAM disk (about
+# twenty-five of them, one after the other)
 if [ -f tests/spawn/ramdisk.dsk ]; then
-    timeout "${WAIT:-10}" tools/run-qemu.sh "$ocamlrun" \
+    timeout "${WAIT:-15}" tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         tests/spawn/ramdisk.dsk \
         -- -display none -serial null -serial "file:$log6" || true

@@ -720,3 +720,65 @@ appears about 1 s after boot, and every test boot got faster.
 
 **Lesson.** When a system is slow, first find out whether it is busy or
 waiting: sampling the instruction pointer answers in a minute.
+
+## 2026-11-16 — Processes that give their memory back
+
+### Freeing what you stand on
+
+**Problem.** `killProcess` (2002) freed ports and channels; the rest was a
+`TODO`. Each program the shell ran kept 0.5–1 MB until reboot.
+
+**Design.** A process ends inside `killProcess`, on its own kernel stack
+and with its own page directory loaded: it cannot free them. So it only
+releases what others see (IPC, semaphores, its children become orphans),
+records its page directory and joins a list of zombies. `reapZombies`,
+called at the start of every `sched()` and by `wait4`, frees the zombies
+other than the current process: it reads the dead page directory and page
+tables through the kernel's one-page window onto physical memory
+(`externalmem.c`), and drops one reference on every present frame
+(physical pages are reference-counted, so copy-on-write and IPC-shared
+pages are handled), then on the page tables, the directory and its
+mirror. The two shared kernel ranges (the kernel itself, the RAM disk's
+page tables) are skipped. The descriptor and pid go when the parent has
+collected the status, or at once when nobody can.
+
+**The catch: aliases.** `spawnProcess` and `fork` build a process's pages
+(directory, page tables, program, stacks) in the kernel's linear space,
+then map the same frames into the process. The kernel mappings stayed
+forever: freeing the frames would have left them pointing at memory
+given to someone else, and kept kernel linear space in use. Once a
+process is built they are now dropped (`__OS_releasePages(.., free = 0)`,
+a pattern `externalmem.c` already used), so each frame belongs to the
+process alone.
+
+**Threads.** An exited thread's `tss` and kernel stack (which lives in the
+process's space) cannot be freed by the thread itself; they are kept on
+a list and reused by the next thread the process creates, and freed with
+the process.
+
+### The leaks the measurement found
+
+With the memory freed, a loop of spawns still lost about 3.5 pages per
+program. Measuring the free pages around separate loops (file operations
+alone, spawns alone) and fixing what showed up:
+- **The registry** started a thread per request on a `malloc`ed stack it
+  never freed (and those threads used the C library while sharing their
+  creator's TLS, mynos-l9h). Requests are short: it now serves them one at
+  a time, with a timeout on the receive.
+- **`listenPort`** took each connection request off the port's queue and
+  never freed it.
+- **`__OS_ipc_freeChannel`**: the first side to close a channel returned
+  before removing the id from its own channel list. One list node per
+  connection, and every file operation is a connection; at the process's
+  end, those stale ids were "freed" again.
+- What remained, about a page per 30 operations, was not a leak: the
+  parent's OCaml minor heap (1 MB, allocated on first touch) filling up.
+  The test touches it all before measuring.
+
+Twenty programs in a row now leave the free memory unchanged.
+
+**Lessons.**
+- Measure the cost of each operation separately, then repeat the loop: a
+  constant cost per round is a leak, a decreasing one is warming up.
+- Memory reachable through two mappings has two owners in practice; give
+  each frame one.

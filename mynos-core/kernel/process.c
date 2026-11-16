@@ -33,6 +33,8 @@
 #include "ipc/port.h"
 #include "ipc/channel.h"
 #include "mynos.h"
+#include "mem/externalmem.h"
+#include "mem/physicalmem.h"
 
 /* the arguments of a process started without any (GRUB modules) */
 static char * default_argv[] = { "mynos", NULL };
@@ -74,6 +76,7 @@ extern uint32_t ramdisk_present;
    shared: read-only pages are left alone by fork's copy-on-write. */
 #define RAMDISK_MAXPTS 16   /* 64 MB */
 static uint32_t * ramdiskPTs[RAMDISK_MAXPTS];
+static uint32_t ramdiskPTframes[RAMDISK_MAXPTS];   /* physical page numbers */
 static uint32_t ramdiskNPTs = 0;
 
 static int buildRamdiskPTs(void) {
@@ -87,6 +90,7 @@ static int buildRamdiskPTs(void) {
     if ((ramdiskPTs[k] = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL)
       return -1;
     kbzero(ramdiskPTs[k], PAGE_SIZE);
+    ramdiskPTframes[k] = LINEAR_TO_PHYSICAL_ADDRESS(ramdiskPTs[k]) >> 12;
   }
   for (i = 0; i < npages; i++)
     ramdiskPTs[i / PDPT_ENTRIES][i % PDPT_ENTRIES] =
@@ -187,6 +191,15 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   /* initial kernel stack data of the new process */
   void * stackData;
 
+  /* The pages built here are allocated in the kernel's linear space, then
+     mapped into the new process. Once it is built, those kernel mappings
+     ("aliases") are dropped: each frame then belongs to the process alone,
+     and is freed with it (reapZombies). */
+  void * alias[8 + KERNEL_STACK_NPAGES + PROCESS_INFO_NPAGES];
+  uint32_t aliasPages[8 + KERNEL_STACK_NPAGES + PROCESS_INFO_NPAGES];
+  uint32_t nAliases = 0;
+#define ALIAS(ADDR, N) { alias[nAliases] = (ADDR); aliasPages[nAliases++] = (N); }
+
   // the linear space process map
   desc->lmemmap = NULL;
 
@@ -260,6 +273,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 			USERMAXPAGE - (ustackBottomAddr >> 12) + 1);
 
   if ((newPD = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
+  ALIAS(newPD, 1);
   kbzero(newPD, PAGE_SIZE);
 
   for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
@@ -281,22 +295,26 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 #endif
 
   if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
+  ALIAS(lastPT, 1);
   desc->ptsMirror = (void*)LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
   kbzero(lastPT, PAGE_SIZE);
 
   /* allocate the page tables needed for info and stacks */
   if ((infoAndStacksPTs = 
        (uint32_t*)__OS_askPages(nInfoAndStacksPTs, 1, 0)) == NULL) return NULL;
+  ALIAS(infoAndStacksPTs, nInfoAndStacksPTs);
   kbzero(infoAndStacksPTs, PAGE_SIZE * nInfoAndStacksPTs);
 
   lastButOnePT = infoAndStacksPTs + (PAGE_SIZE / sizeof(uint32_t)) * (nInfoAndStacksPTs - 1);
 
   if ((currPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
+  ALIAS(currPT, 1);
   kbzero(currPT, PAGE_SIZE);
   newPD[_asm_last_kernel_page_dir_entry_used + 1] = 
     LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_USER | PF_READWRITE | PF_PRESENT;
 
   if ((currPF = (uint32_t*)__OS_askPages(npages_for_process, 1, 0)) == NULL) return NULL;
+  ALIAS(currPF, npages_for_process);
 
   kbzero(currPF, npages_for_process * PAGE_SIZE);
 
@@ -355,6 +373,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
     uint32_t topUser = ustackBottomAddr + PAGE_SIZE * USER_STACK_NPAGES;
 
     if ((top = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
+    ALIAS(top, 1);
     kbzero(top, PAGE_SIZE);
     buildInitialStack(top, topUser, initialStack, argv, envp);
     *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(top)
@@ -364,6 +383,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   /* allocate the kernel stack */
   for (i = 0; i < KERNEL_STACK_NPAGES; i++) {
     if ((stackFrame = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
+    ALIAS(stackFrame, 1);
     *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_PRESENT;
     /* at the end of this cycle stackData points to the last kernel
        stack page of the new process, mapped in the current process page */
@@ -373,6 +393,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   /* allocate the process info space */
   for (i = 0; i < PROCESS_INFO_NPAGES; i++) {
     if ((currPF = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
+    ALIAS(currPF, 1);
     kbzero(currPF, PAGE_SIZE);
     *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_PRESENT;
   }
@@ -450,10 +471,35 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   desc->exitStatus = 0;
   desc->reaped = 0;
   desc->childSem = __OS_sem_allocateSemaphore(0);
+  desc->deadThreads = NULL;
+  desc->memFreed = 0;
+  desc->nextZombie = NULL;
+  tss->kstack = 0;
+
+  /* drop the kernel aliases (the frames stay, mapped in the process) */
+  for (i = 0; i < nAliases; i++)
+    __OS_releasePages(alias[i], aliasPages[i], 0, 0);
+#undef ALIAS
 
   /* ready to run: only now can the scheduler pick it */
   readyQueueInsert(tss);
   return desc;
+}
+
+/* a free pid: the slots of ended processes are reused, in a cycle so that
+   a pid is not given again soon after its process ended */
+int allocPid(void) {
+  static uint32_t last = 0;
+  uint32_t i, p;
+  for (i = 0; i < MAXPROCESSES - 1; i++) {
+    p = (last + i) % (MAXPROCESSES - 1) + 1;          /* 1 .. MAX-1 */
+    if (processTable[p] == NULL) {
+      last = p;
+      if (p >= numProcess) numProcess = p + 1;
+      return p;
+    }
+  }
+  return -1;
 }
 
 /*
@@ -465,10 +511,9 @@ int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
   process_descriptor_t * desc;
   int pid;
 
-  if (numProcess >= MAXPROCESSES) return MYNOS_ERR_FULL;
+  if ((pid = allocPid()) < 0) return MYNOS_ERR_FULL;
   desc = (process_descriptor_t*)kmalloc(sizeof(process_descriptor_t));
   if (desc == NULL) return MYNOS_ERR_FULL;
-  pid = numProcess;
   desc->pid = pid;
   desc->ppid = ppid;
   if (spawnProcess(desc, elf, len, argv, envp) == NULL) {
@@ -479,20 +524,29 @@ int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
   }
   desc->tss->pid = pid;
   processTable[pid] = desc;
-  numProcess++;
   return pid;
 }
 
 
+/* processes that ended, whose memory is still to be freed */
+static process_descriptor_t * zombies = NULL;
+
+/*
+ * Ends the current process. It runs on the process's own kernel stack and
+ * page directory, so it only releases what other processes can see (IPC,
+ * semaphores) and queues the process: its memory is freed by reapZombies,
+ * from another process, after the switch. The descriptor stays until the
+ * parent collects the status (wait4), or goes at once if nobody can.
+ */
 void killProcess(int status) {
   tss_t * tss;
   process_queue_t * q;
   int port, channel;
   int i, n;
   process_descriptor_t * parent;
-  /* TODO free sem for every threads */
-  //__OS_sem_freeSemaphore((processTable[currProcess]->tss)->privSem);
-  processTable[currProcess]->isAlive = 0;
+  process_descriptor_t * self = processTable[currProcess];
+
+  self->isAlive = 0;
   numThreads -= processTable[currProcess]->numThreads;
   numProcesses--;
   
@@ -519,16 +573,126 @@ void killProcess(int status) {
   }
 
 
+  /* semaphores: the threads' private ones and the children's */
+  for (tss = self->tss; tss; tss = tss->next)
+    __OS_sem_freeSemaphore(tss->privSem);
+  __OS_sem_freeSemaphore(self->childSem);
+
+  /* the children become orphans: nobody will wait for them */
+  for (i = 1; i < (int)numProcess; i++) {
+    process_descriptor_t * c = processTable[i];
+    if (!c || c == self || c->ppid != (pid_t)currProcess) continue;
+    c->ppid = 0;
+    if (!c->isAlive && c->memFreed)
+      freeProcessDescriptor(i);
+  }
+
   /* tell the parent, which may be waiting for it */
-  processTable[currProcess]->exitStatus = status;
-  __OS_sem_freeSemaphore(processTable[currProcess]->childSem);
-  parent = processTable[processTable[currProcess]->ppid];
-  if (processTable[currProcess]->ppid != 0 && parent && parent->isAlive)
+  self->exitStatus = status;
+  parent = processTable[self->ppid];
+  if (self->ppid != 0 && parent && parent->isAlive)
     __OS_sem_V(parent->childSem);
 
-  // TODO: free all process resources
-  //kfree(processTable[currProcess]);
-  //processTable[currProcess] = NULL;
+  /* the memory: later, from elsewhere */
+  self->pgdirPhys = (uint32_t)currThread->pgdir;
+  self->memFreed = 0;
+  self->nextZombie = zombies;
+  zombies = self;
+}
+
+void freeProcessDescriptor(pid_t pid) {
+  kfree(processTable[pid]);
+  processTable[pid] = NULL;
+}
+
+/* drop one reference to a physical page (it is free at the last one) */
+static void unsetFrame(uint32_t frame) {
+  static int warned = 0;
+  if (pmem_countref(frame) > 0)
+    pmem_unset(frame);
+  else if (!warned) {
+    warned = 1;
+    printk("freeing a process: frame ");
+    print_uint_hex(frame);
+    printk(" already free\n");
+  }
+}
+
+#ifdef RAMDISK
+static int isRamdiskPT(uint32_t frame) {
+  uint32_t k;
+  for (k = 0; k < ramdiskNPTs; k++)
+    if (ramdiskPTframes[k] == frame) return 1;
+  return 0;
+}
+#else
+#define isRamdiskPT(frame) 0
+#endif
+
+/*
+ * Frees every frame of an ended process's address space, from another
+ * process: its pages (program, heap, stacks, kernel stacks, process info;
+ * shared or copy-on-write pages just lose a reference), its page tables,
+ * its page directory and the page table that mirrors it. The kernel's
+ * page tables and the shared RAM disk ones are not the process's.
+ */
+static void freeAddressSpace(process_descriptor_t * d) {
+  uint32_t pdFrame = d->pgdirPhys >> 12;
+  uint32_t * pd, * w, saved, unused, i, j;
+  int pdSeen = 0;
+
+  if ((pd = kmalloc(PAGE_SIZE)) == NULL) return;   /* leak, rather */
+  w = __mem_mapFrame(pdFrame, &saved);
+  kmemcpy(pd, w, PAGE_SIZE);
+
+  for (i = _asm_last_kernel_page_dir_entry_used + 1; i < LAST_PDPT_INDEX;
+       i++) {
+    uint32_t ptFrame = pd[i] >> 12;
+    if (!(pd[i] & PF_PRESENT) || isRamdiskPT(ptFrame)) continue;
+    w = __mem_mapFrame(ptFrame, &unused);
+    for (j = 0; j < PDPT_ENTRIES; j++)
+      if (w[j] & PF_PRESENT) {
+	/* the page directory is mapped as a page too (top area) */
+	if ((w[j] >> 12) == pdFrame) pdSeen = 1;
+	unsetFrame(w[j] >> 12);
+      }
+    unsetFrame(ptFrame);
+  }
+  __mem_unmapFrame(saved);
+
+  if (!pdSeen) unsetFrame(pdFrame);
+  unsetFrame(((uint32_t)d->ptsMirror) >> 12);
+  kfree(pd);
+}
+
+/*
+ * Frees the memory of the processes that ended, except the current one
+ * (it may be the process that is ending, still on its own stack): called
+ * by the scheduler, and by wait4 before it frees a child's descriptor.
+ */
+void reapZombies(void) {
+  process_descriptor_t ** pz = &zombies;
+  while (*pz) {
+    process_descriptor_t * z = *pz;
+    tss_t * t, * next;
+    if (z->pid == (pid_t)currProcess) {
+      pz = (process_descriptor_t **)&z->nextZombie;
+      continue;
+    }
+    *pz = z->nextZombie;
+
+    freeAddressSpace(z);
+    for (t = z->tss; t; t = next) { next = t->next; kfree(t); }
+    for (t = z->deadThreads; t; t = next) { next = t->next; kfree(t); }
+    z->tss = z->deadThreads = NULL;
+    __lmt_freeList(&(z->lmemmap));
+    z->memFreed = 1;
+
+    /* nobody will collect its status */
+    if (z->ppid == 0 || z->reaped || !processTable[z->ppid] ||
+	!processTable[z->ppid]->isAlive)
+      freeProcessDescriptor(z->pid);
+  }
 }
 
 void initStack(uint32_t s, tss_t * tss) {

@@ -150,6 +150,7 @@ int32_t __OS_port_listenPort(int32_t p) {
   channel = allocChannel(processTable[currProcess]->pid, req->pid);
   *(req->chan) = channel;
   __OS_sem_V(req->sem);
+  kfree(req);   /* (it was never freed: one leak per connection) */
   UNLOCK_PORT(port);
   return channel;
 }

@@ -459,8 +459,13 @@ int _linux_syscall_wait4(int pid, int * status, int options, void * rusage) {
       if (pid > 0 && i != pid) continue;
       children++;
       if (!p->isAlive) {
-	p->reaped = 1;
 	if (status) *status = p->exitStatus;
+	/* free its memory now (if not done yet), then its descriptor */
+	reapZombies();
+	if (p->memFreed)
+	  freeProcessDescriptor(i);
+	else
+	  p->reaped = 1;   /* the reaper will free it */
 	return i;
       }
     }
@@ -669,7 +674,8 @@ static uint32_t copy_page_table(uint32_t ptp, uint32_t * ptc) {
 	  /* copy the page frame */
 	  kmemcpy((void*)pf, (void*)__MEM_LINEAR_ADDRESS(ptp, i, 0), 
 		  PAGE_SIZE);
-	  //DEALLOCATE(pf);
+	  /* drop the kernel alias: the frame is the child's alone */
+	  __OS_releasePages(pf, 1, 0, 0);
 	} else {   // ok, it's a user page
 	  /* the page is set as cow only if: it's not shared, it's not RO,
 	     it's not already cow */
@@ -700,12 +706,14 @@ static tss_t * copyThreads(process_descriptor_t * ddest,
 int _linux_syscall_fork() {
   uint32_t i;
   uint32_t * pde, flags;
-  uint32_t * pdc, *ptc;
+  uint32_t * pdc, *ptc, *prevPtc = NULL;
   uint32_t *lastPT;
   pid_t new_pid;
   int ret = 0;
   tss_t * mirror;  // this is the new process thread corrisponding to current
 
+  /* the pid first: nothing to undo if there is none */
+  if ((new_pid = allocPid()) < 0) return -11;   /* -EAGAIN */
   if ((pdc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
   if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
 
@@ -730,7 +738,10 @@ int _linux_syscall_fork() {
 	/* copy the page table */
 	if (copy_page_table(i, ptc) == -1) return -1;
 
-	//DEALLOCATE(ptc);
+	/* the kernel aliases of the child's structures are dropped once
+	   they are built: the last page table still has to be written */
+	if (prevPtc) __OS_releasePages(prevPtc, 1, 0, 0);
+	prevPtc = ptc;
       } else
 	pdc[i] = flags;
     } else
@@ -740,10 +751,8 @@ int _linux_syscall_fork() {
   /* set the PD pointer: now ptc is the last but one PT */
   ptc[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(pdc) | PF_PRESENT;
   kmemcpy((void*)lastPT, (void*)pdc, PAGE_SIZE);
+  __OS_releasePages(ptc, 1, 0, 0);
 
-  //DEALLOCATE(pdc);
-
-  new_pid = numProcess++;
   numProcesses++;
   numThreads += processTable[currProcess]->numThreads;
 
@@ -787,9 +796,13 @@ int _linux_syscall_fork() {
   processTable[new_pid]->exitStatus = 0;
   processTable[new_pid]->reaped = 0;
   processTable[new_pid]->childSem = __OS_sem_allocateSemaphore(0);
+  processTable[new_pid]->deadThreads = NULL;   /* the parent's are its own */
+  processTable[new_pid]->memFreed = 0;
+  processTable[new_pid]->nextZombie = NULL;
 
   processTable[new_pid]->ptsMirror = (void*)LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
-  //DEALLOCATE(lastPT);
+  __OS_releasePages(lastPT, 1, 0, 0);
+  __OS_releasePages(pdc, 1, 0, 0);
   
   /* copy the registers, except eip and esp */
   asm volatile("movl %%eax, %0":"=m"(mirror->eax));

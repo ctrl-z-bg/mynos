@@ -81,29 +81,31 @@ int registryLookUp(char * name) {
   return ret;
 }
 
-void * worker(void * p) {
-  int channel;
+/* serve one request on a new channel. Requests are served one at a time
+   by the main thread: they are short, and the 2004 version's thread per
+   request leaked its stack (and used the C library from threads that
+   share their creator's TLS, mynos-l9h) */
+static void serve(int channel) {
   mynos_msg_t * msg;
   mynos_reg_cmd_t * cmd;
   int ret;
   int port;
 
-  channel = (int)p;
-  msg = (mynos_msg_t*)malloc(sizeof(mynos_msg_t));
-  ret = mynos_recv(channel, &msg, 0, 0);
+  /* a client that connects and sends nothing must not stop the registry */
+  ret = mynos_recv(channel, &msg, 0, 1000);
   if (ret < 0) {
     printf("Warning registry: invalid recv (%d)\n", ret);
     mynos_freeChannel(channel);
-    free(msg);
-    return NULL;
+    return;
   }
   
   if (msg->size != sizeof(mynos_reg_cmd_t)) {
     printf("Warning registry: invalid message size\n");
     ret = MYNOS_ERR_INVALID;
     mynos_send(channel, &ret, sizeof(int), 0);
+    mynos_freeMsg(&msg);
     mynos_freeChannel(channel);
-    return NULL;
+    return;
   }
 
   cmd = (mynos_reg_cmd_t*)(msg->start);
@@ -139,7 +141,6 @@ void * worker(void * p) {
   mynos_send(channel, &ret, sizeof(int), 0);
   mynos_freeMsg(&msg);
   mynos_freeChannel(channel);
-  return NULL;
 }
 
 int main() {
@@ -164,7 +165,7 @@ int main() {
     if (channel < 0)
       printf("Warning registry listening port: %d\n", channel);
     else {
-      mynos_threadCreate(worker, (void*)channel, malloc(0x5000)+0x4000, 0);
+      serve(channel);
     }
   }
 

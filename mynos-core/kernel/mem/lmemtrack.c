@@ -134,6 +134,18 @@ uint32_t __lmt_freeArea(pdListEl **pdListBgn, uint32_t fromPage, uint32_t npages
   return 0;
 }
 
+/* frees the whole list (a process that ended) */
+void __lmt_freeList(pdListEl **pdListBgn)
+{
+  pdListEl *run = *pdListBgn;
+  while ( run ) {
+    pdListEl *next = run->next;
+    myfree(run);
+    run = next;
+  }
+  *pdListBgn = NULL;
+}
+
 pdListEl *__lmt_copyList(pdListEl *pdListBgn)
 {
   pdListEl *ret = NULL;

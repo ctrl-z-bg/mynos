@@ -33,27 +33,37 @@ int32_t __OS_threadCreate(uint32_t entry_point,
 			   uint32_t flags) {
   tss_t * tss;
   tss_t * next = currThread->next;
+  process_descriptor_t * self = processTable[currProcess];
+  uint32_t kstack;
 
   /* TODO: check the parameters */
 
-  /* create a new thread descriptor */
-  tss = (tss_t*)kmalloc(sizeof(tss_t));
-
-  tss->pid = currProcess;
+  /* a new thread descriptor and kernel stack: those of a thread that
+     exited, if any (they are freed with the process) */
+  tss_t ** pt = &(self->deadThreads);
+  while (*pt && !(*pt)->kstack)   /* the first thread's stack is elsewhere */
+    pt = (tss_t **)&((*pt)->next);
+  if (*pt) {
+    tss = *pt;
+    *pt = tss->next;
+    kstack = tss->kstack;
+  } else {
+    tss = (tss_t*)kmalloc(sizeof(tss_t));
+    /* a kernel stack in user space but with superuser rights */
+    kstack = (uint32_t)__OS_askPages(KERNEL_STACK_NPAGES, 1,
+				     PF_SUPERVISOR_IN_USER_SPACE);
+  }
 
   /* copy the current thread's descriptor to the new one */
   kmemcpy(tss, currThread, sizeof(tss_t));
 
   /* fill some entry... */
+  tss->pid = currProcess;
   tss->eip = entry_point;
   tss->esp = stack;
   tss->eflags = INITIAL_EFLAGS;
-
-  /* create a new kernel stack in user space but with superuser rights */
-  tss->esp0 = ((uint32_t)__OS_askPages(KERNEL_STACK_NPAGES, 
-				       1, 
-				       PF_SUPERVISOR_IN_USER_SPACE)) +
-    KERNEL_STACK_NPAGES * PAGE_SIZE - 1;
+  tss->kstack = kstack;
+  tss->esp0 = kstack + KERNEL_STACK_NPAGES * PAGE_SIZE - 1;
 
   /* initialize the kernel stack for the new thread */
   initStack(tss->esp0, tss);
@@ -94,15 +104,23 @@ void __OS_threadExit(void * retval) {
   printk(") exited\n");
 #endif
 
-  // TODO free this tss
   prev = currThread->prev;
   next = currThread->next;
+  hasPrev = (prev != NULL);
+  hasNext = (next != NULL);
+
+  if (!hasPrev && !hasNext)           /* the last thread: the process ends */
+    _linux_syscall_exit((int)retval);
 
   processTable[currProcess]->numThreads--;
   numThreads--;
 
-  hasPrev = (prev != NULL);
-  hasNext = (next != NULL);
+  /* keep the tss and kernel stack for the next thread (it is safe: this
+     thread runs no more once sched switches away, and only then can
+     another thread of the process create one) */
+  __OS_sem_freeSemaphore(currThread->privSem);
+  currThread->next = processTable[currProcess]->deadThreads;
+  processTable[currProcess]->deadThreads = currThread;
 
   /* enqueue outgoing thread */
   if (hasNext && hasPrev) {

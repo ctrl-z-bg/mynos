@@ -64,8 +64,12 @@ talking through IPC.
   an ELF image (`createProcess` in `process.c`): at boot from the GRUB
   modules, and since 2026 by a process through the native `spawn` call,
   with real `argv`/`envp` on the Linux initial stack. A parent collects a
-  child's exit status with `waitpid`/`wait4`. Ending a process does not
-  free its memory yet (mynos-pg6).
+  child's exit status with `waitpid`/`wait4`. A process that ends gives
+  everything back: its IPC objects and semaphores at once, its memory
+  (pages, page tables, kernel stacks, `tss`) from the next context switch
+  (`reapZombies`: it cannot free the stack it runs on), its descriptor and
+  pid when the parent has collected the status. Pids are reused. Exited
+  threads leave their `tss` and kernel stack to the next thread.
 - **Synchronization:** kernel semaphores (`sem.c`). Every thread has a private
   semaphore.
 - **IPC** (`kernel/ipc/`): **ports** are used to establish connections, and
@@ -98,6 +102,8 @@ All services are linked statically against `libmynos` and placed at
 (`mynos.mk`).
 
 - `registry`: maps names to ports, like a name server (`mynos_registry.h`).
+  It serves one request at a time (2026; it used to start a thread per
+  request).
 - `keyboard`, `serial`: drivers using `mynos_driverRegister` and port I/O.
 - `console`: the console service (2026). Owns the keyboard, edits the line
   being typed and gives lines to programs reading their standard input,
@@ -267,7 +273,6 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | Issue | Where | Problem |
 |---|---|---|
 | mynos-pg9 | `mynos-byterun/src/floats.c` | `frexp()`/`modf()` return 1.0 (legacy 3.06 runtime only; the 5.5 runtime uses musl's libm). |
-| mynos-pg6 | `mynos-core/kernel/process.c` | A process that ends keeps its memory: each program the shell runs costs 0.5–1 MB until reboot. |
 | mynos-l9h | `mynos-core/kernel/threads.c` | Threads share their creator's TLS; no `clone`, so no OCaml `Thread` or `Domain`. |
 | — | `mynos-lib/src/fileio.c` | One read-only flat directory (memrofs); no writable storage (mynos-rf4). |
 
@@ -288,8 +293,8 @@ Planned work, in order. Details live in the beads issues.
 3. **A demonstrable OS with a terminal** (mynos-a2j, done): OCaml bindings
    for the MyNOS API, starting bytecode programs from user space, file I/O
    through memrofs, a console service, and the OCaml toplevel as the shell.
-   Next: processes that free their memory (mynos-pg6), threads and domains
-   (mynos-l9h).
+   Then processes that free their memory (mynos-pg6, done). Next: threads
+   and domains (mynos-l9h).
 4. Later: real external storage, a disk driver and a filesystem as services
    (mynos-rf4); networking (mynos-4f6), a GUI toolkit (mynos-9lr), distinctive
    applications (mynos-3h1).
@@ -379,3 +384,9 @@ Side task: archive the old SourceForge site (mynos-db2).
   the linear space map (closes mynos-dha) and kept the idle thread out of
   the round robin (startup from 32 s to 1 s). Closed mynos-a2j.4 and the
   epic mynos-a2j.
+- **2026-11-16** — Processes free their memory when they end: deferred
+  reaping from another context, kernel aliases dropped at creation, pids
+  and thread stacks reused. Found and fixed three IPC leaks (connection
+  requests, channel ids, registry thread stacks). Twenty programs in a
+  row now leave the free memory unchanged (`tests/spawn`). Closed
+  mynos-pg6.

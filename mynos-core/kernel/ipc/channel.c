@@ -151,6 +151,7 @@ int32_t __OS_ipc_freeChannel(int32_t c) {
   // check if I'm a channel partner
   uc = getMyReadChannel(c);
 
+  if (uc == NULL) return MYNOS_ERR_INVALID;
   if (uc->receiver != processTable[currProcess]->pid)
     return MYNOS_ERR_DENY;
 
@@ -166,6 +167,10 @@ int32_t __OS_ipc_freeChannel(int32_t c) {
   print_int(c);
 #endif
 
+  // it is no longer mine (this was done only by the last side to free
+  // it: the other one kept the id in its list, one leak per channel)
+  listExtractElem(processTable[currProcess]->channelList, (void*)c, NULL);
+
   // check if the other partner freed the channel too
   if (!broken) {
 #ifdef DEBUG
@@ -173,8 +178,6 @@ int32_t __OS_ipc_freeChannel(int32_t c) {
 #endif
     return 0;
   }
-
-  listExtractElem(processTable[currProcess]->channelList, (void*)c, NULL);
 
 #ifdef DEBUG
     printk(" and I'm the last referent one: let's free it!\n");

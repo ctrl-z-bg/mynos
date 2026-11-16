@@ -32,4 +32,14 @@ let () =
   let c = run [| "crash" |] in
   ok &&& check "an uncaught exception: exit code 2"
     (Mynos.wait c = Mynos.Exited 2);
+  (* processes give their memory back when they end (mynos-pg6). First
+     let this program touch all of its minor heap (1 MB, whose pages are
+     allocated on first use), so that only the children count. *)
+  let free () = (Mynos.stats ()).Mynos.free_pages in
+  for _ = 1 to 400_000 do ignore (Sys.opaque_identity (ref 0)) done;
+  let before = free () in
+  for _ = 1 to 20 do ignore (Mynos.wait (run [| "0" |])) done;
+  let after = free () in
+  Printf.printf "spawn: 20 runs, free pages %d -> %d\n%!" before after;
+  ok &&& check "20 runs give their memory back" (before - after <= 4);
   print_endline (if !ok then "spawn: all checks passed" else "spawn: FAIL")

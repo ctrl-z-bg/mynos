@@ -146,6 +146,9 @@ void sched() {
   while ((awaken = timerQueueExtractExpired()) != NULL)
     privV(awaken);
 
+  // free the memory of the processes that ended
+  reapZombies();
+
   currThread = readyQueueNext();
   /* the idle thread (process 0) runs only when no other thread is ready:
      it keeps the CPU until the next timer tick, and every IPC exchange

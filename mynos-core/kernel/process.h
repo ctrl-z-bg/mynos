@@ -68,6 +68,15 @@ typedef struct {
   int exitStatus;
   uint32_t reaped;
   int childSem;
+
+  /* ending: the threads that exited (their tss and kernel stacks are
+     reused by the next threads), the page directory of the process, and
+     the list of ended processes whose memory is still to be freed (it can
+     be freed only from another process: see reapZombies) */
+  tss_t * deadThreads;
+  uint32_t pgdirPhys;
+  uint32_t memFreed;
+  void * nextZombie;
 } process_descriptor_t;
 
 extern process_descriptor_t * processTable[];
@@ -91,6 +100,9 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
 		  pid_t ppid);
 void killProcess(int status);
+int allocPid(void);
+void reapZombies(void);
+void freeProcessDescriptor(pid_t pid);
 
 /* Linux wait status of a process that called exit(code) / was killed */
 #define EXIT_STATUS(code) (((code) & 0xFF) << 8)

@@ -79,6 +79,10 @@ typedef struct {
   uint32_t tls_limit;
   uint32_t tls_pages;   // limit in 4K units
 
+  // kernel stack of a thread made by __OS_threadCreate (0 for the first
+  // thread, whose stack is in the process's top area), kept for reuse
+  uint32_t kstack;
+
 } tss_t;
 
 #endif

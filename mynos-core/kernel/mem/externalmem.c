@@ -45,6 +45,17 @@ static void __mapPageToAppPage(uint32_t phyPage) {
   INVALIDATE_THE_CACHE((void*)__EXTERNAL_VMSPACE_PAGE);
 }
 
+uint32_t * __mem_mapFrame(uint32_t phyPage, uint32_t * saved) {
+  *saved = *(__EXTERNAL_VMSPACE_PAGE_ENTRY);
+  __mapPageToAppPage(phyPage);
+  return __EXTERNAL_VMSPACE_PAGE;
+}
+
+void __mem_unmapFrame(uint32_t saved) {
+  *(__EXTERNAL_VMSPACE_PAGE_ENTRY) = saved;
+  INVALIDATE_THE_CACHE((void*)__EXTERNAL_VMSPACE_PAGE);
+}
+
 static void __mapProcessPD(pid_t pid) {
   uint32_t phyPageAddress;
 

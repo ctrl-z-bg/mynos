@@ -29,4 +29,11 @@
 int32_t __OS_mapPagesTo(pid_t pid, uint32_t lpage,
 			uint32_t npages, uint32_t mode);
 
+/* map the physical page phyPage at a kernel window and return its address,
+   to read structures of another process (its page directory, its page
+   tables). *saved receives the window's previous mapping, to give back to
+   __mem_unmapFrame. One window: one frame at a time. */
+uint32_t * __mem_mapFrame(uint32_t phyPage, uint32_t * saved);
+void __mem_unmapFrame(uint32_t saved);
+
 #endif

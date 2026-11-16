@@ -36,5 +36,6 @@ uint32_t __lmt_freeArea(pdListEl **pdListBgn, uint32_t fromPage,
 uint32_t __lmt_forceAllocation(pdListEl **pdListBgn, uint32_t fromPage, 
 			       uint32_t npages);
 pdListEl *__lmt_copyList(pdListEl *pdListBgn);
+void __lmt_freeList(pdListEl **pdListBgn);
 
 #endif
