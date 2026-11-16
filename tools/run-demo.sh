@@ -13,12 +13,17 @@ cd "$root"
 
 ocamlrun=$(tools/ocamlrun-path.sh)
 
+# the console service owns the keyboard where it exists (dev toolchain);
+# otherwise the original keyboard driver does
+keyboard=services/keyboard/keyboardd
+[ -f services/console/consoled ] && keyboard=services/console/consoled
+
 exec tools/run-qemu.sh \
     "$ocamlrun" \
     tests/hello/hello.byte \
     services/registry/registry \
     services/fs/memrofs/memrofsd \
-    services/keyboard/keyboardd \
+    "$keyboard" \
     services/serial/seriald \
     tests/ramdisk/ramdisk.dsk \
     "$@"

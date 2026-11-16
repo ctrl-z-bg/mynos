@@ -10,10 +10,9 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 
 ocamlrun=$(tools/ocamlrun-path.sh)
-log=$(mktemp)
-log2=$(mktemp)
-log3=$(mktemp)
-trap 'rm -f "$log" "$log2" "$log3"' EXIT
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+log=$tmp/log1 log2=$tmp/log2 log3=$tmp/log3 log4=$tmp/log4
 
 timeout "${WAIT:-10}" tools/run-qemu.sh \
     "$ocamlrun" \
@@ -42,16 +41,38 @@ if [ -f tests/mynos-ocaml/mynos_test.byte ]; then
     cat "$log3" >> "$log"
 fi
 
+# fourth boot: typing on the keyboard, read by OCaml through consoled
+if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
+    tools/run-qemu.sh "$ocamlrun" tests/console/echo.byte \
+        services/registry/registry services/console/consoled \
+        -- -display none -serial null -serial "file:$log4" \
+           -monitor "unix:$tmp/mon,server,nowait" &
+    qemu=$!
+    sleep 4
+    keys() {
+        for k in "$@"; do printf 'sendkey %s\n' "$k"; done |
+            socat - "UNIX-CONNECT:$tmp/mon" >/dev/null
+        sleep 0.5
+    }
+    keys h i ret
+    keys shift-o shift-k x backspace ret
+    keys ctrl-d
+    sleep 2
+    printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon" >/dev/null || true
+    wait $qemu || true
+    cat "$log4" >> "$log"
+fi
+
 fail=0
 expect() {
-    if grep -qF -- "$1" "$log"; then
+    if grep -aqF -- "$1" "$log"; then
         echo "ok    $1"
     else
         echo "FAIL  $1"; fail=1
     fi
 }
 reject() {
-    if grep -qF -- "$1" "$log"; then
+    if grep -aqF -- "$1" "$log"; then
         echo "FAIL  unexpected: $1"; fail=1
     fi
 }
@@ -67,6 +88,11 @@ if [ -f tests/effects/effects.byte ]; then
 fi
 if [ -f tests/mynos-ocaml/mynos_test.byte ]; then
     expect "mynos-ocaml: all checks passed"
+fi
+if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
+    expect 'console: line 1: "hi"'
+    expect 'console: line 2: "OK"'
+    expect "console: end of input after 2 lines"
 fi
 reject "PANIC"
 reject "page fault (?)"

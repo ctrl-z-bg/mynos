@@ -40,3 +40,4 @@ build/
 mynos-runtime/ocamlrun
 mynos-runtime/primitives
 mynos-runtime/prims.c
+services/console/consoled

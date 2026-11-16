@@ -13,6 +13,7 @@
 #   tests/effects/effects.byte       effect handlers test (OCaml 5 only)
 #   mynos-lib/ocaml/mynos.cma        the Mynos OCaml library (dev only)
 #   tests/mynos-ocaml/mynos_test.byte  test of the Mynos library (dev only)
+#   tests/console/echo.byte          reads lines from the console (dev only)
 #   tests/abi/abi                    system call checks
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 set -eu
@@ -31,6 +32,7 @@ if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
   make -C mynos-lib/ocaml
   (cd tests/mynos-ocaml && ocamlc -use-prims ../../mynos-runtime/primitives \
      -I ../../mynos-lib/ocaml mynos.cma -o mynos_test.byte mynos_test.ml)
+  (cd tests/console && ocamlc -o echo.byte echo.ml)
 fi
 (cd tests/hello && ocamlc -o hello.byte hello.ml)
 case $(ocamlc -version) in

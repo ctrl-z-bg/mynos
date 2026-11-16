@@ -147,6 +147,9 @@ void _print_char(char c, char attrib) {
       scroll_screen();
       video -= 0xA0;
     }
+  } else if (c == '\b') {           /* back one cell (not past the line) */
+    if (((uint32_t)video - BASE_VIDEO) % 0xA0 != 0)
+      video -= 2;
   } else {
     *video = c;
     *(video + 1) = attrib;
