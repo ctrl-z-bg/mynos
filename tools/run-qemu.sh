@@ -14,6 +14,7 @@
 #   KERNEL_ONLY  if set and no module is given, boot the bare kernel
 #   KERNEL   kernel image (default: mynos-core/kernel/kernel.elf)
 #   MEM      RAM in MB (default 32)
+#   DISK     a raw disk image, attached as the first IDE disk
 #   VERBOSE  if set, kernel messages stay on screen after boot (they always
 #            go to the second serial port)
 #   SHOT     if set, run headless, save a PNG of the screen to $SHOT after
@@ -38,7 +39,8 @@ if [ -z "$modules" ] && [ -z "${KERNEL_ONLY:-}" ]; then
 fi
 
 set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "${MEM:-32}" \
-    ${VERBOSE:+-append verbose} "$@"
+    ${VERBOSE:+-append verbose} \
+    ${DISK:+-drive file=$DISK,format=raw,if=ide,index=0} "$@"
 
 if [ -z "${SHOT:-}" ]; then
     exec qemu-system-i386 "$@"

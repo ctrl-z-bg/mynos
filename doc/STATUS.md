@@ -124,6 +124,10 @@ All services are linked statically against `libmynos` and placed at
   it through `open`, `read`, `lseek`, `stat`, `opendir`, ... of
   `mynos-lib/src/fileio.c`. The namespace is flat (names up to 63
   characters); `/`, `.` and the empty path name its only directory.
+- `ata` (2026): **a disk driver written in OCaml** (`services/ata/ata.ml`):
+  the first ATA disk, PIO with LBA28, polling, through the I/O ports; it
+  serves sectors as the block service `ata0` (`mynos_block.h`; the OCaml
+  client is module `Block` of the `Mynos` library).
 - `tmpfs` (2026): **the first MyNOS service written in OCaml**
   (`services/tmpfs/tmpfs.ml`), a writable filesystem in memory. It speaks
   the same protocol, which has `WRITE` and `UNLINK` too; `fileio.c` sends
@@ -452,3 +456,8 @@ Side task: archive the old SourceForge site (mynos-db2).
   FAT, served by OCaml services. First step: port I/O and driver
   registration in `Mynos` (`inb`, `outb`, `inw`, `outw`, `insw`, `outsw`,
   `driver_register`, `enable_irq`). Closed mynos-rf4.1.
+- **2026-11-16** — The ATA disk driver, in OCaml (`services/ata`): PIO,
+  LBA28, polling, as the block service `ata0` (protocol
+  `mynos_block.h`, client module `Block`). `tools/run-qemu.sh` takes a
+  disk image (`DISK=`); the storage test writes to it and the host checks
+  the image. Closed mynos-rf4.2.

@@ -10,8 +10,14 @@ mynos.cmi: mynos.mli
 mynos.cmo: mynos.ml mynos.cmi
 	$(OCAMLC) -c mynos.ml
 
-mynos.cma: mynos.cmo
-	$(OCAMLC) -a -o $@ mynos.cmo
+block.cmi: block.mli mynos.cmi
+	$(OCAMLC) -c block.mli
+
+block.cmo: block.ml block.cmi
+	$(OCAMLC) -c block.ml
+
+mynos.cma: mynos.cmo block.cmo
+	$(OCAMLC) -a -o $@ mynos.cmo block.cmo
 
 clean:
 	rm -f *~ *.cm[ioa]

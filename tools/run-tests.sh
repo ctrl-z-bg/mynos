@@ -13,7 +13,7 @@ ocamlrun=$(tools/ocamlrun-path.sh)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 log=$tmp/log1 log2=$tmp/log2 log3=$tmp/log3 log4=$tmp/log4 log5=$tmp/log5
-log6=$tmp/log6 log7=$tmp/log7 log8=$tmp/log8
+log6=$tmp/log6 log7=$tmp/log7 log8=$tmp/log8 log9=$tmp/log9
 
 timeout "${WAIT:-10}" tools/run-qemu.sh \
     "$ocamlrun" \
@@ -31,6 +31,27 @@ if [ -f tests/effects/effects.byte ]; then
     timeout "${WAIT:-10}" tools/run-qemu.sh "$ocamlrun" tests/effects/effects.byte \
         -- -display none -serial null -serial "file:$log2" || true
     cat "$log2" >> "$log"
+fi
+
+# ninth boot: the ATA driver (OCaml) on a QEMU disk: 2048 sectors, each
+# starting with "MYNOS SECTOR n"; the test writes sector 1000
+disk_written=
+if [ -f tests/storage/ramdisk.dsk ]; then
+    python3 -c '
+import sys
+with open(sys.argv[1], "wb") as f:
+    for n in range(2048):
+        s = ("MYNOS SECTOR %d\n" % n).encode()
+        f.write(s + bytes(512 - len(s)))' "$tmp/disk.img"
+    DISK=$tmp/disk.img MEM=64 timeout "${WAIT:-10}" tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        tests/storage/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$log9" || true
+    cat "$log9" >> "$log"
+    disk_written=$(python3 -c '
+import sys
+d = open(sys.argv[1], "rb").read()
+print(d[1000 * 512:1000 * 512 + 16].decode("latin-1"))' "$tmp/disk.img")
 fi
 
 # eighth boot: domains, i.e. Linux threads (clone, futex)
@@ -155,6 +176,15 @@ if [ -f tests/effects/effects.byte ]; then
 fi
 if [ -f tests/domains/domains.byte ]; then
     expect "domains: all checks passed"
+fi
+if [ -f tests/storage/ramdisk.dsk ]; then
+    expect "ata: disk of 2048 sectors"
+    expect "storage: all checks passed"
+    if [ "$disk_written" = "WRITTEN BY MYNOS" ]; then
+        echo "ok    the disk image holds what MyNOS wrote"
+    else
+        echo "FAIL  the disk image holds what MyNOS wrote"; fail=1
+    fi
 fi
 if [ -f tests/mynos-ocaml/mynos_test.byte ]; then
     expect "mynos-ocaml: all checks passed"

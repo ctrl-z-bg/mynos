@@ -45,3 +45,4 @@ tests/files/AUTOEXEC.BAT
 tests/spawn/ocamlrun
 system/ocamlrun
 system/consoled
+tests/storage/ocamlrun

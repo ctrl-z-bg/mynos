@@ -21,6 +21,8 @@ rm -f tests/*/*.byte tests/*/*.cm[io] tests/*/ramdisk.dsk tests/files/AUTOEXEC.B
   tests/spawn/ocamlrun
 make -C init clean
 make -C services/tmpfs clean
+make -C services/ata clean
+make -C tests/storage clean
 make -C shell clean
 make -C system clean
 ' >/dev/null
