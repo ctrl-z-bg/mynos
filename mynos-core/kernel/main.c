@@ -71,6 +71,9 @@ void tsksw() {
   processTable[0] = 
     (process_descriptor_t*)kmalloc(sizeof(process_descriptor_t));
   processTable[0]->tss = (tss_t*)kmalloc(sizeof(tss_t));
+  processTable[0]->tss->tls_base = 0;
+  processTable[0]->tss->tls_limit = 0;
+  processTable[0]->tss->tls_pages = 0;
 
   /* set a tss for the outcoming process */
   processTable[0]->tss->pgdir = (uint32_t**)0x100000;
@@ -81,7 +84,7 @@ void tsksw() {
 
   processTable[0]->numThreads = 1;
   processTable[0]->lastThread = 0;
-  (processTable[0]->tss)->prev = (processTable[0]->tss)->prev = NULL;
+  (processTable[0]->tss)->next = (processTable[0]->tss)->prev = NULL;
   processTable[0]->pid = 0;
   processTable[0]->tss->pid = 0;
   processTable[0]->tss->threadID = 0;

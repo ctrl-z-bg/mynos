@@ -73,6 +73,12 @@ typedef struct {
   // in which queue I am
   void * queue;
 
+  // thread-local storage segment, set by set_thread_area (Linux syscall 243)
+  // and loaded into the GDT_TLS_INDEX descriptor on every context switch
+  uint32_t tls_base;
+  uint32_t tls_limit;
+  uint32_t tls_pages;   // limit in 4K units
+
 } tss_t;
 
 #endif

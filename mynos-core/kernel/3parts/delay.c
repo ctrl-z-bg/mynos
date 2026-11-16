@@ -105,7 +105,7 @@ static unsigned long delay_count = 1;
  * calibration without it losing its finesse afterwards.
  */
 
-void __delay(loops)
+void __delay(unsigned long loops)
 {
     unsigned long c;
     for(c=0;c<loops;c++);

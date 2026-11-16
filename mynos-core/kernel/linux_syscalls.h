@@ -51,4 +51,18 @@ struct mmap_args {
 void * _linux_syscall_mmap(struct mmap_args * args);
 int _linux_syscall_munmap(void *start, size_t length);
 
+/* Linux i386 struct user_desc */
+struct user_desc {
+  uint32_t entry_number;
+  uint32_t base_addr;
+  uint32_t limit;
+  uint32_t flags;  /* seg_32bit:1 contents:2 read_exec_only:1
+                      limit_in_pages:1 seg_not_present:1 useable:1 */
+};
+
+int _linux_syscall_set_thread_area(struct user_desc * u_info);
+
+/* load the TLS segment of thread t into the GDT_TLS_INDEX descriptor */
+void tls_load(void * t);
+
 #endif

@@ -30,6 +30,9 @@
 
 #define GDT_MAX_ENTRIES   8192
 
+/* GDT slot for the user thread-local storage segment (see set_thread_area) */
+#define GDT_TLS_INDEX     5
+
 void _init_gdt();
 
 void gdt_set_entry(uint32_t entry,

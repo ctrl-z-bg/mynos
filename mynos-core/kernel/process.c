@@ -26,11 +26,15 @@
 #include "kutils.h"
 #include "elf.h"
 #include "process.h"
+
 #include "video.h"
 #include "mem/dynalloc.h"
 #include "sched.h"
 #include "ipc/port.h"
 #include "ipc/channel.h"
+
+/* bytes reserved at the top of the user stack for argc/argv/envp/auxv */
+#define INITIAL_STACK_SIZE 64
 
 extern void startThread();
 typedef struct {
@@ -260,9 +264,30 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 			     KERNEL_STACK_NPAGES +
 			     USER_STACK_NPAGES));// + nInfoAndStacksPTs*1024 - 1;
 
-  /* allocate-on-demand the user stack */
-  for (i = 0; i < USER_STACK_NPAGES; i++)
+  /* allocate-on-demand the user stack, except its top page: it holds the
+     initial process stack the Linux ABI expects (argc, argv, envp, auxv),
+     which modern libcs read at startup */
+  for (i = 0; i < USER_STACK_NPAGES - 1; i++)
     *(pun++) = PF_USER | PF_LOGICAL_PRESENT | PF_READWRITE;
+  {
+    uint32_t * top;
+    uint32_t topUser = ustackBottomAddr + PAGE_SIZE * USER_STACK_NPAGES;
+
+    if ((top = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
+    kbzero(top, PAGE_SIZE);
+    /* argv[0] string in the last 16 bytes of the stack */
+    kmemcpy((char*)top + PAGE_SIZE - 16, "mynos", 6);
+    /* the vector at topUser - INITIAL_STACK_SIZE (see tss->esp below) */
+    top += (PAGE_SIZE - INITIAL_STACK_SIZE) / sizeof(uint32_t);
+    top[0] = 1;                   /* argc */
+    top[1] = topUser - 16;        /* argv[0] */
+    top[2] = 0;                   /* end of argv */
+    top[3] = 0;                   /* end of envp */
+    top[4] = 0;                   /* auxv: AT_NULL */
+    top[5] = 0;
+    *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)top & ~(PAGE_SIZE - 1))
+      | PF_USER | PF_PRESENT | PF_READWRITE;
+  }
 
   /* allocate the kernel stack */
   for (i = 0; i < KERNEL_STACK_NPAGES; i++) {
@@ -295,6 +320,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   desc->tss = (tss_t*)kmalloc(sizeof(tss_t));
 
   tss = desc->tss;
+  tss->tls_base = tss->tls_limit = tss->tls_pages = 0;
 
   // insert the thread into readyQueue
   readyQueueInsert(tss);
@@ -302,7 +328,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   /* set the new process tss */
   tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(newPD);
   tss->io_bitmap_offset = sizeof(tss_t)<<16;
-  tss->eip = (uint32_t)0x40000000;
+  tss->eip = entryaddr;  /* ELF entry point (was hardcoded 0x40000000) */
 
   desc->isAlive = 1;
 
@@ -318,7 +344,8 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   tss->ldt = 0;
 
   tss->eflags = INITIAL_EFLAGS;  // iopl = 3
-  tss->esp = tss->ebp = ustackBottomAddr + PAGE_SIZE * USER_STACK_NPAGES - 16;
+  tss->esp = tss->ebp = ustackBottomAddr + PAGE_SIZE * USER_STACK_NPAGES -
+    INITIAL_STACK_SIZE;
   tss->esp0 = tss->esp1 = tss->esp2 = kstackBottomAddr + PAGE_SIZE * KERNEL_STACK_NPAGES;
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
 

@@ -12,7 +12,7 @@ extern void * __OS_releasePages(void *pageaddr, unsigned int npages,
 /* 1st allocated block (beginning of heap), NULL initialized */
 void *_heap = NULL;
 
-inline void
+static inline void
 _insertBlock(void * current, unsigned int sz, void *previous, void *next)
 {
   /* first of all, see if the new block is above the current heap,

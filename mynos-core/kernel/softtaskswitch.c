@@ -22,6 +22,7 @@
 #include "process.h"
 #include "tss.h"
 #include "softtaskswitch.h"
+#include "linux_syscalls.h"
 
 #include "mem/mem.h"
 
@@ -54,6 +55,9 @@ void switchTo(tss_t * old, tss_t * new) {
 
   tss->esp0 = next->esp0;
 
+  /* the incoming thread's TLS segment, reloaded when %gs is popped below */
+  tls_load(next);
+
   /* save some register */
   asm volatile(\
 	       "pushl %esi\n\t"			\
@@ -67,10 +71,7 @@ void switchTo(tss_t * old, tss_t * new) {
 
   /* change page directories only if they are different */
   if (prev->pgdir != next->pgdir)
-    asm volatile(\
-		 "movl %0,%%eax\n\t"\
-		 "movl %%eax,%%cr3\n\t"\
-		 ::"m"(next->pgdir));
+    asm volatile("movl %0,%%cr3\n\t" :: "r"(next->pgdir) : "memory");
 
   /* save esp and eip (a fixed label) of the outcoming process, 
      restore esp of the incoming process */

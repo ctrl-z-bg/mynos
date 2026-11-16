@@ -75,6 +75,10 @@ __asm__ (".pushsection .text\n" \
 	 "   je .linux_munmap\n"\
 	 "   cmpl $140, %eax\n"\
 	 "   je .linux_llseek\n"\
+	 "   cmpl $192, %eax\n"\
+	 "   je .linux_mmap2\n"\
+	 "   cmpl $243, %eax\n"\
+	 "   je .linux_set_thread_area\n"\
 	 "   push %eax\n"\
 	 "   call _linux_syscall_NOTIMPLEMENTED\n"\
 	 ".linux_exit:\n"\
@@ -156,10 +160,60 @@ __asm__ (".pushsection .text\n" \
 	 "   popl %esi\n"\
 	 "   popl %edi\n"\
 	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_mmap2:\n"\
+	 /* same arguments as old mmap, in registers: build a struct mmap_args
+	    on the stack (offset is in pages, ignored like in old mmap) */
+	 "   pushl %ebp\n"\
+	 "   pushl %edi\n"\
+	 "   pushl %esi\n"\
+	 "   pushl %edx\n"\
+	 "   pushl %ecx\n"\
+	 "   pushl %ebx\n"\
+	 "   pushl %esp\n"\
+	 "   call _linux_syscall_mmap\n"\
+	 "   addl $4, %esp\n"\
+	 "   popl %ebx\n"\
+	 "   popl %ecx\n"\
+	 "   popl %edx\n"\
+	 "   popl %esi\n"\
+	 "   popl %edi\n"\
+	 "   popl %ebp\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_set_thread_area:\n"\
+	 "   pushl %ebx\n"\
+	 "   call _linux_syscall_set_thread_area\n"\
+	 "   popl %ebx\n"\
+	 "   jmp .exit_linux_syscall\n"\
 	 ".exit_linux_syscall:\n"\
 	 "   iret                \n"\
 	 ".popsection\n");
 
+
+/* Thread-local storage: a single GDT slot (GDT_TLS_INDEX) shared by all
+   threads, rewritten from the incoming thread's tss on every switch. */
+void tls_load(void * t) {
+  tss_t * thread = (tss_t *)t;
+  if (thread->tls_limit == 0 && thread->tls_base == 0)
+    gdt_set_entry(GDT_TLS_INDEX, 0, 0xFFFFF,
+		  D_DATA + D_WRITE + D_BIG + D_BIG_LIM + D_DPL3);
+  else
+    gdt_set_entry(GDT_TLS_INDEX, thread->tls_base, thread->tls_limit,
+		  D_DATA + D_WRITE + D_BIG + D_DPL3 +
+		  (thread->tls_pages ? D_BIG_LIM : 0));
+}
+
+int _linux_syscall_set_thread_area(struct user_desc * u_info) {
+  if (u_info->entry_number != (uint32_t)-1 &&
+      u_info->entry_number != GDT_TLS_INDEX)
+    return -22; /* EINVAL */
+
+  currThread->tls_base = u_info->base_addr;
+  currThread->tls_limit = u_info->limit & 0xFFFFF;
+  currThread->tls_pages = (u_info->flags >> 4) & 1;
+  u_info->entry_number = GDT_TLS_INDEX;
+  tls_load(currThread);
+  return 0;
+}
 
 void _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id) {
   printk("syscall ");
@@ -246,6 +300,8 @@ void * _linux_syscall_mmap(struct mmap_args * args) {
 
   npages = (args->length - 1) / PAGE_SIZE + 1;
   ret =__OS_askPages(npages, 0, PF_READWRITE | PF_USER);
+  if (ret == NULL)
+    ret = (void *)-12; /* -ENOMEM: libcs test for -4095..-1, not NULL */
 
 #ifdef DEBUG
   printk("mmap: ");

@@ -25,7 +25,7 @@
 #include "kutils.h"
 #include "mem/dynalloc.h"
 
-#define INITIAL_SEGMENTS 5
+#define INITIAL_SEGMENTS 6
 
 #define GDT_SIZE 8192*8
 
@@ -41,6 +41,8 @@ desc_table(GDT, INITIAL_SEGMENTS) {
   /* user code segment */
   stnd_desc(0, 0xFFFFF, (D_CODE + D_BIG + D_BIG_LIM + D_DPL3)),
   /* user data segment */
+  stnd_desc(0, 0xFFFFF, (D_DATA + D_WRITE + D_BIG + D_BIG_LIM + D_DPL3)),
+  /* user TLS segment (GDT_TLS_INDEX): rewritten on every context switch */
   stnd_desc(0, 0xFFFFF, (D_DATA + D_WRITE + D_BIG + D_BIG_LIM + D_DPL3)),
 };
 

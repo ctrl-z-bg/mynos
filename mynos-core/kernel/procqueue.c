@@ -38,7 +38,7 @@ int pqEmpty(process_queue_t * q) {
 }
 
 uint32_t pqNElem(process_queue_t * q) {
-  return pqNElem(q);
+  return listNElem(q);
 }
 
 tss_t * pqExtract(process_queue_t *q) {

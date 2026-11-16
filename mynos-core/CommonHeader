@@ -21,7 +21,7 @@ CWD        = $(shell pwd)
 MYNOS_CORE_ROOT    = $(CWD:%/$(RELPATH)=%)
 
 CC = gcc
-CFLAGS = -DMYNOS -nostdinc -Wall -I. -fno-stack-protector
+CFLAGS = -DMYNOS -nostdinc -Wall -I. -fno-stack-protector -fno-pie -g
 LD = ld
 MAKE	= make
 AS = nasm
