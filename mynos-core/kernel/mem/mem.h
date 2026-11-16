@@ -195,6 +195,7 @@ extern uint32_t __total_phy_pages;
 
 /* to call in mynos_main() */
 void init_memory();
+void mem_reserveAtBoot(uint32_t start, uint32_t len);
 
 /* return value:
    'pageaddr' on success

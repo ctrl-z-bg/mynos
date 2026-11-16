@@ -37,6 +37,22 @@ static void __allocateOnUse(uint32_t * pte, uint32_t addr);
 
 extern uint32_t currProcess;
 
+/* Physical ranges already in use at boot outside the first 4MB (the
+   multiboot modules), registered by mynos_main before init_memory so that
+   no allocation can reuse them. */
+#define MAX_BOOT_RESERVED 32
+static uint32_t boot_reserved_start[MAX_BOOT_RESERVED];
+static uint32_t boot_reserved_len[MAX_BOOT_RESERVED];
+static uint32_t n_boot_reserved = 0;
+
+void mem_reserveAtBoot(uint32_t start, uint32_t len) {
+  if (n_boot_reserved < MAX_BOOT_RESERVED && len > 0) {
+    boot_reserved_start[n_boot_reserved] = start;
+    boot_reserved_len[n_boot_reserved] = len;
+    n_boot_reserved++;
+  }
+}
+
 void init_memory() {
   uint32_t i;
   uint32_t * tmp;
@@ -56,7 +72,35 @@ void init_memory() {
   for (i = 0; i < first_free_phy_page; i++)   /* set bitmap for pages already 
 						 allocated */
     pmem_set(i);
+  /* and for the multiboot modules (they may extend past the first 4MB) */
+  for (i = 0; i < n_boot_reserved; i++) {
+    uint32_t page = boot_reserved_start[i] >> 12;
+    uint32_t last = (boot_reserved_start[i] + boot_reserved_len[i] - 1) >> 12;
+    for (; page <= last && page < __total_phy_pages; page++)
+      if (!(__memory_bitmap[page / 8] & (1 << (page % 8))))
+	pmem_set(page);
+  }
   //__SET_MEMORY_BITMAP_PAGE_BIT(i);
+
+  /* start.asm identity-maps only the first 4MB: map the module pages above
+     it at linear == physical too, so that modinfo addresses stay valid.
+     This must happen before any allocation (the GDT is next): present
+     entries keep __OS_askPages from handing out those linear addresses. */
+  for (i = 0; i < n_boot_reserved; i++) {
+    uint32_t page = boot_reserved_start[i] >> 12;
+    uint32_t last = (boot_reserved_start[i] + boot_reserved_len[i] - 1) >> 12;
+    for (; page <= last; page++) {
+      if (page < first_free_phy_page) continue;
+      if (__IS_PAGE_TABLE_FREE(__PAGE_PD_INDEX(page))) {
+	uint32_t newptaddr = (pmem_findAFreePhysicalPage() << 12);
+	__SET_PAGE_DIR_ENTRY(__PAGE_PD_INDEX(page), newptaddr);
+	INIT_PAGE_TABLE(__GET_PAGE_TABLE_ENTRY(__PAGE_PD_INDEX(page), 0));
+      }
+      __SET_PAGE_TABLE_ENTRY_AND_ALLOC(__PAGE_PD_INDEX(page),
+				       __PAGE_PT_INDEX(page),
+				       page << 12, PF_READWRITE);
+    }
+  }
 
   _init_gdt();
 
@@ -76,6 +120,7 @@ void init_memory() {
     }
   __SET_PAGE_DIR_ENTRY(_asm_last_kernel_page_dir_entry_used, 0);
   printk(" done\n");
+
 
   /*
     we'll use the kernel space's last but one PT to temporary
@@ -396,6 +441,10 @@ static void __allocateOnUse(uint32_t * pte, uint32_t addr) {
   
   // QUESTION: should be invalidated now? To be sure...
   INVALIDATE_THE_CACHE(addr);
+
+  /* fresh memory must read as zeros (as on Linux: libcs rely on it), and
+     must not leak what the frame held for its previous owner */
+  kbzero((void *)(addr & ~(PAGE_SIZE - 1)), PAGE_SIZE);
 #ifdef DEBUG
   printk("new allocated page: ");
   print_ulong_hex(new_phy_page);

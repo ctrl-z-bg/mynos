@@ -150,6 +150,7 @@ void mynos_main(multiboot_info_t *boot_info) {
   for (i = 0; i < boot_info->mods_count; i++) {
     modinfo[i].start = (uint32_t*)module[i].mod_start;
     modinfo[i].len = module[i].mod_end - module[i].mod_start;
+    mem_reserveAtBoot(module[i].mod_start, modinfo[i].len);
 #ifdef RAMDISK
     if (!kmemcmp((uint32_t*)modinfo[i].start, ".RAMDISK", 8)) {
       ramdisk = (void *)modinfo[i].start;

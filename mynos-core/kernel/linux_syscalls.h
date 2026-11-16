@@ -62,6 +62,16 @@ struct user_desc {
 
 int _linux_syscall_set_thread_area(struct user_desc * u_info);
 
+struct iovec {
+  void * iov_base;
+  size_t iov_len;
+};
+
+int _linux_syscall_writev(int fd, const struct iovec * iov, int iovcnt);
+int _linux_syscall_mprotect(void * addr, size_t len, int prot);
+int _linux_syscall_nosignals();
+int _linux_syscall_set_tid_address(int * tidptr);
+
 /* load the TLS segment of thread t into the GDT_TLS_INDEX descriptor */
 void tls_load(void * t);
 
