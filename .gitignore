@@ -43,4 +43,5 @@ mynos-runtime/prims.c
 services/console/consoled
 tests/files/AUTOEXEC.BAT
 tests/spawn/ocamlrun
-shell/ocamlrun
+system/ocamlrun
+system/consoled

@@ -22,6 +22,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <time.h>
 
 #define CAML_NAME_SPACE
 #include <caml/mlvalues.h>
@@ -271,4 +272,12 @@ CAMLprim value caml_mynos_log(value msg)
 {
   mynos_log("%s", String_val(msg));
   return Val_unit;
+}
+
+/* seconds since boot (CLOCK_MONOTONIC) */
+CAMLprim value caml_mynos_uptime(value unit)
+{
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return caml_copy_double(ts.tv_sec + ts.tv_nsec / 1e9);
 }

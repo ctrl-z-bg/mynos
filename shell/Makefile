@@ -1,13 +1,12 @@
-# The MyNOS shell: the OCaml toplevel as init.byte, on a RAM disk with the
-# runtime, the standard library interfaces and a few programs.
-# Built in the dev container (tools/build-all.sh).
+# The MyNOS shell: the OCaml toplevel (shell.byte), with module Shell.
+# Built in the dev container (tools/build-all.sh); it runs from the system
+# RAM disk (system/), started by init.
 
 OCAMLC = ocamlc -use-prims ../mynos-runtime/primitives -I ../mynos-lib/ocaml
-STDLIB = $(shell ocamlc -where)
 MYNOS = ../mynos-lib/ocaml/mynos.cmi ../mynos-lib/ocaml/mynos.cma \
 	../mynos-runtime/primitives
 
-all: ramdisk.dsk
+all: shell.byte
 
 shell.cmi: shell.mli $(MYNOS)
 	$(OCAMLC) -c shell.mli
@@ -15,21 +14,9 @@ shell.cmi: shell.mli $(MYNOS)
 shell.cmo: shell.ml shell.cmi
 	$(OCAMLC) -c shell.ml
 
-init.byte: shell.cmo main.ml $(MYNOS)
+shell.byte: shell.cmo main.ml $(MYNOS)
 	$(OCAMLC) -linkall -I +compiler-libs ocamlcommon.cma ocamlbytecomp.cma \
 	  ocamltoplevel.cma mynos.cma shell.cmo main.ml -o $@
-
-# the runtime without its debugging information: 0.5 MB instead of 1.7
-ocamlrun: ../mynos-runtime/ocamlrun
-	strip -o $@ $<
-
-FILES = init.byte ocamlrun shell.cmi ../mynos-lib/ocaml/mynos.cmi \
-	$(wildcard $(STDLIB)/*.cmi) \
-	../tests/hello/hello.byte ../tests/spawn/child.byte \
-	../tests/ramdisk/AUTOEXEC.BAT
-
-ramdisk.dsk: $(FILES)
-	../services/fs/memrofs/tool/createDisk $(FILES) >/dev/null
 
 clean:
 	rm -f *.cm[io] *.byte ocamlrun ramdisk.dsk

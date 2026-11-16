@@ -134,6 +134,28 @@ modinfo_t bytecode;
 /* the kernel command line (multiboot), copied before memory is set up */
 static char kernel_cmdline[256];
 
+/* the modules' command lines ("path arg1 arg2...", as GRUB's module
+   line or QEMU's -initrd entry): their argv */
+#define MODULE_CMDLINE 128
+#define MODULE_MAXARGS 16
+static char module_cmdline[MAXMODULES][MODULE_CMDLINE];
+static char * module_argv[MAXMODULES][MODULE_MAXARGS + 1];
+
+/* split module i's command line in place into its argv */
+static char ** module_args(int i) {
+  char * s = module_cmdline[i];
+  int n = 0;
+  while (*s && n < MODULE_MAXARGS) {
+    while (*s == ' ') *s++ = 0;
+    if (!*s) break;
+    module_argv[i][n++] = s;
+    while (*s && *s != ' ') s++;
+  }
+  *s = 0;
+  module_argv[i][n] = NULL;
+  return n ? module_argv[i] : NULL;   /* NULL: the default argv */
+}
+
 /* does the kernel command line contain this word? */
 static int cmdline_has(const char * word) {
   int n = kstrlen(word), i, j;
@@ -173,6 +195,13 @@ void mynos_main(multiboot_info_t *boot_info) {
     modinfo[i].start = (uint32_t*)module[i].mod_start;
     modinfo[i].len = module[i].mod_end - module[i].mod_start;
     mem_reserveAtBoot(module[i].mod_start, modinfo[i].len);
+    if (i < MAXMODULES && module[i].string) {
+      char * s = (char *)module[i].string;
+      int j;
+      for (j = 0; s[j] && j < MODULE_CMDLINE - 1; j++)
+	module_cmdline[i][j] = s[j];
+      module_cmdline[i][j] = 0;
+    }
   }
 
 
@@ -310,7 +339,8 @@ void mynos_main(multiboot_info_t *boot_info) {
       modinfo[i].len = module[i].mod_end - module[i].mod_start;
       if ((*((char*)modinfo[i].start) == 0x7F) &&
 	  !kmemcmp((char*)modinfo[i].start + 1, "ELF", 3)) {
-	if (createProcess(modinfo[i].start, modinfo[i].len, NULL, NULL, 0) < 0)
+	if (createProcess(modinfo[i].start, modinfo[i].len,
+			  i < MAXMODULES ? module_args(i) : NULL, NULL, 0) < 0)
 	  printk("module is not a valid MyNOS program\n");
       }
     }

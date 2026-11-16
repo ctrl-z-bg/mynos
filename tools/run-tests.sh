@@ -22,7 +22,7 @@ timeout "${WAIT:-10}" tools/run-qemu.sh \
     services/fs/memrofs/memrofsd \
     services/keyboard/keyboardd \
     services/serial/seriald \
-    tests/abi/abi \
+    "tests/abi/abi one two" \
     tests/ramdisk/ramdisk.dsk \
     -- -display none -serial null -serial "file:$log" || true
 
@@ -84,11 +84,12 @@ if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     cat "$log4" >> "$log"
 fi
 
-# seventh boot: the shell (the OCaml toplevel), driven through the keyboard
-if [ -f shell/ramdisk.dsk ] && [ -f services/console/consoled ]; then
+# seventh boot: the system RAM disk, init starts consoled and the shell (the
+# OCaml toplevel), driven through the keyboard
+if [ -f system/ramdisk.dsk ]; then
     MEM=256 tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
-        services/console/consoled shell/ramdisk.dsk \
+        system/ramdisk.dsk \
         -- -display none -serial null -serial "file:$log7" \
            -monitor "unix:$tmp/mon7,server,nowait" &
     qemu=$!
@@ -99,10 +100,18 @@ if [ -f shell/ramdisk.dsk ] && [ -f services/console/consoled ]; then
     for phrase in '1 + 2;;\n' 'List.map (fun x -> x * x) [1; 2; 3];;\n' \
                   'cat "AUTOEXEC.BAT";;\n' 'ls ();;\n' \
                   'run "child.byte" ["4"];;\n' '1 + "one";;\n' \
-                  '6 * 7;;\n' '{up}\n' '1 + 1;;\n' 'x{up}{up}{down}\n'; do
+                  '6 * 7;;\n' '{up}\n' '1 + 1;;\n' 'x{up}{up}{down}\n' \
+                  '#quit;;\n'; do
         tools/type-keys.py "$tmp/mon7" "$phrase"
         sleep 2
     done
+    # init starts a new shell
+    i=0
+    while [ $i -lt 30 ] && [ "$(grep -ac 'MyNOS shell. Type' "$log7")" -lt 2 ]; do
+        sleep 1; i=$((i + 1))
+    done
+    tools/type-keys.py "$tmp/mon7" '2 + 3;;\n'
+    sleep 2
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null || true
     wait $qemu || true
     cat "$log7" >> "$log"
@@ -142,7 +151,9 @@ if [ -f tests/spawn/ramdisk.dsk ]; then
     expect "args [hello world]"
     expect "spawn: all checks passed"
 fi
-if [ -f shell/ramdisk.dsk ] && [ -f services/console/consoled ]; then
+if [ -f system/ramdisk.dsk ]; then
+    expect "init: started consoled"
+    expect "init: started shell.byte"
     expect "MyNOS shell. Type help ();; for help."
     expect "- : int = 3"
     expect "- : int list = [1; 4; 9]"
@@ -157,6 +168,13 @@ if [ -f shell/ramdisk.dsk ] && [ -f services/console/consoled ]; then
         echo "ok    shell history (Up, Down)"
     else
         echo "FAIL  shell history (Up, Down)"; fail=1
+    fi
+    expect "init: shell.byte (pid"
+    if [ "$(grep -ac 'MyNOS shell. Type' "$log7")" -ge 2 ] &&
+       grep -aqx -- '- : int = 5' "$log7"; then
+        echo "ok    init restarts the shell after #quit"
+    else
+        echo "FAIL  init restarts the shell after #quit"; fail=1
     fi
 fi
 if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then

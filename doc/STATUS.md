@@ -36,7 +36,9 @@ talking through IPC.
 | `services/` | User-space servers: `registry`, `keyboard`, `serial`, `fs/memrofs` |
 | `mynos-runtime/` | The OCaml 5.5 bytecode runtime for MyNOS: upstream runtime, unchanged, plus a MyNOS `main()` (dev toolchain) |
 | `mynos-byterun/` | The OCaml 3.06 bytecode runtime, patched to run on MyNOS (legacy toolchain) |
-| `shell/` | The shell: the OCaml toplevel as `init.byte`, module `Shell` (commands), and its RAM disk |
+| `init/` | `init`, in OCaml: starts the services and the shell listed in `init.rc` |
+| `shell/` | The shell: the OCaml toplevel (`shell.byte`) and module `Shell` (commands) |
+| `system/` | The system RAM disk: `init`, `init.rc`, services, the shell, interfaces, programs |
 | `mynos.mk` | Toolchain variables for user-space programs (`MYNOS_CC`, `MYNOS_LDFLAGS`) |
 
 #### mynos-core — the microkernel
@@ -122,10 +124,19 @@ All services are linked statically against `libmynos` and placed at
 
 The shell is the OCaml 5.5 toplevel itself (`shell/main.ml` calls
 `Topmain.main`), linked with the `Mynos` library and module `Shell`
-(`help`, `ls`, `cat`, `run`, `free`), which is opened at startup. Its RAM
-disk holds the toplevel as `init.byte`, a stripped `ocamlrun` for `run`,
-the standard library's `.cmi` files and a few programs. Typed lines come
-from the console service. `tools/run-demo.sh` boots it.
+(`help`, `ls`, `cat`, `run`, `free`), which is opened at startup. Typed
+lines come from the console service.
+
+#### init and the system RAM disk
+
+`init` (`init/init.ml`, OCaml) is the first program: `ocamlrun` runs
+`init.byte` from the RAM disk. It reads `init.rc` and starts each line's
+program, `start` for services (consoled), `respawn` for the shell, which it
+restarts when it ends (`#quit;;`). Its messages go to the kernel log. The
+system RAM disk (`system/ramdisk.dsk`) holds init and `init.rc`, a stripped
+`ocamlrun`, `consoled`, the shell with the standard library's and
+`Mynos`'s `.cmi` files, and a few programs; only the registry and memrofs,
+which serves the disk, stay GRUB modules. `tools/run-demo.sh` boots it.
 
 #### mynos-runtime (OCaml 5.5)
 
@@ -155,9 +166,11 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 2. The kernel initializes memory, the PIC, the IDT, the PIT, semaphores and the
    services registry.
 3. Every module that is an ELF file is started as a process: the services and
-   `ocamlrun`.
+   `ocamlrun`. A module's command line (`module /path args` in GRUB, `-initrd
+   "path args"` in QEMU) is its `argv`.
 4. `ocamlrun` runs `init.byte` from the RAM disk if there is one (through
-   memrofs): with `shell/ramdisk.dsk`, that is the shell. Otherwise, as
+   memrofs): with `system/ramdisk.dsk`, that is init, which starts the
+   console service and the shell. Otherwise, as
    originally, **module 1 is treated as the OCaml bytecode to execute**:
    the kernel serves it as the single file it knows.
 5. After that, the kernel runs the idle loop.
@@ -403,3 +416,7 @@ Side task: archive the old SourceForge site (mynos-db2).
   messages go to the serial log only (`verbose` keeps them on screen);
   native call 31 `log`. The 2004 VBE debug print is gone (closes
   mynos-tuy). Closed mynos-2g3.
+- **2026-11-16** — `init` in OCaml: reads `init.rc` on the new system RAM
+  disk (`system/`), starts consoled and the shell, restarts the shell after
+  `#quit;;`. Boot modules get `argv` from their command line. `Mynos.log`,
+  `Mynos.uptime`. Closed mynos-azz.

@@ -1,6 +1,7 @@
 /* Checks for the system call fixes made while porting to gcc 14.
    Run it as a MyNOS module (see tools/run-tests.sh). */
 #include <stdio.h>
+#include <string.h>
 #include <errno.h>
 #include <unistd.h>
 #include <time.h>
@@ -25,7 +26,11 @@ int main(int argc, char ** argv) {
   int sem;
 
   /* initial stack */
-  check("argc/argv from the kernel", argc == 1 && argv[0] != NULL);
+  /* the module's command line (tools/run-tests.sh: "tests/abi/abi one
+     two") is its argv */
+  check("argc/argv from the kernel",
+        argc == 3 && argv[0] != NULL && !strcmp(argv[1], "one") &&
+        !strcmp(argv[2], "two") && argv[3] == NULL);
 
   /* unknown Linux syscall: -ENOSYS, not a kernel panic */
   r = linux_syscall0(400);

@@ -16,7 +16,8 @@
 #   tests/console/echo.byte          reads lines from the console (dev only)
 #   tests/files/ramdisk.dsk          RAM disk with init.byte, a file I/O test (dev only)
 #   tests/spawn/ramdisk.dsk          RAM disk with the runtime and a spawn test (dev only)
-#   shell/ramdisk.dsk                RAM disk with the shell, the OCaml toplevel (dev only)
+#   system/ramdisk.dsk               the system RAM disk: init, consoled, the shell
+#                                    (the OCaml toplevel), programs (dev only)
 #   tests/abi/abi                    system call checks
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 set -eu
@@ -46,6 +47,8 @@ case $(ocamlc -version) in
 esac
 (cd tests/ramdisk && ../../services/fs/memrofs/tool/createDisk AUTOEXEC.BAT)
 if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
+  make -C init
   make -C shell
+  make -C system
 fi
 '

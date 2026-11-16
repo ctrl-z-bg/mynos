@@ -1,0 +1,8 @@
+# MyNOS init configuration (init/init.ml): the programs started at boot,
+# from the RAM disk, in order.
+#   start PROGRAM ARGS...     start it and leave it running (services)
+#   respawn PROGRAM ARGS...   start it, and again whenever it ends
+# A .byte program runs on ocamlrun.
+
+start consoled
+respawn shell.byte

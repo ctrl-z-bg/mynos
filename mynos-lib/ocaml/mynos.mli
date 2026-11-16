@@ -21,6 +21,9 @@ val log : string -> unit
 (** Write a line to the kernel log: the serial log port, and not the screen
     once the system has started. For services' messages. *)
 
+val uptime : unit -> float
+(** Seconds since boot. *)
+
 val sleep : float -> unit
 (** Block for at least this many seconds (10 ms resolution). *)
 

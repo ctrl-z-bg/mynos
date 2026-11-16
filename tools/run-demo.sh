@@ -1,9 +1,9 @@
 #!/bin/sh
 # Boot MyNOS in QEMU. Build it first with tools/build-all.sh.
 #
-# With the dev toolchain, it boots the shell: the OCaml toplevel, with the
-# registry, memrofs, the console service and a RAM disk (shell/). Type OCaml
-# phrases ended by ;; for instance help ();;
+# With the dev toolchain, it boots MyNOS with the system RAM disk (system/):
+# ocamlrun runs init, which starts the console service and the shell, the
+# OCaml toplevel. Type OCaml phrases ended by ;; for instance help ();;
 #
 # Otherwise (legacy toolchain, or DEMO=2008) it boots the system as it was in
 # 2004-2008: the OCaml runtime with a test bytecode, the registry, keyboard
@@ -19,14 +19,12 @@ cd "$root"
 
 ocamlrun=$(tools/ocamlrun-path.sh)
 
-if [ "${DEMO:-}" != 2008 ] && [ -f shell/ramdisk.dsk ] &&
-   [ -f services/console/consoled ]; then
+if [ "${DEMO:-}" != 2008 ] && [ -f system/ramdisk.dsk ]; then
     MEM=${MEM:-256} exec tools/run-qemu.sh \
         "$ocamlrun" \
         services/registry/registry \
         services/fs/memrofs/memrofsd \
-        services/console/consoled \
-        shell/ramdisk.dsk \
+        system/ramdisk.dsk \
         "$@"
 fi
 

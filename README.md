@@ -19,7 +19,9 @@ high-level language rather than in C.
 | [`mynos-lib/`](mynos-lib/) | User-space library for the native syscalls (`include/mynos.h`), and the OCaml library `Mynos` (`ocaml/`) |
 | [`services/`](services/) | User-space servers: name registry, console (keyboard and line editing), keyboard and serial drivers, `memrofs` read-only RAM filesystem |
 | [`mynos-runtime/`](mynos-runtime/) | The OCaml 5.5 bytecode runtime for MyNOS: the upstream runtime, unchanged, plus a MyNOS `main()` |
+| [`init/`](init/) | `init`, in OCaml: starts the services and the shell listed in `init.rc` |
 | [`shell/`](shell/) | The shell: the OCaml toplevel, with a few commands (`ls`, `cat`, `run`) and the MyNOS API |
+| [`system/`](system/) | The system RAM disk: init, its configuration, services, the shell, programs |
 | [`mynos-byterun/`](mynos-byterun/) | The original OCaml 3.06 bytecode runtime (`ocamlrun`), patched to run on MyNOS (legacy toolchain) |
 | [`doc/STATUS.md`](doc/STATUS.md) | Architecture overview and current state of the project |
 | [`doc/JOURNAL.md`](doc/JOURNAL.md) | Engineering journal: what was found while reviving the code, bug by bug |
@@ -38,8 +40,8 @@ implements just enough of the Linux syscall interface for them to run
 unmodified, while MyNOS-specific features (IPC, ports, semaphores, IRQs,
 threads, starting programs) go through `libmynos`, which also turns file and
 keyboard I/O into IPC with the filesystem and console services. `ocamlrun`
-then runs `init.byte` from the RAM disk: the shell, which is the OCaml
-toplevel.
+then runs `init.byte` from the RAM disk: `init`, written in OCaml, which
+starts the console service and the shell, the OCaml toplevel.
 
 ```
 MyNOS shell. Type help ();; for help.
