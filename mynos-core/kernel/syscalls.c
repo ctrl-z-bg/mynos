@@ -26,6 +26,7 @@
 #include "irq.h"
 #include "services.h"
 #include "stats.h"
+#include "time.h"
 
 extern uint32_t currProcess;
 
@@ -246,9 +247,10 @@ int32_t _mynos_syscall_WRONGSYSCALL(uint32_t syscall_id) {
   return MYNOS_ERR_INVALID;
 }
 
+/* sleep for at least usec microseconds (mynos_setTimer / mynos_sleep).
+   It used to only store a wake-up time nobody read, in the wrong unit. */
 int32_t _mynos_syscall_setTimer(ulong32_t usec) {
-  uint32_t ticks = usec / ONE_TICK_TIME;
-  currThread->timeToWake = timerTicks + ticks;
+  time_sleepUsec(usec);
   return 0;
 }
 

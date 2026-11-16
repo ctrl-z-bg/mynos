@@ -3,7 +3,7 @@
 # to COM2) and check the expected output. Build first with tools/build-all.sh.
 #
 # Usage: tools/run-tests.sh            exit status 0 if all checks pass
-# Environment: WAIT seconds to let the system run (default 8)
+# Environment: WAIT seconds to let the system run (default 10)
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -14,7 +14,7 @@ log=$(mktemp)
 log2=$(mktemp)
 trap 'rm -f "$log" "$log2"' EXIT
 
-timeout "${WAIT:-8}" tools/run-qemu.sh \
+timeout "${WAIT:-10}" tools/run-qemu.sh \
     "$ocamlrun" \
     tests/hello/hello.byte \
     services/registry/registry \
@@ -27,7 +27,7 @@ timeout "${WAIT:-8}" tools/run-qemu.sh \
 
 # second boot: effect handlers (OCaml 5 only)
 if [ -f tests/effects/effects.byte ]; then
-    timeout "${WAIT:-8}" tools/run-qemu.sh "$ocamlrun" tests/effects/effects.byte \
+    timeout "${WAIT:-10}" tools/run-qemu.sh "$ocamlrun" tests/effects/effects.byte \
         -- -display none -serial null -serial "file:$log2" || true
     cat "$log2" >> "$log"
 fi

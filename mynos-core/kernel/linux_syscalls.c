@@ -29,6 +29,7 @@
 #include "mem/dynalloc.h"
 #include "sched.h"
 #include "sem.h"
+#include "time.h"
 
 extern uint32_t currProcess;
 
@@ -99,6 +100,20 @@ __asm__ (".pushsection .text\n" \
 	 "   je .linux_set_tid_address\n"\
 	 "   cmpl $19, %eax\n"\
 	 "   je .linux_lseek\n"\
+	 "   cmpl $13, %eax\n"\
+	 "   je .linux_time\n"\
+	 "   cmpl $78, %eax\n"\
+	 "   je .linux_gettimeofday\n"\
+	 "   cmpl $162, %eax\n"\
+	 "   je .linux_nanosleep\n"\
+	 "   cmpl $265, %eax\n"\
+	 "   je .linux_clock_gettime\n"\
+	 "   cmpl $267, %eax\n"\
+	 "   je .linux_clock_nanosleep\n"\
+	 "   cmpl $403, %eax\n"\
+	 "   je .linux_clock_gettime64\n"\
+	 "   cmpl $407, %eax\n"\
+	 "   je .linux_clock_nanosleep64\n"\
 	 "   cmpl $37, %eax\n"\
 	 "   je .linux_kill\n"\
 	 "   cmpl $238, %eax\n"\
@@ -175,6 +190,27 @@ __asm__ (".pushsection .text\n" \
 	 ".linux_set_tid_address:\n"\
 	 "   call _linux_syscall_set_tid_address\n"\
 	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_time:\n"\
+	 "   call _linux_syscall_time\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_gettimeofday:\n"\
+	 "   call _linux_syscall_gettimeofday\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_nanosleep:\n"\
+	 "   call _linux_syscall_nanosleep\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_clock_gettime:\n"\
+	 "   call _linux_syscall_clock_gettime\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_clock_nanosleep:\n"\
+	 "   call _linux_syscall_clock_nanosleep\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_clock_gettime64:\n"\
+	 "   call _linux_syscall_clock_gettime64\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_clock_nanosleep64:\n"\
+	 "   call _linux_syscall_clock_nanosleep64\n"\
+	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_kill:\n"\
 	 "   call _linux_syscall_kill\n"\
 	 "   jmp .exit_linux_syscall\n"\
@@ -216,6 +252,86 @@ int _linux_syscall_writev(int fd, const struct iovec * iov, int iovcnt) {
     total += n;
   }
   return total;
+}
+
+/* ---- time (time.c has the clocks and the sleeping) ---- */
+
+struct timespec32 { int32_t tv_sec; int32_t tv_nsec; };
+struct timespec64 { long long tv_sec; long long tv_nsec; };
+struct timeval32  { int32_t tv_sec; int32_t tv_usec; };
+
+#define TIMER_ABSTIME 1
+
+/* time (13) */
+int _linux_syscall_time(int32_t * t) {
+  uint32_t sec, nsec;
+  time_now(CLOCK_REALTIME, &sec, &nsec);
+  if (t) *t = sec;
+  return sec;
+}
+
+/* gettimeofday (78) */
+int _linux_syscall_gettimeofday(struct timeval32 * tv, void * tz) {
+  uint32_t sec, nsec;
+  time_now(CLOCK_REALTIME, &sec, &nsec);
+  if (tv) { tv->tv_sec = sec; tv->tv_usec = nsec / 1000; }
+  return 0;
+}
+
+/* clock_gettime (265) and its time64 variant (403), used by musl on i386 */
+int _linux_syscall_clock_gettime(uint32_t clock, struct timespec32 * ts) {
+  uint32_t sec, nsec;
+  time_now(clock, &sec, &nsec);
+  ts->tv_sec = sec; ts->tv_nsec = nsec;
+  return 0;
+}
+
+int _linux_syscall_clock_gettime64(uint32_t clock, struct timespec64 * ts) {
+  uint32_t sec, nsec;
+  time_now(clock, &sec, &nsec);
+  ts->tv_sec = sec; ts->tv_nsec = nsec;
+  return 0;
+}
+
+/* sleep until (absolute) or for (relative) sec + nsec on a clock */
+static int sleep_for(uint32_t clock, int flags, uint32_t sec, uint32_t nsec) {
+  if (flags & TIMER_ABSTIME) {
+    uint32_t now_s, now_ns;
+    time_now(clock, &now_s, &now_ns);
+    if (sec < now_s || (sec == now_s && nsec <= now_ns))
+      return 0;
+    if (nsec < now_ns) { nsec += 1000000000; sec--; }
+    sec -= now_s; nsec -= now_ns;
+  }
+  time_sleepTicks(time_toTicks(sec, nsec));
+  return 0;
+}
+
+/* nanosleep (162); the remaining time is always 0: no signals interrupt */
+int _linux_syscall_nanosleep(struct timespec32 * req, struct timespec32 * rem) {
+  if (req->tv_sec < 0 || req->tv_nsec < 0 || req->tv_nsec >= 1000000000)
+    return -22; /* EINVAL */
+  sleep_for(CLOCK_MONOTONIC, 0, req->tv_sec, req->tv_nsec);
+  if (rem) { rem->tv_sec = 0; rem->tv_nsec = 0; }
+  return 0;
+}
+
+/* clock_nanosleep (267) and its time64 variant (407) */
+int _linux_syscall_clock_nanosleep(uint32_t clock, int flags,
+				   struct timespec32 * req,
+				   struct timespec32 * rem) {
+  if (req->tv_sec < 0 || req->tv_nsec < 0 || req->tv_nsec >= 1000000000)
+    return -22;
+  return sleep_for(clock, flags, req->tv_sec, req->tv_nsec);
+}
+
+int _linux_syscall_clock_nanosleep64(uint32_t clock, int flags,
+				     struct timespec64 * req,
+				     struct timespec64 * rem) {
+  if (req->tv_sec < 0 || req->tv_nsec < 0 || req->tv_nsec >= 1000000000)
+    return -22;
+  return sleep_for(clock, flags, (uint32_t)req->tv_sec,
+		   (uint32_t)req->tv_nsec);
 }
 
 /* kill (37), tkill (238), tgkill (270). No signal delivery yet: a signal a

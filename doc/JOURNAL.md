@@ -391,3 +391,30 @@ effect handler test; the legacy toolchain still passes too.
   caches) bites on paths that skip the usual code, like a fork child.
 - A user program must never be able to stop the kernel: that one fix made
   every later failure readable.
+
+---
+
+## 2026-11-16 — Timers: the bug was in my reading, not in the queue
+
+When the boot race forced a retry loop, I filed "kernel timers never fire",
+because `timerQueueExtractExpired()` seemed to have no caller. Wrong: my
+search had excluded `sched.c`, where `sched()` calls it on every tick. The
+timer queue works and `recv` timeouts fire. The real problems were next to
+it:
+
+- `mynos_setTimer(usec)` only stored a wake-up time in the thread, never
+  queued it nor blocked it, and converted microseconds with `/ 10` (the tick
+  length in milliseconds) instead of `/ 10000`.
+- There was no way for a Linux program to sleep or read the time.
+
+Now `kernel/time.c` reads the CMOS real-time clock at boot (the wall clock
+is that plus the ticks since), `mynos_setTimer` really sleeps (`mynos_sleep`
+is the new name), and the Linux calls `time`, `gettimeofday`,
+`clock_gettime`, `nanosleep` and `clock_nanosleep` exist, including the
+64-bit-time variants that musl 1.2 uses on i386. No 64-bit division in the
+kernel: it would need libgcc. `tests/abi` measures a 200 ms `nanosleep`
+(220 ms: sleeps round up to the next 10 ms tick) and the registry client
+sleeps instead of spinning.
+
+**Lesson.** Before declaring code dead, search without filters: an
+exclusion meant to hide noise hid the one caller.

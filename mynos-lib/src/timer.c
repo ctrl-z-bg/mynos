@@ -20,6 +20,10 @@
 
 #include "syscall.h"
 
+int mynos_sleep(unsigned long usec) {
+  return __mynos_syscall(300, (int)usec, 0, 0, 0, 0);
+}
+
 int mynos_setTimer(unsigned long usec) {
   int ret;
   ret = __mynos_syscall(300, (int)usec, 0, 0, 0, 0);

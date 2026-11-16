@@ -26,18 +26,14 @@
 #include <string.h>
 
 /* All services start together at boot, so a client can run before the
-   registry has opened its port: retry for a while. The kernel has no sleep
-   yet (its timer queue never fires), so wait by spinning: the scheduler is
-   preemptive and the registry gets the CPU meanwhile. */
+   registry has opened its port: retry for up to two seconds. */
 static int connectToRegistry(void) {
   int channel, tries;
   for (tries = 0; tries < 200; tries++) {
-    volatile int spin;
     channel = mynos_connectToPort(MYNOS_PORT_REGISTRY);
     if (channel != MYNOS_ERR_INVALID)
       return channel;
-    for (spin = 0; spin < 200000; spin++)
-      ;
+    mynos_sleep(10000);
   }
   return channel;
 }

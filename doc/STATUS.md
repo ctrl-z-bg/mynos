@@ -75,8 +75,9 @@ talking through IPC.
     `llseek`; musl and modern OCaml added `set_thread_area` (TLS), `mmap2`,
     `writev`, `lseek`, `stat64`, `fstat64`, `exit_group`,
     `set_tid_address`, `mprotect`, the signal calls (accepted, no delivery
-    yet) and `kill`/`tkill`/`tgkill` on oneself. Unknown calls return
-    `-ENOSYS`.
+    yet), `kill`/`tkill`/`tgkill` on oneself, and the clock and sleep calls
+    (`kernel/time.c`: PIT ticks plus the CMOS clock read at boot). Unknown
+    calls return `-ENOSYS`.
 
 #### services
 
@@ -290,3 +291,7 @@ Side task: archive the old SourceForge site (mynos-db2).
   in the linear map, user faults now kill only the process, boot race with
   the registry, TLS for threads and fork children). Closed mynos-3rz,
   mynos-4er, mynos-pg9; opened mynos-l9h, mynos-e1k, mynos-dha.
+- **2026-11-16** — Time: CMOS clock at boot, working native sleep
+  (`mynos_sleep`), Linux clock and sleep calls; the registry client no longer
+  spins. Closed mynos-e1k (its first description was wrong: the timer queue
+  did work).
