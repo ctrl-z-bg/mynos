@@ -121,8 +121,10 @@ the serial port.
   host (gcc 15, no multilib, x86_64-only dietlibc) cannot build it. Builds run
   in the **legacy container** (`tools/containers/legacy`): Debian lenny i386
   with gcc 4.3.2, binutils 2.18, nasm 2.03, dietlibc 0.31, plus OCaml 3.06
-  built from source. A container with a modern toolchain is planned
-  (mynos-aji).
+  built from source. The **dev container** (`tools/containers/dev`) has a
+  modern toolchain: Debian trixie i386 with gcc 14.2, binutils 2.44,
+  nasm 2.16, dietlibc 0.34, and the same OCaml 3.06. The code does not build
+  there yet; a first attempt shows only a handful of errors (mynos-v8s).
 - **Booting.** `tools/run-qemu.sh` uses QEMU's multiboot loader, no GRUB.
   Modules are passed in order; module 1 must be the OCaml bytecode.
   `tools/run-demo.sh` passes the standard set.
@@ -202,3 +204,7 @@ Side task: archive the old SourceForge site (mynos-db2).
   uninitialized variable in `spawnProcess` and made `createDisk` a host tool.
   Added `tools/build-all.sh`, `tools/run-demo.sh` and `tests/`. Closed
   mynos-bo2 (with bo2.2, bo2.3); opened mynos-tuy.
+- **2026-11-16** — Tagged `revival-baseline`. Added the dev container
+  (trixie i386, gcc 14). First build with gcc 14: one error in the kernel,
+  four in user space, plus warnings that point at real bugs; all listed in
+  mynos-v8s. Closed mynos-aji.

@@ -1,0 +1,46 @@
+# MyNOS dev build environment: a modern toolchain, for porting the code
+# forward from the revival-baseline tag.
+#
+# Debian 13 "trixie", i386: gcc 14, binutils 2.44, nasm 2.16, dietlibc 0.34.
+# Building natively for i386 avoids gcc -m32 and multilib.
+#
+# Until the OCaml runtime is upgraded (mynos-4er), bytecode must still come
+# from ocamlc 3.06: it is built on sarge exactly as in the legacy image and
+# copied over (it only needs libc, libm and libdl).
+#
+# Build:  tools/containers/build-image.sh dev
+# Use:    tools/in-container.sh dev <command>
+
+# --- Stage 1: fetch sources with a modern TLS stack -------------------------
+FROM docker.io/library/debian:bookworm-slim AS fetch
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+RUN curl -fsSLO https://caml.inria.fr/pub/distrib/ocaml-3.06/ocaml-3.06.tar.gz \
+ && echo "1509bde867515d7e7b51710f2b0d2efe0ab5e5918d475244882e615d970b729a  ocaml-3.06.tar.gz" \
+    | sha256sum -c -
+
+# --- Stage 2: OCaml 3.06 on sarge (2005) -------------------------------------
+FROM docker.io/debian/eol:sarge AS ocaml
+RUN apt-get update \
+ && apt-get install -y gcc libc6-dev make \
+ && apt-get clean
+COPY --from=fetch /src/ocaml-3.06.tar.gz /tmp/
+# Bytecode only. The kernel reports x86_64, so force the host type.
+RUN cd /tmp \
+ && tar xzf ocaml-3.06.tar.gz \
+ && cd ocaml-3.06 \
+ && ./configure -prefix /opt/ocaml-3.06 -host i386-pc-linux-gnu -no-tk \
+ && make world \
+ && make install
+
+# --- Stage 3: the modern toolchain on trixie ---------------------------------
+FROM docker.io/library/debian:trixie-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      gcc libc6-dev make binutils nasm dietlibc-dev \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=ocaml /opt/ocaml-3.06 /opt/ocaml-3.06
+ENV PATH=/opt/ocaml-3.06/bin:$PATH
+WORKDIR /mynos

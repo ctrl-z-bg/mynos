@@ -49,7 +49,8 @@ tools/run-demo.sh                        # boot the whole system in QEMU
 ```
 
 `tools/in-container.sh legacy` opens a shell in the build environment, or
-runs the command given after it. `tools/run-qemu.sh` boots the kernel with
+runs the command given after it. A second image, `dev`, has a modern
+toolchain (gcc 14); porting the code to it is in progress. `tools/run-qemu.sh` boots the kernel with
 any list of modules (module 1 is the OCaml bytecode); see the scripts for
 details.
 
