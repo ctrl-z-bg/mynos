@@ -47,6 +47,8 @@ int32_t getFreeChannel() {
 }
 
 channel_t * getChannel(uint32_t c) {
+  /* an id from a process: any value (unsigned, so negatives too) */
+  if (c >= MAXCNLS) return NULL;
   return cTable.table[c];
 }
 

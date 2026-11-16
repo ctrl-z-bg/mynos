@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 #define CAML_NAME_SPACE
 #include <caml/mlvalues.h>
@@ -212,4 +213,54 @@ CAMLprim value caml_mynos_registry_lookup(value name)
   caml_leave_blocking_section();
   caml_stat_free(n);
   return check("registry_lookup", ret);
+}
+
+/* ---- processes ---- */
+
+static char ** c_strings(value arr)
+{
+  mlsize_t i, n = Wosize_val(arr);
+  char ** v = caml_stat_alloc((n + 1) * sizeof(char *));
+  for (i = 0; i < n; i++) v[i] = caml_stat_strdup(String_val(Field(arr, i)));
+  v[n] = NULL;
+  return v;
+}
+
+static void free_strings(char ** v)
+{
+  char ** p;
+  for (p = v; *p; p++) caml_stat_free(*p);
+  caml_stat_free(v);
+}
+
+CAMLprim value caml_mynos_spawn(value path, value argv, value env)
+{
+  int ret;
+  char * p = caml_stat_strdup(String_val(path));
+  char ** a = c_strings(argv);
+  char ** e = c_strings(env);
+  caml_enter_blocking_section();
+  ret = mynos_spawn(p, a, e);
+  caml_leave_blocking_section();
+  caml_stat_free(p);
+  free_strings(a);
+  free_strings(e);
+  return check("spawn", ret);
+}
+
+/* (pid, Linux wait status) of a child that ended: pid > 0 for that child,
+   -1 for any */
+CAMLprim value caml_mynos_wait(value pid)
+{
+  CAMLparam1(pid);
+  CAMLlocal1(r);
+  int status = 0, ret;
+  caml_enter_blocking_section();
+  ret = waitpid(Int_val(pid), &status, 0);
+  caml_leave_blocking_section();
+  if (ret < 0) mynos_error("wait", MYNOS_ERR_INVALID);
+  r = caml_alloc_tuple(2);
+  Store_field(r, 0, Val_int(ret));
+  Store_field(r, 1, Val_int(status));
+  CAMLreturn(r);
 }

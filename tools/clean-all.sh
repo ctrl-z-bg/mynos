@@ -17,5 +17,6 @@ make -C mynos-byterun/src clean
 make -C mynos-runtime clean
 make -C tests/abi clean
 make -C mynos-lib/ocaml clean
-rm -f tests/*/*.byte tests/*/*.cm[io] tests/*/ramdisk.dsk tests/files/AUTOEXEC.BAT
+rm -f tests/*/*.byte tests/*/*.cm[io] tests/*/ramdisk.dsk tests/files/AUTOEXEC.BAT \
+  tests/spawn/ocamlrun
 ' >/dev/null

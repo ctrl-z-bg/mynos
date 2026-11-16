@@ -126,7 +126,7 @@ static void exception(const char * what, uint32_t eip, uint32_t cs) {
     printk(" at ");
     print_ulong_hex(eip);
     print_char('\n');
-    killProcess();
+    killProcess(SIGNAL_STATUS(SIGSEGV));
     sched();         /* switches to another process, never returns */
   }
   printk((char *)what);

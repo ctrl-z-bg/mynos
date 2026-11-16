@@ -583,3 +583,63 @@ page.
   any address that reaches it.
 - Allocators that share an address space must agree on who owns each
   page; "adjacent to mine, so mine" is not a rule.
+
+## 2026-11-16 — Spawn
+
+### Programs starting programs
+
+**Design.** A native call (30) takes an ELF image in the caller's memory,
+an `argv` and an `envp`, and starts a child process; `waitpid`/`wait4`
+(Linux 7 and 114, musl uses the latter) collect its exit status. Reading
+the file stays in user space (`mynos_spawn`, through the same `open`/`read`
+that go to memrofs): the kernel builds processes, it does not know about
+files. The boot modules go through the same `createProcess`, with the old
+`argv = {"mynos"}`. Each process now has `exitStatus` (Linux encoding),
+`reaped`, and `childSem`, a semaphore V'd once per child that ends:
+`wait4` scans the children, and if none has ended sleeps on it and scans
+again. Checking before sleeping on a counting semaphore means no wake-up
+is lost, and a stale count only costs one extra scan.
+
+`spawnProcess` used to put the new thread in the ready queue first and
+build it afterwards; harmless at boot, it is now inserted last (system
+calls run with interrupts off anyway). It also now checks the whole image
+(segments inside the file, everything in the one page table at
+`0x40000000`) before allocating anything, since the image now comes from a
+process.
+
+**One surprise:** the child ran but `Sys.argv` was empty. The MyNOS `main`
+of `ocamlrun` rebuilt `argv` as `{"ocamlrun", prog}`, dropping the rest; it
+now passes its own `argv` to `caml_main` when it has one.
+
+### The page after the boundary
+
+**Symptom.** After a spawn of a file that is not an ELF program failed
+cleanly, the next spawn stopped the kernel: `page fault`, at `_insertBlock`
+(`dynalloc.c`), writing at `0x6fb000`, a page-aligned address.
+
+**Diagnosis.** `qemu -d int` gave the faulting EIP and CR2; `addr2line`
+named the function. The failed spawn had called `kfree` on the new process
+descriptor, the only block in its page: `kfree` gave the page back to the
+page allocator, correctly.
+
+**Cause.** The fix of the previous story let a new block use "the page
+where the previous block ends", computed as the page of the block's *end
+address*. When the previous block ends exactly at a page boundary, its end
+address is the first byte of the next page, which is not the heap's: here,
+the page just given back. The same off-by-one was in the "room at the end
+of the last block" case. (And a 2003 branch returned the block's size
+field instead of the block: unreachable in practice, fixed anyway.)
+
+**Fix.** The page where a block ends is the page of its last byte,
+`end - 1`.
+
+**Lesson.** An end address is one past the end: every "which page"
+question about it needs the `- 1`. Failure paths (a spawn that fails and
+frees) exercise allocators in ways the happy path does not.
+
+### A negative channel id
+
+The test's child raised an exception on purpose by sending on channel
+`-1`. The kernel used the id as an index into its channel table without a
+bound check (ports had one) and faulted. `getChannel` now rejects ids out
+of range: every value a process passes is untrusted.

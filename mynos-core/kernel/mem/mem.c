@@ -462,7 +462,7 @@ static void __userSegfault(uint32_t addr) {
   printk(" killed: invalid memory access at ");
   print_ulong_hex(addr);
   print_char('\n');
-  killProcess();
+  killProcess(SIGNAL_STATUS(SIGSEGV));
   sched();         /* switches to another process, never returns */
 }
 

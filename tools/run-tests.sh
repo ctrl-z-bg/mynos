@@ -3,7 +3,7 @@
 # to COM2) and check the expected output. Build first with tools/build-all.sh.
 #
 # Usage: tools/run-tests.sh            exit status 0 if all checks pass
-# Environment: WAIT seconds to let the system run (default 10)
+# Environment: WAIT seconds to let the system run (default 10, 20 for spawn)
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -13,6 +13,7 @@ ocamlrun=$(tools/ocamlrun-path.sh)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 log=$tmp/log1 log2=$tmp/log2 log3=$tmp/log3 log4=$tmp/log4 log5=$tmp/log5
+log6=$tmp/log6
 
 timeout "${WAIT:-10}" tools/run-qemu.sh \
     "$ocamlrun" \
@@ -49,6 +50,16 @@ if [ -f tests/files/ramdisk.dsk ]; then
         tests/files/ramdisk.dsk \
         -- -display none -serial null -serial "file:$log5" || true
     cat "$log5" >> "$log"
+fi
+
+# sixth boot: init.byte starts other programs from the RAM disk (five
+# runtimes start one after the other: give it more time)
+if [ -f tests/spawn/ramdisk.dsk ]; then
+    timeout "${WAIT:-20}" tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        tests/spawn/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$log6" || true
+    cat "$log6" >> "$log"
 fi
 
 # fourth boot: typing on the keyboard, read by OCaml through consoled
@@ -101,6 +112,11 @@ if [ -f tests/mynos-ocaml/mynos_test.byte ]; then
 fi
 if [ -f tests/files/ramdisk.dsk ]; then
     expect "files: all checks passed"
+fi
+if [ -f tests/spawn/ramdisk.dsk ]; then
+    expect "spawn child"
+    expect "args [hello world]"
+    expect "spawn: all checks passed"
 fi
 if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     expect 'console: line 1: "hi"'

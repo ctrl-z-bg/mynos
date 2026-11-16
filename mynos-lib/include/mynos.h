@@ -108,4 +108,12 @@ int mynos_setTimer(unsigned long usec);  /* old name of mynos_sleep */
 /* STATS */
 void mynos_stats(mynos_stats_t * st);
 
+/* PROCESSES */
+/* start the ELF program in file path as a child process, with arguments
+   and environment (NULL-terminated, either may be NULL); returns its pid
+   or a MYNOS_ERR_* code. Wait for it with waitpid. */
+int mynos_spawn(const char * path, char ** argv, char ** envp);
+/* the same, from an ELF image in memory */
+int mynos_spawnImage(void * elf, unsigned int len, char ** argv, char ** envp);
+
 #endif

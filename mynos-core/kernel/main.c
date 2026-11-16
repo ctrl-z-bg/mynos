@@ -240,7 +240,8 @@ void mynos_main(multiboot_info_t *boot_info) {
     int i;
     
     for (i = 0; i < MAXPROCESSES; i++)
-      processTable[i]->isAlive = 0;
+      if (processTable[i])
+	processTable[i]->isAlive = 0;
   }
 
   /* to try the releasePages */
@@ -290,17 +291,8 @@ void mynos_main(multiboot_info_t *boot_info) {
       modinfo[i].len = module[i].mod_end - module[i].mod_start;
       if ((*((char*)modinfo[i].start) == 0x7F) &&
 	  !kmemcmp((char*)modinfo[i].start + 1, "ELF", 3)) {
-	process_descriptor_t * newdes;
-	int newpid = numProcess;
-	numProcess++;
-	newdes = processTable[newpid] = 
-	  (process_descriptor_t*)kmalloc(sizeof(process_descriptor_t));
-	processTable[newpid]->pid = newpid;
-	processTable[newpid]->ppid = 0;
-	spawnProcess(newdes, 
-		     modinfo[i].start,
-		     modinfo[i].len);
-	processTable[newpid]->tss->pid = newpid;
+	if (createProcess(modinfo[i].start, modinfo[i].len, NULL, NULL, 0) < 0)
+	  printk("module is not a valid MyNOS program\n");
       }
     }
   }

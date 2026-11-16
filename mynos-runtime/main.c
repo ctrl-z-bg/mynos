@@ -19,7 +19,8 @@
  * bytecode runtime, unchanged (libcamlrun.a, built with musl in the dev
  * container).
  *
- * The program to run: the first argument if there is one; otherwise
+ * The program to run: the first argument if there is one (the rest are
+ * its arguments, Sys.argv); otherwise
  * init.byte from the RAM disk (memrofs, through the file functions of
  * libmynos); otherwise the bytecode the kernel serves as "mynos_bytecode"
  * (GRUB module 1), as in the original MyNOS.
@@ -33,10 +34,13 @@ extern void caml_do_exit(int retcode);
 int main(int argc, char **argv)
 {
   struct stat st;
-  char *prog = argc > 1 ? argv[1]
-    : stat("init.byte", &st) == 0 ? "init.byte" : "mynos_bytecode";
-  char *args[] = { "ocamlrun", prog, 0 };
-  caml_main(args);
+  char *args[] = { "ocamlrun", "mynos_bytecode", 0 };
+  if (argc > 1)
+    caml_main(argv);   /* ocamlrun prog.byte args..., as on Unix */
+  else {
+    if (stat("init.byte", &st) == 0) args[1] = "init.byte";
+    caml_main(args);
+  }
   caml_do_exit(0);
   return 0;
 }

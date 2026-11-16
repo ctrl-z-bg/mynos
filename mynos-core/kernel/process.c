@@ -32,9 +32,10 @@
 #include "sched.h"
 #include "ipc/port.h"
 #include "ipc/channel.h"
+#include "mynos.h"
 
-/* bytes reserved at the top of the user stack for argc/argv/envp/auxv */
-#define INITIAL_STACK_SIZE 64
+/* the arguments of a process started without any (GRUB modules) */
+static char * default_argv[] = { "mynos", NULL };
 
 extern void startThread();
 typedef struct {
@@ -69,6 +70,49 @@ extern uint32_t ramdisk_len;
 extern uint32_t ramdisk_present;
 #endif
 
+/*
+ * The initial stack the Linux ABI expects, which modern libcs read at
+ * startup: argc, argv[], NULL, envp[], NULL, auxv (AT_NULL), with the
+ * strings above them. It must fit in the top page of the user stack.
+ * Returns the bytes it takes (16-byte aligned), or 0 if it does not fit.
+ */
+static uint32_t initialStackSize(char ** argv, char ** envp) {
+  uint32_t words = 1 + 1 + 1 + 2, bytes = 0, i;
+  for (i = 0; argv && argv[i]; i++, words++)
+    bytes += kstrlen(argv[i]) + 1;
+  for (i = 0; envp && envp[i]; i++, words++)
+    bytes += kstrlen(envp[i]) + 1;
+  bytes = (bytes + words * 4 + 15) & ~15;
+  return bytes <= PAGE_SIZE ? bytes : 0;
+}
+
+/* writes it at the end of page, whose user address ends at topUser */
+static void buildInitialStack(uint32_t * page, uint32_t topUser,
+			      uint32_t size, char ** argv, char ** envp) {
+  uint32_t * vec = page + (PAGE_SIZE - size) / sizeof(uint32_t);
+  char * str = (char *)page + PAGE_SIZE;
+  uint32_t i, n = 0;
+
+  for (i = 0; argv && argv[i]; i++) ;
+  vec[n++] = i;                                     /* argc */
+  for (i = 0; argv && argv[i]; i++) {
+    uint32_t len = kstrlen(argv[i]) + 1;
+    str -= len;
+    kmemcpy(str, argv[i], len);
+    vec[n++] = topUser - ((char *)page + PAGE_SIZE - str);
+  }
+  vec[n++] = 0;
+  for (i = 0; envp && envp[i]; i++) {
+    uint32_t len = kstrlen(envp[i]) + 1;
+    str -= len;
+    kmemcpy(str, envp[i], len);
+    vec[n++] = topUser - ((char *)page + PAGE_SIZE - str);
+  }
+  vec[n++] = 0;
+  vec[n++] = 0;                                     /* auxv: AT_NULL */
+  vec[n++] = 0;
+}
+
 void initProcessTable() {
   int i;
   for (i = 0; i < MAXPROCESSES; i++)
@@ -85,7 +129,8 @@ void initProcessTable() {
 
 
 process_descriptor_t * spawnProcess(process_descriptor_t * desc, 
-				    uint32_t * test_start, uint32_t test_len) {
+				    uint32_t * test_start, uint32_t test_len,
+				    char ** argv, char ** envp) {
   uint32_t * newPD;
   uint32_t * lastPT;
   uint32_t * lastButOnePT;
@@ -98,9 +143,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   uint32_t i;
   tss_t * tss;
   uint32_t npages_for_process;
-
-  numProcesses++;
-  numThreads++;
+  uint32_t initialStack;
 
   Elf32_Phdr elf_phdata[ELF_MAXSEG];
   Elf32_Ehdr elf_ex;
@@ -130,6 +173,14 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
   nInfoAndStacksPTs = (LAST_PDPT_INDEX - 1) - __ADDRESS_PD_INDEX(ustackBottomAddr) + 1;
 
+  /* check everything before allocating anything: the image may come from a
+     process (mynos_spawn) */
+  if (!argv) argv = default_argv;
+  if ((initialStack = initialStackSize(argv, envp)) == 0)
+    return NULL;
+  if (test_len < sizeof(Elf32_Ehdr))
+    return NULL;
+
   elf_ex=*(Elf32_Ehdr *)test_start;
 
   /* Used GRUB as inspiration */
@@ -147,19 +198,30 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
        (elf_ex.e_phnum > (65536U / elf_ex.e_phentsize) ) )
       return(NULL);
   size = elf_ex.e_phnum * elf_ex.e_phentsize;
-  kmemcpy(elf_phdata, test_start+elf_ex.e_phoff, size);
+  if (elf_ex.e_phoff > test_len || size > test_len - elf_ex.e_phoff)
+      return(NULL);
+  kmemcpy(elf_phdata, (char *)test_start + elf_ex.e_phoff, size);
    
   for (i = 0; i < elf_ex.e_phnum; i++) {
-      Elf32_Phdr *phdr;
-      
-      phdr = (Elf32_Phdr *) ((char *)test_start + elf_ex.e_phoff +  (elf_ex.e_phentsize * i));
+      Elf32_Phdr *phdr = &elf_phdata[i];
       /* we consider only the segments to be loaded*/
       if (phdr->p_type != PT_LOAD) continue; 
+      if (phdr->p_offset > test_len ||
+	  phdr->p_filesz > test_len - phdr->p_offset ||
+	  phdr->p_vaddr < baseaddr || phdr->p_memsz > 0x400000)
+	return(NULL);
       if (baseaddr == 0) baseaddr=phdr->p_vaddr;
       lastaddr = phdr->p_vaddr+phdr->p_memsz;
   }
-  
+
+  /* the program lives in one page table, right after the kernel space */
+  if (baseaddr != (uint32_t)USERMINPAGE << 12 || lastaddr <= baseaddr ||
+      lastaddr - baseaddr > 0x400000)
+    return(NULL);
+
   npages_for_process = ((lastaddr - baseaddr)>>12)+1;
+  numProcesses++;
+  numThreads++;
 
   /* initialize the linear space map */
   // set the beginning of the space (process code, etc.)
@@ -220,10 +282,9 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
 
   for (i = 0; i < elf_ex.e_phnum; i++) {
-      Elf32_Phdr *phdr;
+      Elf32_Phdr *phdr = &elf_phdata[i];
       uint32_t memsz, filesz;
-      
-      phdr = (Elf32_Phdr *) ((char *)test_start + elf_ex.e_phoff +  (elf_ex.e_phentsize * i));
+
       /* we consider only the segments to be loaded*/
       if (phdr->p_type != PT_LOAD) continue; 
       if (baseaddr == 0) baseaddr=phdr->p_vaddr;
@@ -243,7 +304,6 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   for (i = 0; i < npages_for_process; i++)
   currPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(currPF +(PDPT_ENTRIES*i)) 
     | PF_USER | PF_PRESENT | PF_READWRITE;
-  printk("Set linear2phis addr....\n");
 
   newPD[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
   lastPT[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
@@ -263,8 +323,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 			     USER_STACK_NPAGES));// + nInfoAndStacksPTs*1024 - 1;
 
   /* allocate-on-demand the user stack, except its top page: it holds the
-     initial process stack the Linux ABI expects (argc, argv, envp, auxv),
-     which modern libcs read at startup */
+     initial process stack (argc, argv, envp, auxv) */
   for (i = 0; i < USER_STACK_NPAGES - 1; i++)
     *(pun++) = PF_USER | PF_LOGICAL_PRESENT | PF_READWRITE;
   {
@@ -273,17 +332,8 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
     if ((top = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
     kbzero(top, PAGE_SIZE);
-    /* argv[0] string in the last 16 bytes of the stack */
-    kmemcpy((char*)top + PAGE_SIZE - 16, "mynos", 6);
-    /* the vector at topUser - INITIAL_STACK_SIZE (see tss->esp below) */
-    top += (PAGE_SIZE - INITIAL_STACK_SIZE) / sizeof(uint32_t);
-    top[0] = 1;                   /* argc */
-    top[1] = topUser - 16;        /* argv[0] */
-    top[2] = 0;                   /* end of argv */
-    top[3] = 0;                   /* end of envp */
-    top[4] = 0;                   /* auxv: AT_NULL */
-    top[5] = 0;
-    *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS((uint32_t)top & ~(PAGE_SIZE - 1))
+    buildInitialStack(top, topUser, initialStack, argv, envp);
+    *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(top)
       | PF_USER | PF_PRESENT | PF_READWRITE;
   }
 
@@ -307,7 +357,6 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
     lastPT[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
 
-  printk("Copied first shared entries....\n");
   lastPT[_asm_last_kernel_page_dir_entry_used + 1] = 
     LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
   
@@ -319,9 +368,6 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
   tss = desc->tss;
   tss->tls_base = tss->tls_limit = tss->tls_pages = 0;
-
-  // insert the thread into readyQueue
-  readyQueueInsert(tss);
 
   /* set the new process tss */
   tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(newPD);
@@ -343,7 +389,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
   tss->eflags = INITIAL_EFLAGS;  // iopl = 3
   tss->esp = tss->ebp = ustackBottomAddr + PAGE_SIZE * USER_STACK_NPAGES -
-    INITIAL_STACK_SIZE;
+    initialStack;
   tss->esp0 = tss->esp1 = tss->esp2 = kstackBottomAddr + PAGE_SIZE * KERNEL_STACK_NPAGES;
   tss->ss0 = tss->ss1 = tss->ss2 = GDT_OS_DATA_SEL;
 
@@ -382,16 +428,49 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   }
 #endif
 
-  printk("SET TSS entry....\n");
+  desc->exitStatus = 0;
+  desc->reaped = 0;
+  desc->childSem = __OS_sem_allocateSemaphore(0);
+
+  /* ready to run: only now can the scheduler pick it */
+  readyQueueInsert(tss);
   return desc;
 }
 
+/*
+ * Starts a new process from an ELF image (a GRUB module, or a file a
+ * process read: mynos_spawn). Returns its pid, or a MYNOS_ERR_* code.
+ */
+int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
+		  pid_t ppid) {
+  process_descriptor_t * desc;
+  int pid;
 
-void killProcess() {
+  if (numProcess >= MAXPROCESSES) return MYNOS_ERR_FULL;
+  desc = (process_descriptor_t*)kmalloc(sizeof(process_descriptor_t));
+  if (desc == NULL) return MYNOS_ERR_FULL;
+  pid = numProcess;
+  desc->pid = pid;
+  desc->ppid = ppid;
+  if (spawnProcess(desc, elf, len, argv, envp) == NULL) {
+    /* a bad image fails before allocating; out of memory, after (and
+       leaks what it took: processes do not free memory yet) */
+    kfree(desc);
+    return MYNOS_ERR_INVALID;
+  }
+  desc->tss->pid = pid;
+  processTable[pid] = desc;
+  numProcess++;
+  return pid;
+}
+
+
+void killProcess(int status) {
   tss_t * tss;
   process_queue_t * q;
   int port, channel;
   int i, n;
+  process_descriptor_t * parent;
   /* TODO free sem for every threads */
   //__OS_sem_freeSemaphore((processTable[currProcess]->tss)->privSem);
   processTable[currProcess]->isAlive = 0;
@@ -420,6 +499,13 @@ void killProcess() {
     __OS_ipc_freeChannel(channel);
   }
 
+
+  /* tell the parent, which may be waiting for it */
+  processTable[currProcess]->exitStatus = status;
+  __OS_sem_freeSemaphore(processTable[currProcess]->childSem);
+  parent = processTable[processTable[currProcess]->ppid];
+  if (processTable[currProcess]->ppid != 0 && parent && parent->isAlive)
+    __OS_sem_V(parent->childSem);
 
   // TODO: free all process resources
   //kfree(processTable[currProcess]);

@@ -130,6 +130,10 @@ __asm__ (".pushsection .text\n" \
 	 "   je .linux_stat64\n"\
 	 "   cmpl $197, %eax\n"\
 	 "   je .linux_fstat64\n"\
+	 "   cmpl $7, %eax\n"\
+	 "   je .linux_waitpid\n"\
+	 "   cmpl $114, %eax\n"\
+	 "   je .linux_wait4\n"\
 	 "   pushl %eax\n"\
 	 "   call _linux_syscall_NOTIMPLEMENTED\n"\
 	 "   addl $4, %esp\n"\
@@ -231,6 +235,12 @@ __asm__ (".pushsection .text\n" \
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_fstat64:\n"\
 	 "   call _linux_syscall_fstat64\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_waitpid:\n"\
+	 "   call _linux_syscall_waitpid\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_wait4:\n"\
+	 "   call _linux_syscall_wait4\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".exit_linux_syscall:\n"\
 	 "   popl %ebx\n"\
@@ -348,7 +358,7 @@ int _linux_syscall_kill(int pid, int sig) {
   printk(" killed by signal ");
   print_int(sig);
   print_char('\n');
-  killProcess();
+  killProcess(SIGNAL_STATUS(sig));
   sched();         /* switches to another process, never returns */
   return 0;
 }
@@ -424,8 +434,42 @@ void _linux_syscall_exit(int status) {
   printk(" exited with code ");
   print_int(status);
   print_char('\n');
-  killProcess();
+  killProcess(EXIT_STATUS(status));
   sched();
+}
+
+/*
+ * waitpid (7) and wait4 (114, what musl uses): wait for a child to end and
+ * collect its status. pid > 0 waits for that child, -1 (or 0: there are no
+ * process groups) for any. The only option is WNOHANG; rusage is not filled.
+ */
+#define WNOHANG 1
+#define ECHILD 10
+
+int _linux_syscall_wait4(int pid, int * status, int options, void * rusage) {
+  process_descriptor_t * self = processTable[currProcess];
+  while (1) {
+    int i, children = 0;
+    for (i = 1; i < (int)numProcess; i++) {
+      process_descriptor_t * p = processTable[i];
+      if (!p || p->ppid != (int)currProcess || p->reaped) continue;
+      if (pid > 0 && i != pid) continue;
+      children++;
+      if (!p->isAlive) {
+	p->reaped = 1;
+	if (status) *status = p->exitStatus;
+	return i;
+      }
+    }
+    if (!children) return -ECHILD;
+    if (options & WNOHANG) return 0;
+    /* V'd once for every child that ends: check again then */
+    __OS_sem_P(self->childSem);
+  }
+}
+
+int _linux_syscall_waitpid(int pid, int * status, int options) {
+  return _linux_syscall_wait4(pid, status, options, NULL);
 }
 
 int32_t _linux_syscall_pause() {
@@ -737,6 +781,9 @@ int _linux_syscall_fork() {
   processTable[new_pid]->pid = new_pid;
   processTable[new_pid]->ppid = currProcess;
   processTable[new_pid]->isAlive = 1;
+  processTable[new_pid]->exitStatus = 0;
+  processTable[new_pid]->reaped = 0;
+  processTable[new_pid]->childSem = __OS_sem_allocateSemaphore(0);
 
   processTable[new_pid]->ptsMirror = (void*)LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
   //DEALLOCATE(lastPT);

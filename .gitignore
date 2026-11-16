@@ -32,7 +32,7 @@ services/fs/memrofs/tool/createDisk
 services/keyboard/keyboardd
 services/registry/registry
 services/serial/seriald
-*.cm[io]
+*.cm[ioa]
 *.byte
 *.dsk
 tests/abi/abi
@@ -42,3 +42,4 @@ mynos-runtime/primitives
 mynos-runtime/prims.c
 services/console/consoled
 tests/files/AUTOEXEC.BAT
+tests/spawn/ocamlrun

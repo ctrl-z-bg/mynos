@@ -54,7 +54,12 @@ talking through IPC.
   Fork uses copy-on-write.
 - **Processes and threads:** a single hardware TSS. Context switching is done in
   software (`softtaskswitch.c`). The scheduler (`sched.c`) runs on the PIT at
-  100 Hz. Threads are supported (`threads.c`).
+  100 Hz. Threads are supported (`threads.c`). Processes are created from
+  an ELF image (`createProcess` in `process.c`): at boot from the GRUB
+  modules, and since 2026 by a process through the native `spawn` call,
+  with real `argv`/`envp` on the Linux initial stack. A parent collects a
+  child's exit status with `waitpid`/`wait4`. Ending a process does not
+  free its memory yet (mynos-pg6).
 - **Synchronization:** kernel semaphores (`sem.c`). Every thread has a private
   semaphore.
 - **IPC** (`kernel/ipc/`): **ports** are used to establish connections, and
@@ -66,7 +71,7 @@ talking through IPC.
   IRQ.
 - **Two syscall interfaces:**
   - `int 0x90`: the native MyNOS API (send/recv, ports, semaphores, IRQs,
-    threads, timer, stats). See `kernel/syscalls.c` and `mynos-lib`.
+    threads, timer, stats, spawn). See `kernel/syscalls.c` and `mynos-lib`.
   - `int 0x80`: a **Linux-compatible** subset in `kernel/linux_syscalls.c`.
     This lets static Linux i386 programs run unmodified, so MyNOS needs no
     libc of its own: they were built with **dietlibc** originally, with
@@ -75,7 +80,8 @@ talking through IPC.
     `llseek`; musl and modern OCaml added `set_thread_area` (TLS), `mmap2`,
     `writev`, `lseek`, `stat64`, `fstat64`, `exit_group`,
     `set_tid_address`, `mprotect`, the signal calls (accepted, no delivery
-    yet), `kill`/`tkill`/`tgkill` on oneself, and the clock and sleep calls
+    yet), `kill`/`tkill`/`tgkill` on oneself, `waitpid`/`wait4`, and the
+    clock and sleep calls
     (`kernel/time.c`: PIT ticks plus the CMOS clock read at boot). Unknown
     calls return `-ENOSYS`.
 
@@ -101,8 +107,11 @@ All services are linked statically against `libmynos` and placed at
 
 The upstream OCaml 5.5.2 bytecode runtime, **unchanged**: the dev container
 builds it with musl (`/opt/ocaml-runtime-musl`), and `mynos-runtime/Makefile`
-links it with a ten-line `main()` that gives it the bytecode file name to
-open (`mynos-runtime/main.c`). Bytecode is compiled with `ocamlc` 5.5.2.
+links it with a short `main()` that picks the bytecode file to open
+(`mynos-runtime/main.c`): `ocamlrun prog.byte args…` as on Unix, otherwise
+`init.byte` from the RAM disk, otherwise GRUB module 1. Programs start other
+programs with `Mynos.spawn "ocamlrun" [| "ocamlrun"; "prog.byte"; … |]`
+and `Mynos.wait`. Bytecode is compiled with `ocamlc` 5.5.2.
 Effect handlers work; `Domain` and `Thread` need `clone` (mynos-l9h).
 Decision and evidence: `doc/decisions/ocaml-runtime.md`.
 
@@ -156,7 +165,9 @@ on screen and sent to the serial port.
     OCaml 3.06 (see the journal); that is where the Linux ABI work began.
 - **Tests.** `tools/run-tests.sh` boots the whole system headless and checks
   the console output, which the kernel mirrors to COM2. `tests/abi` checks
-  the system call fixes. Both toolchains pass.
+  the system call fixes; with the dev toolchain, OCaml tests cover effects,
+  the `Mynos` library, files, the console and spawning programs
+  (`tests/spawn`). Both toolchains pass.
 - **Booting.** `tools/run-qemu.sh` uses QEMU's multiboot loader, no GRUB.
   Modules are passed in order; module 1 must be the OCaml bytecode.
   `tools/run-demo.sh` passes the standard set. The kernel is built with `-g`,
@@ -187,7 +198,11 @@ on screen and sent to the serial port.
     (Linux) or `MYNOS_ERR_INVALID` (native).
   - The kernel heap allocator (`dynalloc.c`, 2003) could place a block
     across the end of a heap page into a page owned by something else (a
-    process's page directory), and freed pages still in use.
+    process's page directory), and freed pages still in use. It also took
+    the page after a block ending exactly at a page boundary as its own,
+    though `kfree` may have given it back.
+  - A channel id from a process was used as a table index unchecked: a
+    negative id faulted the kernel.
   - The RAM size probe in `start.asm` (2002) wrote `0x12345678` into the
     last dword of every megabyte without restoring it, corrupting modules
     that crossed a megabyte boundary. The size now comes from multiboot.
@@ -319,3 +334,9 @@ Side task: archive the old SourceForge site (mynos-db2).
   memrofs protocol, `ocamlrun` runs `init.byte` from the RAM disk. Fixed two
   bugs of the kernel heap allocator that corrupted a page directory. Closed
   mynos-nxa.
+- **2026-11-16** — Spawn: native call 30 starts a process from an ELF image
+  with `argv`/`envp`, `waitpid`/`wait4` collect exit statuses,
+  `mynos_spawn` in `libmynos`, `Mynos.spawn`/`Mynos.wait` in OCaml;
+  `ocamlrun` passes its arguments on. Fixed a third kernel heap bug and an
+  unchecked channel id. Opened mynos-pg6 (processes leak their memory).
+  Closed mynos-a2j.2.

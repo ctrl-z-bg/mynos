@@ -55,3 +55,15 @@ let sem_free s = ignore (sem_free_raw s)
 
 external register : string -> int = "caml_mynos_registry_register"
 external lookup : string -> int = "caml_mynos_registry_lookup"
+
+type status = Exited of int | Signaled of int
+
+external spawn_raw : string -> string array -> string array -> int
+  = "caml_mynos_spawn"
+let spawn ?(env = [||]) path argv = spawn_raw path argv env
+
+external wait_raw : int -> int * int = "caml_mynos_wait"
+let decode s = if s land 0x7f = 0 then Exited ((s lsr 8) land 0xff)
+               else Signaled (s land 0x7f)
+let wait pid = decode (snd (wait_raw pid))
+let wait_any () = let pid, s = wait_raw (-1) in (pid, decode s)

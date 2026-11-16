@@ -33,18 +33,24 @@ _insertBlock(void * current, unsigned int sz, void *previous, void *next)
 
 /* Can a new block occupy [begin, end] (end included) between two heap
    blocks without asking for pages? Only if it stays in pages the heap
-   already holds: the page where the previous block ends (begin's page) and
-   the page where the next block starts. Any other page may belong to
-   someone else: __OS_askPages hands out kernel pages for other uses too
-   (page directories...), interleaved with heap pages. The old test (fewer
-   than 3 pages spanned) let a block run into such a page and overwrite it. */
+   already holds: the page where the previous block ends (the page of
+   begin - 1: begin is the end of that block) and the page where the next
+   block starts. Any other page may belong to someone else: __OS_askPages
+   hands out kernel pages for other uses too (page directories...),
+   interleaved with heap pages, and kfree gives emptied pages back. The old
+   test (fewer than 3 pages spanned) let a block run into such a page and
+   overwrite it; the next one took begin's page as held even when the
+   previous block ended exactly at a page boundary. */
 static int
 _heapOwnsSpan(void *begin, void *end, void *next)
 {
   void *first = _GET_PAGE_ADDRESS(begin);
   void *last = _GET_PAGE_ADDRESS(end);
-  if (last == first) return 1;
-  return (last == _GET_PAGE_BLOCK(next)) && (last - first == _PAGE_SZ);
+  void *prevPage = _GET_PAGE_ADDRESS(begin - 1);
+  void *nextPage = _GET_PAGE_BLOCK(next);
+  if (first != prevPage && first != nextPage) return 0;
+  if (last != prevPage && last != nextPage) return 0;
+  return last - first <= _PAGE_SZ;
 }
 
 /* looks for a free block in the allocated heap */
@@ -84,7 +90,7 @@ _findFreeBlock(unsigned int sz)
 	  /* number of bytes taken from the first page */
 	  if ( paddr - ret >= osz ) { /* OK, the sp. in the page was enough */
 	    _insertBlock(ret + _SIZE_SZ, sz, old, runner);
-	    return(ret);
+	    return(ret + _SIZE_SZ);  /* was ret: the block's size field */
 	  }
 	}
 	/* otherwise, must allocate */
@@ -107,8 +113,9 @@ _findFreeBlock(unsigned int sz)
   /* if runner is null, check for space at the end of the page */
   if ( !runner ) {
     void *bend = _BLOCK_END(old);
-    /* address of the successive (unallocated) page */
-    void *npage = _GET_NPAGE_ADDRESS(bend);
+    /* end of the page holding the last byte of the block (when the block
+       ends at a page boundary, the next page is not the heap's) */
+    void *npage = _GET_NPAGE_ADDRESS(bend - 1);
     if ( (npage - bend) >= osz ) { /* space at the end! */
       void *ret = bend + _SIZE_SZ;
       _insertBlock(ret, sz, old, NULL);

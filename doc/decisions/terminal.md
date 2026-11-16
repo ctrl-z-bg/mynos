@@ -70,8 +70,10 @@ the registry. The kernel loses its fake bytecode file.
 3. **File client in `mynos-lib`** (mynos-nxa): fd table, `open/read/...`
    over IPC to memrofs (read-only for now, real storage later: mynos-rf4).
    `ocamlrun` loads its bytecode by name from memrofs.
-4. **Spawn** (mynos-a2j.2): a native call to start a process from an ELF
-   image read from a file, with arguments; a shell can then run
-   `ocamlrun prog.byte`.
+4. **Spawn** (mynos-a2j.2, done): a native call to start a process from an
+   ELF image read from a file, with arguments; a shell can then run
+   `ocamlrun prog.byte`. The image is read in user space (`mynos_spawn`,
+   `mynos-lib/src/spawn.c`) and passed to the kernel, which only builds the
+   process.
 5. **The shell** (mynos-a2j.4): the OCaml toplevel, its `.cmi` files on the
    RAM disk, reading the console.

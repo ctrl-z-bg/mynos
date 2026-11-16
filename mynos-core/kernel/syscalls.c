@@ -27,6 +27,8 @@
 #include "services.h"
 #include "stats.h"
 #include "time.h"
+#include "process.h"
+#include "mynos.h"
 
 extern uint32_t currProcess;
 
@@ -68,6 +70,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .mynos_freePort\n"\
 	 "   cmpl $25, %eax\n"\
 	 "   je .mynos_changePortOwner\n"\
+	 "   cmpl $30, %eax\n"\
+	 "   je .mynos_spawn\n"\
 	 "   cmpl $100, %eax\n"\
 	 "   je .mynos_enableIrq\n"\
 	 "   cmpl $101, %eax\n"\
@@ -195,6 +199,17 @@ __asm__ (".pushsection .text\n" \
 	 "   popl %ebx\n"
 	 "   popl %ecx\n"
 	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_spawn:\n"\
+	 "   pushl %esi\n"
+	 "   pushl %edx\n"
+	 "   pushl %ecx\n"
+	 "   pushl %ebx\n"
+	 "   call _mynos_syscall_spawn\n"\
+	 "   popl %ebx\n"
+	 "   popl %ecx\n"
+	 "   popl %edx\n"\
+	 "   popl %esi\n"
+	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_enableIrq:\n"\
 	 "   pushw %bx\n"
 	 "   call _mynos_syscall_enableIrq\n"\
@@ -249,6 +264,18 @@ int32_t _mynos_syscall_WRONGSYSCALL(uint32_t syscall_id) {
 
 /* sleep for at least usec microseconds (mynos_setTimer / mynos_sleep).
    It used to only store a wake-up time nobody read, in the wrong unit. */
+/* spawn (30): start a new process, child of the caller, from an ELF image
+   in the caller's memory, with arguments and environment (NULL-terminated
+   vectors, either may be NULL). Returns the pid or a MYNOS_ERR_* code. */
+int _mynos_syscall_spawn(uint32_t * elf, uint32_t len, char ** argv,
+			 char ** envp) {
+  if ((uint32_t)elf < ((uint32_t)USERMINPAGE << 12) ||
+      (argv && (uint32_t)argv < ((uint32_t)USERMINPAGE << 12)) ||
+      (envp && (uint32_t)envp < ((uint32_t)USERMINPAGE << 12)))
+    return MYNOS_ERR_INVALID;
+  return createProcess(elf, len, argv, envp, currProcess);
+}
+
 int32_t _mynos_syscall_setTimer(ulong32_t usec) {
   time_sleepUsec(usec);
   return 0;
