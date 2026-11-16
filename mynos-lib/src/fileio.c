@@ -18,15 +18,18 @@
  * and pass the rest to the kernel:
  *   - standard input (fd 0) is read from the console service;
  *   - files are opened on memrofs, the RAM disk filesystem, and get
- *     descriptors from FD_BASE up;
+ *     descriptors from FD_BASE up. Its namespace is flat: "/", "." and ""
+ *     name its only directory, which opendir/readdir list;
  *   - everything else (stdout, stderr, and the kernel's own single file
  *     when there is no memrofs) goes to the kernel.
  * The C library's internal I/O (fopen, ...) may bypass these functions;
  * the OCaml runtime uses open/read/lseek/close/stat directly.
  */
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
@@ -159,6 +162,18 @@ static int status_errno(int status)
   }
 }
 
+/* the memrofs name of a path: without leading "/" and "./" ("" for the
+   directory itself) */
+static const char * flat_name(const char * path)
+{
+  while (1) {
+    if (path[0] == '/') path++;
+    else if (path[0] == '.' && path[1] == '/') path += 2;
+    else if (path[0] == '.' && path[1] == 0) path++;
+    else return path;
+  }
+}
+
 /* ---- the replaced functions ---- */
 
 int open(const char * path, int flags, ...)
@@ -181,6 +196,8 @@ int open(const char * path, int flags, ...)
     errno = EROFS;
     return -1;
   }
+  path = flat_name(path);
+  if (!path[0]) { errno = EISDIR; return -1; }
   if (strlen(path) >= MEMROFS_NAMEMAX) { errno = ENAMETOOLONG; return -1; }
 
   memset(&req, 0, sizeof(req));
@@ -344,8 +361,15 @@ int fstat(int fd, struct stat * st)
 
 int stat(const char * path, struct stat * st)
 {
-  int fd = open(path, O_RDONLY);
-  int ret;
+  int fd, ret;
+  if (!flat_name(path)[0] &&
+      service_port(MEMROFS_SERVICE, &memrofs_cache) >= 0) {
+    memset(st, 0, sizeof(*st));          /* the directory */
+    st->st_mode = S_IFDIR | 0555;
+    st->st_nlink = 2;
+    return 0;
+  }
+  fd = open(path, O_RDONLY);
   if (fd < 0) return -1;
   ret = fstat(fd, st);
   close(fd);
@@ -355,4 +379,73 @@ int stat(const char * path, struct stat * st)
 int lstat(const char * path, struct stat * st)
 {
   return stat(path, st);
+}
+
+/* ---- directories: the one memrofs directory ---- */
+
+struct __dirstream {
+  int index;               /* next file to list */
+  struct dirent entry;
+};
+
+DIR * opendir(const char * path)
+{
+  DIR * d;
+  if (service_port(MEMROFS_SERVICE, &memrofs_cache) < 0) {
+    errno = ENOSYS;
+    return NULL;
+  }
+  if (flat_name(path)[0]) {
+    struct stat st;
+    errno = stat(path, &st) == 0 ? ENOTDIR : ENOENT;
+    return NULL;
+  }
+  if ((d = calloc(1, sizeof(*d))) == NULL) { errno = ENOMEM; return NULL; }
+  return d;
+}
+
+struct dirent * readdir(DIR * d)
+{
+  struct memrofs_req req;
+  struct memrofs_reply r;
+  mynos_msg_t * msg;
+  int channel;
+
+  memset(&req, 0, sizeof(req));
+  req.type = MEMROFS_LIST;
+  req.arg1 = d->index;
+  if (memrofs_call(&req, &r, &channel) < 0) { errno = EIO; return NULL; }
+  if (r.status != MEMROFS_OK) {          /* the end: errno unchanged */
+    mynos_freeChannel(channel);
+    return NULL;
+  }
+  if (mynos_recv(channel, &msg, 0, 0) < 0) {
+    mynos_freeChannel(channel);
+    errno = EIO;
+    return NULL;
+  }
+  memset(&d->entry, 0, sizeof(d->entry));
+  memcpy(d->entry.d_name, msg->start,
+         msg->size < sizeof(d->entry.d_name) ? msg->size
+                                             : sizeof(d->entry.d_name) - 1);
+  mynos_freeMsg(&msg);
+  mynos_freeChannel(channel);
+  d->index++;
+  d->entry.d_ino = d->index;
+  d->entry.d_reclen = sizeof(d->entry);
+#ifdef _DIRENT_HAVE_D_TYPE
+  d->entry.d_type = DT_REG;
+#endif
+  return &d->entry;
+}
+
+void rewinddir(DIR * d)
+{
+  d->index = 0;
+}
+
+int closedir(DIR * d)
+{
+  free(d);
+  return 0;
 }

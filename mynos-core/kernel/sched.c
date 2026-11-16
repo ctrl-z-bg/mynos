@@ -147,6 +147,11 @@ void sched() {
     privV(awaken);
 
   currThread = readyQueueNext();
+  /* the idle thread (process 0) runs only when no other thread is ready:
+     it keeps the CPU until the next timer tick, and every IPC exchange
+     that reached it in the round robin waited up to 10 ms */
+  if (currThread->pid == 0 && readyQueueNElem() > 1)
+    currThread = readyQueueNext();
   currProcess = currThread->pid;
 
   if (currThread != oldThread)

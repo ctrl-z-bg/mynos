@@ -3,7 +3,7 @@
 # to COM2) and check the expected output. Build first with tools/build-all.sh.
 #
 # Usage: tools/run-tests.sh            exit status 0 if all checks pass
-# Environment: WAIT seconds to let the system run (default 10, 20 for spawn)
+# Environment: WAIT seconds to let the system run (default 10)
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -13,7 +13,7 @@ ocamlrun=$(tools/ocamlrun-path.sh)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 log=$tmp/log1 log2=$tmp/log2 log3=$tmp/log3 log4=$tmp/log4 log5=$tmp/log5
-log6=$tmp/log6
+log6=$tmp/log6 log7=$tmp/log7
 
 timeout "${WAIT:-10}" tools/run-qemu.sh \
     "$ocamlrun" \
@@ -52,10 +52,9 @@ if [ -f tests/files/ramdisk.dsk ]; then
     cat "$log5" >> "$log"
 fi
 
-# sixth boot: init.byte starts other programs from the RAM disk (five
-# runtimes start one after the other: give it more time)
+# sixth boot: init.byte starts other programs from the RAM disk
 if [ -f tests/spawn/ramdisk.dsk ]; then
-    timeout "${WAIT:-20}" tools/run-qemu.sh "$ocamlrun" \
+    timeout "${WAIT:-10}" tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         tests/spawn/ramdisk.dsk \
         -- -display none -serial null -serial "file:$log6" || true
@@ -82,6 +81,29 @@ if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon" >/dev/null || true
     wait $qemu || true
     cat "$log4" >> "$log"
+fi
+
+# seventh boot: the shell (the OCaml toplevel), driven through the keyboard
+if [ -f shell/ramdisk.dsk ] && [ -f services/console/consoled ]; then
+    MEM=256 tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        services/console/consoled shell/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$log7" \
+           -monitor "unix:$tmp/mon7,server,nowait" &
+    qemu=$!
+    i=0
+    while [ $i -lt 60 ] && ! grep -aq '^# ' "$log7" 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    for phrase in '1 + 2;;\n' 'List.map (fun x -> x * x) [1; 2; 3];;\n' \
+                  'cat "AUTOEXEC.BAT";;\n' 'ls ();;\n' \
+                  'run "child.byte" ["4"];;\n' '1 + "one";;\n'; do
+        tools/type-keys.py "$tmp/mon7" "$phrase"
+        sleep 2
+    done
+    printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null || true
+    wait $qemu || true
+    cat "$log7" >> "$log"
 fi
 
 fail=0
@@ -118,6 +140,16 @@ if [ -f tests/spawn/ramdisk.dsk ]; then
     expect "args [hello world]"
     expect "spawn: all checks passed"
 fi
+if [ -f shell/ramdisk.dsk ] && [ -f services/console/consoled ]; then
+    expect "MyNOS shell. Type help ();; for help."
+    expect "- : int = 3"
+    expect "- : int list = [1; 4; 9]"
+    expect "This file lives in the MyNOS RAM disk."
+    expect "stdlib__List.cmi"
+    expect "args [4]"
+    expect "- : Mynos.status = Mynos.Exited 4"
+    expect "Error: "
+fi
 if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     expect 'console: line 1: "hi"'
     expect 'console: line 2: "OK"'
@@ -125,6 +157,7 @@ if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
 fi
 reject "PANIC"
 reject "page fault (?)"
+reject "Problems releasing pages"
 reject "FAIL"
 
 if [ $fail -ne 0 ]; then

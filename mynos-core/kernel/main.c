@@ -329,8 +329,9 @@ void mynos_main(multiboot_info_t *boot_info) {
   }
 #endif
 
-  // this is the idle process
+  // this is the idle process: wait for the next interrupt
   while(1) {
+    asm volatile("hlt");
     //printk("idle\n");
 #if 0
     // to try the softReset

@@ -14,7 +14,8 @@
  * (services/fs/memrofs), used by the file functions of libmynos
  * (mynos-lib/src/fileio.c). One connection per request: the client sends a
  * struct memrofs_req and receives a struct memrofs_reply; a READ reply with
- * value > 0 is followed by a second message with the data.
+ * value > 0 is followed by a second message with the data, a LIST reply
+ * with status OK by a message with the name. The namespace is flat.
  *
  * Only fixed-size types, so that the layout is the same with every libc.
  */
@@ -23,7 +24,7 @@
 #define __MYNOS_MEMROFS_H__
 
 #define MEMROFS_SERVICE  "memrofs"
-#define MEMROFS_NAMEMAX  20       /* file names, including the final 0 */
+#define MEMROFS_NAMEMAX  64       /* file names, including the final 0 */
 #define MEMROFS_READMAX  16384    /* largest READ */
 
 /* request types */
@@ -32,6 +33,8 @@
 #define MEMROFS_READ   2   /* fd, arg1: max -> value: n, then the data  */
 #define MEMROFS_LSEEK  3   /* fd, arg1: offset, arg2: whence (0/1/2)
                                             -> value: new position      */
+#define MEMROFS_LIST   4   /* arg1: index   -> value: size of the index-th
+                              file, then its name (NOT_FOUND past the end) */
 
 /* reply status */
 #define MEMROFS_OK         0

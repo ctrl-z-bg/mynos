@@ -26,8 +26,11 @@
 #define myalloc(sz) kmalloc(sz)
 #define myfree(ptr) kfree(ptr)
 
-#define PAGESPAN(p) ((p).end - (p).bgn)
+/* The list holds the FREE areas of a process's linear space, in address
+   order; bgn and end are page numbers, both included. */
+#define PAGESPAN(p) ((p).end - (p).bgn + 1)
 
+/* page numbers start at USERMINPAGE: 1 cannot be one */
 #define BLOCKNOTFOUND 1
 #define AREATOOLARGE 1
 
@@ -62,14 +65,14 @@ pdListEl *__lmt_findArea(pdListEl **pdListBgn, uint32_t npages)
   return runner;
 }
 
-/* returns the page number at which the area begins.
-   Adjusts the free space list */
+/* returns the page number at which the area begins (BLOCKNOTFOUND if there
+   is no room). Adjusts the free space list */
 uint32_t __lmt_allocArea(pdListEl **pdListBgn, uint32_t npages)
 {
   pdListEl *tomod;
   uint32_t toret;
 
-  if (npages > (USERMAXPAGE-USERMINPAGE)) return AREATOOLARGE;
+  if (npages == 0 || npages > (USERMAXPAGE-USERMINPAGE)) return AREATOOLARGE;
   
   /* first fit */
   tomod = __lmt_findArea(pdListBgn, npages);
@@ -90,49 +93,44 @@ uint32_t __lmt_allocArea(pdListEl **pdListBgn, uint32_t npages)
     return BLOCKNOTFOUND;
 }
 
-/* frees a block of pages, adjusting the list */
+/* frees a block of pages, adjusting the list. Fails (NOTALLOCATED) if part
+   of it is free already. (The 2003 version unlinked a merged element
+   without fixing its successor's back pointer, and could not free an area
+   above the last free one.) */
 uint32_t __lmt_freeArea(pdListEl **pdListBgn, uint32_t fromPage, uint32_t npages)
 {
-  /* we must find the first block whose 'bgn' is after fromPage+npages */
-  pdListEl *runner = *pdListBgn;
-  pdListEl *prev;
+  uint32_t last = fromPage + npages - 1;
+  pdListEl *prev = NULL, *next = *pdListBgn;
 
-  while ( runner && (runner->bgn < (fromPage + npages)) )
-    runner = runner->next;
-  
-  if ( !runner ) /* the area was not found! */
-    return NOTALLOCATED;
-
-  prev = runner->prev;
-  /* runner == *pdListBgn */
-  if ( !prev ) {
-    if ( (fromPage + npages) == runner->bgn ) { /* extend runner */
-      runner->bgn = fromPage;
-    } else { /* must create a new previous... */
-      *pdListBgn = __lmt_newPdListEl(fromPage, fromPage+npages-1, runner, NULL);
-      runner->prev = *pdListBgn;
-    }
-    return 0;
+  if (npages == 0) return 0;
+  /* prev: the last free area before ours; next: the first one after it */
+  while ( next && next->bgn <= last ) {
+    if ( next->end >= fromPage ) /* overlaps a free area */
+      return NOTALLOCATED;
+    prev = next;
+    next = next->next;
   }
 
-  if ( (runner->bgn - prev->end) == npages+1 ) {
-    /* the freed area joins prev and runner */
-    /* must join the two blocks */
-    prev->end = runner->end;
-    prev->next = runner->next;
-    myfree(runner);
-  } else if ( prev->end == (fromPage - 1) ) { /* sticks to prev */
-    prev->end = fromPage+npages - 1;
-  } else if ( (fromPage + npages) == runner->bgn ) { /* sticks to runner */
-    runner->bgn = fromPage;
-  } else if ( prev->end < (fromPage - 1) ) {
-    /* must create another block */
-    pdListEl *newBlock =
-      __lmt_newPdListEl(fromPage, fromPage+npages-1, runner, prev);
-    prev->next = runner->prev  = newBlock;
-  } else /* error!! */
-    return NOTALLOCATED;
-  
+  if ( prev && prev->end + 1 == fromPage ) {        /* sticks to prev */
+    prev->end = last;
+    if ( next && last + 1 == next->bgn ) {          /* and to next: join */
+      prev->end = next->end;
+      prev->next = next->next;
+      if ( next->next )
+	next->next->prev = prev;
+      myfree(next);
+    }
+  } else if ( next && last + 1 == next->bgn ) {     /* sticks to next */
+    next->bgn = fromPage;
+  } else {                                          /* a new free area */
+    pdListEl *el = __lmt_newPdListEl(fromPage, last, next, prev);
+    if ( prev )
+      prev->next = el;
+    else
+      *pdListBgn = el;
+    if ( next )
+      next->prev = el;
+  }
   return 0;
 }
 
@@ -175,10 +173,11 @@ uint32_t __lmt_forceAllocation(pdListEl **pdListBgn, uint32_t fromPage, uint32_t
     return 0;
   }
   
-  while ( runner && (runner->end <= fromPage) )
+  while ( runner && (runner->end < fromPage) )
     runner = runner->next;
 
-  if ( !runner || !(runner->end >= (fromPage+npages-1)) )
+  if ( !runner || runner->bgn > fromPage ||
+       !(runner->end >= (fromPage+npages-1)) )
     KPANIC("lmemtrack.c: Block not found");
   
   if ( (runner->bgn == fromPage) && runner->end == (fromPage+npages-1) ) {

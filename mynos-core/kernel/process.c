@@ -68,6 +68,33 @@ extern modinfo_t bytecode;
 extern void * ramdisk;
 extern uint32_t ramdisk_len;
 extern uint32_t ramdisk_present;
+
+/* The RAM disk is mapped read-only in every process, right after the
+   program (0x40400000 up, read by memrofs), by page tables built once and
+   shared: read-only pages are left alone by fork's copy-on-write. */
+#define RAMDISK_MAXPTS 16   /* 64 MB */
+static uint32_t * ramdiskPTs[RAMDISK_MAXPTS];
+static uint32_t ramdiskNPTs = 0;
+
+static int buildRamdiskPTs(void) {
+  uint32_t npages = (ramdisk_len - 1) / PAGE_SIZE + 1;
+  uint32_t n = (npages - 1) / PDPT_ENTRIES + 1, k, i;
+  if (n > RAMDISK_MAXPTS) {
+    printk("RAM disk too large, not mapped\n");
+    return -1;
+  }
+  for (k = 0; k < n; k++) {
+    if ((ramdiskPTs[k] = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL)
+      return -1;
+    kbzero(ramdiskPTs[k], PAGE_SIZE);
+  }
+  for (i = 0; i < npages; i++)
+    ramdiskPTs[i / PDPT_ENTRIES][i % PDPT_ENTRIES] =
+      LINEAR_TO_PHYSICAL_ADDRESS(ramdisk + (PAGE_SIZE * i))
+      | PF_USER | PF_PRESENT;
+  ramdiskNPTs = n;
+  return 0;
+}
 #endif
 
 /*
@@ -226,14 +253,11 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   /* initialize the linear space map */
   // set the beginning of the space (process code, etc.)
   __lmt_forceAllocation(&(desc->lmemmap), USERMINPAGE, npages_for_process);
-  // set the end of linear space as allocated...
-  __lmt_forceAllocation(&(desc->lmemmap), 
-			USERMAXPAGE - (PROCESS_INFO_NPAGES +
-				       KERNEL_STACK_NPAGES +
-				       USER_STACK_NPAGES) + 1,
-			PROCESS_INFO_NPAGES +
-			KERNEL_STACK_NPAGES +
-			USER_STACK_NPAGES);
+  // set the end of linear space as allocated: the stacks, the process
+  // info and the page tables mapping (it reserved the right number of
+  // pages, but at the very top, above where the stacks are)
+  __lmt_forceAllocation(&(desc->lmemmap), ustackBottomAddr >> 12,
+			USERMAXPAGE - (ustackBottomAddr >> 12) + 1);
 
   if ((newPD = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
   kbzero(newPD, PAGE_SIZE);
@@ -408,23 +432,18 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   desc->tss->privSem = __OS_sem_allocateSemaphore(0);
 
 #ifdef RAMDISK
-  if (ramdisk_present) {
-    /* the RAM disk takes a whole page directory entry (4MB) right after the
-       program: record it in the linear space map, or mmap could hand out
-       addresses overlapping it */
-    __lmt_forceAllocation(&(desc->lmemmap),
-			  (_asm_last_kernel_page_dir_entry_used + 2) * PDPT_ENTRIES,
-			  PDPT_ENTRIES);
-    if ((currPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
-    kbzero(currPT, PAGE_SIZE);
-    newPD[_asm_last_kernel_page_dir_entry_used + 2] = 
-      LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_USER | PF_READWRITE | PF_PRESENT;
-    
-    for (i = 0; i < ((ramdisk_len - 1) / PAGE_SIZE + 1); i++)
-      currPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(ramdisk + (PAGE_SIZE * i))
-	| PF_USER | PF_PRESENT | PF_READWRITE;
-    lastPT[_asm_last_kernel_page_dir_entry_used + 2] = 
-      LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
+  if (ramdisk_present && (ramdiskNPTs || buildRamdiskPTs() == 0)) {
+    uint32_t first = _asm_last_kernel_page_dir_entry_used + 2;
+    /* record it in the linear space map, or mmap could hand out addresses
+       overlapping it */
+    __lmt_forceAllocation(&(desc->lmemmap), first * PDPT_ENTRIES,
+			  ramdiskNPTs * PDPT_ENTRIES);
+    for (i = 0; i < ramdiskNPTs; i++) {
+      newPD[first + i] = LINEAR_TO_PHYSICAL_ADDRESS(ramdiskPTs[i])
+	| PF_USER | PF_READWRITE | PF_PRESENT;
+      lastPT[first + i] = LINEAR_TO_PHYSICAL_ADDRESS(ramdiskPTs[i])
+	| PF_PRESENT;
+    }
   }
 #endif
 

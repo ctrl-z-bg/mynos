@@ -159,10 +159,14 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
   if ((flags & PF_USER) || (flags & PF_SUPERVISOR_IN_USER_SPACE)) {
     uint32_t start = __lmt_allocArea(&(processTable[currProcess]->lmemmap), 
 				     npages);
+    void * ret;
+    if (start < USERMINPAGE) return NULL;   /* no room */
     flags &= (~PF_SUPERVISOR_IN_USER_SPACE); // remove, if present
     //printk("====   "); print_uint_hex(start);
-    return __OS_askPagesFrom((void *)(start<<12), npages, alloc_now,
-			     flags);
+    ret = __OS_askPagesFrom((void *)(start<<12), npages, alloc_now, flags);
+    if (ret == NULL)   /* give the linear area back */
+      __lmt_freeArea(&(processTable[currProcess]->lmemmap), start, npages);
+    return ret;
   }
 #endif
 
@@ -243,7 +247,14 @@ void * __OS_releasePages(void *pageaddr, unsigned int npages,
     if (__lmt_freeArea(&(processTable[currProcess]->lmemmap),
 		       (addr >> 12),
 		       npages) != 0)
-      printk("Problems releasing pages\n");
+    {
+      /* part of the area is free already */
+      printk("Problems releasing pages at ");
+      print_uint_hex(addr);
+      printk(", ");
+      print_uint(npages);
+      printk(" pages\n");
+    }
 #endif
 
   for (i = 0; i < npages; i++) {

@@ -643,3 +643,80 @@ The test's child raised an exception on purpose by sending on channel
 `-1`. The kernel used the id as an index into its channel table without a
 bound check (ports had one) and faulted. `getChannel` now rejects ids out
 of range: every value a process passes is untrusted.
+
+## 2026-11-16 — The shell
+
+### The OCaml toplevel as the shell
+
+The shell is the toplevel of OCaml 5.5 itself: `shell/main.ml` sets the
+include path to the RAM disk, opens module `Shell` (a few commands: `ls`,
+`cat`, `run`, `help`, `free`) and calls `Topmain.main`. Linked without
+`-g`, the toplevel is 3.8 MB (the system's `ocaml` is 28 MB, mostly debug
+information). What it needed from MyNOS:
+- **Its interfaces**: the standard library's `.cmi` files (830 KB) on the
+  RAM disk. Some names are 28 characters long (memrofs allowed 19: now 63)
+  and the disk grew to 5.5 MB, beyond the one page table (4 MB) the
+  kernel mapped it with. The RAM disk now takes as many page tables as it
+  needs, built once and shared by every process; its pages are read-only,
+  so fork's copy-on-write leaves them alone.
+- **Finding files**: an interactive toplevel looks for `.cmi` files with
+  `Sys.file_exists` on each directory of the load path (not through a
+  `readdir` cache, as the batch compiler does), so a flat filesystem
+  works: the include path is `/`, and `libmynos` drops leading `/` and
+  `./`. `readdir` over a new memrofs LIST request came anyway, for `ls`.
+- **Memory**: 256 MB in QEMU for the demo and the test.
+
+### The free list that pointed into freed memory
+
+**Symptom.** In the shell, `run "hello.byte" []` killed the shell with
+`Out of memory`; the kernel had refused a 17-page `mmap` with 59 000 free
+physical pages. Boots also printed "Problems releasing pages" since the
+move to musl (mynos-dha).
+
+**Diagnosis.** Printing the process's free linear space list when `mmap`
+failed showed garbage: `0x1-0x1 0x1C-0x3 0x9A9D08-...`.
+
+**Cause.** `__lmt_freeArea` (`lmemtrack.c`, 2003), when a freed area
+joined the free areas on both sides, unlinked and freed the second one
+without updating its successor's `prev` pointer, which kept pointing into
+freed kernel heap. It also could not free an area above the last free one
+(the "Problems releasing pages": the area simply leaked), and treated the
+inclusive bounds of an area inconsistently. Separately, `spawnProcess`
+reserved the right number of pages for the stacks, but at the very top of
+the address space, where the page table mapping is, instead of where the
+stacks are.
+
+**Fix.** A rewritten `__lmt_freeArea`: find the free areas just before and
+after, refuse overlaps, merge, fix every link. Sizes are `end - bgn + 1`.
+`__OS_askPages` checks the allocation result (it used to map page 1 on
+failure) and gives the area back if mapping fails. The stacks are reserved
+where they are.
+
+**Lesson.** musl's allocator `mmap`s and `munmap`s far more than dietlibc
+did; old code paths that were never exercised get exercised. A message
+that "only" warns ("Problems releasing pages") can be the visible end of a
+corruption.
+
+### Thirty-two seconds to a prompt
+
+**Symptom.** The shell took 32 s to print its prompt, 14 of them before
+its first line of output; exactly the same with KVM.
+
+**Diagnosis.** Identical times with and without hardware virtualization
+mean the time is not spent computing. Sampling the CPU's EIP through the
+QEMU monitor (`info registers`, 80 times) found it in the kernel's idle
+loop every single time.
+
+**Cause.** The ready queue is a round robin that includes the idle thread.
+A client that sends a request and blocks calls the scheduler, which picks
+the next thread in the queue; when that was the idle thread, it spun until
+the next timer tick (10 ms) before the server got the CPU. The toplevel
+starts with hundreds of IPC exchanges (its 3.8 MB in 16 KB reads, then the
+`.cmi` files).
+
+**Fix.** The scheduler skips the idle thread when another thread is ready;
+the idle loop halts the CPU (`hlt`) instead of spinning. The prompt now
+appears about 1 s after boot, and every test boot got faster.
+
+**Lesson.** When a system is slow, first find out whether it is busy or
+waiting: sampling the instruction pointer answers in a minute.

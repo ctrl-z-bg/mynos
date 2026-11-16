@@ -19,6 +19,7 @@ high-level language rather than in C.
 | [`mynos-lib/`](mynos-lib/) | User-space library for the native syscalls (`include/mynos.h`), and the OCaml library `Mynos` (`ocaml/`) |
 | [`services/`](services/) | User-space servers: name registry, console (keyboard and line editing), keyboard and serial drivers, `memrofs` read-only RAM filesystem |
 | [`mynos-runtime/`](mynos-runtime/) | The OCaml 5.5 bytecode runtime for MyNOS: the upstream runtime, unchanged, plus a MyNOS `main()` |
+| [`shell/`](shell/) | The shell: the OCaml toplevel, with a few commands (`ls`, `cat`, `run`) and the MyNOS API |
 | [`mynos-byterun/`](mynos-byterun/) | The original OCaml 3.06 bytecode runtime (`ocamlrun`), patched to run on MyNOS (legacy toolchain) |
 | [`doc/STATUS.md`](doc/STATUS.md) | Architecture overview and current state of the project |
 | [`doc/JOURNAL.md`](doc/JOURNAL.md) | Engineering journal: what was found while reviving the code, bug by bug |
@@ -31,11 +32,27 @@ Low-level design notes from 2002 (memory layout, interrupts, startup) are in
 
 GRUB loads the kernel together with a set of modules. The kernel starts every
 ELF module as a user process: the services and `ocamlrun`. User programs are
-built for Linux with [dietlibc](https://www.fefe.de/dietlibc/) and statically
-linked. The kernel implements just enough of the Linux syscall interface for
-them to run unmodified, while MyNOS-specific features (IPC, ports, semaphores,
-IRQs, threads) go through `libmynos`. `ocamlrun` then executes the OCaml
-bytecode passed to it as a GRUB module.
+static Linux i386 binaries (built with [musl](https://musl.libc.org/) today,
+with [dietlibc](https://www.fefe.de/dietlibc/) originally). The kernel
+implements just enough of the Linux syscall interface for them to run
+unmodified, while MyNOS-specific features (IPC, ports, semaphores, IRQs,
+threads, starting programs) go through `libmynos`, which also turns file and
+keyboard I/O into IPC with the filesystem and console services. `ocamlrun`
+then runs `init.byte` from the RAM disk: the shell, which is the OCaml
+toplevel.
+
+```
+MyNOS shell. Type help ();; for help.
+OCaml version 5.5.2
+# let rec fact n = if n = 0 then 1 else n * fact (n - 1);;
+val fact : int -> int = <fun>
+# fact 10;;
+- : int = 3628800
+# run "hello.byte" [];;
+Hello from OCaml on MyNOS!
+...
+- : Mynos.status = Mynos.Exited 0
+```
 
 See [`doc/STATUS.md`](doc/STATUS.md) for details.
 
@@ -49,7 +66,7 @@ with [podman](https://podman.io/); QEMU runs on the host.
 ```sh
 tools/containers/build-image.sh dev      # once: build the image
 tools/build-all.sh                       # build everything in the container
-tools/run-demo.sh                        # boot the whole system in QEMU
+tools/run-demo.sh                        # boot MyNOS in QEMU, into the shell
 ```
 
 There are two build environments: `dev` (default) with a modern toolchain
@@ -69,9 +86,10 @@ details.
 Development stopped at the end of 2004, after the IPC, threads, copy-on-write
 and the bytecode interpreter port were in place. In 2026 the original system
 was rebuilt, ported to a modern toolchain and moved to OCaml 5.5; it runs
-again in QEMU. No OCaml services exist yet, and the way the bytecode is
-loaded is a shortcut. The current state, known issues and a
-work log are kept in [`doc/STATUS.md`](doc/STATUS.md).
+again in QEMU, and boots into an OCaml toplevel that can start programs. No
+OCaml services exist yet, and storage is a read-only RAM disk. The current
+state, known issues and a work log are kept in
+[`doc/STATUS.md`](doc/STATUS.md).
 
 ## Authors
 

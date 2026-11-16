@@ -36,6 +36,7 @@ talking through IPC.
 | `services/` | User-space servers: `registry`, `keyboard`, `serial`, `fs/memrofs` |
 | `mynos-runtime/` | The OCaml 5.5 bytecode runtime for MyNOS: upstream runtime, unchanged, plus a MyNOS `main()` (dev toolchain) |
 | `mynos-byterun/` | The OCaml 3.06 bytecode runtime, patched to run on MyNOS (legacy toolchain) |
+| `shell/` | The shell: the OCaml toplevel as `init.byte`, module `Shell` (commands), and its RAM disk |
 | `mynos.mk` | Toolchain variables for user-space programs (`MYNOS_CC`, `MYNOS_LDFLAGS`) |
 
 #### mynos-core — the microkernel
@@ -49,12 +50,17 @@ talking through IPC.
   User code starts at 1 GB (`0x40000000`). The last page directory entries map
   the current process's page tables so the kernel can edit them (full layout in
   `mynos-core/doc/MyNOS-note.txt`). Physical pages are tracked with a bitmap
-  (`physicalmem.c`). The kernel allocator is `kmalloc`/`kfree` (`dynalloc.c`).
+  (`physicalmem.c`); each process's free linear space is a list of areas
+  (`lmemtrack.c`). The kernel allocator is `kmalloc`/`kfree` (`dynalloc.c`).
+  The RAM disk is mapped read-only from `0x40400000` in every process, by
+  page tables shared between processes (up to 64 MB).
   `externalmem.c` lets the kernel manipulate another process's virtual memory.
   Fork uses copy-on-write.
 - **Processes and threads:** a single hardware TSS. Context switching is done in
-  software (`softtaskswitch.c`). The scheduler (`sched.c`) runs on the PIT at
-  100 Hz. Threads are supported (`threads.c`). Processes are created from
+  software (`softtaskswitch.c`). The scheduler (`sched.c`) is a round robin
+  run on the PIT at 100 Hz and whenever a thread blocks; the idle thread
+  (process 0, `hlt`) runs only when nothing else is ready. Threads are
+  supported (`threads.c`). Processes are created from
   an ELF image (`createProcess` in `process.c`): at boot from the GRUB
   modules, and since 2026 by a process through the native `spawn` call,
   with real `argv`/`envp` on the Linux initial stack. A parent collects a
@@ -101,7 +107,18 @@ All services are linked statically against `libmynos` and placed at
   starting with the `.RAMDISK` magic. The image is built on the host with
   `fs/memrofs/tool/createDisk.c`. Protocol (2026):
   `mynos-lib/include/mynos_memrofs.h`. Programs reach it through `open`,
-  `read`, `lseek`, `stat`, ... of `mynos-lib/src/fileio.c`.
+  `read`, `lseek`, `stat`, `opendir`, ... of `mynos-lib/src/fileio.c`. The
+  namespace is flat (names up to 63 characters); `/`, `.` and the empty
+  path name its only directory.
+
+#### shell
+
+The shell is the OCaml 5.5 toplevel itself (`shell/main.ml` calls
+`Topmain.main`), linked with the `Mynos` library and module `Shell`
+(`help`, `ls`, `cat`, `run`, `free`), which is opened at startup. Its RAM
+disk holds the toplevel as `init.byte`, a stripped `ocamlrun` for `run`,
+the standard library's `.cmi` files and a few programs. Typed lines come
+from the console service. `tools/run-demo.sh` boots it.
 
 #### mynos-runtime (OCaml 5.5)
 
@@ -133,8 +150,9 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 3. Every module that is an ELF file is started as a process: the services and
    `ocamlrun`.
 4. `ocamlrun` runs `init.byte` from the RAM disk if there is one (through
-   memrofs). Otherwise, as originally, **module 1 is treated as the OCaml
-   bytecode to execute**: the kernel serves it as the single file it knows.
+   memrofs): with `shell/ramdisk.dsk`, that is the shell. Otherwise, as
+   originally, **module 1 is treated as the OCaml bytecode to execute**:
+   the kernel serves it as the single file it knows.
 5. After that, the kernel runs the idle loop.
 
 ---
@@ -145,11 +163,14 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 
 **The original system builds and runs again**, as it did in 2004–2008
 (tag `revival-baseline`), **with both the 2008 toolchain and a modern one**:
-`tools/build-all.sh [dev|legacy]` then `tools/run-demo.sh`. In QEMU it boots
-the kernel, runs a test OCaml program (`tests/hello`) on `ocamlrun`, starts
-the registry, the keyboard and serial drivers and memrofs, and memrofs's
-built-in test reads a file from the RAM disk over IPC. Typed keys are echoed
-on screen and sent to the serial port.
+`tools/build-all.sh [dev|legacy]` then `tools/run-demo.sh`. With the modern
+toolchain **MyNOS boots into a shell, the OCaml toplevel**, in about a
+second: phrases typed on the keyboard are compiled and run, files of the RAM
+disk can be read and programs started (`help ();;`). With the 2008 toolchain
+(or `DEMO=2008`) the demo is the original one: a test OCaml program
+(`tests/hello`) on `ocamlrun`, the registry, the keyboard and serial
+drivers and memrofs, whose built-in test reads a file from the RAM disk over
+IPC; typed keys are echoed on screen and sent to the serial port.
 
 - **Toolchains.** Builds run in containers; the host (gcc 15, no multilib,
   x86_64-only dietlibc) is not used.
@@ -166,8 +187,9 @@ on screen and sent to the serial port.
 - **Tests.** `tools/run-tests.sh` boots the whole system headless and checks
   the console output, which the kernel mirrors to COM2. `tests/abi` checks
   the system call fixes; with the dev toolchain, OCaml tests cover effects,
-  the `Mynos` library, files, the console and spawning programs
-  (`tests/spawn`). Both toolchains pass.
+  the `Mynos` library, files, the console, spawning programs
+  (`tests/spawn`) and the shell, typing phrases through QEMU's monitor
+  (`tools/type-keys.py`). Both toolchains pass.
 - **Booting.** `tools/run-qemu.sh` uses QEMU's multiboot loader, no GRUB.
   Modules are passed in order; module 1 must be the OCaml bytecode.
   `tools/run-demo.sh` passes the standard set. The kernel is built with `-g`,
@@ -203,6 +225,14 @@ on screen and sent to the serial port.
     though `kfree` may have given it back.
   - A channel id from a process was used as a table index unchecked: a
     negative id faulted the kernel.
+  - The linear space map (`lmemtrack.c`, 2003) freed a list element while
+    its successor still pointed to it, so the list got corrupted after a
+    few `munmap` calls; it also could not free an area above the last free
+    one ("Problems releasing pages"), and reserved the top pages of the
+    address space instead of the stacks.
+  - The scheduler gave the idle thread a full time slice in the round
+    robin even when other threads were ready: every IPC exchange could wait
+    for the next timer tick. The shell started in 32 s; now in 1 s.
   - The RAM size probe in `start.asm` (2002) wrote `0x12345678` into the
     last dword of every megabyte without restoring it, corrupting modules
     that crossed a megabyte boundary. The size now comes from multiboot.
@@ -214,7 +244,6 @@ on screen and sent to the serial port.
   the runtime is OCaml 5.5.2 (`mynos-runtime/`), as decided in
   `doc/decisions/ocaml-runtime.md`. `tools/run-tests.sh` also runs an effect
   handlers test. The legacy toolchain keeps dietlibc and OCaml 3.06.
-  Known glitch: `Problems releasing pages` messages with musl (mynos-dha).
   - `memrofs/tool/createDisk` is a host tool but was built like a MyNOS
     program; now built with plain gcc.
 - **Changes for the modern toolchain:**
@@ -238,12 +267,14 @@ on screen and sent to the serial port.
 | Issue | Where | Problem |
 |---|---|---|
 | mynos-pg9 | `mynos-byterun/src/floats.c` | `frexp()`/`modf()` return 1.0 (legacy 3.06 runtime only; the 5.5 runtime uses musl's libm). |
+| mynos-pg6 | `mynos-core/kernel/process.c` | A process that ends keeps its memory: each program the shell runs costs 0.5–1 MB until reboot. |
+| mynos-l9h | `mynos-core/kernel/threads.c` | Threads share their creator's TLS; no `clone`, so no OCaml `Thread` or `Domain`. |
+| — | `mynos-lib/src/fileio.c` | One read-only flat directory (memrofs); no writable storage (mynos-rf4). |
 
 ### Not started
 
-- No OCaml service or driver exists yet; the only OCaml code is the test
-  program `tests/hello/hello.ml`. The "OS based on a high-level language"
-  part never went beyond running the bytecode interpreter.
+- No OCaml service or driver exists yet: OCaml runs programs and the shell,
+  while services and drivers are still in C.
 - Nothing on "new language definition".
 
 ### Direction
@@ -254,9 +285,11 @@ Planned work, in order. Details live in the beads issues.
    hello world bytecode. This is the baseline for everything else.
 2. **Decide on the OCaml runtime** (mynos-4er): stay on 3.06, or move to 4.14
    or 5.x.
-3. **A demonstrable OS with a terminal** (mynos-a2j): OCaml bindings for the
-   MyNOS API, starting bytecode programs from user space, file I/O through
-   memrofs, a console service, and the OCaml toplevel as the shell.
+3. **A demonstrable OS with a terminal** (mynos-a2j, done): OCaml bindings
+   for the MyNOS API, starting bytecode programs from user space, file I/O
+   through memrofs, a console service, and the OCaml toplevel as the shell.
+   Next: processes that free their memory (mynos-pg6), threads and domains
+   (mynos-l9h).
 4. Later: real external storage, a disk driver and a filesystem as services
    (mynos-rf4); networking (mynos-4f6), a GUI toolkit (mynos-9lr), distinctive
    applications (mynos-3h1).
@@ -340,3 +373,9 @@ Side task: archive the old SourceForge site (mynos-db2).
   `ocamlrun` passes its arguments on. Fixed a third kernel heap bug and an
   unchecked channel id. Opened mynos-pg6 (processes leak their memory).
   Closed mynos-a2j.2.
+- **2026-11-16** — The shell: MyNOS boots into the OCaml 5.5 toplevel, with
+  commands to list and print files and run programs. RAM disks larger than
+  4 MB, longer file names, `readdir` over memrofs. Rewrote the free list of
+  the linear space map (closes mynos-dha) and kept the idle thread out of
+  the round robin (startup from 32 s to 1 s). Closed mynos-a2j.4 and the
+  epic mynos-a2j.

@@ -429,11 +429,14 @@ int32_t _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id) {
 }
 
 void _linux_syscall_exit(int status) {
-  printk("process ");
-  print_int(currProcess);
-  printk(" exited with code ");
-  print_int(status);
-  print_char('\n');
+  /* a normal end is silent: the parent gets the status (waitpid) */
+  if (status != 0) {
+    printk("process ");
+    print_int(currProcess);
+    printk(" exited with code ");
+    print_int(status);
+    print_char('\n');
+  }
   killProcess(EXIT_STATUS(status));
   sched();
 }

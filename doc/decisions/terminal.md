@@ -75,5 +75,5 @@ the registry. The kernel loses its fake bytecode file.
    `ocamlrun prog.byte`. The image is read in user space (`mynos_spawn`,
    `mynos-lib/src/spawn.c`) and passed to the kernel, which only builds the
    process.
-5. **The shell** (mynos-a2j.4): the OCaml toplevel, its `.cmi` files on the
-   RAM disk, reading the console.
+5. **The shell** (mynos-a2j.4, done): the OCaml toplevel, its `.cmi` files
+   on the RAM disk, reading the console (`shell/`).

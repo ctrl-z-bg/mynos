@@ -47,15 +47,26 @@ int main(int argc, char ** argv) {
   MAGIC_len = strlen(MAGIC);
 
   headerlen = MAXFILES * sizeof(fileentry_t);
-  header = (fileentry_t*)malloc(headerlen);
+  header = (fileentry_t*)calloc(1, headerlen);  /* unused entries: no name */
 
+  if (argc - 1 > MAXFILES) {
+    fprintf(stderr, "At most %d files\n", MAXFILES);
+    exit(-1);
+  }
   for (i = 1; i < argc; i++) {
+    /* the RAM disk is flat: a file is named by its base name */
+    const char * name = strrchr(argv[i], '/') ? strrchr(argv[i], '/') + 1
+                                              : argv[i];
     if ((fd = open(argv[i], O_RDONLY)) == -1) {
       fprintf(stderr, "Unable to open file %s\n", argv[i]);
       exit(-1);
     }
+    if (strlen(name) >= FILENAMEMAXLEN) {
+      fprintf(stderr, "File name too long: %s\n", name);
+      exit(-1);
+    }
     size = lseek(fd, 0, SEEK_END);
-    strcpy(header[i-1].filename, argv[i]);
+    strcpy(header[i-1].filename, name);
     header[i-1].start = 0;
     header[i-1].size = size;
     sumlen += size;

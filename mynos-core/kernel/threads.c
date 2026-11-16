@@ -86,11 +86,13 @@ void __OS_threadExit(void * retval) {
   readyQueueExtractThread(currThread);
   timerQueueExtractThread(currThread);
 
+#ifdef DEBUG_THREADS
   printk("Thread ");
   print_ulong(currThread->threadID);
   printk(" (process  ");
   print_ulong(currProcess);
   printk(") exited\n");
+#endif
 
   // TODO free this tss
   prev = currThread->prev;

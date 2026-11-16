@@ -133,6 +133,19 @@ static void memrofs_lseek(int channel, struct memrofs_req * req)
   reply(channel, MEMROFS_OK, f->pos);
 }
 
+static void memrofs_list(int channel, struct memrofs_req * req)
+{
+  fileentry_t * fe;
+  if (req->arg1 < 0 || req->arg1 >= MAXFILES ||
+      !filesystem[req->arg1].filename[0]) {
+    reply(channel, MEMROFS_NOT_FOUND, -1);
+    return;
+  }
+  fe = &filesystem[req->arg1];
+  reply(channel, MEMROFS_OK, fe->size);
+  mynos_send(channel, fe->filename, strlen(fe->filename) + 1, 0);
+}
+
 static void process_request(int channel, struct memrofs_req * req)
 {
   switch (req->type) {
@@ -140,6 +153,7 @@ static void process_request(int channel, struct memrofs_req * req)
   case MEMROFS_CLOSE: memrofs_close(channel, req); break;
   case MEMROFS_READ:  memrofs_read(channel, req);  break;
   case MEMROFS_LSEEK: memrofs_lseek(channel, req); break;
+  case MEMROFS_LIST:  memrofs_list(channel, req);  break;
   default:            reply(channel, MEMROFS_INVALID, -1);
   }
 }

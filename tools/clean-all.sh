@@ -19,4 +19,5 @@ make -C tests/abi clean
 make -C mynos-lib/ocaml clean
 rm -f tests/*/*.byte tests/*/*.cm[io] tests/*/ramdisk.dsk tests/files/AUTOEXEC.BAT \
   tests/spawn/ocamlrun
+make -C shell clean
 ' >/dev/null
