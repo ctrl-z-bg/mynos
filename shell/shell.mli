@@ -7,11 +7,18 @@
 val help : unit -> unit
 (** Print a short guide. *)
 
-val ls : unit -> unit
-(** List the files of the RAM disk, with their sizes. *)
+val ls : ?dir:string -> unit -> unit
+(** List the files of a directory ([/], the RAM disk, by default; [/tmp] is
+    the writable one), with their sizes. *)
 
 val cat : string -> unit
 (** Print a file. *)
+
+val write : string -> string -> unit
+(** [write file text] makes [file] contain [text] (only under [/tmp]). *)
+
+val rm : string -> unit
+(** Remove a file (only under [/tmp]). *)
 
 val run : string -> string list -> Mynos.status
 (** [run prog args] starts the program in file [prog] with arguments

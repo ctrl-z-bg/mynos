@@ -5,4 +5,5 @@
 # A .byte program runs on ocamlrun.
 
 start consoled
+start tmpfs.byte
 respawn shell.byte

@@ -58,8 +58,11 @@ int32_t __OS_ipc_send(int32_t c, void * start, uint32_t size,
 
   channel = getMyWriteChannel(c);
 
+  /* the pages of the message: tpage is the page of its last byte (it was
+     the page after the end: a message ending at a page boundary mapped one
+     page more into the receiver, which never unmapped it) */
   spage = uintstart >> 12;
-  tpage = (uintstart + size) >> 12;
+  tpage = size ? (uintstart + size - 1) >> 12 : spage;
   
   // TODO CHECK AREA: MYNOS_ERR_IPC_INVALID_AREA
 

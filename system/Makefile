@@ -14,6 +14,7 @@ consoled: ../services/console/consoled
 	strip -o $@ $<
 
 FILES = ../init/init.byte init.rc ocamlrun consoled \
+	../services/tmpfs/tmpfs.byte \
 	../shell/shell.byte ../shell/shell.cmi ../mynos-lib/ocaml/mynos.cmi \
 	$(wildcard $(STDLIB)/*.cmi) \
 	../tests/hello/hello.byte ../tests/spawn/child.byte \

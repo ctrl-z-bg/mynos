@@ -48,6 +48,7 @@ esac
 (cd tests/ramdisk && ../../services/fs/memrofs/tool/createDisk AUTOEXEC.BAT)
 if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
   make -C init
+  make -C services/tmpfs
   make -C shell
   make -C system
 fi

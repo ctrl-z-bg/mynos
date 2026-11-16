@@ -33,7 +33,7 @@ talking through IPC.
 |---|---|
 | `mynos-core/` | The microkernel: boot, memory, processes, threads, scheduler, IPC, syscalls |
 | `mynos-lib/` | User-space library wrapping the native MyNOS syscalls (`include/mynos.h`), and the OCaml library `Mynos` (`ocaml/`) |
-| `services/` | User-space servers: `registry`, `keyboard`, `serial`, `fs/memrofs` |
+| `services/` | User-space servers: `registry`, `console`, `keyboard`, `serial`, `fs/memrofs`, and `tmpfs` (OCaml) |
 | `mynos-runtime/` | The OCaml 5.5 bytecode runtime for MyNOS: upstream runtime, unchanged, plus a MyNOS `main()` (dev toolchain) |
 | `mynos-byterun/` | The OCaml 3.06 bytecode runtime, patched to run on MyNOS (legacy toolchain) |
 | `init/` | `init`, in OCaml: starts the services and the shell listed in `init.rc` |
@@ -115,23 +115,29 @@ All services are linked statically against `libmynos` and placed at
 - `fs/memrofs`: a read-only in-memory filesystem. GRUB loads it as a module
   starting with the `.RAMDISK` magic. The image is built on the host with
   `fs/memrofs/tool/createDisk.c`. Protocol (2026):
-  `mynos-lib/include/mynos_memrofs.h`. Programs reach it through `open`,
-  `read`, `lseek`, `stat`, `opendir`, ... of `mynos-lib/src/fileio.c`. The
-  namespace is flat (names up to 63 characters); `/`, `.` and the empty
-  path name its only directory.
+  `mynos-lib/include/mynos_fs.h`, the file service protocol. Programs reach
+  it through `open`, `read`, `lseek`, `stat`, `opendir`, ... of
+  `mynos-lib/src/fileio.c`. The namespace is flat (names up to 63
+  characters); `/`, `.` and the empty path name its only directory.
+- `tmpfs` (2026): **the first MyNOS service written in OCaml**
+  (`services/tmpfs/tmpfs.ml`), a writable filesystem in memory. It speaks
+  the same protocol, which has `WRITE` and `UNLINK` too; `fileio.c` sends
+  `/tmp/NAME` to it as `NAME` (one flat directory, lost at shutdown), and
+  replaces `write` and `unlink` as well. Started by init.
 
 #### shell
 
 The shell is the OCaml 5.5 toplevel itself (`shell/main.ml` calls
 `Topmain.main`), linked with the `Mynos` library and module `Shell`
-(`help`, `ls`, `cat`, `run`, `free`), which is opened at startup. Typed
-lines come from the console service.
+(`help`, `ls`, `cat`, `write`, `rm`, `run`, `free`), which is opened at
+startup. Typed lines come from the console service. Files written under
+`/tmp` can be run with `#use`.
 
 #### init and the system RAM disk
 
 `init` (`init/init.ml`, OCaml) is the first program: `ocamlrun` runs
 `init.byte` from the RAM disk. It reads `init.rc` and starts each line's
-program, `start` for services (consoled), `respawn` for the shell, which it
+program, `start` for services (consoled, tmpfs), `respawn` for the shell, which it
 restarts when it ends (`#quit;;`). Its messages go to the kernel log. The
 system RAM disk (`system/ramdisk.dsk`) holds init and `init.rc`, a stripped
 `ocamlrun`, `consoled`, the shell with the standard library's and
@@ -293,12 +299,11 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 |---|---|---|
 | mynos-pg9 | `mynos-byterun/src/floats.c` | `frexp()`/`modf()` return 1.0 (legacy 3.06 runtime only; the 5.5 runtime uses musl's libm). |
 | mynos-l9h | `mynos-core/kernel/threads.c` | Threads share their creator's TLS; no `clone`, so no OCaml `Thread` or `Domain`. |
-| — | `mynos-lib/src/fileio.c` | One read-only flat directory (memrofs); no writable storage (mynos-rf4). |
+| — | `mynos-lib/src/fileio.c` | Two flat directories: `/` (memrofs, read-only) and `/tmp` (tmpfs, in memory). No persistent storage (mynos-rf4); no `rename`. |
 
 ### Not started
 
-- No OCaml service or driver exists yet: OCaml runs programs and the shell,
-  while services and drivers are still in C.
+- Drivers are still in C; of the services, `tmpfs` and `init` are in OCaml.
 - Nothing on "new language definition".
 
 ### Direction
@@ -420,3 +425,9 @@ Side task: archive the old SourceForge site (mynos-db2).
   disk (`system/`), starts consoled and the shell, restarts the shell after
   `#quit;;`. Boot modules get `argv` from their command line. `Mynos.log`,
   `Mynos.uptime`. Closed mynos-azz.
+- **2026-11-16** — `tmpfs`, the first service in OCaml: a writable
+  filesystem in memory at `/tmp`; the memrofs protocol becomes the file
+  service protocol (`mynos_fs.h`) with `WRITE` and `UNLINK`; `write`,
+  `unlink` in `libmynos`; shell commands `write`, `rm`, `ls ~dir`. Fixed an
+  IPC bug from 2004: a message ending at a page boundary mapped one page
+  too many into the receiver, leaked. Closed mynos-gcv.

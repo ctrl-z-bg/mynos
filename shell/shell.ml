@@ -4,13 +4,17 @@ let help () =
   print_string
     "This shell is the OCaml toplevel: type OCaml phrases ended by ;;\n\
      Commands (module Shell, already open):\n\
-    \  ls ();;                    list the files of the RAM disk\n\
-    \  cat \"AUTOEXEC.BAT\";;       print a file\n\
-    \  run \"hello.byte\" [];;      start a program and wait for it\n\
-    \  free ();;                  free memory\n\
+    \  ls ();;                     list the files of the RAM disk\n\
+    \  ls ~dir:\"/tmp\" ();;         list /tmp, the writable directory\n\
+    \  cat \"AUTOEXEC.BAT\";;        print a file\n\
+    \  write \"/tmp/a.ml\" \"1+1;;\";; write a file\n\
+    \  #use \"/tmp/a.ml\";;          run the phrases in a file\n\
+    \  rm \"/tmp/a.ml\";;            remove a file\n\
+    \  run \"hello.byte\" [];;       start a program and wait for it\n\
+    \  free ();;                   free memory\n\
      The MyNOS system calls are in module Mynos (#show Mynos;;).\n\
      Line editing: Backspace; Up and Down recall previous lines.\n\
-     #quit;; or Ctrl-D ends the shell.\n";
+     #quit;; or Ctrl-D ends the shell (init starts a new one).\n";
   flush stdout
 
 let size name =
@@ -18,15 +22,24 @@ let size name =
   | ic -> let n = in_channel_length ic in close_in ic; n
   | exception Sys_error _ -> -1
 
-let ls () =
-  let files = Sys.readdir "/" in
+let ls ?(dir = "/") () =
+  let files = Sys.readdir dir in
   Array.sort compare files;
-  Array.iter (fun f -> Printf.printf "%9d  %s\n" (size f) f) files;
+  Array.iter (fun f ->
+      let path = Filename.concat dir f in
+      if Sys.is_directory path then Printf.printf "%9s  %s/\n" "dir" f
+      else Printf.printf "%9d  %s\n" (size path) f)
+    files;
   flush stdout
 
 let cat name =
   print_string (In_channel.with_open_bin name In_channel.input_all);
   flush stdout
+
+let write file text =
+  Out_channel.with_open_bin file (fun oc -> output_string oc text)
+
+let rm = Sys.remove
 
 let run prog args =
   let argv =

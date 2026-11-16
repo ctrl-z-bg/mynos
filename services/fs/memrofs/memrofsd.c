@@ -31,7 +31,7 @@
 /*
  * memrofs: read-only filesystem on the RAM disk that GRUB loads as a module
  * (".RAMDISK" image, see tool/createDisk.c). The kernel maps the image at
- * 0x40400000 in every process. Protocol: mynos-lib/include/mynos_memrofs.h.
+ * 0x40400000 in every process. Protocol: mynos-lib/include/mynos_fs.h.
  */
 
 char * MAGIC = ".RAMDISK";
@@ -54,38 +54,42 @@ static int find_file(const char * name)
 /* the open file `fd` of `client`, or NULL with *status set */
 static filedescriptor_t * owned(int fd, int client, int * status)
 {
-  if (fd < 3 || fd >= MAXOPENFILES) { *status = MEMROFS_INVALID; return NULL; }
-  if (!filedesc[fd].pid) { *status = MEMROFS_NOT_OPEN; return NULL; }
-  if (filedesc[fd].pid != client) { *status = MEMROFS_DENIED; return NULL; }
-  *status = MEMROFS_OK;
+  if (fd < 3 || fd >= MAXOPENFILES) { *status = FS_INVALID; return NULL; }
+  if (!filedesc[fd].pid) { *status = FS_NOT_OPEN; return NULL; }
+  if (filedesc[fd].pid != client) { *status = FS_DENIED; return NULL; }
+  *status = FS_OK;
   return &filedesc[fd];
 }
 
 static void reply(int channel, int status, int value)
 {
-  struct memrofs_reply r;
+  struct fs_reply r;
   r.status = status;
   r.value = value;
   mynos_send(channel, &r, sizeof(r), 0);
 }
 
-static void memrofs_open(int channel, struct memrofs_req * req)
+static void memrofs_open(int channel, struct fs_req * req)
 {
   int idx, fd;
-  req->name[MEMROFS_NAMEMAX - 1] = 0;
+  req->name[FS_NAMEMAX - 1] = 0;
+  if (req->arg1 & (FS_O_WRITE | FS_O_CREAT | FS_O_TRUNC | FS_O_APPEND)) {
+    reply(channel, FS_READONLY, -1);
+    return;
+  }
   /* names are flat; accept an optional leading slash */
   idx = find_file(req->name[0] == '/' ? req->name + 1 : req->name);
-  if (idx < 0) { reply(channel, MEMROFS_NOT_FOUND, -1); return; }
+  if (idx < 0) { reply(channel, FS_NOT_FOUND, -1); return; }
   for (fd = 3; fd < MAXOPENFILES && filedesc[fd].pid; fd++)
     ;
-  if (fd >= MAXOPENFILES) { reply(channel, MEMROFS_TOO_MANY, -1); return; }
+  if (fd >= MAXOPENFILES) { reply(channel, FS_TOO_MANY, -1); return; }
   filedesc[fd].pid = req->client;
   filedesc[fd].fileidx = idx;
   filedesc[fd].pos = 0;
-  reply(channel, MEMROFS_OK, fd);
+  reply(channel, FS_OK, fd);
 }
 
-static void memrofs_close(int channel, struct memrofs_req * req)
+static void memrofs_close(int channel, struct fs_req * req)
 {
   int status;
   filedescriptor_t * f = owned(req->fd, req->client, &status);
@@ -93,9 +97,9 @@ static void memrofs_close(int channel, struct memrofs_req * req)
   reply(channel, status, 0);
 }
 
-static void memrofs_read(int channel, struct memrofs_req * req)
+static void memrofs_read(int channel, struct fs_req * req)
 {
-  static char buf[MEMROFS_READMAX];
+  static char buf[FS_IOMAX];
   int status, n;
   fileentry_t * fe;
   filedescriptor_t * f = owned(req->fd, req->client, &status);
@@ -103,9 +107,9 @@ static void memrofs_read(int channel, struct memrofs_req * req)
   if (!f) { reply(channel, status, 0); return; }
   fe = &filesystem[f->fileidx];
   n = f->pos < fe->size ? fe->size - f->pos : 0;
-  n = MIN(n, MIN(req->arg1, MEMROFS_READMAX));
+  n = MIN(n, MIN(req->arg1, FS_IOMAX));
   if (n < 0) n = 0;
-  reply(channel, MEMROFS_OK, n);
+  reply(channel, FS_OK, n);
   if (n > 0) {
     /* copy first: sending straight from the RAM disk would map its frames
        into the client, which may free them when it unmaps the message */
@@ -115,7 +119,7 @@ static void memrofs_read(int channel, struct memrofs_req * req)
   }
 }
 
-static void memrofs_lseek(int channel, struct memrofs_req * req)
+static void memrofs_lseek(int channel, struct fs_req * req)
 {
   int status;
   long long pos;
@@ -126,35 +130,43 @@ static void memrofs_lseek(int channel, struct memrofs_req * req)
   case 0: pos = req->arg1; break;
   case 1: pos = (long long)f->pos + req->arg1; break;
   case 2: pos = (long long)filesystem[f->fileidx].size + req->arg1; break;
-  default: reply(channel, MEMROFS_INVALID, -1); return;
+  default: reply(channel, FS_INVALID, -1); return;
   }
-  if (pos < 0) { reply(channel, MEMROFS_INVALID, -1); return; }
+  if (pos < 0) { reply(channel, FS_INVALID, -1); return; }
   f->pos = (uint32_t)pos;
-  reply(channel, MEMROFS_OK, f->pos);
+  reply(channel, FS_OK, f->pos);
 }
 
-static void memrofs_list(int channel, struct memrofs_req * req)
+static void memrofs_list(int channel, struct fs_req * req)
 {
   fileentry_t * fe;
   if (req->arg1 < 0 || req->arg1 >= MAXFILES ||
       !filesystem[req->arg1].filename[0]) {
-    reply(channel, MEMROFS_NOT_FOUND, -1);
+    reply(channel, FS_NOT_FOUND, -1);
     return;
   }
   fe = &filesystem[req->arg1];
-  reply(channel, MEMROFS_OK, fe->size);
+  reply(channel, FS_OK, fe->size);
   mynos_send(channel, fe->filename, strlen(fe->filename) + 1, 0);
 }
 
-static void process_request(int channel, struct memrofs_req * req)
+static void process_request(int channel, struct fs_req * req)
 {
   switch (req->type) {
-  case MEMROFS_OPEN:  memrofs_open(channel, req);  break;
-  case MEMROFS_CLOSE: memrofs_close(channel, req); break;
-  case MEMROFS_READ:  memrofs_read(channel, req);  break;
-  case MEMROFS_LSEEK: memrofs_lseek(channel, req); break;
-  case MEMROFS_LIST:  memrofs_list(channel, req);  break;
-  default:            reply(channel, MEMROFS_INVALID, -1);
+  case FS_OPEN:  memrofs_open(channel, req);  break;
+  case FS_CLOSE: memrofs_close(channel, req); break;
+  case FS_READ:  memrofs_read(channel, req);  break;
+  case FS_LSEEK: memrofs_lseek(channel, req); break;
+  case FS_LIST:  memrofs_list(channel, req);  break;
+  case FS_WRITE: {                 /* take the data, which the client sends
+				      before it waits for the reply */
+    mynos_msg_t * data;
+    if (mynos_recv(channel, &data, 0, 1000) == 0) mynos_freeMsg(&data);
+    reply(channel, FS_READONLY, -1);
+    break;
+  }
+  case FS_UNLINK: reply(channel, FS_READONLY, -1); break;
+  default:            reply(channel, FS_INVALID, -1);
   }
 }
 
@@ -193,7 +205,7 @@ int main() {
 
   while (1) {
     mynos_msg_t * msg;
-    struct memrofs_req req;
+    struct fs_req req;
     int channel = mynos_listenPort(port);
 
     if (channel < 0) {
@@ -205,7 +217,7 @@ int main() {
 	memcpy(&req, msg->start, sizeof(req));
 	process_request(channel, &req);
       } else
-	reply(channel, MEMROFS_INVALID, -1);
+	reply(channel, FS_INVALID, -1);
       mynos_freeMsg(&msg);
     }
     mynos_freeChannel(channel);

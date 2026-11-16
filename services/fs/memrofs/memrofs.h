@@ -19,11 +19,11 @@
 */
 
 #include <mynos.h>
-#include <mynos_memrofs.h>
+#include <mynos_fs.h>
 #include <stdint.h>
 #include <sys/types.h>
 
-#define FILENAMEMAXLEN MEMROFS_NAMEMAX
+#define FILENAMEMAXLEN FS_NAMEMAX
 #define MAXOPENFILES   1000
 #define MAXFILES       1000
 #define RAMDISKMAXSIZE (1024*1024)

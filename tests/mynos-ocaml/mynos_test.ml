@@ -5,9 +5,9 @@ let check what ok =
   Printf.printf "mynos-ocaml: %-34s %s\n%!" what (if ok then "ok" else "FAIL");
   ok
 
-(* memrofs protocol (mynos-lib/include/mynos_memrofs.h): an 84-byte
-   struct memrofs_req { int type, client, fd, arg1, arg2; char name[64]; }
-   and an 8-byte struct memrofs_reply { int status, value; } *)
+(* file service protocol (mynos-lib/include/mynos_fs.h): an 84-byte
+   struct fs_req { int type, client, fd, arg1, arg2; char name[64]; }
+   and an 8-byte struct fs_reply { int status, value; } *)
 let request typ fill =
   let b = Bytes.make 84 '\000' in
   Bytes.set_int32_le b 0 (Int32.of_int typ);

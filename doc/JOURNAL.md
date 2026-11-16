@@ -782,3 +782,54 @@ Twenty programs in a row now leave the free memory unchanged.
   constant cost per round is a leak, a decreasing one is warming up.
 - Memory reachable through two mappings has two owners in practice; give
   each frame one.
+
+## 2026-11-16 — Boot, init and the first OCaml service
+
+### Three steps
+
+- **Clean boot screen.** Once user space starts, kernel messages go only
+  to the log port (`kernel_on_screen`, unless the kernel command line says
+  `verbose`), and services log through a new native call (31) instead of
+  printing: the screen belongs to the shell.
+- **init in OCaml.** A boot module's command line is now its `argv`, so
+  `ocamlrun` could be told what to run; but the better structure was to
+  make the first bytecode program, `init`, read `init.rc` and start the
+  rest from the RAM disk: consoled, tmpfs, and the shell, restarted when
+  it ends. Only the registry and memrofs (which serves the disk) remain
+  GRUB modules.
+- **tmpfs**, the first service in OCaml: 200 lines, a hash table of
+  files, the same request format as memrofs (parsed with
+  `String.get_int32_le`). memrofs's protocol became the file service
+  protocol, with `WRITE` (request, then data, then reply: the server must
+  take the data even to refuse it, or the client stays blocked in its
+  send) and `UNLINK`.
+
+### The leak that depended on where a buffer was
+
+**Symptom.** With the new `fileio.c`, the spawn test lost 31 pages per
+program. The old `fileio.c` lost none, although the reading code in both
+was the same, line for line.
+
+**Diagnosis.** A careful rerun of each variant, everything rebuilt each
+time, gave consistent results only when looked at from the side of
+memrofs: `memrofsd` links `libmynos` too, and the new `fileio.c` has a
+larger table, which moved memrofs's static read buffer. With the new
+library it landed at `0x40011000`, page-aligned.
+
+**Cause.** `__OS_ipc_send` (2004) computed the last page of a message as
+`(start + size) >> 12`, the page *after* the last byte when the message
+ends at a page boundary. A page-aligned 16 KB message was mapped into the
+receiver as five pages; the receiver unmapped four (it knows the size).
+One leaked page per read. The first experiments were misleading: they
+swapped the library in the runtime, while memrofs kept whichever library
+it had last been linked with. The culprit was a binary not under
+suspicion.
+
+**Fix.** `(start + size - 1) >> 12`.
+
+**Lessons.**
+- The third "one past the end" bug of the week (the heap allocator, the
+  free list, now IPC): every end address deserves a second look.
+- A change in one binary can move data in another that links the same
+  library. When results contradict the code, rebuild everything and vary
+  one thing at a time.

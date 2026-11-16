@@ -101,6 +101,11 @@ if [ -f system/ramdisk.dsk ]; then
                   'cat "AUTOEXEC.BAT";;\n' 'ls ();;\n' \
                   'run "child.byte" ["4"];;\n' '1 + "one";;\n' \
                   '6 * 7;;\n' '{up}\n' '1 + 1;;\n' 'x{up}{up}{down}\n' \
+                  'write "/tmp/t.ml" "let t = 6 * 9;;";;\n' \
+                  '#use "/tmp/t.ml";;\n' 'ls ~dir:"/tmp" ();;\n' \
+                  'write "/tmp/big" (String.make 40000 (Char.chr 97));;\n' \
+                  'String.length (In_channel.with_open_bin "/tmp/big" In_channel.input_all);;\n' \
+                  'write "AUTOEXEC.BAT" "";;\n' \
                   '#quit;;\n'; do
         tools/type-keys.py "$tmp/mon7" "$phrase"
         sleep 2
@@ -169,6 +174,11 @@ if [ -f system/ramdisk.dsk ]; then
     else
         echo "FAIL  shell history (Up, Down)"; fail=1
     fi
+    expect "init: started tmpfs.byte"
+    expect "val t : int = 54"
+    expect "t.ml"
+    expect "- : int = 40000"
+    expect "AUTOEXEC.BAT: Read-only file system"
     expect "init: shell.byte (pid"
     if [ "$(grep -ac 'MyNOS shell. Type' "$log7")" -ge 2 ] &&
        grep -aqx -- '- : int = 5' "$log7"; then
