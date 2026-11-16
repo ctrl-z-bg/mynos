@@ -215,7 +215,7 @@ void keyb_handler(void)
 		control_keys |= CK_SHIFT;
 	if((key == 0x80 + 0x2A) || (key == 0x80 + 0x36))	/* Shift key depressed */
 		control_keys &= (0xFF - CK_SHIFT);
-	if(key == 0x38 && (!control_keys & CK_ALT))
+	if(key == 0x38 && !(control_keys & CK_ALT))
 		control_keys |= CK_ALT;
 	if(key == 0x80 + 0x38)
 		control_keys &= (0xFF - CK_ALT);

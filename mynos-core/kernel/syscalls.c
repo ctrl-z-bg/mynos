@@ -47,7 +47,7 @@ __asm__ (".pushsection .text\n" \
 	 "   je .mynos_V\n"\
 	 "   cmpl $9, %eax\n"\
 	 "   je .mynos_semInit\n"\
-	 "   cmpl $9, %eax\n"\
+	 "   cmpl $13, %eax\n"\
 	 "   je .mynos_semFree\n"\
 	 "   cmpl $10, %eax\n"\
 	 "   je .mynos_driverRegister\n"\
@@ -83,6 +83,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .mynos_stats\n"\
 	 "   push %eax\n"\
 	 "   call _mynos_syscall_WRONGSYSCALL\n"\
+	 "   addl $4, %esp\n"\
+	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_send:\n"\
 	 "   pushl %esi\n"
 	 "   pushl %edx\n"
@@ -234,10 +236,14 @@ __asm__ (".pushsection .text\n" \
 	 ".popsection\n");
 
 
-void _mynos_syscall_WRONGSYSCALL(uint32_t syscall_id) {
-  printk("syscall ");
+/* unknown native system call: report it and fail the call */
+int32_t _mynos_syscall_WRONGSYSCALL(uint32_t syscall_id) {
+  printk("MyNOS syscall ");
   print_uint(syscall_id);
-  KPANIC(" doesn't exist!!");
+  printk(" doesn't exist (process ");
+  print_uint(currProcess);
+  printk(")\n");
+  return MYNOS_ERR_INVALID;
 }
 
 int32_t _mynos_syscall_setTimer(ulong32_t usec) {

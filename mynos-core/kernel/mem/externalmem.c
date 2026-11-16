@@ -151,7 +151,7 @@ static int32_t __mapPageTo(pid_t pid,
 	__setExternalProcessPage(pid,
 				 __ADDRESS_PD_INDEX(laddrreceiver),
 				 __ADDRESS_PT_INDEX(laddrreceiver),
-				 ppage,
+				 0, /* no frame yet: allocated on first access */
 				 PF_USER | PF_READWRITE | PF_LOGICAL_PRESENT);
 	return 0;
       }

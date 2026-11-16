@@ -114,7 +114,7 @@ void freeChannel(channel_t * c) {
 }
 
 int32_t insertMsgIntoChannel(unichannel_t * channel, msg_t * msg) {
-  int * p = &(channel->wrP);
+  uint32_t * p = &(channel->wrP);
   if (channel->free == 0)
     return MYNOS_ERR_FULL;
   while (channel->msg[*p] != NULL) (*p) = ((*p)+1) % MAXMSGS;
@@ -124,7 +124,7 @@ int32_t insertMsgIntoChannel(unichannel_t * channel, msg_t * msg) {
 }
 
 msg_t * nextMsg(unichannel_t * channel) {
-  int * p;
+  uint32_t * p;
   msg_t * msg;
 
   if (channel->free == MAXMSGS) return NULL;  // no message

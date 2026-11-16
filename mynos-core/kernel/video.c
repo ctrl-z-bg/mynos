@@ -109,8 +109,29 @@ void print_ulong_hex(ulong32_t n) {
   printk(curr_char + 1);
 }
  
+/* Every character printed on screen is also sent to the second serial port
+   (COM2, 0x2F8), so that a headless QEMU can log the console to a file
+   (tools/run-tests.sh). COM1 is left to the seriald service. */
+#define LOG_PORT 0x2F8
+
+static void log_char(char c) {
+  static int initialized = 0;
+  if (!initialized) {
+    outportb(LOG_PORT + 1, 0x00);    /* no interrupts */
+    outportb(LOG_PORT + 3, 0x80);    /* DLAB on */
+    outportb(LOG_PORT + 0, 0x01);    /* 115200 baud */
+    outportb(LOG_PORT + 1, 0x00);
+    outportb(LOG_PORT + 3, 0x03);    /* 8N1, DLAB off */
+    initialized = 1;
+  }
+  while (!(inportb(LOG_PORT + 5) & 0x20))   /* transmitter empty */
+    ;
+  outportb(LOG_PORT, c);
+}
+
 void _print_char(char c, char attrib) {
   uint32_t cursor;
+  log_char(c);
   if (video >= (char*)END_VIDEO) {
     scroll_screen();
     video -= 0xA0;

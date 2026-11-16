@@ -48,7 +48,7 @@ int mynos_initSem(unsigned int n) {
 
 int mynos_freeSem(int sem) {
   int ret;
-  ret = __mynos_syscall(10, (int)sem, 0, 0, 0, 0);
+  ret = __mynos_syscall(13, (int)sem, 0, 0, 0, 0);
   return ret;    
 }
 

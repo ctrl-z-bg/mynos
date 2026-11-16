@@ -222,12 +222,10 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   for (i = 0; i < elf_ex.e_phnum; i++) {
       Elf32_Phdr *phdr;
       uint32_t memsz, filesz;
-      ushort16_t startaddr;
       
       phdr = (Elf32_Phdr *) ((char *)test_start + elf_ex.e_phoff +  (elf_ex.e_phentsize * i));
       /* we consider only the segments to be loaded*/
       if (phdr->p_type != PT_LOAD) continue; 
-      startaddr = phdr->p_vaddr;
       if (baseaddr == 0) baseaddr=phdr->p_vaddr;
       memsz = phdr->p_memsz;
       filesz = phdr->p_filesz;

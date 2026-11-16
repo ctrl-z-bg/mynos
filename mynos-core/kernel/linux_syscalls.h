@@ -26,7 +26,7 @@
 void _linux_syscalls_trap_TRAP();
 
 /* for the not yet implemented syscalls */
-void _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id);
+int32_t _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id);
 
 /* the sys_calls... */
 void _linux_syscall_exit(int status);

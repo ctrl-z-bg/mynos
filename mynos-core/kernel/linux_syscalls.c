@@ -81,6 +81,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .linux_set_thread_area\n"\
 	 "   push %eax\n"\
 	 "   call _linux_syscall_NOTIMPLEMENTED\n"\
+	 "   addl $4, %esp\n"\
+	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_exit:\n"\
 	 "   pushl %ebx\n"\
 	 "   call _linux_syscall_exit\n"\
@@ -215,10 +217,21 @@ int _linux_syscall_set_thread_area(struct user_desc * u_info) {
   return 0;
 }
 
-void _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id) {
-  printk("syscall ");
-  print_uint(syscall_id);
-  KPANIC(" is not yet implemented!");
+/* unknown Linux system call: fail with -ENOSYS, as Linux does, so that
+   libcs and runtimes can fall back. Report each number once. */
+int32_t _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id) {
+  static uint32_t reported[512 / 32];
+  if (syscall_id >= 512 ||
+      !(reported[syscall_id / 32] & (1u << (syscall_id % 32)))) {
+    if (syscall_id < 512)
+      reported[syscall_id / 32] |= 1u << (syscall_id % 32);
+    printk("Linux syscall ");
+    print_uint(syscall_id);
+    printk(" not implemented (process ");
+    print_uint(currProcess);
+    printk("): -ENOSYS\n");
+  }
+  return -38; /* -ENOSYS */
 }
 
 void _linux_syscall_exit(int status) {

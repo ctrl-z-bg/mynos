@@ -43,6 +43,8 @@ struct longjmp_buffer {
 struct longjmp_buffer {
   jmp_buf buf;
 };
+#undef sigsetjmp   /* some libcs (dietlibc) define them as macros */
+#undef siglongjmp
 #define sigsetjmp(buf,save) setjmp(buf)
 #define siglongjmp(buf,val) longjmp(buf,val)
 #endif

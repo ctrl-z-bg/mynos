@@ -155,7 +155,7 @@ int32_t __OS_port_listenPort(int32_t p) {
 }
 
 req_t * nextReq(port_t * port) {
-  int * p;
+  uint32_t * p;
   req_t * req;
 
   if (port->free == MAXREQ) return NULL;  // no message

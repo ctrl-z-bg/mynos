@@ -208,7 +208,7 @@ void * __OS_releasePages(void *pageaddr, unsigned int npages,
       return NULL;
     
     /* get the page table entry */
-    pte = (int*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), 
+    pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(addr), 
 				       __ADDRESS_PT_INDEX(addr));
     
     /* check if the page is an allocated user page */

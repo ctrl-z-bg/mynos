@@ -26,6 +26,6 @@
 void _mynos_syscalls_trap_TRAP();
 
 /* for the not yet implemented syscalls */
-void _mynos_syscall_WRONGSYSCALL(uint32_t syscall_id);
+int32_t _mynos_syscall_WRONGSYSCALL(uint32_t syscall_id);
 
 #endif
