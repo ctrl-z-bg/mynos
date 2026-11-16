@@ -1,0 +1,186 @@
+
+
+<HTML>
+	<HEAD>
+		<TITLE>MyNOS Screenshots</TITLE>
+	</HEAD>
+
+<BODY bgcolor="white">
+
+
+<table BORDER="0" CELLSPACING="10" WIDTH="100%">
+	<tr>
+		<td width=149 VALIGN="top">
+			<img src="img/mynos-logo.jpg">
+		</td>
+		<td VALIGN="top">
+
+<table WIDTH="100%">
+<tr>
+	<td bgcolor="gray" VALIGN="top">
+	<h3>What's MyNOS?</h3>
+	</td>
+</tr>
+<tr>
+<td VALIGN="top">
+<I>The MyNOS project aims at developing a new and different operating system, based on high-level languages. MyNOS will be based on the OCaml bytecode interpreter. We'd like to explore microkernel architecture and new language definition too.</I>
+</td>
+</tr>
+</table>
+
+		</td>
+	</tr>
+	<tr>
+		<td VALIGN="top">
+<table WIDTH="100%">
+<tr><td><a href=index.html>Homepage</a></td></tr>
+<tr><td><a href=why.html>Why MyNOS</a></td></tr>
+<tr><td><a href=status.html>Project status</a></td></tr>
+<tr><td><a href=sfcorner.html>SourceForge Corner</a></td></tr>
+<tr><td bgcolor="gray">Screenshots</td></tr>
+<tr><td><a href=tryit.html>Try it!</a></td></tr>
+<tr><td><a href=links.html>Links</a></td></tr>
+</table>
+<br>
+<a href="https://sourceforge.net/donate/index.php?group_id=35113">
+<img src="https://images-ssl.sourceforge.net/images/project-support.jpg" border=0></a>
+<br>
+<br>From 2002-10-08<br>
+<table bgcolor=black noborder><tr><td><img src=img/counter/2.gif><img src=img/counter/2.gif><img src=img/counter/7.gif><img src=img/counter/6.gif><img src=img/counter/3.gif></td></tr></table>visitors<br><br>
+<P>Powered by<br>
+
+<table border=0 cellspacing=0 cellpadding=0><tr><td valign=middle><li><a target="blank" href="http://www.ctrl-z-bg.org">^Z bg crew </a></td>
+<td valign=middle><a target="blank" href="http://www.ctrl-z-bg.org">
+<img src="img/^Z_bg_logo.gif" border=0></a></td></tr></table>
+
+<li><A href="http://sourceforge.net"> <IMG
+                  src="http://sourceforge.net/sflogo.php?group_id=35113"
+                  width="88" height="31" border="0" alt="SourceForge
+                  Logo"></A>
+<li><a href="http://www.php.net"><img src="img/php-logo.png" border=0></a><br><br>
+<P><I>Logo by</I><br>Luigi Ferrini
+		</td>
+		<td VALIGN="top">
+
+
+<img width=1 height=1 border=0 src="http://mynos.sourceforge.net/statitm_v30a/stat_page.php?id=1">
+
+
+
+<h3>Screenshots</h3>
+
+<table BORDER="0" CELLSPACING="10" WIDTH="100%">
+<tr>
+ <td>
+<a href="screenshots-shot-9.html"><img src=img/snap_serial_small.jpg></a>
+ </td>
+ <td VALIGN="top">
+<I>2003-04-07</I><br>
+The Linux machine and the bochs machine running MyNOS talk via serial port. The serial port support runs on top of microkernel.
+ </td>
+</tr>
+<tr>
+<tr>
+ <td>
+<a href="screenshots-shot-8.html"><img src=img/snap_sem_small.jpg></a>
+ </td>
+ <td VALIGN="top">
+<I>2002-11-26</I><br>
+Two processes test the MyNOS-core semaphores
+ </td>
+</tr>
+<tr>
+<tr>
+ <td>
+<a href="screenshots-shot-7.html"><img src=img/snap_ramdisk_small.jpg></a>
+ </td>
+ <td VALIGN="top">
+<I>2002-11-11</I><br>
+A test program uses, by ipc, a simple ramdisk filesystem, the first service running on top of the microkernel
+ </td>
+</tr>
+<tr>
+<tr>
+ <td>
+<a href="screenshots-shot-6.html"><img src=img/snap_ocaml_small.jpg></a>
+ </td>
+ <td VALIGN="top">
+<I>2002-10-22</I><br>
+The ocaml virtual machine run on MyNOS-core!!! A first virtual machine forked a second one and they executed the same bytecode.
+ </td>
+</tr>
+<tr>
+<tr>
+ <td>
+<a href="screenshots-shot-5.html"><img src=img/snap_vga_small.jpg></a>
+ </td>
+ <td VALIGN="top">
+<I>2002-10-16</I><br>
+A first attempt to enter in vga mode.
+ </td>
+</tr>
+<tr>
+<tr>
+ <td>
+<a href="screenshots-shot-4.html"><img src=img/snap_fork_small.jpg></a>
+ </td>
+ <td VALIGN="top">
+<I>2002-10-11</I><br>
+Fork: the process 1 forked the process 2, who forked the process 3.
+ </td>
+</tr>
+<tr>
+<tr>
+ <td>
+<a href="screenshots-shot-3.html"><img src=img/snap_5processes_small.jpg></a>
+ </td>
+ <td VALIGN="top">
+<I>2002-10-08</I><br>
+Multitasking: some processes are looping into a 'while'. They are compiled on Linux *for* Linux! They use a Linux C library and they call some Linux system calls too. MyNOS has the trap 0x80 mapped in a way to be Linux binary compatible.
+ </td>
+</tr>
+<tr>
+<tr>
+ <td>
+<a href="screenshots-shot-2.html"><img src=img/snap_pagefault_small.jpg></a>
+ </td>
+ <td VALIGN="top">
+<I>2002-10-08</I><br>
+Allocate-on-fault: the processes try to access a page only logically allocated: the kernel in debug mode prints some information and allocates the physical pages they need.
+ </td>
+</tr>
+<tr>
+<tr>
+ <td>
+<a href="screenshots-shot-1.html"><img src=img/snap_initsys_small.jpg></a>
+ </td>
+ <td VALIGN="top">
+<I>2002-10-08</I><br>
+Some messages printed by kernel in the init phase.
+ </td>
+</tr>
+<tr>
+
+</table>
+
+
+		</td>
+	</tr>
+</table>
+
+<script type="text/plain" data-archive="tracker script disabled in archive copy" LANGUAGE="JavaScript">
+<!-- Begin
+qs=(document.referrer?escape(document.referrer):"-")+",";
+qs+=screen.width+"x"+screen.height+","+(screen.colorDepth==0?screen.pixelDepth:screen.colorDepth)+",";
+qs+=(navigator.javaEnabled()?"1,":"0,");
+for(i=0;i<navigator.plugins.length;i++)
+{p=navigator.plugins[i];
+if(p.name.substring(0,16)!="Netscape Default") qs=qs+"|"+p.name+"|"; }
+document.write("<IMG SRC=\"http://www.thunderstats.com/thunderstat.cgi?hide&info="+qs+"\" BORDER=0>");
+// -->
+</SCRIPT>
+<NOSCRIPT>
+<IMG SRC="http://www.thunderstats.com/thunderstat.cgi?hide" BORDER=0>
+</NOSCRIPT>
+</body>
+</html>

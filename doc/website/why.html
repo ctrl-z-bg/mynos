@@ -1,0 +1,181 @@
+
+
+<HTML>
+	<HEAD>
+		<TITLE>Why MyNOS?</TITLE>
+	</HEAD>
+
+<BODY bgcolor="white">
+
+
+<table BORDER="0" CELLSPACING="10" WIDTH="100%">
+	<tr>
+		<td width=149 VALIGN="top">
+			<img src="img/mynos-logo.jpg">
+		</td>
+		<td VALIGN="top">
+
+<table WIDTH="100%">
+<tr>
+	<td bgcolor="gray" VALIGN="top">
+	<h3>What's MyNOS?</h3>
+	</td>
+</tr>
+<tr>
+<td VALIGN="top">
+<I>The MyNOS project aims at developing a new and different operating system, based on high-level languages. MyNOS will be based on the OCaml bytecode interpreter. We'd like to explore microkernel architecture and new language definition too.</I>
+</td>
+</tr>
+</table>
+
+		</td>
+	</tr>
+	<tr>
+		<td VALIGN="top">
+<table WIDTH="100%">
+<tr><td><a href=index.html>Homepage</a></td></tr>
+<tr><td bgcolor="gray">Why MyNOS</td></tr>
+<tr><td><a href=status.html>Project status</a></td></tr>
+<tr><td><a href=sfcorner.html>SourceForge Corner</a></td></tr>
+<tr><td><a href=screenshots.html>Screenshots</a></td></tr>
+<tr><td><a href=tryit.html>Try it!</a></td></tr>
+<tr><td><a href=links.html>Links</a></td></tr>
+</table>
+<br>
+<a href="https://sourceforge.net/donate/index.php?group_id=35113">
+<img src="https://images-ssl.sourceforge.net/images/project-support.jpg" border=0></a>
+<br>
+<br>From 2002-10-08<br>
+<table bgcolor=black noborder><tr><td><img src=img/counter/2.gif><img src=img/counter/2.gif><img src=img/counter/7.gif><img src=img/counter/6.gif><img src=img/counter/4.gif></td></tr></table>visitors<br><br>
+<P>Powered by<br>
+
+<table border=0 cellspacing=0 cellpadding=0><tr><td valign=middle><li><a target="blank" href="http://www.ctrl-z-bg.org">^Z bg crew </a></td>
+<td valign=middle><a target="blank" href="http://www.ctrl-z-bg.org">
+<img src="img/^Z_bg_logo.gif" border=0></a></td></tr></table>
+
+<li><A href="http://sourceforge.net"> <IMG
+                  src="http://sourceforge.net/sflogo.php?group_id=35113"
+                  width="88" height="31" border="0" alt="SourceForge
+                  Logo"></A>
+<li><a href="http://www.php.net"><img src="img/php-logo.png" border=0></a><br><br>
+<P><I>Logo by</I><br>Luigi Ferrini
+		</td>
+		<td VALIGN="top">
+
+
+<img width=1 height=1 border=0 src="http://mynos.sourceforge.net/statitm_v30a/stat_page.php?id=1">
+
+<table WIDTH="100%">
+<tr>
+<td bgcolor="gray">	<h3>Why MyNOS?</h3>
+	</td>
+</tr>
+<tr>
+<td>
+
+<P>In this time and age, when so many advanced OSes compete for a market
+that changes at a furious pace, why embark in the writing of yet
+another OS (therefore the name)?
+
+<P>Before an answer is attempted, please notice just how many similar
+projects are there. There are countless "alternative" operating systems
+that people have been writing in their spare time. Very few of them
+ever reached any useful, or even <i>usable</i> state, and yet new ones
+start on a regular basis.
+
+<P>One reason for this lies within the fact that an operating system is a
+very complex and challenging system, which undoubtably attracts people
+with a technically inclined mind.
+
+<P>A second, more "psychological" reason is that by writing your own OS,
+you get your system to execute, even at the lowest level, only things
+you told it to execute. That makes you feel more independent, more in
+control. To some of us, this is a sheer personal satisfaction
+that is right on the money. To most people, this is the definition
+of a lifeless geek.
+
+<P>At last, but not least, present OSes are far from perfect. They often
+trade elegance for speed, effectiveness for backward compatibility,
+experimentation for widespread distribution.
+
+<P>To give an example, the most common programming language used to write
+operating system is C (this is perhaps changing to move to more
+structured languages, however). The reason for this is that C is very
+close to the underlying hardware, and therefore allows great control
+over it. A common drawback is that the interaction with the OS is
+usually constrained to a low C API level (case in point, POSIX).
+Building higher-level intermediate layers makes the system run slower,
+and is usually avoided, at the cost of keeping a 30 years old
+interface.
+
+<P>With MyNOS, we wanted to explore how OS staples (memory allocation,
+filesystem, macrokernel, etc.) could be "removed". The operating
+system could be written in a high-level language, and provide higher
+level abstractions. The language of choice is OCAML, because it is a
+very nice, elegant language, because it is functional, because it is
+object-oriented, and simply because it is so far from the the usual
+low-level view over the OS.
+
+<P>As it happened with LISP, that in the old days required a LISP-machine
+to run effectively, to write an operating system in OCAML we would
+definitely need some kind of special hardware support. While modifying
+hardware is not really our bag, we know that to abstract from the
+hardware layer is the job of an OS. The idea is therefore to build an
+underlying OS to provide "standard" OS functionalities, in order to
+have an "abstract machine" on top of which which to run the OCAML
+virtual machine.
+
+<P>This is not a chinese box. At first we wanted to get the underlying OS done
+as soon as possible, in order to switch to the OCAML layer. However, why not
+experiment with that as well. Our current more complete vision features:
+<UL TYPE="circle">
+<li>a complete microkernel architecture written in C+asm to provide
+  basic microkernel functionalities (process management and IPC)
+<li>peripheral services running as processes
+<li>"virtual machine" services to run as processes.
+</UL>
+
+<P>Virtual machine processes include a POSIX server which should
+implement the POSIX standard, allowing us to run, for instance, Unix
+programs. One of the virtual machines will be the OCAML virtual
+machine which should be able to run OCAML bytecode natively, and
+provide a higher level abstraction to the OS.
+
+<P>The project started after a very long planning activity. Its goals
+have somehow shifted, and we are now more involved and concerned with
+the development of the lower leve OS than with the higher level, OCAML
+one. Our objective is to reach a stable and versatile platform on
+which we would be able to run code originally developed for different
+platforms (like Linux), and on which to experiment with our OCAML
+"kernel". Thanks to the elegant and robust microkernel architecture
+(another feature not commonly exploited by today's OSes), we will be
+able to access and modify views over very low-level facilities like
+memory and disk without rewriting critical kernel parts, and always
+acting at user-level. Ideally, we would like to get to a point where a
+different, new, higher level and yet strong abstraction to the machine
+is achieved through OCAML, similar to what Unix achieved in the 70ies.
+
+</td>
+</tr>
+</table>
+
+		</td>
+	</tr>
+</table>
+
+<script type="text/plain" data-archive="tracker script disabled in archive copy" LANGUAGE="JavaScript">
+<!-- Begin
+qs=(document.referrer?escape(document.referrer):"-")+",";
+qs+=screen.width+"x"+screen.height+","+(screen.colorDepth==0?screen.pixelDepth:screen.colorDepth)+",";
+qs+=(navigator.javaEnabled()?"1,":"0,");
+for(i=0;i<navigator.plugins.length;i++)
+{p=navigator.plugins[i];
+if(p.name.substring(0,16)!="Netscape Default") qs=qs+"|"+p.name+"|"; }
+document.write("<IMG SRC=\"http://www.thunderstats.com/thunderstat.cgi?hide&info="+qs+"\" BORDER=0>");
+// -->
+</SCRIPT>
+<NOSCRIPT>
+<IMG SRC="http://www.thunderstats.com/thunderstat.cgi?hide" BORDER=0>
+</NOSCRIPT>
+</body>
+</html>

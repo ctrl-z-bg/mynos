@@ -338,7 +338,7 @@ Planned work, in order. Details live in the beads issues.
    (mynos-rf4); networking (mynos-4f6), a GUI toolkit (mynos-9lr), distinctive
    applications (mynos-3h1).
 
-Side task: archive the old SourceForge site (mynos-db2).
+The old SourceForge site is archived in `doc/website/` (mynos-db2).
 
 ### History
 
@@ -461,3 +461,7 @@ Side task: archive the old SourceForge site (mynos-db2).
   `mynos_block.h`, client module `Block`). `tools/run-qemu.sh` takes a
   disk image (`DISK=`); the storage test writes to it and the host checks
   the image. Closed mynos-rf4.2.
+- **2026-11-16** — The original website (mynos.sourceforge.net, from the
+  Wayback Machine) archived as static files in `doc/website/`, with the
+  2002-2004 news posts and the 2002 and 2004 test packages. Closed
+  mynos-db2.

@@ -1,0 +1,113 @@
+<HTML>
+<HEAD>
+<TITLE>MyNOS News (SourceForge, 2002-2004)</TITLE>
+<META http-equiv="Content-Type" content="text/html; charset=utf-8">
+</HEAD>
+<BODY bgcolor="white">
+<p><img src="img/mynos-logo.jpg"></p>
+<p><a href="index.html">MyNOS home page</a></p>
+<h2>MyNOS News</h2>
+<p><i>Archive copy. The project's news items were posted on SourceForge
+(group_id=35113) and linked from the home page. The text of each post below is
+extracted verbatim from the Wayback Machine captures of
+<code>http://sourceforge.net/forum/forum.php?forum_id=N</code> (March 2009);
+the SourceForge page layout is omitted. Oldest first.</i></p>
+<hr>
+<h3><a name="forum_id=225129">Static ELF format supported!</a></h3>
+<b>Posted By:</b> nardo <br />
+<b>Date:</b> 2002-11-04 12:55 <br />
+<b>Summary:</b> <a href="http://sourceforge.net/forum/forum.php?forum_id=225129">Static ELF format supported!</a>
+<p>
+Kernel can load static ELF modules. Ocaml virtual machine has been successfully tested.
+</p>
+<hr width="100%" size="1" noshade>
+<h3><a name="forum_id=225787">About to go alpha: roadmap.</a></h3>
+<b>Posted By:</b> alley <br />
+<b>Date:</b> 2002-11-06 13:36 <br />
+<b>Summary:</b> <a href="http://sourceforge.net/forum/forum.php?forum_id=225787">About to go alpha: roadmap.</a>
+<p>
+We are eager and willing to switch from &quot;planning&quot; to &quot;alpha&quot; stage. Some of the things that are presently in the kernel are preliminar, but some are stable. Even if we want to improve all components, we know we will not until we get to a more complete system, using which the necessity to improve such components arises.&nbsp;<br />
+&nbsp;<br />
+For this reason, efforts will take place in the near future to take the project to a point where we can claim alpha stage. To do so, we need to implement interprocess communication (IPC). A preliminary, simple-minded implementation will do, for now; either way, it'll call for synchronization mechanisms like mutexes, some sort of scheduler, etc.&nbsp;<br />
+&nbsp;<br />
+We feel that once IPC is developed (although in a silly way), the functionalities of the microkernel are complete, and we can therefore concentrate on services (filesystem, memory, swap, gui, POSIX compatibility, OCAML server etc.). IPC is however a delicate component, so any suggesion is welcome. We also know that being elf-compatible, a POSIX compatibility service would enable us to import several components from POSIX-compliant OS'es, which means dramatic improvements in the speed of development.&nbsp;<br />
+&nbsp;<br />
+Therefore, we're tackling IPC, after which we'll be &quot;alpha&quot;: help welcome!
+</p>
+<hr width="100%" size="1" noshade>
+<h3><a name="forum_id=226579">IPC implemented: MyNOS reaches Alpha state!</a></h3>
+<b>Posted By:</b> alley <br />
+<b>Date:</b> 2002-11-09 01:56 <br />
+<b>Summary:</b> <a href="http://sourceforge.net/forum/forum.php?forum_id=226579">IPC implemented: MyNOS reaches Alpha state!</a>
+<p>
+After a long night's work, a preliminary version of IPC has been implemented. Currently, send, receive and receiveAll are implemented. Send and receive take a pid as the party's identification, and all communication primitives work in either synchronous or asynchronous (nonblocking) mode. Limitations: no control over buffer permissions, the trasmission involves 2 copies of the message.&nbsp;<br />
+&nbsp;<br />
+To test the behavior of the communication syscalls, a simple readonly ramdisk service has been implemented. MyNOS is now a microkernel with its first service.&nbsp;<br />
+&nbsp;<br />
+To do: implement exec(), scheduler (is now round-robin), mutexes, and define a boot procedure: this will fulfil the microkernel's requirements.&nbsp;<br />
+&nbsp;<br />
+We now claim alpha status!
+</p>
+<hr width="100%" size="1" noshade>
+<h3><a name="forum_id=228392">IPC buffer check implemented</a></h3>
+<b>Posted By:</b> zavatt <br />
+<b>Date:</b> 2002-11-20 11:47 <br />
+<b>Summary:</b> <a href="http://sourceforge.net/forum/forum.php?forum_id=228392">IPC buffer check implemented</a>
+<p>
+The Inter Process Communication buffer check is now implemented.
+</p>
+<hr width="100%" size="1" noshade>
+<h3><a name="forum_id=230841">MyNOS! has Semaphores!</a></h3>
+<b>Posted By:</b> nardo <br />
+<b>Date:</b> 2002-11-26 13:36 <br />
+<b>Summary:</b> <a href="http://sourceforge.net/forum/forum.php?forum_id=230841">MyNOS! has Semaphores!</a>
+<p>
+Semaphores have been implemented. Now there is also a first implementation of process queues management.
+</p>
+<hr width="100%" size="1" noshade>
+<h3><a name="forum_id=266534">Progress report</a></h3>
+<b>Posted By:</b> zavatt <br />
+<b>Date:</b> 2003-04-07 12:56 <br />
+<b>Summary:</b> <a href="http://sourceforge.net/forum/forum.php?forum_id=266534">Progress report</a>
+<p>
+Advanced IPC under specification phase; in the meanwhile we have developed and tested the serial driver (running as a daemon process as the keyboard one). Services can register dynamically with the kernel. A screenshot shows the daemon printing a message received from the serial port (using bochs and the serial port emulation). We have conducted a private test sending messages via the serial port from/to a sinclair spectrum old computer.&nbsp;<br />
+List of available daemons: keyboard, serial, simple readonly ramdisk, ocaml virtual machine.
+</p>
+<hr width="100%" size="1" noshade>
+<h3><a name="forum_id=297491">Soft taskswitch and more...</a></h3>
+<b>Posted By:</b> zavatt <br />
+<b>Date:</b> 2003-07-30 13:46 <br />
+<b>Summary:</b> <a href="http://sourceforge.net/forum/forum.php?forum_id=297491">Soft taskswitch and more...</a>
+<p>
+The mynos-core taskswitch policy changed from hardware (jump to tssd) to software. In the meanwhile the fork implementation changed and the sched() function was added too.&nbsp;<br />
+Next steps will be threads, timers and a real scheduler.&nbsp;<br />
+Stay tuned!
+</p>
+<hr width="100%" size="1" noshade>
+<h3><a name="forum_id=302309">Threads support</a></h3>
+<b>Posted By:</b> zavatt <br />
+<b>Date:</b> 2003-08-18 10:30 <br />
+<b>Summary:</b> <a href="http://sourceforge.net/forum/forum.php?forum_id=302309">Threads support</a>
+<p>
+Support for threads was added to the kernel. The model is pretty clean: every thread belongs to the same process (same pid) and a fork duplicates the whole process (every thread).
+</p>
+<hr width="100%" size="1" noshade>
+<h3><a name="forum_id=326553">Copy-On-Write</a></h3>
+<b>Posted By:</b> zavatt <br />
+<b>Date:</b> 2003-11-07 11:39 <br />
+<b>Summary:</b> <a href="http://sourceforge.net/forum/forum.php?forum_id=326553">Copy-On-Write</a>
+<p>
+Copy-On-Write has been implemented in mynos-core kernel.
+</p>
+<hr width="100%" size="1" noshade>
+<h3><a name="forum_id=404043">New IPC for mynos-core</a></h3>
+<b>Posted By:</b> zavatt <br />
+<b>Date:</b> 2004-09-01 14:52 <br />
+<b>Summary:</b> <a href="http://sourceforge.net/forum/forum.php?forum_id=404043">New IPC for mynos-core</a>
+<p>
+The microkernel IPC was re-designed (and re-implemented) from scratch. It uses ports and channels (similar to ports and sockets) and a message can be shared or not, in the latter case the pages are copy-on-writed from sender to receiver (if the message is very short then is copied).&nbsp;<br />
+Other improvements and bug fixes was also introduced.
+</p>
+<hr width="100%" size="1" noshade>
+</BODY>
+</HTML>
