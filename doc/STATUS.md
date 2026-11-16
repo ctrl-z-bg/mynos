@@ -109,36 +109,59 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 ### Build and run
 
 **The original system builds and runs again**, as it did in 2004–2008
-(tag `revival-baseline`):
-`tools/build-all.sh` then `tools/run-demo.sh`. In QEMU it boots the kernel,
-runs a test OCaml program (`tests/hello`) on `ocamlrun`, starts the registry,
-the keyboard and serial drivers and memrofs, and memrofs's built-in test reads
-a file from the RAM disk over IPC. Typed keys are echoed on screen and sent to
-the serial port.
+(tag `revival-baseline`), **with both the 2008 toolchain and a modern one**:
+`tools/build-all.sh [dev|legacy]` then `tools/run-demo.sh`. In QEMU it boots
+the kernel, runs a test OCaml program (`tests/hello`) on `ocamlrun`, starts
+the registry, the keyboard and serial drivers and memrofs, and memrofs's
+built-in test reads a file from the RAM disk over IPC. Typed keys are echoed
+on screen and sent to the serial port.
 
-- **Toolchain.** The November 2008 commits add `-fno-stack-protector`, so
-  the last original state targets gcc ≥ 4.1 (gcc 4.3, Ubuntu 8.10 era). The
-  host (gcc 15, no multilib, x86_64-only dietlibc) cannot build it. Builds run
-  in the **legacy container** (`tools/containers/legacy`): Debian lenny i386
-  with gcc 4.3.2, binutils 2.18, nasm 2.03, dietlibc 0.31, plus OCaml 3.06
-  built from source. The **dev container** (`tools/containers/dev`) has a
-  modern toolchain: Debian trixie i386 with gcc 14.2, binutils 2.44,
-  nasm 2.16, dietlibc 0.34, and the same OCaml 3.06. The code does not build
-  there yet; a first attempt shows only a handful of errors (mynos-v8s).
+- **Toolchains.** Builds run in containers; the host (gcc 15, no multilib,
+  x86_64-only dietlibc) is not used.
+  - **dev** (`tools/containers/dev`, default): Debian trixie i386, gcc 14.2,
+    binutils 2.44, nasm 2.16, dietlibc 0.34.
+  - **legacy** (`tools/containers/legacy`): Debian lenny i386, gcc 4.3.2,
+    binutils 2.18, nasm 2.03, dietlibc 0.31: what the November 2008 commits
+    expect (they add `-fno-stack-protector`, gcc ≥ 4.1). Kept to compare
+    behaviour with the original.
+  - Both include OCaml 3.06 built from source on sarge, to produce bytecode
+    for the 3.06 runtime.
 - **Booting.** `tools/run-qemu.sh` uses QEMU's multiboot loader, no GRUB.
   Modules are passed in order; module 1 must be the OCaml bytecode.
-  `tools/run-demo.sh` passes the standard set.
-- **Fixes needed to get here** (bugs hidden by the old compilers):
+  `tools/run-demo.sh` passes the standard set. The kernel is built with `-g`,
+  so `qemu-system-i386 -s -S` plus `gdb mynos-core/kernel/kernel.elf` gives
+  source-level debugging.
+- **Bugs hidden by the old compilers**, fixed:
   - Top-level `asm` blocks (interrupt, trap and syscall entry points) had no
     section directive; gcc 4.3 placed `pit_ISR` in `.bss` and `int7_TRAP` in
-    `.data`, so the first timer tick hit an invalid opcode. They now use
-    `.pushsection .text`.
-  - `spawnProcess` (`process.c`) used `baseaddr` uninitialized when sizing
-    the process image; with gcc 4.3 it asked for about 1 GB of pages and
-    hung. Now initialized to 0.
+    `.data`. They now use `.pushsection .text`.
+  - `spawnProcess` used `baseaddr` uninitialized when sizing the process
+    image (asked for about 1 GB of pages and hung).
+  - `switchTo` loaded `cr3` through `%eax` without telling the compiler; with
+    position-independent code `%eax` held the base of the static variables.
+    The kernel is now built with `-fno-pie` and the asm is fixed.
+  - The `mynos-lib` system call wrappers loaded each register in a separate
+    `asm` statement; now one statement with proper constraints
+    (`mynos-lib/src/syscall.h`).
+  - `memrofsd` replied on an uninitialized `sender` instead of the request's
+    channel.
+  - `pqNElem` called itself forever; `main.c` set `prev` twice instead of
+    `next` and `prev`; `_insertBlock` was a non-static `inline` (no external
+    definition in C99).
   - `memrofs/tool/createDisk` is a host tool but was built like a MyNOS
-    program (dietlibc, libmynos, `0x40000000`) and crashed on Linux. Now
-    built with plain gcc.
+    program; now built with plain gcc.
+- **Changes for the modern toolchain:**
+  - Programs are linked with `-Wl,-N -Wl,--build-id=none`: modern `ld` puts
+    the ELF headers and a build-id note in an extra segment far below
+    `0x40000000`, while the kernel loads one contiguous image from there. The
+    kernel now also jumps to the ELF entry point instead of a fixed address.
+  - dietlibc 0.34 needs three Linux ABI features the 2008 kernel lacked:
+    `set_thread_area` (TLS, used for `errno`), `mmap2`, and a Linux-style
+    initial stack (`argc`/`argv`/`envp`/`auxv`). They are implemented
+    minimally (mynos-51c).
+  - Small C fixes: a K&R parameter, missing `<unistd.h>`, `errno`
+    declaration, a `return` without value.
+  - Remaining warnings: mynos-j17.
 - `mynos-core/boot/` (floppy bootloader) does not assemble with nasm 2.x
   (mynos-s96); the build uses `mynos-core/kernel` directly.
 
@@ -208,3 +231,8 @@ Side task: archive the old SourceForge site (mynos-db2).
   (trixie i386, gcc 14). First build with gcc 14: one error in the kernel,
   four in user space, plus warnings that point at real bugs; all listed in
   mynos-v8s. Closed mynos-aji.
+- **2026-11-16** — Ported to the modern toolchain (gcc 14, dietlibc 0.34):
+  the whole demo runs the same with `dev` and `legacy`. Fixed several bugs
+  the old compilers hid, added `set_thread_area`, `mmap2` and a Linux
+  initial stack. `tools/build-all.sh` now defaults to `dev`. Closed
+  mynos-v8s; opened mynos-j17, mynos-51c.

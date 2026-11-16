@@ -38,27 +38,32 @@ See [`doc/STATUS.md`](doc/STATUS.md) for details.
 
 ## Building
 
-The code needs a 2008-era 32-bit toolchain (gcc 4.3, dietlibc for i386) and
-OCaml 3.06, which current systems don't provide. Builds run in a container
+The system is 32-bit and needs dietlibc for i386 and OCaml 3.06, which
+current distributions don't provide for the host. Builds run in containers
 with [podman](https://podman.io/); QEMU runs on the host.
 
 ```sh
-tools/containers/build-image.sh legacy   # once: build the image
+tools/containers/build-image.sh dev      # once: build the image
 tools/build-all.sh                       # build everything in the container
 tools/run-demo.sh                        # boot the whole system in QEMU
 ```
 
-`tools/in-container.sh legacy` opens a shell in the build environment, or
-runs the command given after it. A second image, `dev`, has a modern
-toolchain (gcc 14); porting the code to it is in progress. `tools/run-qemu.sh` boots the kernel with
-any list of modules (module 1 is the OCaml bytecode); see the scripts for
+There are two build environments: `dev` (default) with a modern toolchain
+(gcc 14, Debian trixie i386), and `legacy` with the toolchain of the original
+project (gcc 4.3, Debian lenny i386), kept to compare behaviour with the
+original. Pass the name to the scripts, e.g. `tools/build-all.sh legacy`;
+run `tools/clean-all.sh` first when switching between them.
+
+`tools/in-container.sh dev` opens a shell in the build environment, or runs
+the command given after it. `tools/run-qemu.sh` boots the kernel with any
+list of modules (module 1 is the OCaml bytecode); see the scripts for
 details.
 
 ## Status
 
 Development stopped at the end of 2004, after the IPC, threads, copy-on-write
 and the bytecode interpreter port were in place. In 2026 the original system
-was rebuilt with its period toolchain and runs again in QEMU. No OCaml
+was rebuilt, ported to a modern toolchain and runs again in QEMU. No OCaml
 services exist yet, and the way the bytecode is loaded is a shortcut. The current state, known issues and a
 work log are kept in [`doc/STATUS.md`](doc/STATUS.md).
 

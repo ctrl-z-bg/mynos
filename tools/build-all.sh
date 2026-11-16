@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build the whole system and the test files in a build container.
 #
-# Usage: tools/build-all.sh [legacy|dev]     (default: legacy)
+# Usage: tools/build-all.sh [dev|legacy]     (default: dev)
 #
 # Produces:
 #   mynos-core/kernel/kernel.elf     the kernel
@@ -12,7 +12,7 @@
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 set -eu
 
-name=${1:-legacy}
+name=${1:-dev}
 root=$(cd "$(dirname "$0")/.." && pwd)
 
 exec "$root/tools/in-container.sh" "$name" sh -euc '
