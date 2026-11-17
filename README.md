@@ -17,7 +17,7 @@ high-level language rather than in C.
 |---|---|
 | [`mynos-core/`](mynos-core/) | The microkernel: multiboot boot, paging, processes and threads, copy-on-write fork, scheduler, semaphores, port/channel IPC, user-space IRQ delivery, native (`int 0x90`) and Linux-compatible (`int 0x80`) syscalls |
 | [`mynos-lib/`](mynos-lib/) | User-space library for the native syscalls (`include/mynos.h`), and the OCaml library `Mynos` (`ocaml/`) |
-| [`services/`](services/) | User-space servers: name registry, console (keyboard and line editing), keyboard and serial drivers, `memrofs` read-only RAM filesystem |
+| [`services/`](services/) | User-space servers: name registry, console (keyboard, layouts, line editing, the serial port as a terminal), file systems (`memrofs`, `tmpfs`, `fatfs`), the ATA disk driver, the network (`netd`: lwIP, TLS), language models (`llmd`) |
 | [`mynos-runtime/`](mynos-runtime/) | The OCaml 5.5 bytecode runtime for MyNOS: the upstream runtime, unchanged, plus a MyNOS `main()` |
 | [`init/`](init/) | `init`, in OCaml: starts the services and the shell listed in `init.rc` |
 | [`shell/`](shell/) | The shell: the OCaml toplevel, with a few commands (`ls`, `cat`, `run`) and the MyNOS API |
@@ -86,14 +86,60 @@ the command given after it. `tools/run-qemu.sh` boots the kernel with any
 list of modules (`"path args"` passes arguments); without modules it boots
 the standard system, like `tools/run-demo.sh`. See the scripts for details.
 
+## Using it
+
+`tools/run-demo.sh` opens QEMU's window on MyNOS's shell; `help` lists the
+commands. `/disk` is a FAT disk image (`system/disk.img`) kept across
+boots; `/tmp` is in memory; `/` is the read-only RAM disk.
+
+**The console.** Shift + Page Up / Page Down scroll back through the
+lines that went off the screen (500 are kept). Accented letters are
+shown (UTF-8). `keymap it` switches the keyboard to the Italian layout,
+with AltGr (or Ctrl + Alt) for `@ # [ ] { } ~ €`; `keymap us` switches
+back, and the choice is remembered on `/disk`.
+
+**Copy and paste with the host.** QEMU's window cannot paste. Instead,
+make your terminal a console of MyNOS too:
+
+```sh
+SERIAL=1 tools/run-demo.sh                   # the window, and this terminal
+SERIAL=1 tools/run-demo.sh -- -display none  # this terminal only
+```
+
+The terminal is connected to MyNOS's second serial port: copy, paste
+(several lines run one after the other), scrollback and accented letters
+are your terminal's. Ctrl-C goes to MyNOS; Ctrl-A then X stops QEMU.
+Kernel and service messages show there too, and full-screen programs
+(`edit`, `kilo`) want a terminal of 80 x 25.
+
+**Language models** (optional; [`doc/decisions/llm.md`](doc/decisions/llm.md)).
+Copy [`llm.env.example`](llm.env.example) to `llm.env` (ignored by git),
+put your keys in it, and `tools/run-demo.sh` copies it into the disk as
+`/disk/llm.env`. Claude and any server speaking OpenAI's Chat Completions
+(OpenAI, vLLM, Ollama on the host at `10.0.2.2`) can be configured. Then,
+in the shell:
+
+```
+llm -l                                  # the configured models
+llm Which year was OCaml born?          # a question
+ask list the files in /disk with their sizes    # a command, run if you agree
+agent Write the IP address of MyNOS in /disk/ip.txt
+```
+
+`agent` carries out a task with tools (commands, files, OCaml programs
+type-checked before they run, the system's typed services), and asks
+before anything that changes things (y, n, or a for yes to all). It
+records what the system did meanwhile: `trace calls /tmp/agent.trc`.
+
 ## Status
 
 Development stopped at the end of 2004, after the IPC, threads, copy-on-write
 and the bytecode interpreter port were in place. In 2026 the original system
 was rebuilt, ported to a modern toolchain and moved to OCaml 5.5; it runs
 again in QEMU, and boots into a command shell, with the OCaml toplevel, an
-editor and the OCaml compiler inside. No
-OCaml services exist yet, and storage is a read-only RAM disk. The current
+editor and the OCaml compiler inside. Services are written in OCaml too
+(the disk driver, the FAT file system, a web server, the language model
+service), over typed IPC; the network has TCP, UDP and TLS. The current
 state, known issues and a work log are kept in
 [`doc/STATUS.md`](doc/STATUS.md).
 

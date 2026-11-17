@@ -831,4 +831,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   port reads 0xFF): the system crawled and the shell kept restarting.
   COM2 is used only if present, loops on it are bounded, and a test boots
   without it.
+- **2026-11-17** — README: a "Using it" section (the console's keys and
+  layouts, `SERIAL=1` for copy and paste with the host, language models:
+  `llm.env`, `llm`, `ask`, `agent`); its status paragraph brought up to
+  date.
 
