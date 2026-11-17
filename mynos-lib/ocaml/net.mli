@@ -39,6 +39,9 @@ type _ request =
   | Recv : int * int -> string request
       (** at most this many bytes (up to 16384); [""] at the end *)
   | Close : int -> unit request
+  | Set_timeout : int * int -> unit request
+      (** [(socket, ms)]: a [Recv] or [Accept] on it that waits longer
+          fails with ["timeout"]; 0: wait forever (the default) *)
 
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
 

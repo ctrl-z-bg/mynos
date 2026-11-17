@@ -202,6 +202,7 @@ struct sock {
   err_t err;
   /* a request waiting for something to come: Connect, Recv, Accept */
   int rx_ch, rx_kind, rx_max;
+  u32_t timeout, rx_deadline;   /* Set_timeout (ms, 0: none) for Recv, Accept */
   /* a Send waiting for room in the send buffer */
   int tx_ch;
   char * tx;
@@ -213,6 +214,8 @@ struct sock {
 };
 
 static struct sock socks[MAXSOCK];
+
+static void start_wait(struct sock * s);
 
 static int alloc_sock(void) {
   int i;
@@ -557,6 +560,7 @@ static void do_accept(int ch, long long id) {
   }
   l->rx_kind = W_ACCEPT;
   l->rx_ch = ch;
+  start_wait(l);
 }
 
 static void do_send(int ch, long long id, const char * data, unsigned int n) {
@@ -579,7 +583,36 @@ static void do_recv(int ch, long long id, long long max) {
   s->rx_kind = W_RECV;
   s->rx_ch = ch;
   s->rx_max = max > MAXRECV ? MAXRECV : (int)max;
+  start_wait(s);
   serve_recv(s);
+}
+
+/* a Recv or Accept starts waiting */
+static void start_wait(struct sock * s) {
+  s->rx_deadline = s->timeout ? sys_now() + s->timeout : 0;
+}
+
+/* the ones that waited too long */
+static void socket_timeouts(void) {
+  int i;
+  for (i = 0; i < MAXSOCK; i++) {
+    struct sock * s = &socks[i];
+    if (s->state != S_FREE && s->rx_ch >= 0 &&
+        (s->rx_kind == W_RECV || s->rx_kind == W_ACCEPT) && s->rx_deadline &&
+        (s32_t)(sys_now() - s->rx_deadline) >= 0) {
+      reply_error(s->rx_ch, "timeout");
+      s->rx_ch = -1;
+      s->rx_kind = W_NONE;
+    }
+  }
+}
+
+static void do_set_timeout(int ch, long long id, long long ms) {
+  struct sock * s = get_sock(id);
+  if (s == NULL) { reply_error(ch, "not a socket"); return; }
+  if (ms < 0 || ms > 86400000) { reply_error(ch, "bad timeout"); return; }
+  s->timeout = (u32_t)ms;
+  reply_unit(ch);
 }
 
 static void do_close(int ch, long long id) {
@@ -617,6 +650,8 @@ static void handle(int ch, const char * msg, unsigned int len) {
   case 7: x = wire_get_int(&r); y = wire_get_int(&r); END();
     do_recv(ch, x, y); break;
   case 8: x = wire_get_int(&r); END(); do_close(ch, x); break;
+  case 9: x = wire_get_int(&r); y = wire_get_int(&r); END();
+    do_set_timeout(ch, x, y); break;
   default: reply_error(ch, "unknown request"); break;
   }
 #undef END
@@ -721,6 +756,7 @@ int main(void) {
     sys_check_timeouts();
     check_address();
     ping_timeouts();
+    socket_timeouts();
     while (r) {
       struct request * next = r->next;
       handle(r->ch, r->msg, r->len);

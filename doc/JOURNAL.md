@@ -1194,3 +1194,19 @@ whole script under `set -e`.
 It worked the first time it booted: DHCP from QEMU's user network, ping,
 DNS to the internet through the host, TCP both ways (the host fetches a
 page from httpd, in OCaml, through a forwarded port).
+
+## 2026-11-17 — A web server that kept the browser waiting
+
+*Symptom:* the owner's browser waited many seconds for
+http://localhost:8080/. *Diagnosis:* measured before guessing: a single
+`curl` got its page in 50 ms; with one idle connection open first, as
+browsers do to save time later, the next request got nothing in 30 s.
+*Cause:* httpd served one connection at a time, and sat in `Recv` on the
+connection that never sent a request, until the browser gave it up.
+*Fix:* 8 worker domains take accepted connections from a queue (the
+`Mynos` stubs release the runtime around blocking calls, so a domain
+waiting in IPC does not hold up the others' garbage collection); and a
+per-socket timeout in "net/1" (`Set_timeout`, added as a new case, so old
+clients still work), which netd checks in its loop, so that idle
+connections free their worker after 10 s. *Lesson:* a server tested with
+`curl` only is tested with the politest client there is.

@@ -44,6 +44,17 @@ let () =
        print_string ("net: the host says: " ^ answer);
        answer = "HELLO FROM MYNOS\n"
      | exception e -> print_endline (error e); false);
+  ok &&& check "Recv with a timeout"
+    (match Net.call n (Net.Connect ("10.0.2.2", 47001)) with
+     | s ->
+       Net.call n (Net.Set_timeout (s, 300));
+       (* the host's server waits for a whole line: nothing comes *)
+       let r = (match Net.call n (Net.Recv (s, 100)) with
+           | _ -> false
+           | exception Ipc.Remote_error (_, "timeout") -> true) in
+       Net.call n (Net.Close s);
+       r
+     | exception e -> print_endline (error e); false);
   ok &&& check "a refused connection is an error"
     (match Net.call n (Net.Connect ("10.0.2.2", 47002)) with
      | _ -> false

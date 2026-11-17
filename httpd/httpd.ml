@@ -95,6 +95,37 @@ let read_request n s =
           | data -> go (acc ^ data)) in
   go ""
 
+(* one connection: the request, the reply. A connection that sends nothing
+   (browsers open some in advance) times out instead of holding a worker *)
+let serve n s peer =
+  (try
+     Net.call n (Net.Set_timeout (s, 10000));
+     let request = read_request n s in
+     if request <> "" then begin
+       let reply = answer request in
+       log "%s %s" peer (List.hd (String.split_on_char '\r' request));
+       ignore (Net.call n (Net.Send (s, reply)))
+     end
+   with Ipc.Remote_error (_, m) -> log "%s: %s" peer m);
+  (try Net.call n (Net.Close s) with Ipc.Remote_error _ -> ())
+
+(* connections are served by a few domains at once, so that a slow or idle
+   one does not stop the others: the main domain accepts them and queues
+   them for the workers *)
+let workers = 8
+let queue = Queue.create ()
+let lock = Mutex.create ()
+let nonempty = Condition.create ()
+
+let worker n () =
+  while true do
+    Mutex.lock lock;
+    while Queue.is_empty queue do Condition.wait nonempty lock done;
+    let s, peer = Queue.pop queue in
+    Mutex.unlock lock;
+    serve n s peer
+  done
+
 let () =
   match Net.connect () with
   | exception Mynos.Error _ -> log "no network service"
@@ -102,16 +133,14 @@ let () =
     match Net.call n (Net.Listen port) with
     | exception Ipc.Remote_error (_, m) -> log "port %d: %s" port m
     | l ->
-      log "serving %s on port %d" root port;
+      log "serving %s on port %d, %d connections at a time" root port workers;
+      for _ = 1 to workers do ignore (Domain.spawn (worker n)) done;
       while true do
         match Net.call n (Net.Accept l) with
         | exception Ipc.Remote_error (_, m) -> log "accept: %s" m
         | s, peer, _ ->
-          (try
-             let request = read_request n s in
-             let reply = answer request in
-             log "%s %s" peer (List.hd (String.split_on_char '\r' request));
-             ignore (Net.call n (Net.Send (s, reply)))
-           with Ipc.Remote_error (_, m) -> log "%s: %s" peer m);
-          (try Net.call n (Net.Close s) with Ipc.Remote_error _ -> ())
+          Mutex.lock lock;
+          Queue.push (s, peer) queue;
+          Condition.signal nonempty;
+          Mutex.unlock lock
       done

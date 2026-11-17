@@ -161,11 +161,12 @@ All services are linked statically against `libmynos` and placed at
   frame is a function call. DHCP (else QEMU's 10.0.2.15), ARP, IPv4, ICMP,
   TCP, DNS. Programs use it over typed IPC, protocol "net/1": module `Net`
   (`Config`, `Ping`, `Resolve`, `Connect`, `Listen`, `Accept`, `Send`,
-  `Recv`, `Close`), the first protocol with a C service, through
+  `Recv`, `Close`, `Set_timeout`), the first protocol with a C service, through
   `mynos_wire.h`. One lwIP thread; a second one receives the requests;
   requests that wait (`Recv`, `Accept`...) keep their channel open until
   lwIP's callback replies. `sh` has `ifconfig`, `ping`, `host`; `httpd`
-  (`httpd/httpd.ml`, OCaml) serves `/disk` over HTTP, and
+  (`httpd/httpd.ml`, OCaml) serves `/disk` over HTTP with 8 worker domains
+  (idle connections time out after 10 s), and
   `tools/run-demo.sh` forwards the host's port 8080 to it.
 - `tmpfs` (2026): **the first MyNOS service written in OCaml**
   (`services/tmpfs/tmpfs.ml`), a writable filesystem in memory. It speaks
@@ -624,3 +625,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   demo. `tests/net` with a TCP server and a client on the host. Follow-up:
   mynos-t9l (C sockets), mynos-c9h (socket owners, UDP), mynos-8v4 (IRQs).
   Closed mynos-4f6.
+- **2026-11-17** — httpd answered a browser after many seconds: it served
+  one connection at a time, and browsers open connections in advance that
+  send nothing. Now 8 worker domains, and `Set_timeout` in "net/1" (as
+  `SO_RCVTIMEO`) so that idle connections end after 10 s. 50-70 ms a page
+  with six idle connections open.

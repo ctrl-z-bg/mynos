@@ -19,6 +19,7 @@ type _ request =
   | Send : int * string -> int request
   | Recv : int * int -> string request
   | Close : int -> unit request
+  | Set_timeout : int * int -> unit request
 
 let config_codec =
   Wire.(conv
@@ -46,6 +47,7 @@ module Protocol = struct
     | Send (s, d) -> case 6; int s; str d
     | Recv (s, n) -> case 7; int s; int n
     | Close s -> case 8; int s
+    | Set_timeout (s, ms) -> case 9; int s; int ms
 
   let read_request r =
     let str () = Wire.read r Wire.string and int () = Wire.read r Wire.int in
@@ -59,6 +61,7 @@ module Protocol = struct
     | 6 -> let s = int () in Request (Send (s, str ()))
     | 7 -> let s = int () in Request (Recv (s, int ()))
     | 8 -> Request (Close (int ()))
+    | 9 -> let s = int () in Request (Set_timeout (s, int ()))
     | n -> raise (Wire.Error (Printf.sprintf "net: unknown request %d" n))
 
   let reply : type a. a request -> a Wire.t = function
@@ -71,6 +74,7 @@ module Protocol = struct
     | Recv _ -> Wire.string
     | Accept _ -> Wire.(triple int string int)
     | Close _ -> Wire.unit
+    | Set_timeout _ -> Wire.unit
 end
 
 module I = Ipc.Make (Protocol)
