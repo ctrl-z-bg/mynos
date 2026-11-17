@@ -1570,3 +1570,37 @@ may use.
 shape from the same value) is what keeps descriptions honest; the one
 place where that is impossible (C) got a test instead.
 
+## 2026-11-17 — The agent's first real run, and the shell's lost redirections
+
+**Symptom.** In the first run of `agent` with Claude, `fetch -i
+https://example.com` (run through `run_command`) printed its answer on the
+console; the model got "exit status 0" and nothing else, and ran it again.
+The run then stopped making progress.
+
+**Diagnosis.** `run_command` starts `sh -c COMMAND` with `MYNOS_STDOUT`
+(and `MYNOS_STDERR`, `MYNOS_STDIN`) pointing at files of `/tmp`. `sh`
+itself honoured them, but at start it drops these variables from the
+table it builds its programs' environment from (so that `> FILE` on one
+command does not leak to the next): its programs got neither the output
+file nor the empty input. Their output went to the console, and a
+program reading its input waited for the keyboard.
+
+**Cause.** MyNOS has no inherited file descriptors; redirection travels in
+the environment, and a shell must pass on its own as Unix passes fds.
+
+**Fix.** `sh` keeps the redirections it was started with and gives them
+to its programs unless a command has its own; outputs as `>>` (the file
+is already the shell's). The agent creates the output file first and
+appends to it, so `sh` and its programs share it in order.
+
+**Also.** With prompt caching on, Claude's `usage.input_tokens` counts only
+the uncached part: the first report said "10 tokens in". llmd now adds
+the cache's reads and writes, so `input_tokens` is the whole prompt.
+
+**Lesson.** An agent is a harsh user of the system: it runs commands in
+contexts no person does (output to a file, no keyboard), and a quiet
+inconsistency (a shell that forgets its own redirections) shows up at
+once as a model repeating itself. The recorder made the rest visible: the
+second run's file shows the agent, llmd, netd, fatfs, ata and fetch, each
+call nested in the one that caused it.
+

@@ -170,6 +170,8 @@ def anthropic(headers, req):
     need(isinstance(req.get("model"), str), "model: a string")
     need(isinstance(req.get("max_tokens"), int) and req["max_tokens"] > 0,
          "max_tokens: a positive integer")
+    if "cache_control" in req:
+        need(req["cache_control"] == {"type": "ephemeral"}, "cache_control")
     if "fallbacks" in req:
         need("server-side-fallback-2026-07-01" in headers.get("anthropic-beta", ""),
              "fallbacks needs its beta header")

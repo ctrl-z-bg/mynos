@@ -196,7 +196,11 @@ let anthropic p (c : Llm.chat) : Llm.answer =
       (if c.tools = [] then [] else [ "tools", Array (List.map tool c.tools) ]);
       (if p.effort = "" then []
        else [ "output_config", Object [ "effort", String p.effort ] ]);
-      (if p.fallbacks = "" then [] else [ "fallbacks", String p.fallbacks ]) ]) in
+      (if p.fallbacks = "" then [] else [ "fallbacks", String p.fallbacks ]);
+      (* the prompt so far cached, for the next request of a conversation
+         (an agent's loop): prompts shorter than the model's minimum are
+         simply not cached *)
+      [ "cache_control", Object [ "type", String "ephemeral" ] ] ]) in
   let headers = List.concat [
       (if p.key = "" then [] else [ "x-api-key", p.key ]);
       [ "anthropic-version", "2026-10-21" ];
@@ -218,8 +222,12 @@ let anthropic p (c : Llm.chat) : Llm.answer =
     | "refusal" -> Refusal
     | s -> Other s in
   let usage = field "usage" j in
+  (* the whole prompt: the tokens read from the cache and written to it
+     are counted apart from input_tokens *)
   { content; stop; model = str (field "model" j);
-    input_tokens = num (field "input_tokens" usage);
+    input_tokens = num (field "input_tokens" usage)
+                   + num (field "cache_creation_input_tokens" usage)
+                   + num (field "cache_read_input_tokens" usage);
     output_tokens = num (field "output_tokens" usage) }
 
 (* --- the Chat Completions API (OpenAI, vLLM, Ollama...) --- *)

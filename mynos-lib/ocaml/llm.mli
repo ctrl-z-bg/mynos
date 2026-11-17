@@ -54,7 +54,7 @@ type answer = {
   content : block list;
   stop : stop;
   model : string;      (** the model that answered *)
-  input_tokens : int;
+  input_tokens : int;  (** the whole prompt, cached parts included *)
   output_tokens : int;
 }
 

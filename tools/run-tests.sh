@@ -293,6 +293,9 @@ fi
 if [ -f tests/net/ramdisk.dsk ]; then
     expect "net: all checks passed"
     expect "asked-ok"           # ask in sh: the proposed command ran
+    expect "agent-ran"          # agent: the command it was allowed to run ran
+    expect "agent-local"
+    expect "The user did not allow this command."
     if [ -n "$net_fetched" ]; then
         echo "ok    the host fetched a page from a server in MyNOS"
     else

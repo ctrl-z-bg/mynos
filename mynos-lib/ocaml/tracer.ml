@@ -157,7 +157,7 @@ let get_string c =
 type arg = I | S
 
 (* the typed protocols the player knows: request names and arguments, and
-   the replies' types (mynos-lib/ocaml/block.ml, net.ml) *)
+   the replies' types (mynos-lib/ocaml/block.ml, net.ml, llm.ml) *)
 let protocols = [
   "block/1", [| "Info", [], [ I ]; "Read", [ I; I ], [ S ]; "Write", [ I; S ], [] |];
   "net/1", [| "Config", [], [ S; S; S; S; S ]; "Ping", [ S; I ], [ I ];
@@ -166,6 +166,7 @@ let protocols = [
               "Recv", [ I; I ], [ S ]; "Close", [ I ], []; "Set_timeout", [ I; I ], [];
               "Connect_tls", [ S; I ], [ I ]; "Udp_bind", [ I ], [ I ];
               "Send_to", [ I; S; I; S ], [ I ]; "Recv_from", [ I; I ], [ S; I; S ] |];
+  "llm/1", [| "Profiles", [], []; "Chat", [ S ], [] |];   (* Chat: its profile *)
 ]
 
 let get_args c args =

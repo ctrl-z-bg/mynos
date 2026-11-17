@@ -70,6 +70,7 @@ if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
   make -C fetch
   make -C services/llm
   make -C llm
+  make -C agent
   make -C tests/net
   make -C shell
   make -C system

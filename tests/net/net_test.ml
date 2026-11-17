@@ -241,4 +241,28 @@ let () =
     (ask "claude" "/ask-yes.txt" = Mynos.Exited 0);
   ok &&& check "ask: and with Chat Completions" (ask "local" "/ask-yes.txt" = Mynos.Exited 0);
   ok &&& check "ask: not run without a yes" (ask "claude" "/ask-no.txt" = Mynos.Exited 1);
+  (* the agent (mynos-wsd.3): the fake model calls its first tool,
+     run_command, with the task as the command, then reports the result.
+     The commands write "agent-ran" and "agent-local", which the tasks do
+     not contain: tools/run-tests.sh looks for them. *)
+  ignore (Mynos.spawn "ocamlrun" [| "ocamlrun"; "tmpfs.byte" |]);
+  Mynos.sleep 0.5;
+  let agent args answers =
+    match Mynos.spawn ~env:[| "MYNOS_STDIN=" ^ answers; "PATH=/" |] "ocamlrun"
+            (Array.append [| "ocamlrun"; "agent.byte" |] args) with
+    | pid -> Mynos.wait pid
+    | exception e -> print_endline (error e); Mynos.Exited 99 in
+  ok &&& check "agent: a command confirmed, run, reported"
+    (agent [| "-p"; "claude"; "X=ran; echo agent-$X" |] "/ask-yes.txt" = Mynos.Exited 0);
+  ok &&& check "agent: with -y, Chat Completions"
+    (agent [| "-y"; "-p"; "local"; "Y=local; echo agent-$Y" |] "/ask-no.txt" = Mynos.Exited 0);
+  ok &&& check "agent: the recorder saw it call llmd, and llmd netd"
+    (match Tracer.load "/tmp/agent.trc" with
+     | r ->
+       let calls = Tracer.calls r in
+       List.exists (fun c -> String.starts_with ~prefix:"llm/1 Chat \"local\"" c.Tracer.request) calls
+       && List.exists (fun c -> String.starts_with ~prefix:"net/1 Connect" c.Tracer.request) calls
+     | exception e -> print_endline (error e); false);
+  ok &&& check "agent: a command refused is not run"
+    (agent [| "-p"; "claude"; "echo agent-$NOT_RUN" |] "/ask-no.txt" = Mynos.Exited 0);
   print_endline (if !ok then "net: all checks passed" else "net: FAIL")

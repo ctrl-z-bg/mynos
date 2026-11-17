@@ -22,7 +22,7 @@ ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2
 	cp $< $@
 
 FILES = ../init/init.byte init.rc ocamlrun consoled kilo netd ../httpd/httpd.byte \
-	../trace/trace.byte ../fetch/fetch.byte ../llm/llm.byte \
+	../trace/trace.byte ../fetch/fetch.byte ../llm/llm.byte ../agent/agent.byte \
 	../services/llm/llmd.byte \
 	../third_party/ca-certificates/cacert.pem \
 	../services/tmpfs/tmpfs.byte ../services/ata/ata.byte \

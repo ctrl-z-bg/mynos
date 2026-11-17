@@ -197,6 +197,9 @@ All services are linked statically against `libmynos` and placed at
   protocols list their requests (`Ipc.request_doc`), every `Ipc.Make`
   service and netd answer `"describe"`; module `Tools` turns a description
   into model tools (JSON Schema) and calls any typed service from JSON.
+  `agent TASK`: the model works with tools (commands, files, the typed
+  services' requests), what changes things confirmed first, the recorder
+  on (`/tmp/agent.trc`).
   Tests: `tools/net-peer.py llm`, a fake provider that checks both
   APIs' requests.
 - **The event recorder** (2026, `doc/decisions/tracer.md`): while a
@@ -465,6 +468,7 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | — | `services/net/netd.c` | TLS: clients only (no `Listen_tls`); no revocation checks (CRL, OCSP); Mozilla's list is parsed at the first TLS connection (about 1.5 s in QEMU), later handshakes take 0.2-0.4 s; the clear bytes travel between netd and the program over IPC. |
 | — | `services/ata/ata.ml` | The disk is polled (PIO: the driver copies every word anyway, and QEMU completes commands at once); IRQ 14 is free for it. |
 | — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently; the stdio of C programs (musl's direct system calls) is not redirected. |
+| — | `agent/`, `services/llm/` | The agent has no token budget (only `-n` model calls); answers are not streamed. |
 
 ### Not started
 
@@ -491,7 +495,7 @@ Planned work, in order. Details live in the beads issues.
    (mynos-dhp, done): `https://` clients, `Http`, `Json`, `fetch`.
 6. Language models (mynos-wsd, `doc/decisions/llm.md`): `llmd` and `llm/1`
    (done), `ask` in `sh` (done), protocols that describe themselves (done), an agent
-   loop with the recorder on.
+   loop with the recorder on (done).
 7. Then: a GUI toolkit (mynos-9lr), distinctive
    applications (mynos-3h1), several CPUs (mynos-awn).
 
@@ -788,3 +792,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   shapes, JSON round trips, block/1's description (mynos-ocaml); netd's
   description equals `net.ml`'s, and `net_config`, `net_ping` and
   `llm_chat` called from JSON (network test).
+- 2026-11-17: The agent (mynos-wsd.3): `agent TASK` runs the model's tool
+  loop with its own tools (`run_command`, `read_file`, `write_file`,
+  `list_directory`) and the typed services' (`-s`, from descriptions);
+  what changes things is confirmed first (y/n/a, `-y`); the recorder runs
+  meanwhile (`/tmp/agent.trc`). llmd asks Claude to cache prompts, and
+  counts cached tokens in `input_tokens`. `sh` now gives its own
+  redirections to its programs (a `sh -c` whose output goes to a file
+  sent its programs' output to the console, and their input read the
+  console). Network test: three runs (confirmed, `-y`, refused) and the
+  recording's nested calls. With Claude: a task in Italian (the IP
+  address, the Date of https://example.com, into `/disk/note.txt`, read
+  back) done with `net_config`, `fetch -i`, `write_file`, `read_file`.

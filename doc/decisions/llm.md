@@ -2,8 +2,8 @@
 
 - **Issue:** mynos-wsd (an "AI-OS" direction, from Alessandro's idea)
 - **Date:** 2026-11-17
-- **Status:** accepted (2026-11-17); steps 1 (`llmd`, `llm/1`, `llm`), 2
-  (`ask`) and 3 (descriptions, `Tools`) implemented the same day.
+- **Status:** accepted (2026-11-17); all four steps implemented the same
+  day: `llmd`, `llm/1` and `llm`; `ask`; descriptions and `Tools`; `agent`.
 
 ## The idea
 
@@ -196,11 +196,35 @@ shape, the reply read back as JSON. A program, or a model, can use a
 service it was not compiled against: `llm_chat` itself is callable from
 JSON. `safe` is for the agent: what changes things is confirmed first.
 
+### 9. The agent
+
+`agent TASK...` (`agent/agent_main.ml`) runs the loop: the model answers,
+its tool calls are carried out, their results sent back, until it answers
+with no tool call (or after 20 model calls, `-n`). Its tools:
+
+- its own: `run_command` (one line of `sh`, run by a new `sh -c` with its
+  input from an empty file and its output, and its programs' output,
+  into a file of `/tmp`, sent back with the exit status), `read_file`,
+  `write_file`, `list_directory`;
+- every request of the typed services it is given (`-s net,llm`; `net` by
+  default), from their descriptions (`Tools`).
+
+What changes things (a command, a write, a request not `safe`) is shown
+and done only once confirmed: y, n, or a (yes to all for this run); `-y`
+confirms everything. A refusal goes back to the model as the tool's
+error. The process has no privilege: it reaches what the user's programs
+reach, and the services know it as itself (`Ipc.caller`).
+
+The event recorder runs meanwhile, and its file (`/tmp/agent.trc`, `-t`)
+shows, with `trace calls`, the agent's calls to llmd, llmd's to netd (the
+TLS connection to the provider), and the commands' own calls, nested.
+llmd asks Claude to cache the prompt (`cache_control`, automatic): in a
+loop, each request repeats the previous one and adds to it.
+
 ## Not now
 
-- **Streaming**, images, documents, and prompt caching (worth it for the
-  agent's long, repeated prompts: with step 4).
-- **Costs**: `answer` reports tokens; budgets per process can come with the
-  agent.
+- **Streaming**, images, documents.
+- **Costs**: `answer` reports tokens, and `agent` their sum; no budget
+  yet beyond the number of model calls.
 - **Who may ask**: every process may use `llmd`. With users, a profile can
   be restricted to some.

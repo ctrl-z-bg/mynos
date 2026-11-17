@@ -29,6 +29,12 @@ llmd.byte: ../../services/llm/llmd.byte
 sh.byte: ../../sh/sh.byte
 	cp $< $@
 
+agent.byte: ../../agent/agent.byte
+	cp $< $@
+
+tmpfs.byte: ../../services/tmpfs/tmpfs.byte
+	cp $< $@
+
 ask-yes.txt:
 	echo y > $@
 
@@ -36,7 +42,7 @@ ask-no.txt:
 	echo n > $@
 
 FILES = init.byte net_child.byte ocamlrun netd cacert.pem llmd.byte llm-test.env \
-	sh.byte ask-yes.txt ask-no.txt
+	sh.byte ask-yes.txt ask-no.txt agent.byte tmpfs.byte
 
 ramdisk.dsk: $(FILES)
 	../../services/fs/memrofs/tool/createDisk $(FILES) >/dev/null

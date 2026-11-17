@@ -263,14 +263,28 @@ let is_elf file =
   | s -> s = "\127ELF"
   | exception _ -> false
 
+(* the shell's own redirections, given to its programs unless a command
+   has its own: as fds are inherited elsewhere ("sh -c CMD > FILE" sends
+   CMD's programs' output to FILE too). Outputs append: the file is
+   already the shell's *)
+let inherited_redirs =
+  List.filter_map (fun k ->
+      match Sys.getenv_opt k with
+      | Some v when v <> "" ->
+        Some (k, if k = "MYNOS_STDIN" || String.starts_with ~prefix:">>" v then v
+               else ">>" ^ v)
+      | _ -> None)
+    [ "MYNOS_STDIN"; "MYNOS_STDOUT"; "MYNOS_STDERR" ]
+
 let environment c =
   let base = Hashtbl.fold (fun k v acc -> (k, v) :: acc) vars [] in
   let base = List.fold_left (fun acc (k, v) -> (k, v) :: List.remove_assoc k acc) base c.env_assigns in
-  let redirs =
+  let own =
     (match c.inp with Some f -> [ ("MYNOS_STDIN", f) ] | None -> [])
     @ (match c.out_file with
         | Some (f, app) -> [ ("MYNOS_STDOUT", (if app then ">>" else "") ^ f) ]
         | None -> []) in
+  let redirs = own @ List.filter (fun (k, _) -> not (List.mem_assoc k own)) inherited_redirs in
   Array.of_list (List.map (fun (k, v) -> k ^ "=" ^ v) (base @ redirs))
 
 let status_code = function
@@ -352,7 +366,8 @@ let help out =
      export unset env which source free clear help exit;\n\
      network: ifconfig, ping HOST [COUNT], host NAME.\n\
      Programs: edit FILE, ocamlc, kilo, hello, ocaml (the OCaml toplevel),\n\
-     trace COMMAND (record what the system does meanwhile), llm QUESTION...\n\
+     trace COMMAND (record what the system does meanwhile), llm QUESTION,\n\
+     agent TASK (a language model does it with tools, asking first)...\n\
      ask REQUEST: a command for it, from a language model; run if you agree.\n\
      Syntax: 'quotes' \"quotes\" $VAR $? NAME=value ; && || < > >> | *.ml\n\
      Files: / is the RAM disk, /tmp is in memory, /disk is the FAT disk.\n"
