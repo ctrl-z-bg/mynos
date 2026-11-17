@@ -24,6 +24,11 @@
  * handles the requests. A request that has to wait (Recv, Accept,
  * Connect, Ping, Resolve) keeps its channel open, and gets its reply from
  * the lwIP callback that ends the wait.
+ *
+ * Sockets (TCP, TLS, UDP) belong to the process that made them, known
+ * from the request's channel (mynos_channelPeer); once a second, the
+ * sockets of processes that ended are closed
+ * (doc/decisions/identity-and-permissions.md).
  */
 
 #include <stdio.h>
@@ -45,6 +50,7 @@
 #include "lwip/altcp_tcp.h"
 #include "lwip/altcp_tls.h"
 #include "lwip/raw.h"
+#include "lwip/udp.h"
 #include "lwip/dns.h"
 #include "lwip/dhcp.h"
 #include "lwip/etharp.h"
@@ -68,6 +74,9 @@
 #define MAXBACKLOG  8
 #define MAXRECV     16384
 #define MAXPING     8
+#define MAXDGRAMS   32        /* datagrams kept per UDP socket */
+#define MAXDGRAM    8192      /* bytes in a datagram sent */
+#define OWNER_CHECK 1000      /* ms between checks of the owners */
 #define DHCP_WAIT   5000      /* ms, then a static address (QEMU's) */
 
 /* lwIP's clock (NO_SYS) */
@@ -204,11 +213,21 @@ static void check_address(void) {
 
 /* ---------------------------------------------------------------- sockets */
 
-enum { S_FREE, S_CONNECTING, S_OPEN, S_LISTEN };
-enum { W_NONE, W_CONNECT, W_RECV, W_ACCEPT };
+enum { S_FREE, S_CONNECTING, S_OPEN, S_LISTEN, S_UDP };
+enum { W_NONE, W_CONNECT, W_RECV, W_ACCEPT, W_RECVFROM };
+
+/* a datagram received, not read yet */
+struct dgram {
+  struct pbuf * p;
+  ip_addr_t addr;
+  u16_t port;
+  struct dgram * next;
+};
 
 struct sock {
   int state;
+  int owner;                    /* the pid of the process that made it */
+  int rx_caller;                /* who waits in Accept: the new socket's owner */
   struct altcp_pcb * pcb;       /* NULL once lwIP freed it (an error) */
   int tls;                      /* TLS over TCP (Connect_tls) */
   char host[256];               /* Connect_tls: the server's name */
@@ -226,25 +245,47 @@ struct sock {
   int backlog[MAXBACKLOG], nbacklog;
   ip_addr_t peer;
   u16_t peer_port;
+  /* UDP */
+  struct udp_pcb * udp;
+  struct dgram * dgrams;
+  int ndgrams;
 };
 
 static struct sock socks[MAXSOCK];
 
 static void start_wait(struct sock * s);
 
+/* the pid of the process whose request is being handled (channelPeer of
+   its channel, taken by the listener thread) */
+static int current_caller = -1;
+
+/* a free socket, the current caller's */
 static int alloc_sock(void) {
   int i;
   for (i = 0; i < MAXSOCK; i++)
     if (socks[i].state == S_FREE) {
       memset(&socks[i], 0, sizeof socks[i]);
       socks[i].rx_ch = socks[i].tx_ch = -1;
+      socks[i].owner = current_caller;
       return i;
     }
   return -1;
 }
 
-static struct sock * get_sock(long long id) {
-  if (id < 0 || id >= MAXSOCK || socks[id].state == S_FREE) return NULL;
+/* a socket of the caller's (doc/decisions/identity-and-permissions.md): NULL
+   and an error message if there is none of that number, or it is another
+   process's */
+static const char * sock_error;
+
+static struct sock * get_sock(long long id, int caller) {
+  if (id < 0 || id >= MAXSOCK || socks[id].state == S_FREE) {
+    sock_error = "not a socket";
+    return NULL;
+  }
+  if (socks[id].owner != caller) {
+    sock_error = "not your socket";
+    return NULL;
+  }
   return &socks[id];
 }
 
@@ -400,6 +441,8 @@ static err_t on_accept(void * arg, struct altcp_pcb * pcb, err_t err) {
   c = &socks[id];
   c->state = S_OPEN;
   c->pcb = pcb;
+  /* the process that accepts it; until then, the listener's */
+  c->owner = l->rx_kind == W_ACCEPT ? l->rx_caller : l->owner;
   altcp_get_tcp_addrinfo(pcb, 0, &c->peer, &c->peer_port);
   setup_pcb(pcb, id);
   if (l->rx_kind == W_ACCEPT) {
@@ -422,6 +465,13 @@ static void close_sock(struct sock * s) {
       altcp_err(s->pcb, NULL);
     }
     if (altcp_close(s->pcb) != ERR_OK) altcp_abort(s->pcb);
+  }
+  if (s->udp) udp_remove(s->udp);
+  while (s->dgrams) {
+    struct dgram * d = s->dgrams;
+    s->dgrams = d->next;
+    pbuf_free(d->p);
+    free(d);
   }
   if (s->rx) pbuf_free(s->rx);
   if (s->rx_ch >= 0) reply_error(s->rx_ch, "socket closed");
@@ -679,11 +729,13 @@ static void do_listen(int ch, long long port) {
 }
 
 static void do_accept(int ch, long long id) {
-  struct sock * l = get_sock(id);
+  struct sock * l = get_sock(id, current_caller);
   int i;
-  if (l == NULL || l->state != S_LISTEN) { reply_error(ch, "not a listening socket"); return; }
+  if (l == NULL) { reply_error(ch, sock_error); return; }
+  if (l->state != S_LISTEN) { reply_error(ch, "not a listening socket"); return; }
   if (l->rx_ch >= 0) { reply_error(ch, "an Accept is already waiting"); return; }
   if (l->nbacklog > 0) {
+    socks[l->backlog[0]].owner = current_caller;
     reply_accept(ch, &socks[l->backlog[0]]);
     for (i = 1; i < l->nbacklog; i++) l->backlog[i - 1] = l->backlog[i];
     l->nbacklog--;
@@ -691,12 +743,14 @@ static void do_accept(int ch, long long id) {
   }
   l->rx_kind = W_ACCEPT;
   l->rx_ch = ch;
+  l->rx_caller = current_caller;
   start_wait(l);
 }
 
 static void do_send(int ch, long long id, const char * data, unsigned int n) {
-  struct sock * s = get_sock(id);
-  if (s == NULL || s->state != S_OPEN) { reply_error(ch, "not a connected socket"); return; }
+  struct sock * s = get_sock(id, current_caller);
+  if (s == NULL) { reply_error(ch, sock_error); return; }
+  if (s->state != S_OPEN) { reply_error(ch, "not a connected socket"); return; }
   if (s->tx_ch >= 0) { reply_error(ch, "a Send is already waiting"); return; }
   if ((s->tx = malloc(n ? n : 1)) == NULL) { reply_error(ch, "out of memory"); return; }
   memcpy(s->tx, data, n);
@@ -707,8 +761,9 @@ static void do_send(int ch, long long id, const char * data, unsigned int n) {
 }
 
 static void do_recv(int ch, long long id, long long max) {
-  struct sock * s = get_sock(id);
-  if (s == NULL || s->state != S_OPEN) { reply_error(ch, "not a connected socket"); return; }
+  struct sock * s = get_sock(id, current_caller);
+  if (s == NULL) { reply_error(ch, sock_error); return; }
+  if (s->state != S_OPEN) { reply_error(ch, "not a connected socket"); return; }
   if (s->rx_ch >= 0) { reply_error(ch, "a Recv is already waiting"); return; }
   if (max < 1) { reply_error(ch, "bad size"); return; }
   s->rx_kind = W_RECV;
@@ -729,7 +784,8 @@ static void socket_timeouts(void) {
   for (i = 0; i < MAXSOCK; i++) {
     struct sock * s = &socks[i];
     if (s->state != S_FREE && s->rx_ch >= 0 &&
-        (s->rx_kind == W_RECV || s->rx_kind == W_ACCEPT) && s->rx_deadline &&
+        (s->rx_kind == W_RECV || s->rx_kind == W_ACCEPT ||
+         s->rx_kind == W_RECVFROM) && s->rx_deadline &&
         (s32_t)(sys_now() - s->rx_deadline) >= 0) {
       reply_error(s->rx_ch, "timeout");
       s->rx_ch = -1;
@@ -739,27 +795,156 @@ static void socket_timeouts(void) {
 }
 
 static void do_set_timeout(int ch, long long id, long long ms) {
-  struct sock * s = get_sock(id);
-  if (s == NULL) { reply_error(ch, "not a socket"); return; }
+  struct sock * s = get_sock(id, current_caller);
+  if (s == NULL) { reply_error(ch, sock_error); return; }
   if (ms < 0 || ms > 86400000) { reply_error(ch, "bad timeout"); return; }
   s->timeout = (u32_t)ms;
   reply_unit(ch);
 }
 
 static void do_close(int ch, long long id) {
-  struct sock * s = get_sock(id);
-  if (s == NULL) { reply_error(ch, "not a socket"); return; }
+  struct sock * s = get_sock(id, current_caller);
+  if (s == NULL) { reply_error(ch, sock_error); return; }
   close_sock(s);
   reply_unit(ch);
 }
 
-static void handle(int ch, const char * msg, unsigned int len) {
+/* the sockets of processes that ended: closed (their listening ports are
+   free again). Every OWNER_CHECK ms, one processInfo per owner. */
+static void owner_checks(void) {
+  static u32_t last = 0;
+  int i, j;
+  if (sys_now() - last < OWNER_CHECK) return;
+  last = sys_now();
+  for (i = 0; i < MAXSOCK; i++) {
+    int owner = socks[i].owner, info;
+    if (socks[i].state == S_FREE || socks[i].owner < 0) continue;
+    /* the owner's first socket: check it once, close all its sockets */
+    for (j = 0; j < i; j++)
+      if (socks[j].state != S_FREE && socks[j].owner == owner) break;
+    if (j < i) continue;
+    info = mynos_processInfo(owner);
+    if (info >= 0 && (info & MYNOS_PROC_ALIVE)) continue;
+    for (j = i; j < MAXSOCK; j++)
+      if (socks[j].state != S_FREE && socks[j].owner == owner) {
+        /* a listener's backlog goes with it */
+        close_sock(&socks[j]);
+      }
+  }
+}
+
+/* ---------------------------------------------------------------- UDP */
+
+static void reply_datagram(int ch, struct dgram * d, int max) {
+  wire_writer w;
+  unsigned int n = d->p->tot_len;
+  char * buf;
+  if (n > (unsigned int)max) n = max;            /* the rest is lost */
+  if ((buf = malloc(n ? n : 1)) == NULL) { reply_error(ch, "out of memory"); return; }
+  pbuf_copy_partial(d->p, buf, (u16_t)n, 0);
+  wire_writer_init(&w);
+  wire_reply_ok(&w);
+  wire_put_cstring(&w, ipaddr_ntoa(&d->addr));
+  wire_put_int(&w, d->port);
+  wire_put_string(&w, buf, n);
+  send_reply(ch, &w);
+  free(buf);
+}
+
+/* a waiting Recv_from: the first datagram */
+static void serve_recvfrom(struct sock * s) {
+  struct dgram * d = s->dgrams;
+  if (s->rx_kind != W_RECVFROM || d == NULL) return;
+  s->dgrams = d->next;
+  s->ndgrams--;
+  reply_datagram(s->rx_ch, d, s->rx_max);
+  pbuf_free(d->p);
+  free(d);
+  s->rx_kind = W_NONE;
+  s->rx_ch = -1;
+}
+
+static void on_udp(void * arg, struct udp_pcb * pcb, struct pbuf * p,
+                   const ip_addr_t * addr, u16_t port) {
+  struct sock * s = &socks[IDX(arg)];
+  struct dgram * d, ** last;
+  (void)pcb;
+  if (s->ndgrams == MAXDGRAMS || (d = malloc(sizeof *d)) == NULL) {
+    pbuf_free(p);                         /* full: dropped, as UDP may */
+    return;
+  }
+  d->p = p;
+  ip_addr_copy(d->addr, *addr);
+  d->port = port;
+  d->next = NULL;
+  for (last = &s->dgrams; *last; last = &(*last)->next) ;
+  *last = d;
+  s->ndgrams++;
+  serve_recvfrom(s);
+}
+
+static void do_udp_bind(int ch, long long port) {
+  struct sock * s;
+  int id;
+  err_t e;
+  if (port < 0 || port > 65535) { reply_error(ch, "bad port"); return; }
+  if ((id = alloc_sock()) < 0) { reply_error(ch, "too many sockets"); return; }
+  s = &socks[id];
+  if ((s->udp = udp_new()) == NULL) { reply_error(ch, "out of memory"); return; }
+  if ((e = udp_bind(s->udp, IP_ANY_TYPE, (u16_t)port)) != ERR_OK) {
+    udp_remove(s->udp);
+    s->udp = NULL;
+    reply_error(ch, err_text(e));
+    return;
+  }
+  s->state = S_UDP;
+  udp_recv(s->udp, on_udp, ARG(id));
+  reply_int(ch, id);
+}
+
+static void do_send_to(int ch, long long id, const char * host, long long port,
+                       const char * data, unsigned int n) {
+  struct sock * s = get_sock(id, current_caller);
+  ip_addr_t addr;
+  struct pbuf * p;
+  err_t e;
+  if (s == NULL) { reply_error(ch, sock_error); return; }
+  if (s->state != S_UDP) { reply_error(ch, "not a UDP socket"); return; }
+  if (!ipaddr_aton(host, &addr)) { reply_error(ch, "not an address"); return; }
+  if (port <= 0 || port > 65535) { reply_error(ch, "bad port"); return; }
+  if (n > MAXDGRAM) { reply_error(ch, "datagram too large"); return; }
+  if ((p = pbuf_alloc(PBUF_TRANSPORT, (u16_t)n, PBUF_RAM)) == NULL) {
+    reply_error(ch, "out of memory");
+    return;
+  }
+  pbuf_take(p, data, (u16_t)n);
+  e = udp_sendto(s->udp, p, &addr, (u16_t)port);
+  pbuf_free(p);
+  if (e != ERR_OK) reply_error(ch, err_text(e));
+  else reply_int(ch, n);
+}
+
+static void do_recv_from(int ch, long long id, long long max) {
+  struct sock * s = get_sock(id, current_caller);
+  if (s == NULL) { reply_error(ch, sock_error); return; }
+  if (s->state != S_UDP) { reply_error(ch, "not a UDP socket"); return; }
+  if (s->rx_ch >= 0) { reply_error(ch, "a Recv_from is already waiting"); return; }
+  if (max < 1) { reply_error(ch, "bad size"); return; }
+  s->rx_kind = W_RECVFROM;
+  s->rx_ch = ch;
+  s->rx_max = max > MAXRECV ? MAXRECV : (int)max;
+  start_wait(s);
+  serve_recvfrom(s);
+}
+
+static void handle(int ch, int caller, const char * msg, unsigned int len) {
   wire_reader r;
   char a[256];
   long long kind, x, y;
   const char * data;
   unsigned int n;
 
+  current_caller = caller;
   wire_reader_init(&r, msg, len);
   if (wire_check_protocol(&r, PROTOCOL) < 0) {
     reply_error(ch, "protocol: netd speaks " PROTOCOL);
@@ -785,6 +970,12 @@ static void handle(int ch, const char * msg, unsigned int len) {
     do_set_timeout(ch, x, y); break;
   case 10: wire_get_cstring(&r, a, sizeof a); x = wire_get_int(&r); END();
     do_connect_tls(ch, a, x); break;
+  case 11: x = wire_get_int(&r); END(); do_udp_bind(ch, x); break;
+  case 12: x = wire_get_int(&r); wire_get_cstring(&r, a, sizeof a);
+    y = wire_get_int(&r); data = wire_get_string(&r, &n); END();
+    do_send_to(ch, x, a, y, data, n); break;
+  case 13: x = wire_get_int(&r); y = wire_get_int(&r); END();
+    do_recv_from(ch, x, y); break;
   default: reply_error(ch, "unknown request"); break;
   }
 #undef END
@@ -794,6 +985,7 @@ static void handle(int ch, const char * msg, unsigned int len) {
 
 struct request {
   int ch;
+  int caller;                   /* the pid at the other end */
   char * msg;
   unsigned int len;
   struct request * next;
@@ -838,6 +1030,7 @@ static void * listener(void * arg) {
     memcpy(r->msg, m->start, m->size);
     r->len = m->size;
     r->ch = ch;
+    r->caller = mynos_channelPeer(ch);
     r->next = NULL;
     mynos_freeMsg(&m);
     pthread_mutex_lock(&lock);
@@ -920,9 +1113,10 @@ int main(void) {
     check_address();
     ping_timeouts();
     socket_timeouts();
+    owner_checks();
     while (r) {
       struct request * next = r->next;
-      handle(r->ch, r->msg, r->len);
+      handle(r->ch, r->caller, r->msg, r->len);
       poll_card();
       free(r->msg);
       free(r);

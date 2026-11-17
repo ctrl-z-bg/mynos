@@ -164,7 +164,8 @@ let protocols = [
               "Resolve", [ S ], [ S ]; "Connect", [ S; I ], [ I ]; "Listen", [ I ], [ I ];
               "Accept", [ I ], [ I; S; I ]; "Send", [ I; S ], [ I ];
               "Recv", [ I; I ], [ S ]; "Close", [ I ], []; "Set_timeout", [ I; I ], [];
-              "Connect_tls", [ S; I ], [ I ] |];
+              "Connect_tls", [ S; I ], [ I ]; "Udp_bind", [ I ], [ I ];
+              "Send_to", [ I; S; I; S ], [ I ]; "Recv_from", [ I; I ], [ S; I; S ] |];
 ]
 
 let get_args c args =

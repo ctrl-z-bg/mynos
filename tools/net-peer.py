@@ -6,6 +6,8 @@
   net-peer.py fetch PORT FILE    connect to localhost:PORT (QEMU forwards it
                                  to MyNOS) until it answers, send an HTTP
                                  request, write the answer to FILE
+  net-peer.py udpecho PORT       answer each UDP datagram with its bytes in
+                                 capitals (until killed)
   net-peer.py https PORT CERT KEY
                                  an HTTPS server with that certificate:
                                  answers each request with "METHOD PATH
@@ -96,9 +98,19 @@ def https(port, cert, key):
             pass                        # a refused handshake: the next one
 
 
+def udpecho(port):
+    srv = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    srv.bind(("127.0.0.1", port))
+    while True:
+        data, peer = srv.recvfrom(65536)
+        srv.sendto(data.upper(), peer)
+
+
 if __name__ == "__main__":
     if sys.argv[1] == "echo":
         echo(int(sys.argv[2]))
+    elif sys.argv[1] == "udpecho":
+        udpecho(int(sys.argv[2]))
     elif sys.argv[1] == "https":
         https(int(sys.argv[2]), sys.argv[3], sys.argv[4])
     else:

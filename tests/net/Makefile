@@ -10,6 +10,9 @@ all: ramdisk.dsk
 init.byte: net_test.ml $(MYNOS)
 	$(OCAMLC) mynos.cma -o $@ net_test.ml
 
+net_child.byte: net_child.ml $(MYNOS)
+	$(OCAMLC) mynos.cma -o $@ net_child.ml
+
 ocamlrun: ../../mynos-runtime/ocamlrun
 	strip -o $@ $<
 
@@ -20,8 +23,8 @@ netd: ../../services/net/netd
 cacert.pem: tls/ca.pem
 	cp $< $@
 
-ramdisk.dsk: init.byte ocamlrun netd cacert.pem
-	../../services/fs/memrofs/tool/createDisk init.byte ocamlrun netd cacert.pem >/dev/null
+ramdisk.dsk: init.byte net_child.byte ocamlrun netd cacert.pem
+	../../services/fs/memrofs/tool/createDisk init.byte net_child.byte ocamlrun netd cacert.pem >/dev/null
 
 clean:
 	rm -f *.cm[io] *.byte ocamlrun netd cacert.pem ramdisk.dsk

@@ -164,7 +164,8 @@ All services are linked statically against `libmynos` and placed at
   frame is a function call. DHCP (else QEMU's 10.0.2.15), ARP, IPv4, ICMP,
   TCP, DNS. Programs use it over typed IPC, protocol "net/1": module `Net`
   (`Config`, `Ping`, `Resolve`, `Connect`, `Listen`, `Accept`, `Send`,
-  `Recv`, `Close`, `Set_timeout`, `Connect_tls`), the first protocol with a C service, through
+  `Recv`, `Close`, `Set_timeout`, `Connect_tls`, and UDP: `Udp_bind`,
+  `Send_to`, `Recv_from`), the first protocol with a C service, through
   `mynos_wire.h`. **TLS** (1.2 and 1.3): mbedTLS 3.6 LTS
   (`third_party/mbedtls`, used under GPL-2.0-or-later) under lwIP's
   `altcp` layer (its port adapted to 3.6); the server's certificate is
@@ -439,7 +440,6 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
 | mynos-t9l | `mynos-lib/` | C programs have no sockets API yet: only OCaml programs reach the network (module `Net`). |
 | — | `mynos-core/kernel/ipc/channel.c` | The two ends of a channel are told apart by pid: threads (or domains) of one process cannot talk to each other over IPC. |
-| mynos-c9h | `services/net/netd.c` | Sockets have no owner (any process may use any socket number) and stay open when their process dies; no UDP for programs yet. |
 | — | `services/net/netd.c` | TLS: clients only (no `Listen_tls`); no revocation checks (CRL, OCSP); Mozilla's list is parsed at the first TLS connection (about 1.5 s in QEMU), later handshakes take 0.2-0.4 s; the clear bytes travel between netd and the program over IPC. |
 | — | `services/ata/ata.ml` | The disk is polled (PIO: the driver copies every word anyway, and QEMU completes commands at once); IRQ 14 is free for it. |
 | — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently; the stdio of C programs (musl's direct system calls) is not redirected. |
@@ -716,3 +716,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   for it while it runs, and frees it when it ends (a restarted service
   can register again). Found: threads of one process cannot talk over IPC
   (channel ends are told apart by pid).
+- **2026-11-17** — Step 3, netd: sockets belong to the process that made
+  them (an accepted connection to the process that accepted it), known
+  from the request's channel; another process gets "not your socket";
+  once a second the sockets of processes that ended are closed, so a
+  restarted server listens on its port again. UDP in "net/1" (cases
+  11-13: `Udp_bind`, `Send_to`, `Recv_from`, 32 datagrams queued per
+  socket). Tests: UDP to the host and back, a child process refused our
+  socket, a dead child's listening port free again. Closed mynos-c9h.

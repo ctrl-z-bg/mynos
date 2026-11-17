@@ -21,6 +21,9 @@ type _ request =
   | Close : int -> unit request
   | Set_timeout : int * int -> unit request
   | Connect_tls : string * int -> int request
+  | Udp_bind : int -> int request
+  | Send_to : int * string * int * string -> int request
+  | Recv_from : int * int -> (string * int * string) request
 
 let config_codec =
   Wire.(conv
@@ -50,6 +53,9 @@ module Protocol = struct
     | Close s -> case 8; int s
     | Set_timeout (s, ms) -> case 9; int s; int ms
     | Connect_tls (h, p) -> case 10; str h; int p
+    | Udp_bind p -> case 11; int p
+    | Send_to (s, a, p, d) -> case 12; int s; str a; int p; str d
+    | Recv_from (s, n) -> case 13; int s; int n
 
   let read_request r =
     let str () = Wire.read r Wire.string and int () = Wire.read r Wire.int in
@@ -65,6 +71,11 @@ module Protocol = struct
     | 8 -> Request (Close (int ()))
     | 9 -> let s = int () in Request (Set_timeout (s, int ()))
     | 10 -> let h = str () in Request (Connect_tls (h, int ()))
+    | 11 -> Request (Udp_bind (int ()))
+    | 12 ->
+      let s = int () in let a = str () in let p = int () in
+      Request (Send_to (s, a, p, str ()))
+    | 13 -> let s = int () in Request (Recv_from (s, int ()))
     | n -> raise (Wire.Error (Printf.sprintf "net: unknown request %d" n))
 
   let reply : type a. a request -> a Wire.t = function
@@ -72,6 +83,9 @@ module Protocol = struct
     | Ping _ -> Wire.int
     | Connect _ -> Wire.int
     | Connect_tls _ -> Wire.int
+    | Udp_bind _ -> Wire.int
+    | Send_to _ -> Wire.int
+    | Recv_from _ -> Wire.(triple string int string)
     | Listen _ -> Wire.int
     | Send _ -> Wire.int
     | Resolve _ -> Wire.string

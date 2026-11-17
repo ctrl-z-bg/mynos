@@ -95,6 +95,33 @@ let () =
           has 0) in
   ok &&& check "TLS: an unknown authority is refused" (refused_tls 47444 "trusted CA");
   ok &&& check "TLS: a certificate for another name is refused" (refused_tls 47445 "CN");
+  (* UDP *)
+  ok &&& check "UDP to the host and back"
+    (match Net.call n (Net.Udp_bind 0) with
+     | u ->
+       Net.call n (Net.Set_timeout (u, 3000));
+       ignore (Net.call n (Net.Send_to (u, "10.0.2.2", 47053, "hello udp")));
+       let a, p, d = Net.call n (Net.Recv_from (u, 100)) in
+       Printf.printf "net: %s:%d says %S\n%!" a p d;
+       Net.call n (Net.Close u);
+       a = "10.0.2.2" && p = 47053 && d = "HELLO UDP"
+     | exception e -> print_endline (error e); false);
+  (* sockets belong to their process (doc/decisions/identity-and-permissions.md) *)
+  let child args =
+    match Mynos.spawn "ocamlrun" (Array.append [| "ocamlrun"; "net_child.byte" |] args) with
+    | pid -> Mynos.wait pid
+    | exception e -> print_endline (error e); Mynos.Exited 99 in
+  ok &&& check "another process cannot close our socket"
+    (let u = Net.call n (Net.Udp_bind 0) in
+     let r = child [| "close"; string_of_int u |] in
+     Net.call n (Net.Close u);
+     r = Mynos.Exited 0);
+  ok &&& check "the sockets of a process that ended are closed"
+    (child [| "listen"; "8082" |] = Mynos.Exited 0
+     && (Mynos.sleep 1.5;
+         match Net.call n (Net.Listen 8082) with
+         | l -> Net.call n (Net.Close l); true
+         | exception e -> print_endline ("net: " ^ error e); false));
   (* a malformed message: an error reply, and the service goes on *)
   let raw msg =
     let ch = Mynos.connect (Mynos.lookup "net") in

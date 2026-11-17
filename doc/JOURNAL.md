@@ -1407,3 +1407,30 @@ was the right shape for the others; asking "is there a more elegant way"
 before writing the code avoided a second identity that every later
 feature would have had to carry.
 
+## 2026-11-17 — Sockets with owners, and threads that cannot call each other
+
+**Owners in netd.** The listener thread now asks `channelPeer` for each
+request's channel; the main loop handles the request with that pid as the
+current caller, and a new socket is the caller's. A connection accepted by
+lwIP before anyone called `Accept` belongs to the listener's owner, then
+to whoever accepts it. Every second, netd checks each owner once with
+`processInfo` and closes the sockets of those that ended: since pids are
+not reused, "no such pid" is final, and nothing can be closed by mistake
+because a later process got the same number. UDP came with it: lwIP's
+raw `udp_*` API, a queue of 32 datagrams per socket, and `Recv_from`
+waiting like `Recv` (and timing out like it).
+
+**A limit found on the way.** A test meant to check the caller through a
+real service served it from a second domain of the test program and
+called it from the first: it hung. The two ends of a channel are told
+apart by pid (`getMyReadChannel` compares the receiver with the caller's
+pid), so when both ends are the same process, both sides read the same
+half: the request and the reply never meet. It has always been so; the
+check now uses the handler directly, and the live path is covered by the
+registry and netd. Noted in STATUS as a known limit.
+
+**Lesson.** "Who is calling" was one system call away once the kernel
+kept a stable name for processes: the work in netd was mostly deciding
+the owner in the less obvious cases (accepted connections, a listener's
+backlog).
+

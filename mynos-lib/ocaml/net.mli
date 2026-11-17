@@ -11,8 +11,11 @@
       Net.call n (Net.Recv (s, 4096));;
     ]}
 
-    Addresses are dotted IPv4 strings. Sockets are numbers: any process may
-    use any socket (there is no owner yet). [Recv] and [Accept] wait. *)
+    Addresses are dotted IPv4 strings. Sockets are numbers, and belong to
+    the process that made them (a connection from [Accept], to the process
+    that accepted it): another one gets ["not your socket"]. netd closes the
+    sockets of a process that ended within a second, so a restarted server
+    can listen on its port again. [Recv], [Accept] and [Recv_from] wait. *)
 
 type config = {
   mac : string;        (** ["52:54:00:12:34:56"] *)
@@ -50,6 +53,16 @@ type _ request =
           netd trusts: Mozilla's list ([/cacert.pem] on the RAM disk) and
           the user's ([/disk/ca.pem], if any). [Send] and [Recv] then carry
           the clear bytes. *)
+  | Udp_bind : int -> int request
+      (** a UDP port (0: any): a UDP socket. Up to 32 datagrams wait to be
+          read; later ones are dropped. *)
+  | Send_to : int * string * int * string -> int request
+      (** [(socket, address, port, data)]: one datagram (up to 8192
+          bytes); its size *)
+  | Recv_from : int * int -> (string * int * string) request
+      (** [(socket, max)]: the next datagram, waiting for one
+          ({!Set_timeout} applies): [(address, port, data)], [data] cut to
+          [max] bytes *)
 
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
 
