@@ -30,10 +30,65 @@ let config_codec =
           (fun c -> (c.mac, c.address, (c.netmask, c.gateway, c.dns)))
           (fun (mac, address, (netmask, gateway, dns)) ->
              { mac; address; netmask; gateway; dns })
-          (triple string string (triple string string string)))
+          (triple (field "mac" string) (field "address" string)
+             (triple (field "netmask" string) (field "gateway" string)
+                (field "dns" string))))
+
+(* the requests' arguments, for the description (write_request writes
+   them one after the other, as these tuples) *)
+let socket = Wire.(field "socket" int)
+let address = Wire.(field "address" string)
+let port = Wire.(field "port" int)
 
 module Protocol = struct
   let id = "net/1"
+  let summary =
+    "The network (TCP/IP over the NE2000 card; netd, in C): addresses, DNS, \
+     TCP connections (also with TLS) and listening sockets, UDP. Sockets \
+     are numbers and belong to the process that made them."
+  let requests = Ipc.[
+      request ~safe:true 0 "config" "The network's configuration (by DHCP)."
+        Wire.unit config_codec;
+      request ~safe:true 1 "ping"
+        "Ping an address (IPv4, dotted): the round trip time in ms."
+        Wire.(pair address (field "timeout_ms" int)) Wire.int;
+      request ~safe:true 2 "resolve" "A host name's IPv4 address (DNS)."
+        Wire.(field "name" string) Wire.string;
+      request 3 "connect" "A TCP connection to an address and port: its socket."
+        Wire.(pair address port) Wire.int;
+      request 4 "listen" "Listen on a TCP port: a listening socket."
+        port Wire.int;
+      request 5 "accept"
+        "Wait for a connection on a listening socket: its socket, and the \
+         peer's address and port."
+        socket Wire.(triple socket address port);
+      request 6 "send" "Send all of these bytes on a socket: their number."
+        Wire.(pair socket (field "data" string)) Wire.int;
+      request 7 "recv"
+        "Receive at most max bytes (up to 16384) from a socket; empty at the \
+         end. Waits."
+        Wire.(pair socket (field "max" int)) Wire.string;
+      request 8 "close" "Close a socket." socket Wire.unit;
+      request 9 "set_timeout"
+        "A recv or accept on this socket that waits longer than ms fails \
+         with \"timeout\" (0: wait forever)."
+        Wire.(pair socket (field "ms" int)) Wire.unit;
+      request 10 "connect_tls"
+        "A TCP connection with TLS to a host (a name, or an address) and \
+         port, the server's certificate checked: its socket. send and recv \
+         then carry the clear bytes."
+        Wire.(pair (field "host" string) port) Wire.int;
+      request 11 "udp_bind" "A UDP socket on a port (0: any)." port Wire.int;
+      request 12 "send_to" "Send one UDP datagram: its size."
+        Wire.(Wire.conv (fun (s, a, p, d) -> ((s, a), (p, d)))
+                (fun ((s, a), (p, d)) -> (s, a, p, d))
+                (pair (pair socket address) (pair port (field "data" string))))
+        Wire.int;
+      request 13 "recv_from"
+        "Receive one UDP datagram (at most max bytes): the sender's address \
+         and port, and the data. Waits."
+        Wire.(pair socket (field "max" int))
+        Wire.(triple address port (field "data" string)) ]
   type 'a r = 'a request
   type 'a request = 'a r
   type packed = Request : 'a request -> packed

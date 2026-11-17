@@ -7,8 +7,56 @@ type caller = { pid : int; io : bool }
 
 let nobody = { pid = -1; io = false }
 
+type request_doc = {
+  case : int;
+  name : string;
+  doc : string;
+  args : Wire.shape;
+  reply : Wire.shape;
+  safe : bool;
+}
+
+let request ?(safe = false) case name doc args reply =
+  { case; name; doc; args = Wire.shape args; reply = Wire.shape reply; safe }
+
+type description = {
+  protocol : string;
+  summary : string;
+  requests : request_doc list;
+}
+
+let request_doc_codec =
+  Wire.(conv
+          (fun r -> ((r.case, r.name, r.doc), (r.args, r.reply, r.safe)))
+          (fun ((case, name, doc), (args, reply, safe)) ->
+             { case; name; doc; args; reply; safe })
+          (pair (triple int string string) (triple shape_codec shape_codec bool)))
+
+let description_codec =
+  Wire.(conv (fun d -> (d.protocol, d.summary, d.requests))
+          (fun (protocol, summary, requests) -> { protocol; summary; requests })
+          (triple string string (list request_doc_codec)))
+
+(* the request "describe": a protocol of its own, with nothing after its
+   id; the reply, Ok description *)
+let describe_id = "describe"
+
+let describe ?(timeout = 1.0) name =
+  let ch = Mynos.connect (Mynos.lookup name) in
+  let answer =
+    Fun.protect ~finally:(fun () -> try Mynos.free_channel ch with Mynos.Error _ -> ())
+      (fun () ->
+         Mynos.send ch (Wire.to_string Wire.string describe_id);
+         Mynos.recv ~timeout ch) in
+  match Wire.of_string (Wire.result description_codec Wire.string) answer with
+  | Ok d -> d
+  | Error m -> raise (Remote_error (name, m))
+  | exception Wire.Error e -> raise (Protocol_error (Printf.sprintf "%s: %s" name e))
+
 module type PROTOCOL = sig
   val id : string
+  val summary : string
+  val requests : request_doc list
   type 'a request
   type packed = Request : 'a request -> packed
   val write_request : Wire.writer -> 'a request -> unit
@@ -60,7 +108,10 @@ module Make (P : PROTOCOL) = struct
     match
       let r = Wire.reader msg in
       let id = Wire.read r Wire.string in
-      if id <> P.id then Error (Printf.sprintf "protocol %S, expected %S" id P.id)
+      if id = describe_id && Wire.at_end r then
+        Ok (Wire.to_string (Wire.result description_codec Wire.string)
+              (Ok { protocol = P.id; summary = P.summary; requests = P.requests }))
+      else if id <> P.id then Error (Printf.sprintf "protocol %S, expected %S" id P.id)
       else match P.read_request r with
         | P.Request req ->
           if not (Wire.at_end r) then Error "bytes left over in the request"

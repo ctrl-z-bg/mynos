@@ -193,7 +193,11 @@ All services are linked statically against `libmynos` and placed at
   thinking) travel back as `Opaque`. The `llm` command (`llm -l`, `llm -p
   PROFILE -v QUESTION`). `ask REQUEST` in `sh`: the model proposes a
   command line (tool `propose_command`), `sh` runs it once the user says
-  yes. Tests: `tools/net-peer.py llm`, a fake provider that checks both
+  yes. Protocols describe themselves: `Wire` codecs carry shapes,
+  protocols list their requests (`Ipc.request_doc`), every `Ipc.Make`
+  service and netd answer `"describe"`; module `Tools` turns a description
+  into model tools (JSON Schema) and calls any typed service from JSON.
+  Tests: `tools/net-peer.py llm`, a fake provider that checks both
   APIs' requests.
 - **The event recorder** (2026, `doc/decisions/tracer.md`): while a
   recording is on, the kernel (`kernel/trace.c`) writes an event for every
@@ -486,7 +490,7 @@ Planned work, in order. Details live in the beads issues.
    and an NE2000 driver in netd, `Net` over "net/1", `httpd`; TLS
    (mynos-dhp, done): `https://` clients, `Http`, `Json`, `fetch`.
 6. Language models (mynos-wsd, `doc/decisions/llm.md`): `llmd` and `llm/1`
-   (done), `ask` in `sh` (done), protocols that describe themselves, an agent
+   (done), `ask` in `sh` (done), protocols that describe themselves (done), an agent
    loop with the recorder on.
 7. Then: a GUI toolkit (mynos-9lr), distinctive
    applications (mynos-3h1), several CPUs (mynos-awn).
@@ -775,3 +779,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   test: `sh -c "ask ..."` with yes and no, through both APIs. By hand, with
   Claude: "elenca i file in /disk con le loro dimensioni" became `ls -l
   /disk`, explained in Italian.
+- 2026-11-17: Protocols that describe themselves (mynos-wsd.2): `Wire`
+  codecs carry their shape (`Wire.shape`, `Wire.field`, named variant
+  cases); `Ipc.PROTOCOL` has `summary` and `requests` (block/1, net/1,
+  llm/1 described); `Ipc.Make` services answer `"describe"`, netd too
+  (`wire_put_shape`, a compact notation in C). Module `Tools`: a
+  description becomes model tools (JSON Schema), called from JSON. Tests:
+  shapes, JSON round trips, block/1's description (mynos-ocaml); netd's
+  description equals `net.ml`'s, and `net_config`, `net_ping` and
+  `llm_chat` called from JSON (network test).

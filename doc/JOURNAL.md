@@ -1536,3 +1536,37 @@ what was sent with what was meant (here: the disk's copy against the
 file, byte for byte, without printing the key) before suspecting the
 code.
 
+## 2026-11-17 — Codecs that know their shape
+
+**The question.** Step 3 of the AI direction: make every typed service a
+tool a model can call, "with no glue code". A model sees JSON and JSON
+Schemas; a service reads `Wire` bytes. Something must sit between them
+for every protocol.
+
+**Choice.** Not a translator per protocol, but one derived from data:
+each `Wire` codec now carries its shape (a lazy value, so that `fix` can
+name its recursion: inside, `Var "t"`; outside, `Rec ("t", ...)`). A
+protocol's request list gives each request's argument and reply codecs,
+so their shapes come from the very codecs that encode them; for `Block`,
+the arguments' codecs are now defined once and used by both
+`write_request` and the description. JSON maps onto shapes by a few rules
+(named tuple components are object fields; nested unnamed tuples are
+flattened, so `conv`'d records read naturally; variants are a case name or
+a one-field object), and `Tools` writes and reads the bytes by walking the
+shape. `llm_chat`, with lists of variants of records, goes through it.
+
+**The C service.** netd describes itself from a table in a compact
+notation (`"(socket:I,max:I)"`), parsed by `wire_put_shape`. The same
+description now exists twice, in C and in `net.ml`; the network test
+compares them (the structure, not the prose), so a change to one without
+the other fails.
+
+**Discovery.** The registry cannot list names, and asking a 2004 service
+(memrofs, the console) a typed question risks confusing it: descriptions
+are asked by name, with a timeout. The agent is told which services it
+may use.
+
+**Lesson.** Making the codec the single source of truth (bytes and
+shape from the same value) is what keeps descriptions honest; the one
+place where that is impossible (C) got a test instead.
+

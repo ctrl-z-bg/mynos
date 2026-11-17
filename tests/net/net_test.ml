@@ -181,6 +181,52 @@ let () =
   ok &&& check "llm: an unknown profile"
     (match Llm.ask ~profile:"nope" l "hello" with
      | _ -> false | exception Ipc.Remote_error _ -> true);
+  (* protocols that describe themselves (mynos-wsd.2): netd (C) and llmd
+     (OCaml) answer "describe"; their requests, called from JSON *)
+  let structure (rs : Ipc.request_doc list) =
+    List.map (fun (r : Ipc.request_doc) -> (r.case, r.name, r.args, r.reply, r.safe)) rs in
+  ok &&& check "describe: netd's protocol is net.ml's"
+    (match Ipc.describe "net" with
+     | d -> d.Ipc.protocol = "net/1"
+            && structure d.requests = structure Net.Protocol.requests
+     | exception e -> print_endline (error e); false);
+  ok &&& check "describe: llmd's"
+    (match Ipc.describe "llm" with
+     | d -> d.Ipc.protocol = "llm/1" && d.requests = Llm.Protocol.requests
+     | exception e -> print_endline (error e); false);
+  let tools = (try Tools.of_service "net" @ Tools.of_service "llm"
+               with e -> print_endline (error e); []) in
+  let tool_call name input =
+    match Tools.call (Tools.find tools name) input with
+    | out -> print_endline ("net: " ^ name ^ " " ^ input ^ " -> " ^ out); Ok out
+    | exception (Ipc.Remote_error (_, m) | Failure m) -> Error m
+    | exception e -> Error (error e) in
+  ok &&& check "tools: 16 requests of 2 services, as tools"
+    (List.length tools = 16
+     && (Tools.find tools "net_ping").tool.Llm.schema
+        = {|{"type":"object","properties":{"address":{"type":"string"},"timeout_ms":{"type":"integer"}},"required":["address","timeout_ms"]}|});
+  ok &&& check "tools: net_config from JSON"
+    (match tool_call "net_config" "{}" with
+     | Ok out -> Json.(member "address" (of_string out) |> to_string_value) = "10.0.2.15"
+     | Error m -> print_endline m; false);
+  ok &&& check "tools: net_ping"
+    (match tool_call "net_ping" {|{"address": "10.0.2.2", "timeout_ms": 2000}|} with
+     | Ok out -> int_of_string_opt out <> None | Error m -> print_endline m; false);
+  ok &&& check "tools: a service's error"
+    (tool_call "net_close" {|{"socket": 9999}|} = Error "not a socket"
+     || (print_endline "net: close 9999"; false));
+  ok &&& check "tools: arguments that do not fit"
+    (match tool_call "net_ping" {|{"address": 5, "timeout_ms": 1}|} with
+     | Error m -> String.starts_with ~prefix:"expected" m | Ok _ -> false);
+  ok &&& check "tools: llm_chat from JSON (lists, variants, records)"
+    (match tool_call "llm_chat"
+             {|{"profile": "local", "system": "", "max_tokens": 0, "tools": [],
+                "messages": [{"assistant": false, "content": [{"text": "hi"}]}]}|} with
+     | Ok out ->
+       let j = Json.of_string out in
+       Json.(member "stop" j) = Json.String "end"
+       && Json.(member "content" j |> index 0 |> member "text" |> to_string_value) = "echo: hi"
+     | Error m -> print_endline m; false);
   (* ask in sh (mynos-wsd.1): the fake model proposes the request itself as
      the command; it runs only when the answer read is "y" (from a file
      here, a key on the console). Its output, "asked-ok", is not in the

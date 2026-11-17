@@ -52,13 +52,19 @@ llm.cmi: llm.mli ipc.cmi
 llm.cmo: llm.ml llm.cmi
 	$(OCAMLC) -c llm.ml
 
+tools.cmi: tools.mli llm.cmi json.cmi ipc.cmi
+	$(OCAMLC) -c tools.mli
+
+tools.cmo: tools.ml tools.cmi
+	$(OCAMLC) -c tools.ml
+
 tracer.cmi: tracer.mli
 	$(OCAMLC) -c tracer.mli
 
 tracer.cmo: tracer.ml tracer.cmi
 	$(OCAMLC) -c tracer.ml
 
-MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo net.cmo json.cmo http.cmo llm.cmo tracer.cmo
+MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo tracer.cmo
 
 mynos.cma: $(MODULES)
 	$(OCAMLC) -a -o $@ $(MODULES)

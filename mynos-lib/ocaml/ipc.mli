@@ -30,10 +30,53 @@ type caller = { pid : int; io : bool }
 val nobody : caller
 (** A caller for tests: pid -1, no privilege. *)
 
+(** {2 Descriptions}
+
+    A protocol describes itself (doc/decisions/llm.md): its requests, with
+    their arguments and reply as {!Wire.shape}s. Every service made with
+    {!Make} answers a request of protocol ["describe"] with its
+    description, so a program can learn a service's protocol at run time,
+    and call it without its OCaml types ({!Tools}: from JSON, for language
+    models). *)
+
+type request_doc = {
+  case : int;              (** its number on the wire *)
+  name : string;           (** ["read"] *)
+  doc : string;            (** what it does, for people and models *)
+  args : Wire.shape;       (** written after the number: a {!Wire.Tuple} of
+                               {!Wire.Named} values, or [Unit] *)
+  reply : Wire.shape;
+  safe : bool;             (** it only reads: it changes nothing *)
+}
+
+val request :
+  ?safe:bool -> int -> string -> string -> 'a Wire.t -> 'b Wire.t -> request_doc
+(** [request case name doc args reply] ([safe]: false). *)
+
+type description = {
+  protocol : string;       (** ["block/1"] *)
+  summary : string;
+  requests : request_doc list;
+}
+
+val description_codec : description Wire.t
+
+val describe : ?timeout:float -> string -> description
+(** The description of the service registered under this name. Raises
+    {!Mynos.Error} if there is none or it does not answer within
+    [timeout] seconds (1), {!Remote_error} if it does not describe
+    itself. Only typed services should be asked. *)
+
 module type PROTOCOL = sig
   val id : string
   (** Name and version, such as ["block/1"]: a service refuses requests
       of another id. *)
+
+  val summary : string
+  (** What the service does, in a sentence or two. *)
+
+  val requests : request_doc list
+  (** Its requests: their numbers must be [write_request]'s. *)
 
   type 'a request
   type packed = Request : 'a request -> packed

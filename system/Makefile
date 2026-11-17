@@ -34,7 +34,7 @@ FILES = ../init/init.byte init.rc ocamlrun consoled kilo netd ../httpd/httpd.byt
 	../mynos-lib/ocaml/mynos.cma ../mynos-lib/ocaml/block.cmi \
 	../mynos-lib/ocaml/wire.cmi ../mynos-lib/ocaml/ipc.cmi ../mynos-lib/ocaml/net.cmi \
 	../mynos-lib/ocaml/tracer.cmi ../mynos-lib/ocaml/json.cmi ../mynos-lib/ocaml/http.cmi \
-	../mynos-lib/ocaml/llm.cmi \
+	../mynos-lib/ocaml/llm.cmi ../mynos-lib/ocaml/tools.cmi \
 	../tests/hello/hello.byte ../tests/spawn/child.byte \
 	../tests/ramdisk/AUTOEXEC.BAT
 

@@ -166,3 +166,87 @@ void wire_reply_error(wire_writer * w, const char * message) {
   wire_put_int(w, 1);
   wire_put_cstring(w, message);
 }
+
+/* ---- descriptions ---- */
+
+/* the case numbers of Wire.shape_codec */
+enum { SH_UNIT, SH_BOOL, SH_INT, SH_FLOAT, SH_STRING, SH_OPTION, SH_LIST,
+       SH_TUPLE, SH_NAMED, SH_VARIANT, SH_REC, SH_VAR };
+
+static int is_name_char(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+}
+
+/* the shape at *p; *p moves past it */
+static int put_shape(wire_writer * w, const char ** p) {
+  const char * s = *p;
+  const char * q = s;
+  while (is_name_char(*q)) q++;
+  if (q > s && *q == ':') {                  /* name:x */
+    wire_put_int(w, SH_NAMED);
+    wire_put_string(w, s, q - s);
+    *p = q + 1;
+    return put_shape(w, p);
+  }
+  switch (*s) {
+  case 'U': *p = s + 1; wire_put_int(w, SH_UNIT); return 0;
+  case 'B': *p = s + 1; wire_put_int(w, SH_BOOL); return 0;
+  case 'I': *p = s + 1; wire_put_int(w, SH_INT); return 0;
+  case 'F': *p = s + 1; wire_put_int(w, SH_FLOAT); return 0;
+  case 'S': *p = s + 1; wire_put_int(w, SH_STRING); return 0;
+  case 'O': case 'L':
+    if (s[1] != '<') return -1;
+    wire_put_int(w, *s == 'O' ? SH_OPTION : SH_LIST);
+    *p = s + 2;
+    if (put_shape(w, p) < 0 || **p != '>') return -1;
+    (*p)++;
+    return 0;
+  case '(': {
+    /* the components at this depth, counted first */
+    int n = 1, depth = 0;
+    const char * c;
+    for (c = s + 1; *c && !(depth == 0 && *c == ')'); c++) {
+      if (*c == '(' || *c == '<') depth++;
+      else if (*c == ')' || *c == '>') depth--;
+      else if (*c == ',' && depth == 0) n++;
+    }
+    if (*c != ')') return -1;
+    wire_put_int(w, SH_TUPLE);
+    wire_put_int(w, n);
+    *p = s + 1;
+    while (n-- > 0) {
+      if (put_shape(w, p) < 0) return -1;
+      if (**p == ',') (*p)++;
+    }
+    if (**p != ')') return -1;
+    (*p)++;
+    return 0;
+  }
+  default: return -1;
+  }
+}
+
+int wire_put_shape(wire_writer * w, const char * notation) {
+  const char * p = notation;
+  if (put_shape(w, &p) < 0 || *p) return -1;
+  return 0;
+}
+
+void wire_reply_description(wire_writer * w, const char * protocol,
+                            const char * summary,
+                            const wire_request_doc * requests, int n) {
+  int i;
+  wire_reply_ok(w);
+  wire_put_cstring(w, protocol);
+  wire_put_cstring(w, summary);
+  wire_put_int(w, n);
+  for (i = 0; i < n; i++) {
+    wire_put_int(w, i);                    /* the case: the index */
+    wire_put_cstring(w, requests[i].name);
+    wire_put_cstring(w, requests[i].doc);
+    wire_put_shape(w, requests[i].args);
+    wire_put_shape(w, requests[i].reply);
+    wire_put_bool(w, requests[i].safe);
+  }
+}
+

@@ -72,4 +72,26 @@ int wire_check_protocol(wire_reader * r, const char * id);
 void wire_reply_ok(wire_writer * w);
 void wire_reply_error(wire_writer * w, const char * message);
 
+/* Descriptions (Ipc.describe, doc/decisions/llm.md): a request whose
+   protocol id is "describe" asks a service for its protocol. */
+#define WIRE_DESCRIBE "describe"
+
+/* a shape (Wire.shape), written from a compact notation:
+     U B I F S          unit, bool, int, float, string
+     O<x> L<x>          an option, a list of x
+     (x,y,...)          a tuple
+     name:x             a named component (Wire.field)
+   e.g. "(socket:I,max:I)". Returns -1 on a malformed notation. */
+int wire_put_shape(wire_writer * w, const char * notation);
+
+/* a request of a description, then the description's reply: Ok, the
+   protocol, its summary and its requests */
+typedef struct {
+  int safe;
+  const char * name, * args, * reply, * doc;  /* args, reply: shapes */
+} wire_request_doc;
+void wire_reply_description(wire_writer * w, const char * protocol,
+                            const char * summary,
+                            const wire_request_doc * requests, int n);
+
 #endif

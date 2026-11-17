@@ -37,51 +37,68 @@ type _ request =
 
 let block_codec =
   Wire.(variant [
-      case 0 string (fun s -> Text s) (function Text s -> Some s | _ -> None);
-      case 1 (triple string string string)
+      case ~name:"text" 0 string (fun s -> Text s) (function Text s -> Some s | _ -> None);
+      case ~name:"tool_call" 1
+        (triple (field "id" string) (field "name" string) (field "input" string))
         (fun (id, name, input) -> Tool_call { id; name; input })
         (function Tool_call { id; name; input } -> Some (id, name, input) | _ -> None);
-      case 2 (triple string string bool)
+      case ~name:"tool_result" 2
+        (triple (field "id" string) (field "content" string) (field "error" bool))
         (fun (id, content, error) -> Tool_result { id; content; error })
         (function Tool_result { id; content; error } -> Some (id, content, error)
                 | _ -> None);
-      case 3 string (fun s -> Opaque s) (function Opaque s -> Some s | _ -> None) ])
+      case ~name:"opaque" 3 string (fun s -> Opaque s) (function Opaque s -> Some s | _ -> None) ])
 
 let message_codec =
   Wire.(conv (fun m -> (m.role = Assistant, m.content))
           (fun (a, content) -> { role = (if a then Assistant else User); content })
-          (pair bool (list block_codec)))
+          (pair (field "assistant" bool) (field "content" (list block_codec))))
 
 let tool_codec =
   Wire.(conv (fun (t : tool) -> (t.name, t.description, t.schema))
           (fun (name, description, schema) -> { name; description; schema })
-          (triple string string string))
+          (triple (field "name" string) (field "description" string)
+             (field "schema" string)))
 
 let chat_codec =
   Wire.(conv
           (fun c -> ((c.profile, c.system, c.max_tokens), (c.messages, c.tools)))
           (fun ((profile, system, max_tokens), (messages, tools)) ->
              { profile; system; max_tokens; messages; tools })
-          (pair (triple string string int)
-             (pair (list message_codec) (list tool_codec))))
+          (pair (triple (field "profile" string) (field "system" string)
+                   (field "max_tokens" int))
+             (pair (field "messages" (list message_codec))
+                (field "tools" (list tool_codec)))))
 
 let stop_codec =
   Wire.(variant [
-      case 0 unit (fun () -> End) (function End -> Some () | _ -> None);
-      case 1 unit (fun () -> Tool_use) (function Tool_use -> Some () | _ -> None);
-      case 2 unit (fun () -> Max_tokens) (function Max_tokens -> Some () | _ -> None);
-      case 3 unit (fun () -> Refusal) (function Refusal -> Some () | _ -> None);
-      case 4 string (fun s -> Other s) (function Other s -> Some s | _ -> None) ])
+      case ~name:"end" 0 unit (fun () -> End) (function End -> Some () | _ -> None);
+      case ~name:"tool_use" 1 unit (fun () -> Tool_use) (function Tool_use -> Some () | _ -> None);
+      case ~name:"max_tokens" 2 unit (fun () -> Max_tokens) (function Max_tokens -> Some () | _ -> None);
+      case ~name:"refusal" 3 unit (fun () -> Refusal) (function Refusal -> Some () | _ -> None);
+      case ~name:"other" 4 string (fun s -> Other s) (function Other s -> Some s | _ -> None) ])
 
 let answer_codec =
   Wire.(conv
           (fun a -> ((a.content, a.stop, a.model), (a.input_tokens, a.output_tokens)))
           (fun ((content, stop, model), (input_tokens, output_tokens)) ->
              { content; stop; model; input_tokens; output_tokens })
-          (pair (triple (list block_codec) stop_codec string) (pair int int)))
+          (pair (triple (field "content" (list block_codec)) (field "stop" stop_codec)
+                   (field "model" string))
+             (pair (field "input_tokens" int) (field "output_tokens" int))))
 
 module Protocol = struct
   let id = "llm/1"
+  let summary =
+    "Language models (llmd): the profiles configured in /disk/llm.env, and \
+     conversations with them, with tools."
+  let requests = Ipc.[
+      request ~safe:true 0 "profiles"
+        "The model profiles: name, API and model of each, the default first."
+        Wire.unit
+        Wire.(list (triple (field "name" string) (field "api" string) (field "model" string)));
+      request 1 "chat" "A conversation with a model: its answer."
+        chat_codec answer_codec ]
   type 'a r = 'a request
   type 'a request = 'a r
   type packed = Request : 'a request -> packed

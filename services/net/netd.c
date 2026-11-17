@@ -937,6 +937,53 @@ static void do_recv_from(int ch, long long id, long long max) {
   serve_recvfrom(s);
 }
 
+/* the description of "net/1", for Ipc.describe (doc/decisions/llm.md):
+   the same as Net.Protocol.requests (mynos-lib/ocaml/net.ml), which the
+   network test checks; the case of each request is its index */
+static const wire_request_doc requests[] = {
+  { 1, "config", "U", "(mac:S,address:S,(netmask:S,gateway:S,dns:S))",
+    "The network's configuration (by DHCP)." },
+  { 1, "ping", "(address:S,timeout_ms:I)", "I",
+    "Ping an address (IPv4, dotted): the round trip time in ms." },
+  { 1, "resolve", "name:S", "S", "A host name's IPv4 address (DNS)." },
+  { 0, "connect", "(address:S,port:I)", "I",
+    "A TCP connection to an address and port: its socket." },
+  { 0, "listen", "port:I", "I", "Listen on a TCP port: a listening socket." },
+  { 0, "accept", "socket:I", "(socket:I,address:S,port:I)",
+    "Wait for a connection on a listening socket: its socket, and the "
+    "peer's address and port." },
+  { 0, "send", "(socket:I,data:S)", "I",
+    "Send all of these bytes on a socket: their number." },
+  { 0, "recv", "(socket:I,max:I)", "S",
+    "Receive at most max bytes (up to 16384) from a socket; empty at the "
+    "end. Waits." },
+  { 0, "close", "socket:I", "U", "Close a socket." },
+  { 0, "set_timeout", "(socket:I,ms:I)", "U",
+    "A recv or accept on this socket that waits longer than ms fails with "
+    "\"timeout\" (0: wait forever)." },
+  { 0, "connect_tls", "(host:S,port:I)", "I",
+    "A TCP connection with TLS to a host (a name, or an address) and port, "
+    "the server's certificate checked: its socket. send and recv then "
+    "carry the clear bytes." },
+  { 0, "udp_bind", "port:I", "I", "A UDP socket on a port (0: any)." },
+  { 0, "send_to", "((socket:I,address:S),(port:I,data:S))", "I",
+    "Send one UDP datagram: its size." },
+  { 0, "recv_from", "(socket:I,max:I)", "(address:S,port:I,data:S)",
+    "Receive one UDP datagram (at most max bytes): the sender's address "
+    "and port, and the data. Waits." },
+};
+
+static void describe(int ch) {
+  wire_writer w;
+  wire_writer_init(&w);
+  wire_reply_description(&w, PROTOCOL,
+    "The network (TCP/IP over the NE2000 card; netd, in C): addresses, DNS, "
+    "TCP connections (also with TLS) and listening sockets, UDP. Sockets "
+    "are numbers and belong to the process that made them.",
+    requests, sizeof requests / sizeof requests[0]);
+  send_reply(ch, &w);
+}
+
 static void handle(int ch, int caller, const char * msg, unsigned int len) {
   wire_reader r;
   char a[256];
@@ -946,9 +993,18 @@ static void handle(int ch, int caller, const char * msg, unsigned int len) {
 
   current_caller = caller;
   wire_reader_init(&r, msg, len);
-  if (wire_check_protocol(&r, PROTOCOL) < 0) {
-    reply_error(ch, "protocol: netd speaks " PROTOCOL);
-    return;
+  {
+    unsigned int n;
+    const char * id = wire_get_string(&r, &n);
+    if (!r.error && n == strlen(WIRE_DESCRIBE) && !memcmp(id, WIRE_DESCRIBE, n)
+        && wire_at_end(&r)) {
+      describe(ch);
+      return;
+    }
+    if (r.error || n != strlen(PROTOCOL) || memcmp(id, PROTOCOL, n)) {
+      reply_error(ch, "protocol: netd speaks " PROTOCOL);
+      return;
+    }
   }
 #define END() if (!wire_at_end(&r)) { reply_error(ch, "malformed request"); return; }
   kind = wire_get_int(&r);

@@ -2,8 +2,8 @@
 
 - **Issue:** mynos-wsd (an "AI-OS" direction, from Alessandro's idea)
 - **Date:** 2026-11-17
-- **Status:** accepted (2026-11-17); steps 1 (`llmd`, `llm/1`, `llm`) and
-  2 (`ask`) implemented the same day.
+- **Status:** accepted (2026-11-17); steps 1 (`llmd`, `llm/1`, `llm`), 2
+  (`ask`) and 3 (descriptions, `Tools`) implemented the same day.
 
 ## The idea
 
@@ -171,6 +171,30 @@ file. Nothing runs without a yes, in a script either. A model that
 answers in text (a question needing no command) has its text shown. The
 proposals are commands of `sh`, not OCaml for the toplevel: `ocaml` is
 one of the commands it may propose.
+
+### 8. Protocols that describe themselves
+
+Every `Wire` codec carries its **shape** (`Wire.shape`): unit, bool, int,
+float, string, options, lists, tuples, named components (`Wire.field`),
+variants with named cases, recursive types. A protocol lists its requests
+(`Ipc.request_doc`: case number, name, documentation, the shapes of its
+arguments and reply, and `safe`: whether it only reads), and a summary.
+Every service made with `Ipc.Make` answers a request of protocol
+`"describe"` with that description, with no code of its own. netd, in C,
+answers it too, from a table written in a compact notation
+(`wire_put_shape`: `"(socket:I,max:I)"`); the network test checks that it
+is `net.ml`'s.
+
+Descriptions are asked by name (`Ipc.describe`, with a timeout): the
+registry cannot list its names, and the services of 2004 (memrofs, the
+console) expect C structures, not typed messages.
+
+From a description alone, module **`Tools`** makes each request a model's
+tool: its name (`net_ping`), its documentation, and a JSON Schema of its
+arguments; and calls it with JSON, written as the protocol's bytes by
+shape, the reply read back as JSON. A program, or a model, can use a
+service it was not compiled against: `llm_chat` itself is callable from
+JSON. `safe` is for the agent: what changes things is confirmed first.
 
 ## Not now
 

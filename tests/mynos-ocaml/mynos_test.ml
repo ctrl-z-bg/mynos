@@ -138,6 +138,33 @@ let () =
           "\014block/1\018";                       (* request 9 *)
           "\014block/1\002\002";                  (* Read without count *)
           Block.request_message Block.Info ^ "x" ]);
+  (* descriptions (mynos-wsd.2): shapes, a service's answer to "describe",
+     and values written and read from JSON by shape *)
+  ok &&& check "wire: shapes"
+    (Wire.(shape (pair (field "a" int) (list (option string))))
+     = Wire.(Tuple [ Named ("a", Int); List (Option String) ])
+     && (match Wire.shape tree with
+         | Wire.Rec ("t", Wire.Variant [ (0, "0", Wire.Int);
+                                         (1, "1", Wire.Tuple [ Var "t"; Var "t" ]) ]) -> true
+         | _ -> false));
+  ok &&& check "ipc: a service describes its protocol"
+    (match Wire.of_string (Wire.result Ipc.description_codec Wire.string)
+             (Block.answer h (Wire.to_string Wire.string "describe")) with
+     | Ok d -> d.Ipc.protocol = "block/1" && d.requests = Block.Protocol.requests
+               && List.map (fun (r : Ipc.request_doc) -> r.name) d.requests
+                  = [ "info"; "read"; "write" ]
+     | Error _ -> false);
+  let via_json shape json =
+    let w = Wire.writer () in
+    Tools.write_json shape w (Json.of_string json);
+    Json.to_string (Tools.read_json shape (Wire.reader (Wire.contents w))) in
+  ok &&& check "tools: values from JSON and back"
+    (via_json Wire.(shape (pair (field "lba" int) (field "count" int))) {|{"count":2,"lba":7}|}
+     = {|{"lba":7,"count":2}|}
+     && via_json (Wire.shape tree) {|{"1":[{"0":1},{"1":[{"0":-2},{"0":3}]}]}|}
+        = {|{"1":[{"0":1},{"1":[{"0":-2},{"0":3}]}]}|}
+     && via_json Wire.(shape (list (option string))) {|["a",null]|} = {|["a",null]|}
+     && via_json Wire.(shape (result int string)) {|{"error":"e"}|} = {|{"error":"e"}|});
   (* a service served by a second domain of this process, called from the
      first: each end of a channel has its own id (mynos-9e1; the ends were
      told apart by pid, and the call hung) *)

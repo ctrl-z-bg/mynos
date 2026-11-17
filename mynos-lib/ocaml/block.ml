@@ -8,8 +8,21 @@ type _ request =
   | Read : int * int -> string request
   | Write : int * string -> unit request
 
+let read_args = Wire.(pair (field "lba" int) (field "count" int))
+let write_args = Wire.(pair (field "lba" int) (field "bytes" string))
+
 module Protocol = struct
   let id = "block/1"
+  let summary = "A block device (a disk): sectors of 512 bytes, numbered from 0 (LBA)."
+  let requests = Ipc.[
+      request ~safe:true 0 "info" "The number of sectors of the device."
+        Wire.unit Wire.int;
+      request ~safe:true 1 "read"
+        "Read count sectors (1 to 32) from sector lba: their bytes."
+        read_args Wire.string;
+      request 2 "write"
+        "Write bytes (a whole number of sectors, up to 32) from sector lba."
+        write_args Wire.unit ]
   type 'a r = 'a request
   type 'a request = 'a r
   type packed = Request : 'a request -> packed
@@ -18,16 +31,16 @@ module Protocol = struct
     match r with
     | Info -> Wire.write w Wire.int 0
     | Read (lba, count) ->
-      Wire.write w Wire.int 1; Wire.write w Wire.(pair int int) (lba, count)
+      Wire.write w Wire.int 1; Wire.write w read_args (lba, count)
     | Write (lba, bytes) ->
-      Wire.write w Wire.int 2; Wire.write w Wire.(pair int string) (lba, bytes)
+      Wire.write w Wire.int 2; Wire.write w write_args (lba, bytes)
 
   let read_request r =
     match Wire.read r Wire.int with
     | 0 -> Request Info
-    | 1 -> let lba, count = Wire.read r Wire.(pair int int) in
+    | 1 -> let lba, count = Wire.read r read_args in
       Request (Read (lba, count))
-    | 2 -> let lba, bytes = Wire.read r Wire.(pair int string) in
+    | 2 -> let lba, bytes = Wire.read r write_args in
       Request (Write (lba, bytes))
     | n -> raise (Wire.Error (Printf.sprintf "block: unknown request %d" n))
 
