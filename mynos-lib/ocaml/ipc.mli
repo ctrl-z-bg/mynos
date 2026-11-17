@@ -10,8 +10,8 @@
     ]}
 
     [Ipc.Make (P)] gives clients a [call] whose result has the type of the
-    request, and services a [serve] loop that hands each request to a
-    function of type ['a. 'a P.request -> 'a]. Messages are encoded with
+    request, and services a [serve] loop that hands each request, with
+    its {!caller}, to a function of type ['a. caller -> 'a P.request -> 'a]. Messages are encoded with
     {!Wire}: a request is the protocol's [id] then the request; a reply is
     [Ok value] or [Error message] (case 0 or 1). One connection per call. *)
 
@@ -21,6 +21,14 @@ exception Remote_error of string * string
 
 exception Protocol_error of string
 (** The service's reply was malformed. *)
+
+type caller = { pid : int; io : bool }
+(** Who sent a request: its pid (pids are not reused, so it names one
+    process) and whether it has the [io] privilege
+    (doc/decisions/identity-and-permissions.md). *)
+
+val nobody : caller
+(** A caller for tests: pid -1, no privilege. *)
 
 module type PROTOCOL = sig
   val id : string
@@ -54,9 +62,9 @@ module Make (P : PROTOCOL) : sig
 
   (** {2 Services} *)
 
-  type handler = { handle : 'a. 'a P.request -> 'a }
-  (** An exception raised by [handle] is the reply: the client raises
-      {!Remote_error} with its message. *)
+  type handler = { handle : 'a. caller -> 'a P.request -> 'a }
+  (** [handle caller request]. An exception raised by [handle] is the
+      reply: the client raises {!Remote_error} with its message. *)
 
   val serve : string -> handler -> 'b
   (** Register the service under this name and answer requests, one at a
@@ -67,8 +75,9 @@ module Make (P : PROTOCOL) : sig
   (** {2 Messages (for tests)} *)
 
   val request_message : 'a P.request -> string
-  val answer : handler -> string -> string
-  (** The reply to a request message, as [serve] sends it. *)
+  val answer : ?caller:caller -> handler -> string -> string
+  (** The reply to a request message, as [serve] sends it ([caller]:
+      {!nobody} by default). *)
 
   val read_reply : string -> 'a P.request -> 'a
   (** As [call] reads it; [Remote_error]'s service name is [""]. *)

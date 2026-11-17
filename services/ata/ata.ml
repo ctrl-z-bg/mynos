@@ -1,6 +1,6 @@
 (* ata: the driver of the first ATA (IDE) disk, written in OCaml. It runs
    as an ordinary MyNOS process: it talks to the controller through the I/O
-   ports (MyNOS gives processes I/O privilege) and serves sectors to other
+   ports (init gives it the io privilege: "driver ata.byte" in init.rc) and serves sectors to other
    processes over IPC, as the block service "ata0".
 
    The disk is the master of the primary channel (ports 0x1F0-0x1F7 and
@@ -97,7 +97,7 @@ let identify () =
 (* ---- the block service (typed IPC: Block.Protocol) ---- *)
 
 let handle sectors : Block.handler = {
-  Block.handle = fun (type a) (r : a Block.request) : a ->
+  Block.handle = fun (type a) _caller (r : a Block.request) : a ->
     let check lba count =
       if count < 1 || count > Block.max_count then
         invalid_arg (Printf.sprintf "%d sectors: 1 to %d per request" count

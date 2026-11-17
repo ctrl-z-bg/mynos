@@ -112,7 +112,7 @@ let () =
   (* typed IPC: every request of the block protocol, through the encoding
      and a handler, and its reply back *)
   let disk = Bytes.make (4 * 512) 'd' in
-  let h = { Block.handle = fun (type a) (r : a Block.request) : a ->
+  let h = { Block.handle = fun (type a) _ (r : a Block.request) : a ->
       match r with
       | Block.Info -> 4
       | Block.Read (lba, n) ->
@@ -138,6 +138,17 @@ let () =
           "\014block/1\018";                       (* request 9 *)
           "\014block/1\002\002";                  (* Read without count *)
           Block.request_message Block.Info ^ "x" ]);
+  (* the caller of a request (doc/decisions/identity-and-permissions.md),
+     given to the handler (a real service is in another process: the two
+     ends of a channel are told apart by pid, so threads of one process
+     cannot talk over IPC) *)
+  let who = { Block.handle = fun (type a) (c : Ipc.caller) (r : a Block.request) : a ->
+      match r with
+      | Block.Info -> c.Ipc.pid * 2 + (if c.io then 1 else 0)
+      | _ -> invalid_arg "only Info" } in
+  ok &&& check "ipc: the handler gets the caller"
+    (Block.read_reply (Block.answer ~caller:{ Ipc.pid = 42; io = true } who
+                         (Block.request_message Block.Info)) Block.Info = 85);
   (* the event recorder: an IPC exchange with the registry, recorded *)
   Tracer.start ();
   (try ignore (Mynos.lookup "tracedservice") with Mynos.Error _ -> ());

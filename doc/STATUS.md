@@ -438,6 +438,7 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | — | `mynos-lib/src/fileio.c` | `/` (memrofs) is read-only and flat, `/tmp` (tmpfs) flat and in memory; `/disk` (fatfs) has directories. `rename` within one service; paths up to 63 characters inside a service. |
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
 | mynos-t9l | `mynos-lib/` | C programs have no sockets API yet: only OCaml programs reach the network (module `Net`). |
+| — | `mynos-core/kernel/ipc/channel.c` | The two ends of a channel are told apart by pid: threads (or domains) of one process cannot talk to each other over IPC. |
 | mynos-c9h | `services/net/netd.c` | Sockets have no owner (any process may use any socket number) and stay open when their process dies; no UDP for programs yet. |
 | — | `services/net/netd.c` | TLS: clients only (no `Listen_tls`); no revocation checks (CRL, OCSP); Mozilla's list is parsed at the first TLS connection (about 1.5 s in QEMU), later handshakes take 0.2-0.4 s; the clear bytes travel between netd and the program over IPC. |
 | — | `services/ata/ata.ml` | The disk is polled (PIO: the driver copies every word anyway, and QEMU completes commands at once); IRQ 14 is free for it. |
@@ -709,3 +710,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   channels and semaphores. Stress test: an unprivileged child is refused
   an IRQ, the parent's semaphore, a well-known port and a privileged
   spawn, and ended by `inb`; `channelPeer` names it.
+- **2026-11-17** — Step 2: typed IPC handlers get the caller
+  (`Ipc.caller`: pid, io), from `channelPeer`; the registry takes the
+  owner of a name from the channel (not from the request), keeps the name
+  for it while it runs, and frees it when it ends (a restarted service
+  can register again). Found: threads of one process cannot talk over IPC
+  (channel ends are told apart by pid).

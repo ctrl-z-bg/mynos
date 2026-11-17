@@ -132,8 +132,14 @@ static int unprivileged(int port, int sem) {
   if (mynos_allocPortP(1) != MYNOS_ERR_DENY) bad |= 8;
   if (mynos_spawnPriv("stress", NULL, NULL, MYNOS_PRIV_IO) != MYNOS_ERR_DENY)
     bad |= 16;
+  /* a name in the registry: ours while we run */
+  if (mynos_registryRegister("stress-name") < 0) bad |= 32;
   if ((ch = mynos_connectToPort(port)) < 0) return 100;
   mynos_send(ch, &pid, sizeof pid, 0);
+  {
+    mynos_msg_t * go;                 /* the parent checks the name first */
+    if (mynos_recv(ch, &go, 0, 0) >= 0) mynos_freeMsg(&go);
+  }
   mynos_freeChannel(ch);
   return bad;
 }
@@ -159,6 +165,9 @@ static int permissions(int port, char * ps) {
   C("a connection from the child", ch >= 0 && mynos_recv(ch, &msg, 0, 0) >= 0);
   C("channelPeer names the child", peer == pid && *(int *)msg->start == pid);
   mynos_freeMsg(&msg);
+  C("a registered name is its owner's while it runs",
+    mynos_registryRegister("stress-name") < 0);
+  mynos_send(ch, &ok, sizeof ok, 0);
   /* (it may have ended already, not collected yet: then not ALIVE) */
   C("the child has no privileges",
     mynos_processInfo(pid) >= 0 && (mynos_processInfo(pid) & 0xFF) == 0);
@@ -168,6 +177,10 @@ static int permissions(int port, char * ps) {
   if (WIFEXITED(st) && WEXITSTATUS(st)) printf("stress: refusals missing: %x\n", WEXITSTATUS(st));
   C("an ended process is not found by its pid",
     mynos_processInfo(pid) == MYNOS_ERR_INVALID);
+  {
+    int p = mynos_registryRegister("stress-name");
+    C("and its name is free again", p >= 0 && mynos_registryLookUp("stress-name") == p);
+  }
   C("this process has the io privilege",
     mynos_processInfo(getpid()) == (MYNOS_PROC_ALIVE | MYNOS_PRIV_IO));
   C("the semaphore is still ours", mynos_P(sem) == 0 && mynos_freeSem(sem) == 0);

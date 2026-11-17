@@ -3,6 +3,10 @@
 exception Remote_error of string * string
 exception Protocol_error of string
 
+type caller = { pid : int; io : bool }
+
+let nobody = { pid = -1; io = false }
+
 module type PROTOCOL = sig
   val id : string
   type 'a request
@@ -44,7 +48,7 @@ module Make (P : PROTOCOL) = struct
         (fun () -> Mynos.send ch msg; Mynos.recv ch) in
     read_reply_of c.name answer req
 
-  type handler = { handle : 'a. 'a P.request -> 'a }
+  type handler = { handle : 'a. caller -> 'a P.request -> 'a }
 
   let error m = Wire.to_string (Wire.result Wire.unit Wire.string) (Error m)
 
@@ -52,7 +56,7 @@ module Make (P : PROTOCOL) = struct
     | Failure m | Invalid_argument m | Sys_error m -> m
     | e -> Printexc.to_string e
 
-  let answer h msg =
+  let answer ?(caller = nobody) h msg =
     match
       let r = Wire.reader msg in
       let id = Wire.read r Wire.string in
@@ -60,7 +64,7 @@ module Make (P : PROTOCOL) = struct
       else match P.read_request r with
         | P.Request req ->
           if not (Wire.at_end r) then Error "bytes left over in the request"
-          else Ok (match h.handle req with
+          else Ok (match h.handle caller req with
               | v ->
                 (try Wire.to_string (reply_codec req) (Ok v)
                  with e -> error ("cannot encode the reply: " ^ message e))
@@ -76,7 +80,12 @@ module Make (P : PROTOCOL) = struct
       (try
          (* a client that connects and sends nothing must not stop us *)
          let msg = Mynos.recv ~timeout:1.0 ch in
-         Mynos.send ch (answer h msg)
+         let caller =
+           let pid = Mynos.channel_peer ch in
+           match Mynos.process_info pid with
+           | Some i -> { pid; io = i.Mynos.io }
+           | None -> { pid; io = false } in
+         Mynos.send ch (answer ~caller h msg)
        with Mynos.Error (fn, code) ->
          Mynos.log (Printf.sprintf "%s: %s: %s" P.id fn (Mynos.error_name code)));
       (try Mynos.free_channel ch with Mynos.Error _ -> ())

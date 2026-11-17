@@ -50,12 +50,12 @@ val write : t -> int -> string -> unit
 
 (** {2 Drivers} *)
 
-type handler = { handle : 'a. 'a request -> 'a }
+type handler = { handle : 'a. Ipc.caller -> 'a request -> 'a }
 
 val serve : string -> handler -> 'b
 (** Register a block service under this name and answer its requests. *)
 
-val answer : handler -> string -> string
+val answer : ?caller:Ipc.caller -> handler -> string -> string
 (** For tests: the reply to a request message. *)
 
 val request_message : 'a request -> string

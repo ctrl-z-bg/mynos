@@ -75,7 +75,7 @@ let write d lba bytes =
     end in
   go lba 0
 
-type handler = I.handler = { handle : 'a. 'a request -> 'a }
+type handler = I.handler = { handle : 'a. Ipc.caller -> 'a request -> 'a }
 
 let serve = I.serve
 let answer = I.answer

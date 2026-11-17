@@ -31,9 +31,13 @@
   }
 #endif
 
+/* a name, its port, and the process that registered it: the name is its
+   own while it runs, free again when it ends
+   (doc/decisions/identity-and-permissions.md) */
 struct table_entry_s {
   char name[MAXNAMELEN+1];
   int port;
+  int owner;
   struct table_entry_s * next;
 };
 
@@ -47,12 +51,13 @@ void initRegistry() {
   registry.head = NULL;
 }
 
-int insertIntoRegistry(char * name, int port) {
+int insertIntoRegistry(char * name, int port, int owner) {
   struct table_entry_s * el;
 
   mynos_P(registry.sem);
   el = (struct table_entry_s *)malloc(sizeof(struct table_entry_s));
   el->port = port;
+  el->owner = owner;
   strcpy(el->name, name);
   el->next = registry.head;
   registry.head = el;
@@ -61,22 +66,26 @@ int insertIntoRegistry(char * name, int port) {
   return 0;
 }
 
+/* the port of a name; the entries of processes that ended are dropped on
+   the way */
 int registryLookUp(char * name) {
   int ret = MYNOS_ERR_INVALID;
-  struct table_entry_s * pun;
+  struct table_entry_s ** pp, * e;
   mynos_P(registry.sem);
-  pun = registry.head;
-  if (pun && !strcmp(pun->name, name))
-    ret = pun->port;
-  else
-    if (pun)
-      while (pun->next) {
-	if (!strcmp((pun->next)->name, name)) {
-	  ret = (pun->next)->port;
-	  break;
-	}
-	pun = pun->next;
-      }
+  pp = &registry.head;
+  while ((e = *pp) != NULL) {
+    int info = mynos_processInfo(e->owner);
+    if (info < 0 || !(info & MYNOS_PROC_ALIVE)) {
+      *pp = e->next;
+      free(e);
+      continue;
+    }
+    if (!strcmp(e->name, name)) {
+      ret = e->port;
+      break;
+    }
+    pp = &e->next;
+  }
   mynos_V(registry.sem);
   return ret;
 }
@@ -119,14 +128,19 @@ static void serve(int channel) {
     {
     case MYNOS_REGISTRY_REGISTER:
       if (registryLookUp(cmd->name) < 0) { // is not already present
+	/* the caller is the one at the other end of the channel (the pid
+	   in the request, arg1, is not to be trusted) */
+	int owner = mynos_channelPeer(channel);
 	port = mynos_allocPort();
 	ret = port;
-	if (port < 0) {
-	  mynos_log("Warning registry: allocPort result is %d\n", port);
+	if (port < 0 || owner < 0) {
+	  mynos_log("Warning registry: allocPort %d, caller %d\n", port, owner);
+	  if (port >= 0) mynos_freePort(port);
+	  ret = port < 0 ? port : owner;
 	  break;
 	}
-	mynos_changePortOwner(port, cmd->arg1);
-	insertIntoRegistry(cmd->name, port);
+	mynos_changePortOwner(port, owner);
+	insertIntoRegistry(cmd->name, port, owner);
       } else {
 	mynos_log("Warning registry: name %s is already present\n", cmd->name);
 	ret = MYNOS_ERR_INVALID;
