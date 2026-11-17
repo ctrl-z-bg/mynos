@@ -44,12 +44,15 @@ typedef struct {
 } unichannel_t;  // unidirectional channel
 
 typedef struct {
-  int32_t id;     // slot + MAXCNLS * generation
+  int32_t id;     // 2 * (slot + MAXCNLS * generation): the ends are id, id+1
   unichannel_t * c1;
   unichannel_t * c2;
 } channel_t;
 
 void initChannelTable();
+/* the recorder names a channel, not one of its ends */
+#define TRACE_CHANNEL(c) ((int32_t)((c) & ~1))
+
 int32_t allocChannel(pid_t p1, pid_t p2);
 channel_t * getChannel(uint32_t c);
 unichannel_t * getMyWriteChannel(uint32_t c);

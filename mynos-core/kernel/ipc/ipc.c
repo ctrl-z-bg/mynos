@@ -53,10 +53,8 @@ int32_t __OS_ipc_send(int32_t c, void * start, uint32_t size,
   // the message must be the sender's own memory
   if (!justSync && !__mem_userArea(start, size)) return MYNOS_ERR_INVALID;
 
-  // check if I'm a channel partner
-  channel = getMyReadChannel(c);
-  if (channel == NULL || channel->receiver != processTable[currProcess]->pid)
-    return MYNOS_ERR_DENY;
+  // check if this end is mine
+  if (getMyReadChannel(c) == NULL) return MYNOS_ERR_DENY;
 
   // check if the channel is broken
   if (isChannelBroken(c)) return MYNOS_ERR_BROKEN;
@@ -79,7 +77,7 @@ int32_t __OS_ipc_send(int32_t c, void * start, uint32_t size,
     destpageaddr = destpage << 12;
   }
 
-  TRACE(TRACE_SEND, CURRPID, channel->receiver, c, size, 0,
+  TRACE(TRACE_SEND, CURRPID, channel->receiver, TRACE_CHANNEL(c), size, 0,
 	justSync ? NULL : start, size);
   msg = kmalloc(sizeof(msg_t));
 
@@ -136,13 +134,10 @@ int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg,
       (shortmsg && !__mem_userArea(shortmsg, MYNOS_SHORT_MESSAGE_SIZE)))
     return MYNOS_ERR_INVALID;
 
-  // normal request
+  // this end must be mine
+  if (getChannel(c) == NULL) return MYNOS_ERR_INVALID;
   rc = getMyReadChannel(c);
-  if (rc == NULL) return MYNOS_ERR_INVALID;
-
-  // check if I'm a channel partner
-  if (rc->receiver != processTable[currProcess]->pid)
-    return MYNOS_ERR_DENY;
+  if (rc == NULL) return MYNOS_ERR_DENY;
 
   // check if the channel is locked
   if (rc->locked) return MYNOS_ERR_BUSY;
@@ -177,7 +172,8 @@ int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg,
 
   if (trace_on) {
     unichannel_t * other = getMyWriteChannel(c);
-    trace_event(TRACE_RECV, CURRPID, other ? other->receiver : -1, c,
+    trace_event(TRACE_RECV, CURRPID, other ? other->receiver : -1,
+		TRACE_CHANNEL(c),
 		msg->size, 0, NULL, 0);
   }
 

@@ -6,7 +6,7 @@
 - **Status:** accepted (2026-11-17), with generational ids instead of a
   serial (the owner's choice); implemented the same day (steps 1-4).
   Follow-ups: mynos-37p (per-port I/O bitmap), mynos-9e1 (IPC between
-  threads of one process).
+  threads of one process: done, each end of a channel has its own id).
 
 ## The problem
 
@@ -44,7 +44,7 @@ kernel's ids carry a **generation**, as semaphore ids already did
 
 ```
 pid     = slot + 1000 * generation      (processTable has 1000 slots)
-channel = slot + 4096 * generation
+channel = 2 * (slot + 4096 * generation) + end   (end 0: listener, 1: connector)
 port    = slot + 10000 * generation     (well-known ports: generation 0)
 ```
 

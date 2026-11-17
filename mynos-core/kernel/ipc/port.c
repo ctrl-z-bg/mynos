@@ -45,7 +45,7 @@ void initPortTable() {
    id = slot + MAXPORTS * generation, so that the id of a freed port does
    not name a later one. Well-known ports (below MYNOS_FIRST_FREE_PORT:
    the registry's, 0) keep generation 0: their number is their id. */
-#define PORT_GENERATIONS (0x7fffffff / MAXPORTS)
+#define PORT_GENERATIONS (0x40000000 / MAXPORTS)  /* below 2^30: OCaml's max_int on i386 */
 static uint32_t portGeneration[MAXPORTS];
 
 port_t * getPort(int32_t p) {
@@ -179,7 +179,7 @@ int32_t __OS_port_listenPort(int32_t p) {
   if (req == NULL) KPANIC("PANIC IN listenPort!");
   channel = allocChannel(processTable[currProcess]->pid, req->pid);
   TRACE(TRACE_CONNECT, req->pid, CURRPID, channel, 0, p, NULL, 0);
-  *(req->chan) = channel;
+  *(req->chan) = channel < 0 ? channel : channel + 1;  /* the other end */
   __OS_sem_V(req->sem);
   kfree(req);   /* (it was never freed: one leak per connection) */
   UNLOCK_PORT(port);

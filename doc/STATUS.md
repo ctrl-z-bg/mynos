@@ -87,7 +87,9 @@ talking through IPC.
 - **Synchronization:** kernel semaphores (`sem.c`). Every thread has a private
   semaphore.
 - **IPC** (`kernel/ipc/`): **ports** are used to establish connections, and
-  bidirectional **channels** carry messages. Short messages (≤ 8 bytes) are
+  bidirectional **channels** carry messages; each end of a channel has its
+  own id (the listener's even, the connector's the next one), so two threads
+  of one process can talk over a channel. Short messages (≤ 8 bytes) are
   copied; larger ones can be shared (`MYNOS_IPC_SHARED`). Port 0 is reserved
   for the registry.
 - **Typed IPC** (`mynos-lib/ocaml/wire.ml`, `ipc.ml`;
@@ -442,7 +444,6 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | — | `mynos-lib/src/fileio.c` | `/` (memrofs) is read-only and flat, `/tmp` (tmpfs) flat and in memory; `/disk` (fatfs) has directories. `rename` within one service; paths up to 63 characters inside a service. |
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
 | mynos-t9l | `mynos-lib/` | C programs have no sockets API yet: only OCaml programs reach the network (module `Net`). |
-| mynos-9e1 | `mynos-core/kernel/ipc/channel.c` | The two ends of a channel are told apart by pid: threads (or domains) of one process cannot talk to each other over IPC. |
 | — | `services/net/netd.c` | TLS: clients only (no `Listen_tls`); no revocation checks (CRL, OCSP); Mozilla's list is parsed at the first TLS connection (about 1.5 s in QEMU), later handshakes take 0.2-0.4 s; the clear bytes travel between netd and the program over IPC. |
 | — | `services/ata/ata.ml` | The disk is polled (PIO: the driver copies every word anyway, and QEMU completes commands at once); IRQ 14 is free for it. |
 | — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently; the stdio of C programs (musl's direct system calls) is not redirected. |
@@ -735,3 +736,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   write: an error, the process lives (with the previous kernel, the
   process was killed). Also: `recv` left a broken channel locked; `send`
   on a channel not ours dereferenced NULL. Closed mynos-nn7.
+- 2026-11-17: Channel ends have their own ids (mynos-9e1): `2 * (slot +
+  4096 * generation) + side`; the kernel knows the end from the id, no
+  longer from the caller's pid, so threads and domains of one process call
+  each other over IPC (test: a `Block` service served by a second domain of
+  `mynos_test`, called from the first). The recorder still names the
+  channel (the even id). Channel and port ids stay below 2^30, OCaml's
+  `max_int` on i386. Closed mynos-9e1.

@@ -138,10 +138,27 @@ let () =
           "\014block/1\018";                       (* request 9 *)
           "\014block/1\002\002";                  (* Read without count *)
           Block.request_message Block.Info ^ "x" ]);
+  (* a service served by a second domain of this process, called from the
+     first: each end of a channel has its own id (mynos-9e1; the ends were
+     told apart by pid, and the call hung) *)
+  let pid_seen = ref 0 in
+  let h2 = { Block.handle = fun (type a) (c : Ipc.caller) (r : a Block.request) : a ->
+      pid_seen := c.Ipc.pid; h.Block.handle c r } in
+  ignore (Domain.spawn (fun () -> Block.serve "selftest-block" h2));
+  let rec client n =
+    match Block.connect ~service:"selftest-block" () with
+    | b -> Some b
+    | exception Mynos.Error _ when n > 0 -> Mynos.sleep 0.05; client (n - 1)
+    | exception Mynos.Error _ -> None in
+  ok &&& check "ipc: between two domains of a process"
+    (match client 40 with
+     | None -> false
+     | Some b ->
+       Block.sectors b = 4
+       && Block.read b 1 1 = String.make 512 'w'
+       && !pid_seen = pid);
   (* the caller of a request (doc/decisions/identity-and-permissions.md),
-     given to the handler (a real service is in another process: the two
-     ends of a channel are told apart by pid, so threads of one process
-     cannot talk over IPC) *)
+     given to the handler *)
   let who = { Block.handle = fun (type a) (c : Ipc.caller) (r : a Block.request) : a ->
       match r with
       | Block.Info -> c.Ipc.pid * 2 + (if c.io then 1 else 0)

@@ -1472,3 +1472,32 @@ channel table is full") instead of failing silently.
 the bug class was exactly "check, block, then use", which a review by
 that question found in two places.
 
+## 2026-11-17 — A channel's ends, told apart by id
+
+**Symptom.** A test served the `Block` protocol from a second domain of a
+process and called it from the first: the call never returned.
+
+**Diagnosis.** A channel is two one-way queues, `c1` and `c2`, each with
+its `receiver` pid. `send` and `recv` found "my" queue by comparing the
+caller's pid with the receivers: with one process at both ends, both
+threads matched `c1`, both read it, and both wrote into `c2`, which nobody
+read.
+
+**Cause.** The channel id named the channel, not an end; the end was
+inferred from who called. That was right in 2002, when one process meant
+one thread of control talking to others; with threads and OCaml domains a
+process can be both client and server.
+
+**Fix.** Each end has its own id: `2 * (slot + 4096 * generation) +
+side`. `listen` returns the even one, `connect` the odd one; the kernel
+takes the end from the id and checks that its receiver is the caller's
+process (the ownership check stays). The recorder keeps naming the channel
+(`TRACE_CHANNEL`, the even id), so its pairing of requests and replies did
+not change. The generation bounds were also lowered so that channel and
+port ids stay below 2^30: OCaml's `int` on i386 has 31 bits, and an id
+above `max_int` would have turned negative, years of uptime from now.
+
+**Lesson.** A handle should name what it is used for: an id that names a
+shared object and lets the kernel guess the side from the caller works
+only while "caller" and "side" are the same thing.
+

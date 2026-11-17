@@ -39,11 +39,17 @@ void initChannelTable() {
   kbzero(cTable.table, MAXCNLS * sizeof(channel_t*));
 }
 
-/* Channel ids carry a generation, as pids and ports do: id = slot +
-   MAXCNLS * generation, so that a freed channel's id, kept by mistake,
-   does not name a later channel of other processes. */
-#define CHANNEL_GENERATIONS (0x7fffffff / MAXCNLS)
+/* Each end of a channel has its own id: 2 * (slot + MAXCNLS * generation)
+   + side, side 0 for the end of the process that listened, 1 for the one
+   that connected. The end is known from the id, not from the caller's pid,
+   so two threads of one process can talk over a channel (mynos-9e1). The
+   generation, as for pids and ports, keeps a freed channel's ids, kept by
+   mistake, from naming a later channel; ids stay below 2^30, OCaml's
+   max_int on i386. */
+#define CHANNEL_GENERATIONS (0x40000000 / (2 * MAXCNLS))
 static uint32_t generation[MAXCNLS];
+
+#define SLOT(c) (((uint32_t)(c) >> 1) % MAXCNLS)
 
 /* a free slot */
 int32_t getFreeChannel() {
@@ -59,8 +65,8 @@ channel_t * getChannel(uint32_t c) {
   /* an id from a process: any value (unsigned, so negatives too) */
   channel_t * channel;
   if (c > 0x7fffffff) return NULL;
-  channel = cTable.table[c % MAXCNLS];
-  return (channel && channel->id == (int32_t)c) ? channel : NULL;
+  channel = cTable.table[SLOT(c)];
+  return (channel && channel->id == (int32_t)(c & ~1u)) ? channel : NULL;
 }
 
 unichannel_t * allocUnichannel(pid_t p) {
@@ -80,7 +86,7 @@ int32_t allocChannel(pid_t p1, pid_t p2) {
   int slot = getFreeChannel(), id;
   if (slot < 0)
     return slot;
-  id = slot + MAXCNLS * generation[slot];
+  id = 2 * (slot + MAXCNLS * generation[slot]);
   c = kmalloc(sizeof(channel_t));
   c->id = id;
   c->c1 = allocUnichannel(p1);
@@ -90,29 +96,25 @@ int32_t allocChannel(pid_t p1, pid_t p2) {
 
   // insert this channel into the each process channel list
   listInsert(proc(p1)->channelList, (void*)id);
-  listInsert(proc(p2)->channelList, (void*)id);
+  listInsert(proc(p2)->channelList, (void*)(id + 1));
 
-  return id;
+  return id;   /* p1's end; p2's is id + 1 */
 }
 
-unichannel_t * getMyWriteChannel(uint32_t c) {
-  channel_t * channel = getChannel(c);
-  if (channel == NULL) return NULL;
-  if (channel->c1->receiver == processTable[currProcess]->pid)
-    return channel->c2;
-  if (channel->c2->receiver == processTable[currProcess]->pid)
-    return channel->c1;
-  return NULL;
-}
-
+/* the end c names, if it is the caller's (its process reads from it) */
 unichannel_t * getMyReadChannel(uint32_t c) {
   channel_t * channel = getChannel(c);
+  unichannel_t * mine;
   if (channel == NULL) return NULL;
-  if (channel->c1->receiver == processTable[currProcess]->pid)
-    return channel->c1;
-  if (channel->c2->receiver == processTable[currProcess]->pid)
-    return channel->c2;
-  return NULL;
+  mine = (c & 1) ? channel->c2 : channel->c1;
+  return mine->receiver == CURRPID ? mine : NULL;
+}
+
+/* the other end, where the caller's messages go */
+unichannel_t * getMyWriteChannel(uint32_t c) {
+  channel_t * channel = getChannel(c);
+  if (getMyReadChannel(c) == NULL) return NULL;
+  return (c & 1) ? channel->c1 : channel->c2;
 }
 
 void freeUnichannel(unichannel_t * c) {
@@ -165,13 +167,11 @@ int32_t __OS_ipc_freeChannel(int32_t c) {
   uc = getMyReadChannel(c);
 
   if (uc == NULL) return MYNOS_ERR_INVALID;
-  if (uc->receiver != processTable[currProcess]->pid)
-    return MYNOS_ERR_DENY;
 
   if (trace_on) {
     unichannel_t * other = getMyWriteChannel(c);
-    trace_event(TRACE_FREE, CURRPID, other ? other->receiver : -1, c,
-		0, 0, NULL, 0);
+    trace_event(TRACE_FREE, CURRPID, other ? other->receiver : -1,
+		TRACE_CHANNEL(c), 0, 0, NULL, 0);
   }
 
   // check if broken BEFORE erasing the receiver field
@@ -203,8 +203,8 @@ int32_t __OS_ipc_freeChannel(int32_t c) {
 #endif
 
   freeChannel(chan);
-  cTable.table[c % MAXCNLS] = NULL;
-  generation[c % MAXCNLS] = (generation[c % MAXCNLS] + 1) % CHANNEL_GENERATIONS;
+  cTable.table[SLOT(c)] = NULL;
+  generation[SLOT(c)] = (generation[SLOT(c)] + 1) % CHANNEL_GENERATIONS;
   cTable.free++;
 
   return 0;
