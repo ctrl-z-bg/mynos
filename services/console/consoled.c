@@ -511,6 +511,16 @@ static void * keyboard_thread(void * arg)
 
 #define COM2 0x2F8
 
+/* is there a UART at COM2? its scratch register keeps what is written */
+static int serial_present(void)
+{
+  if (inportb(COM2 + 5) == 0xFF) return 0;
+  outportb(COM2 + 7, 0x5A);
+  if (inportb(COM2 + 7) != 0x5A) return 0;
+  outportb(COM2 + 7, 0xA5);
+  return inportb(COM2 + 7) == 0xA5;
+}
+
 static void * serial_thread(void * arg)
 {
   int irq = (int)arg;
@@ -518,8 +528,9 @@ static void * serial_thread(void * arg)
   unsigned int u = 0;
   int u_left = 0;
   while (1) {
+    int budget = 4096;                 /* never spin on a port gone wrong */
     mynos_P(irq);
-    while (inportb(COM2 + 5) & 1) {
+    while (budget-- > 0 && inportb(COM2 + 5) != 0xFF && (inportb(COM2 + 5) & 1)) {
       unsigned char b = inportb(COM2);
       if (!canon) {                    /* raw: as the terminal sends them */
 	char ch = (char)b;
@@ -621,10 +632,14 @@ int main()
   stack = malloc(0x4000);
   mynos_threadCreate(keyboard_thread, (void *)irq, stack + 0x4000, 0);
 
-  /* COM2: interrupts when a byte comes (the kernel writes to it, polling) */
-  irq = mynos_driverRegister("serial2", 3, NULL, NULL);
+  /* COM2: interrupts when a byte comes (the kernel writes to it, polling).
+     Only if there is one: a missing port reads 0xFF, "a byte waiting"
+     forever (QEMU with its window has COM1 only) */
+  irq = serial_present() ? mynos_driverRegister("serial2", 3, NULL, NULL)
+                         : MYNOS_ERR_INVALID;
   if (irq >= 0) {
-    while (inportb(COM2 + 5) & 1) inportb(COM2);
+    int i;
+    for (i = 0; i < 64 && (inportb(COM2 + 5) & 1); i++) inportb(COM2);
     outportb(COM2 + 1, 0x01);          /* receive interrupts */
     outportb(COM2 + 4, 0x0B);          /* DTR, RTS, OUT2 (the IRQ line) */
     mynos_enableIrq(3);

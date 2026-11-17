@@ -826,3 +826,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   QEMU's monitor (CP437 bytes, the scrollback's mark), the Italian layout,
   input and a paste over COM2, `run_ocaml` with a program that compiles
   and one that does not.
+- **2026-11-17** — Fixed: without a second serial port (QEMU's window,
+  `tools/run-demo.sh`) `consoled` looped forever emptying COM2 (a missing
+  port reads 0xFF): the system crawled and the shell kept restarting.
+  COM2 is used only if present, loops on it are bounded, and a test boots
+  without it.
+

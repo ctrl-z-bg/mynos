@@ -1642,3 +1642,32 @@ checks that the same shell goes on.
 mix: either one V per read, or a reader that tolerates being woken for
 nothing. A second input device made a latent race ordinary.
 
+## 2026-11-17 — A serial port that is not there
+
+**Symptom.** Right after the console work, the owner found MyNOS unusable
+in QEMU's window: the shell took some 25 seconds to come, `ls` took
+seconds, and the shell kept restarting. Every test passed, and in the
+tests the shell came within a second.
+
+**Diagnosis.** The tests always give QEMU two serial ports (COM2 is their
+log); QEMU with its window, as `tools/run-demo.sh` starts it, has COM1
+only. Booted that way, the shell did not answer a typed `ls` within 6
+seconds.
+
+**Cause.** `consoled` emptied COM2 at start with `while (LSR & 1)
+read()`. A port that does not exist reads 0xFF, whose bit 0 says "a byte
+is waiting": the loop never ended. `consoled` spun on port I/O (each
+access a trip out of the virtual machine), slowing everything; it never
+registered the console, so the shell, unable to read, ended and was
+started again by init, over and over.
+
+**Fix.** `consoled` uses COM2 only if it is there (LSR is not 0xFF, and the
+UART's scratch register keeps what is written to it), and every loop on
+the port is bounded. A new test boots without COM2 and reads the
+shell's answer from the screen through QEMU's monitor.
+
+**Lesson.** The tests ran a configuration the owner never uses. The
+default way of running the system (`tools/run-demo.sh`, a window) needs
+its own test, especially when a change touches hardware that may be
+absent. And a loop that waits on a device's status must have a bound.
+

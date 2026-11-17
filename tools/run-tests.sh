@@ -203,6 +203,28 @@ if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     cat "$log4" >> "$log"
 fi
 
+# the system as QEMU's window starts it: no second serial port (COM1 only).
+# consoled must not wait for a port that is not there: the shell answers
+# within seconds (read from the screen, through QEMU's monitor)
+nocom2=
+if [ -f system/ramdisk.dsk ]; then
+    MEM=256 tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        system/ramdisk.dsk \
+        -- -display none -serial null -monitor "unix:$tmp/mon-nc,server,nowait" &
+    qemu=$!
+    sleep 5
+    tools/type-keys.py "$tmp/mon-nc" 'X=ok; echo nocom2-$X\n'
+    sleep 3
+    printf 'xp /2000hx 0xb8000\n' | socat - "UNIX-CONNECT:$tmp/mon-nc" |
+        grep -o ' 0x[0-9a-f]\{4\}' | python3 -c '
+import sys
+s = bytes(int(x, 16) & 0xFF for x in sys.stdin.read().split())
+sys.exit(0 if b"nocom2-ok" in s else 1)' && nocom2=yes
+    printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-nc" >/dev/null || true
+    wait $qemu || true
+fi
+
 # seventh boot: the system RAM disk, init starts the services and sh, driven
 # through the keyboard: the OCaml toplevel (ocaml), programs, sh again
 history_saved= kilo_saved= edit_saved= sh_saved= trace_calls= trace_json=
@@ -490,6 +512,11 @@ import re, sys
 s = open(sys.argv[1], "rb").read()
 assert re.search(rb"\[-\d+\]$", s[:80]), s[:80]
 PY
+    if [ -n "$nocom2" ]; then
+        echo "ok    without COM2 (QEMU's window), the shell answers within seconds"
+    else
+        echo "FAIL  without COM2 (QEMU's window), the shell answers within seconds"; fail=1
+    fi
     expect "dal-seriale"
     expect "incollata-2"
     expect "still-seriale"
