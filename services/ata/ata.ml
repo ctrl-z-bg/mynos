@@ -7,7 +7,7 @@
    0x3F6), addressed with 28-bit LBA, in PIO mode, polling the status
    register: the controller's interrupts are turned off.
 
-   Protocol: mynos-lib/include/mynos_block.h. *)
+   Protocol: Block.Protocol ("block/1", typed IPC: mynos-lib/ocaml/block.mli). *)
 
 (* ---- the controller ---- *)
 
@@ -94,55 +94,38 @@ let identify () =
     end
   end
 
-(* ---- the block service ---- *)
+(* ---- the block service (typed IPC: Block.Protocol) ---- *)
 
-let ok = 0 and invalid = 1 and io_error = 2
-let max_count = 32
-
-let reply ch status value =
-  let b = Bytes.create 8 in
-  Bytes.set_int32_le b 0 (Int32.of_int status);
-  Bytes.set_int32_le b 4 (Int32.of_int value);
-  Mynos.send ch (Bytes.to_string b)
-
-let serve sectors ch =
-  let req = Mynos.recv ~timeout:1.0 ch in
-  let int_at i = Int32.to_int (String.get_int32_le req i) in
-  if String.length req <> 12 then reply ch invalid 0
-  else begin
-    let typ = int_at 0 and lba = int_at 4 and count = int_at 8 in
-    let in_range =
-      count >= 1 && count <= max_count && lba >= 0 && lba + count <= sectors in
-    match typ with
-    | 0 -> reply ch ok sectors
-    | 1 when in_range ->
-      (match read_sectors lba count with
-       | bytes -> reply ch ok count; Mynos.send ch bytes
-       | exception Device e ->
-         Mynos.log ("ata: read: " ^ e); reply ch io_error 0)
-    | 2 ->
-      (* the data follows the request: take it before replying *)
-      let bytes = Mynos.recv ~timeout:1.0 ch in
-      if not in_range || String.length bytes <> 512 * count then
-        reply ch invalid 0
-      else (match write_sectors lba count bytes with
-          | () -> reply ch ok count
-          | exception Device e ->
-            Mynos.log ("ata: write: " ^ e); reply ch io_error 0)
-    | _ -> reply ch invalid 0
-  end
+let handle sectors : Block.handler = {
+  Block.handle = fun (type a) (r : a Block.request) : a ->
+    let check lba count =
+      if count < 1 || count > Block.max_count then
+        invalid_arg (Printf.sprintf "%d sectors: 1 to %d per request" count
+                       Block.max_count);
+      if lba < 0 || lba + count > sectors then
+        invalid_arg (Printf.sprintf "sectors %d..%d: the disk has %d" lba
+                       (lba + count - 1) sectors) in
+    let device what f =
+      try f () with Device e ->
+        Mynos.log (Printf.sprintf "ata: %s: %s" what e);
+        failwith ("I/O error: " ^ e) in
+    match r with
+    | Block.Info -> sectors
+    | Block.Read (lba, count) ->
+      check lba count;
+      device "read" (fun () -> read_sectors lba count)
+    | Block.Write (lba, bytes) ->
+      if String.length bytes mod Block.sector <> 0 then
+        invalid_arg "write: not a whole number of sectors";
+      let count = String.length bytes / Block.sector in
+      check lba count;
+      device "write" (fun () -> write_sectors lba count bytes)
+}
 
 let () =
   match (try identify () with Device _ -> None) with
   | None -> Mynos.log "ata: no ATA disk on the primary channel"
   | Some sectors ->
-    let port = Mynos.register "ata0" in
     Mynos.log (Printf.sprintf "ata: disk of %d sectors (%d MB), service ata0"
                  sectors (sectors / 2048));
-    while true do
-      let ch = Mynos.listen port in
-      (try serve sectors ch
-       with Mynos.Error (fn, code) ->
-         Mynos.log (Printf.sprintf "ata: %s: %s" fn (Mynos.error_name code)));
-      (try Mynos.free_channel ch with Mynos.Error _ -> ())
-    done
+    Block.serve "ata0" (handle sectors)

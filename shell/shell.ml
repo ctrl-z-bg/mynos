@@ -17,6 +17,8 @@ let help () =
     \  sh ();;                     a command shell (ls, cp, mv...; exit: back)\n\
     \  compile \"/disk/a.ml\";;      compile it into /disk/a.byte (ocamlc)\n\
     \  free ();;                   free memory\n\
+    \  let d = Block.connect ();;  a service, called with typed IPC:\n\
+    \  Block.call d Block.Info;;   the disk's size, in sectors\n\
      The MyNOS system calls are in module Mynos (#show Mynos;;).\n\
      Line editing: Backspace; Up and Down recall previous lines.\n\
      #quit;; or Ctrl-D leaves the toplevel.\n";

@@ -27,6 +27,7 @@ FILES = ../init/init.byte init.rc ocamlrun consoled kilo \
 	$(STDLIB)/stdlib.cma $(STDLIB)/std_exit.cmo $(STDLIB)/runtime-launch-info \
 	ocamlc.byte ../mynos-runtime/primitives \
 	../mynos-lib/ocaml/mynos.cma ../mynos-lib/ocaml/block.cmi \
+	../mynos-lib/ocaml/wire.cmi ../mynos-lib/ocaml/ipc.cmi \
 	../tests/hello/hello.byte ../tests/spawn/child.byte \
 	../tests/ramdisk/AUTOEXEC.BAT
 

@@ -1127,3 +1127,32 @@ step found something:
 the leaks; count resources (semaphores, channels, heap blocks by caller)
 from gdb when something runs out; check pointers at the system call
 boundary, because the kernel's own addresses never fault.
+
+## 2026-11-17 — Back to the 2002 idea: typed IPC
+
+Re-reading `doc/website/why.html` with the owner: the microkernel, the
+services as processes and the OCaml virtual machine as a process are as
+planned in 2002, but what we had built on top in the last two days was a
+small Unix (files, a shell, a terminal), and even the OCaml services
+talked like C programs, through structs packed with `Bytes.set_int32_le`.
+The presentation's aim was "a new, higher level and yet strong abstraction
+to the machine through OCaml". Decision (`doc/decisions/typed-ipc.md`):
+keep the Unix-like layer as the floor, and give OCaml programs typed IPC.
+
+A protocol is a GADT of requests indexed by the reply type
+(`Read : int * int -> string request`), so `call` returns the right type
+and a service's handler is a polymorphic function. The codecs come from
+combinators (`Wire`), not `Marshal`: a service must survive any client,
+and `Marshal` trusts its input. The format (zigzag LEB128 ints,
+length-prefixed strings, variants as case numbers) is simple enough for
+the C side the network service will need. Reading counts and lengths are
+bounded by the bytes left, so a malformed message cannot make a service
+allocate much.
+
+Two small traps. `Wire` defines an exception `Error`, which shadows the
+constructor of `result` inside the module: `Stdlib.Error` there. And a
+request string in a test was written with its length as a plain byte; the
+length is itself a zigzag int (7 is the byte 14), which the test caught.
+
+*Lesson:* the useful check for "is this still MyNOS?" was a document
+written twenty years ago; worth re-reading before each new layer.

@@ -10,14 +10,28 @@ mynos.cmi: mynos.mli
 mynos.cmo: mynos.ml mynos.cmi
 	$(OCAMLC) -c mynos.ml
 
-block.cmi: block.mli mynos.cmi
+wire.cmi: wire.mli
+	$(OCAMLC) -c wire.mli
+
+wire.cmo: wire.ml wire.cmi
+	$(OCAMLC) -c wire.ml
+
+ipc.cmi: ipc.mli wire.cmi mynos.cmi
+	$(OCAMLC) -c ipc.mli
+
+ipc.cmo: ipc.ml ipc.cmi
+	$(OCAMLC) -c ipc.ml
+
+block.cmi: block.mli ipc.cmi
 	$(OCAMLC) -c block.mli
 
 block.cmo: block.ml block.cmi
 	$(OCAMLC) -c block.ml
 
-mynos.cma: mynos.cmo block.cmo
-	$(OCAMLC) -a -o $@ mynos.cmo block.cmo
+MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo
+
+mynos.cma: $(MODULES)
+	$(OCAMLC) -a -o $@ $(MODULES)
 
 clean:
 	rm -f *~ *.cm[ioa]

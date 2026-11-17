@@ -90,6 +90,17 @@ talking through IPC.
   bidirectional **channels** carry messages. Short messages (≤ 8 bytes) are
   copied; larger ones can be shared (`MYNOS_IPC_SHARED`). Port 0 is reserved
   for the registry.
+- **Typed IPC** (`mynos-lib/ocaml/wire.ml`, `ipc.ml`;
+  `doc/decisions/typed-ipc.md`): above the bytes, a service's protocol is an
+  OCaml GADT of requests indexed by the type of their reply, and
+  `Ipc.Make (Protocol)` gives a `call` whose result has the request's type
+  and a `serve` loop. Values travel in a small format of our own (`Wire`:
+  zigzag LEB128 ints, length-prefixed strings, variants as case numbers),
+  checked when read: a malformed request gets an error reply, never a
+  crash. Services are then callable from the toplevel
+  (`Block.call d (Block.Read (0, 1))`). The block service is the first
+  user; the file services keep their C protocol (`mynos_fs.h`), which
+  libmynos speaks for the C library.
 - **Drivers in user space:** a process calls `mynos_driverRegister(name, irq, …)`
   and gets a semaphore. The kernel signals it (`V`) on every interrupt of that
   IRQ.
@@ -135,8 +146,9 @@ All services are linked statically against `libmynos` and placed at
   characters); `/`, `.` and the empty path name its only directory.
 - `ata` (2026): **a disk driver written in OCaml** (`services/ata/ata.ml`):
   the first ATA disk, PIO with LBA28, polling, through the I/O ports; it
-  serves sectors as the block service `ata0` (`mynos_block.h`; the OCaml
-  client is module `Block` of the `Mynos` library).
+  serves sectors as the block service `ata0`, over typed IPC (protocol
+  `Block.Protocol`, "block/1"; the client is module `Block` of the `Mynos`
+  library).
 - `fatfs` (2026): **the FAT filesystem of the disk, in OCaml**
   (`services/fatfs/fatfs.ml`), mounted at `/disk`: FAT16 and FAT32 as made
   by `mkfs.fat`, directories, 8.3 and VFAT long names, read and written,
@@ -578,3 +590,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   takes one), clobbered registers, two semaphore leaks and a linear space
   list leak; `KPANIC` now stops the machine. 2400 processes run with no
   memory lost. Follow-up: mynos-nn7. Closed mynos-0fw.
+- **2026-11-17** — Re-read the 2002 presentation (`doc/website/why.html`):
+  the architecture is faithful, but the user space had become a small
+  Unix. Decided (`doc/decisions/typed-ipc.md`): typed IPC for OCaml
+  programs and services, the Unix-like layer kept as the floor, `sh` kept
+  next to the toplevel. Done: `Wire` (codecs and wire format), `Ipc.Make`,
+  the block protocol converted (`ata.ml`, `Block`; `mynos_block.h`
+  removed), callable from the toplevel; tests of the format, of every
+  block request, and of malformed messages to the live driver. Closed
+  mynos-tc3; next, the network (mynos-4f6) on it.

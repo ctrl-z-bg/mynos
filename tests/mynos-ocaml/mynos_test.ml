@@ -74,5 +74,69 @@ let () =
    | exception e ->
        print_endline (Printexc.to_string e);
        ok &&& check "read a file through memrofs" false);
+  (* typed IPC: the wire format *)
+  let round c x = Wire.of_string c (Wire.to_string c x) = x in
+  let malformed c s = match Wire.of_string c s with
+    | _ -> false | exception Wire.Error _ -> true in
+  ok &&& check "wire: ints round trip"
+    (List.for_all (round Wire.int)
+       [ 0; 1; -1; 63; -64; 64; 300; -300; max_int; min_int; 123456789 ]);
+  ok &&& check "wire: small ints take one byte"
+    (String.length (Wire.to_string Wire.int 63) = 1
+     && String.length (Wire.to_string Wire.int (-64)) = 1
+     && Wire.to_string Wire.int (-1) = "\001");
+  ok &&& check "wire: strings, floats, lists, options, results"
+    (round Wire.string "" && round Wire.string (String.make 5000 'x')
+     && round Wire.float 3.25 && round Wire.float (-0.0)
+     && round Wire.(list (pair int string)) [ (1, "a"); (-2, "") ]
+     && round Wire.(array bool) [| true; false |]
+     && round Wire.(option (triple int unit string)) (Some (7, (), "z"))
+     && round Wire.(result int string) (Error "e")
+     && round Wire.(result int string) (Ok 4));
+  let tree = Wire.fix (fun tree ->
+      Wire.(variant [
+          case 0 int (fun n -> `Leaf n) (function `Leaf n -> Some n | _ -> None);
+          case 1 (pair tree tree) (fun (a, b) -> `Node (a, b))
+            (function `Node (a, b) -> Some (a, b) | _ -> None) ])) in
+  ok &&& check "wire: a recursive variant"
+    (round tree (`Node (`Leaf 1, `Node (`Leaf (-2), `Leaf 3))));
+  ok &&& check "wire: malformed messages are refused"
+    (malformed Wire.int "" && malformed Wire.int "\128"
+     && malformed Wire.string "\010abc"         (* 5 bytes announced *)
+     && malformed Wire.(list int) "\254\255\255\255\007"
+     && malformed Wire.bool "\002" && malformed Wire.int "\001\001"
+     && malformed Wire.(result int string) "\004");
+  ok &&& check "wire: an int too large for 31 bits is refused"
+    (Sys.int_size > 31
+     || malformed Wire.int "\128\128\128\128\128\001");
+  (* typed IPC: every request of the block protocol, through the encoding
+     and a handler, and its reply back *)
+  let disk = Bytes.make (4 * 512) 'd' in
+  let h = { Block.handle = fun (type a) (r : a Block.request) : a ->
+      match r with
+      | Block.Info -> 4
+      | Block.Read (lba, n) ->
+        if lba < 0 || n < 1 || lba + n > 4 then invalid_arg "out of range";
+        Bytes.sub_string disk (lba * 512) (n * 512)
+      | Block.Write (lba, s) -> Bytes.blit_string s 0 disk (lba * 512)
+                                  (String.length s) } in
+  let via r = Block.read_reply (Block.answer h (Block.request_message r)) r in
+  ok &&& check "ipc: block requests round trip"
+    (via Block.Info = 4
+     && (via (Block.Write (1, String.make 512 'w')); true)
+     && via (Block.Read (1, 1)) = String.make 512 'w'
+     && String.length (via (Block.Read (0, 4))) = 2048);
+  ok &&& check "ipc: an exception in the service is the client's error"
+    (match via (Block.Read (3, 2)) with
+     | _ -> false
+     | exception Ipc.Remote_error (_, "out of range") -> true);
+  ok &&& check "ipc: bad requests get an error reply"
+    (List.for_all (fun msg ->
+         match Block.read_reply (Block.answer h msg) Block.Info with
+         | _ -> false | exception Ipc.Remote_error _ -> true)
+        [ ""; "\014block/2\000";                  (* another version *)
+          "\014block/1\018";                       (* request 9 *)
+          "\014block/1\002\002";                  (* Read without count *)
+          Block.request_message Block.Info ^ "x" ]);
   print_endline (if !ok then "mynos-ocaml: all checks passed"
                  else "mynos-ocaml: SOME CHECKS FAILED")
