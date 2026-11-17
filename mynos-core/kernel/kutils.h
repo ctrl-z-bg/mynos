@@ -31,5 +31,8 @@ void kbzero(void * s, size_t n);
 int katoi(const char* s);
 int kmemcmp(const void *dst, const void *src, size_t count);
 int kstrlen(const char * s);
+/* a kernel table is full: said once per table, on the console
+   (doc/decisions/identity-and-permissions.md) */
+void ktableFull(const char * table, int * said);
 
 #endif

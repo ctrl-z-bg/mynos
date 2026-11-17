@@ -66,6 +66,10 @@ int32_t getFreePort() {
     if (pTable.table[i] == NULL) return i;
     if (++i == MAXPORTS) i = MYNOS_FIRST_FREE_PORT;
   }
+  {
+    static int said = 0;
+    ktableFull("port", &said);
+  }
   return MYNOS_ERR_FULL;
 }
 

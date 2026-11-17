@@ -510,6 +510,10 @@ int allocPid(void) {
       return p + MAXPROCESSES * generation[p];
     }
   }
+  {
+    static int said = 0;
+    ktableFull("process", &said);
+  }
   return -1;
 }
 

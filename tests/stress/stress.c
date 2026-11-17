@@ -13,6 +13,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/mman.h>
 #include <mynos.h>
 
 static int failures = 0;
@@ -195,6 +196,62 @@ static int permissions(int port, char * ps) {
   }
 #undef C
   return ok;
+}
+
+/* ---- a page that goes away while the kernel waits to write into it ---- */
+
+static long native5(long n, long a, long b, long c, long d, long e) {
+  long ret = n;
+  __asm__ volatile ("int $0x90" : "+a"(ret), "+b"(a), "+c"(b), "+d"(c),
+                    "+S"(d), "+D"(e) : : "memory");
+  return ret;
+}
+
+/* the child: connect, wait, send a short message */
+static int late_sender(int port) {
+  int ch = mynos_connectToPort(port), x = 42;
+  if (ch < 0) return 1;
+  mynos_sleep(300000);
+  mynos_send(ch, &x, sizeof x, 0);
+  mynos_freeChannel(ch);
+  return 0;
+}
+
+static int unmap_ch, unmap_result, unmap_done;
+static void * unmap_page;
+static char unmap_stack[8192];
+
+static void * unmap_receiver(void * arg) {
+  (void)arg;
+  /* recv (4) with the message's description in unmap_page */
+  unmap_result = native5(4, unmap_ch, (long)unmap_page, 0, 0, 0);
+  mynos_V(unmap_done);
+  return NULL;
+}
+
+/* recv waits; meanwhile this thread unmaps the page where the kernel will
+   write the message's description: the call fails, the process lives
+   (copy_to_user; before, the kernel's fault ended the process) */
+static int unmapped_recv(int port, char * ps) {
+  char * argv[] = { "stress", "late", ps, NULL };
+  int pid, st;
+  unmap_page = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (unmap_page == MAP_FAILED) return 0;
+  ((char *)unmap_page)[0] = 1;            /* allocated */
+  unmap_done = mynos_initSem(0);
+  pid = spawn_child(argv);
+  unmap_ch = mynos_listenPort(port);
+  mynos_threadCreate(unmap_receiver, NULL, unmap_stack + sizeof unmap_stack, 0);
+  mynos_sleep(100000);                    /* the receiver waits in recv */
+  munmap(unmap_page, 4096);
+  mynos_P(unmap_done);
+  mynos_freeSem(unmap_done);
+  mynos_freeChannel(unmap_ch);
+  waitpid(pid, &st, 0);
+  if (unmap_result != MYNOS_ERR_INVALID)
+    printf("stress: recv into an unmapped page: %d\n", unmap_result);
+  return unmap_result == MYNOS_ERR_INVALID;
 }
 
 /* ---- the test ---- */
@@ -407,6 +464,8 @@ static int test(void) {
   }
   check("permissions: privileges, owners, channelPeer",
         permissions(port, ps));
+  check("a page unmapped while recv waits: an error, not the end",
+        unmapped_recv(port, ps));
   check("the system still starts programs after it",
         ipc_rounds(port, 2) == 0);
 
@@ -424,6 +483,8 @@ int main(int argc, char ** argv) {
     return badptr(atoi(argv[2]));
   if (argc == 4 && !strcmp(argv[1], "unpriv"))
     return unprivileged(atoi(argv[2]), atoi(argv[3]));
+  if (argc == 3 && !strcmp(argv[1], "late"))
+    return late_sender(atoi(argv[2]));
   if (argc == 2 && !strcmp(argv[1], "unpriv-io"))
     return unprivileged_io();
   if (argc == 2 && atoi(argv[1]) > 0) repeat = atoi(argv[1]);

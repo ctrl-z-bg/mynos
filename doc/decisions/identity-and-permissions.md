@@ -4,7 +4,9 @@
   mynos-c9h (sockets owned by their process; UDP)
 - **Date:** 2026-11-17
 - **Status:** accepted (2026-11-17), with generational ids instead of a
-  serial (the owner's choice); in progress
+  serial (the owner's choice); implemented the same day (steps 1-4).
+  Follow-ups: mynos-37p (per-port I/O bitmap), mynos-9e1 (IPC between
+  threads of one process).
 
 ## The problem
 

@@ -514,7 +514,9 @@ int _linux_syscall_wait4(int pid, int * status, int options, void * rusage) {
       if (pid > 0 && p->pid != pid) continue;
       children++;
       if (!p->isAlive) {
-	if (status) *status = p->exitStatus;
+	/* after waiting: copied, the memory may be gone (another thread) */
+	if (status && copy_to_user(status, &p->exitStatus, sizeof *status) < 0)
+	  return -14;   /* -EFAULT */
 	/* free its memory now (if not done yet), then its descriptor */
 	reapZombies();
 	pid = p->pid;

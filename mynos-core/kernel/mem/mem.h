@@ -229,7 +229,7 @@ void SEG_createStandardDescriptor(uint32_t * address,
 
 /* PAGE FAULT STUFF!!! */
 void _page_fault_handler_TRAP();  /* the wrapper... */
-void _page_fault_handler(uint32_t addr, uint32_t errcode); /* ... and the 
+void _page_fault_handler(uint32_t addr, uint32_t errcode, uint32_t * frame); /* ... and the 
 							      real handler */
 /* special cases */
 // it returns the new copy physical address
@@ -249,6 +249,11 @@ void __mem_allocateOnUse(uint32_t addr);
    read or write for it? user pages, allocated or to be allocated on use;
    no wrap around; never the kernel's */
 int __mem_userArea(const void * start, uint32_t size);
+
+/* copies to and from a process's memory: 0, or -1 if the address is not
+   the process's or faults (the process goes on) */
+int copy_to_user(void * user, const void * kernel, uint32_t n);
+int copy_from_user(void * kernel, const void * user, uint32_t n);
 /* the length of the string at s if all of it (and its final 0) is user
    memory and it is shorter than max, else -1 */
 int __mem_userString(const char * s, uint32_t max);

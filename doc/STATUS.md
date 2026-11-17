@@ -198,7 +198,10 @@ All services are linked statically against `libmynos` and placed at
   its parent's; `sh` and what it starts have none (an `outb` ends the
   program). Semaphores are their process's own, IRQ lines their driver's;
   well-known ports (0-15) are taken by privileged processes only. Tables:
-  4096 channels (was 100 for the whole system), 4096 semaphores.
+  4096 channels (was 100 for the whole system), 4096 semaphores; a full
+  table is said once on the console. `copy_to_user`/`copy_from_user`:
+  a fault on a user address inside them makes the call fail instead of
+  ending the process (used where a call writes after blocking).
 - **Random numbers** (2026, `kernel/random.c`): `getrandom` serves bytes
   for cryptography: the time-stamp counter at every timer tick and
   interrupt, and RDRAND/RDSEED at boot when the processor has them
@@ -434,12 +437,12 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | mynos-pg9 | `mynos-byterun/src/floats.c` | `frexp()`/`modf()` return 1.0 (legacy 3.06 runtime only; the 5.5 runtime uses musl's libm). |
 | mynos-09i | `mynos-runtime/` | No OCaml `Thread` module yet (needs systhreads and unix stubs); domains work. |
 | mynos-awn | `mynos-core/kernel/` | One CPU: threads and domains run in turn, not in parallel. |
-| mynos-nn7 | `mynos-core/kernel/` | A bad user pointer met halfway through a system call ends the process with kernel state possibly half updated; the io privilege is all or nothing (no per-port I/O bitmap yet). |
+| mynos-37p | `mynos-core/kernel/` | The io privilege is all or nothing (no per-port I/O bitmap yet); copies to user memory go through `copy_to_user` only where a call blocks first (`recv`, `wait4`): elsewhere the entry check suffices, as the kernel is not preempted. |
 | — | `mynos-core/kernel/threads.c` | Native MyNOS threads (`mynos_threadCreate`) share their creator's TLS: code that uses the C library should use pthreads. |
 | — | `mynos-lib/src/fileio.c` | `/` (memrofs) is read-only and flat, `/tmp` (tmpfs) flat and in memory; `/disk` (fatfs) has directories. `rename` within one service; paths up to 63 characters inside a service. |
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
 | mynos-t9l | `mynos-lib/` | C programs have no sockets API yet: only OCaml programs reach the network (module `Net`). |
-| — | `mynos-core/kernel/ipc/channel.c` | The two ends of a channel are told apart by pid: threads (or domains) of one process cannot talk to each other over IPC. |
+| mynos-9e1 | `mynos-core/kernel/ipc/channel.c` | The two ends of a channel are told apart by pid: threads (or domains) of one process cannot talk to each other over IPC. |
 | — | `services/net/netd.c` | TLS: clients only (no `Listen_tls`); no revocation checks (CRL, OCSP); Mozilla's list is parsed at the first TLS connection (about 1.5 s in QEMU), later handshakes take 0.2-0.4 s; the clear bytes travel between netd and the program over IPC. |
 | — | `services/ata/ata.ml` | The disk is polled (PIO: the driver copies every word anyway, and QEMU completes commands at once); IRQ 14 is free for it. |
 | — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently; the stdio of C programs (musl's direct system calls) is not redirected. |
@@ -724,3 +727,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   11-13: `Udp_bind`, `Send_to`, `Recv_from`, 32 datagrams queued per
   socket). Tests: UDP to the host and back, a child process refused our
   socket, a dead child's listening port free again. Closed mynos-c9h.
+- **2026-11-17** — Step 4: `copy_user` with a fix-up in the page fault
+  handler (one known instruction; the handler gets the interrupted
+  frame); `recv` and `wait4` write into the process with it after
+  blocking; a full kernel table is said once. Stress test: a thread
+  waits in `recv` while another unmaps the page where the kernel will
+  write: an error, the process lives (with the previous kernel, the
+  process was killed). Also: `recv` left a broken channel locked; `send`
+  on a channel not ours dereferenced NULL. Closed mynos-nn7.

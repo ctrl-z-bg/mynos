@@ -65,7 +65,7 @@ void _int11(uint32_t eip, uint32_t cs);
 void _int12(uint32_t eip, uint32_t cs);
 void _int13(uint32_t eip, uint32_t cs);
 void _int14(uint32_t addr, uint32_t errcode);
-extern void _page_fault_handler(uint32_t addr, uint32_t errcode);
+extern void _page_fault_handler(uint32_t addr, uint32_t errcode, uint32_t * frame);
 void _int15();
 void _int16(uint32_t cs);
 

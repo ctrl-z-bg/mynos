@@ -1434,3 +1434,41 @@ kept a stable name for processes: the work in netd was mostly deciding
 the owner in the less obvious cases (accepted connections, a listener's
 backlog).
 
+## 2026-11-17 — Safe copies: a fault the kernel expects
+
+**The case.** The kernel checks user pointers at the entry of a system
+call, and it is not preempted, so between the check and the access
+nothing can change, unless the call blocks. `recv` does: it waits for a
+message, then writes the message's description into the receiver's
+memory. Meanwhile another thread of the same process may unmap that
+memory. The kernel then faulted on a user address and, since the
+robustness work (mynos-0fw), ended the process: a correct program (its other
+thread was entitled to unmap) killed by the kernel's own access.
+
+**The fix, as Linux does it, with a table of one.** `copy_user` is a few
+lines of assembly around one `rep movsb` whose address is known
+(`copy_user_insn`). The page fault handler now receives the interrupted
+frame (its assembly wrapper pushes a pointer to the saved registers, with
+eip after them); a fault in kernel mode at that instruction resumes at
+`copy_user_fault`, which returns -1. Faults that are legitimate (pages
+allocated on use, copy on write) are still served first; only a fault
+that would have ended the process is turned into an error. `recv` and
+`wait4` write through `copy_to_user` after blocking; calls that do not
+block keep the entry check, which is enough.
+
+**The test.** In the stress test a thread calls `recv` (the native call,
+with the description's address in a page of its own), the main thread
+waits 100 ms and unmaps the page, a child sends the message 300 ms
+later. With this kernel the call returns `MYNOS_ERR_INVALID` and the
+test goes on; with the previous one the stress process was killed
+("invalid memory access at 0x40079008"). Reading `recv` again also showed
+two small bugs: a broken channel stayed locked on the early returns, and
+`send` on a channel the caller is not part of read through a NULL pointer.
+
+**Limits.** Running out of a kernel table now says so once ("kernel: the
+channel table is full") instead of failing silently.
+
+**Lesson.** The pre-check was right for every call that does not sleep;
+the bug class was exactly "check, block, then use", which a review by
+that question found in two places.
+

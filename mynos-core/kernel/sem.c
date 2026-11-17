@@ -108,7 +108,9 @@ int __OS_sem_allocateSemaphore(uint32_t n) {
     if ( n > MAXSEMVALUE) return(-1);
     __lock(&(semaphores.mutex));
     if (semaphores.nused == MAXSEM) {
+	static int said = 0;
 	__unlock(&(semaphores.mutex));
+	ktableFull("semaphore", &said);
 	return(-1);
     }
 

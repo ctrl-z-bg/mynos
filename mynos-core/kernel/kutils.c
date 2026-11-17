@@ -19,6 +19,7 @@
 */
 
 #include "kutils.h"
+#include "video.h"
 
 void* kmemcpy(void* dst, const void* src, size_t count) {
   register char *d=dst;
@@ -77,3 +78,10 @@ int kstrlen(const char * s) {
   return (p - s);
 }
 
+void ktableFull(const char * table, int * said) {
+  if (*said) return;
+  *said = 1;
+  printk("kernel: the ");
+  printk((char *)table);
+  printk(" table is full\n");
+}

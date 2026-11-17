@@ -357,12 +357,13 @@ __asm__ (".pushsection .text\n" \
 	 "   movl %eax, (0)               \n"\
 	 "   popl %eax                    \n"  /* retrieve error code */\
          "   pushal                       \n"  /* save all registers */\
+	 "   movl %esp, %ebx              \n"  /* the frame: registers, eip */\
+	 "   pushl %ebx                   \n"\
 	 "   pushl %eax                   \n"  /* push error code */\
 	 "   movl %cr2, %eax              \n"\
 	 "   pushl %eax                   \n"  /* push faulting address */\
 	 "   call _page_fault_handler     \n"  /* call the ISR handler */\
-	 "   popl %eax                    \n"  /* pop the address */\
-	 "   popl %eax                    \n"  /* pop the error code */\
+	 "   addl $12, %esp               \n"  /* address, error code, frame */\
 	 "   popal                        \n"\
 	 "   movl (0), %eax               \n"\
 	 "   iret                         \n"\
@@ -506,6 +507,57 @@ int __mem_userVector(char ** v, uint32_t max_entries, uint32_t max_len) {
   return -1;
 }
 
+/*
+ * Copies between the kernel and a process's memory that may fault
+ * (doc/decisions/identity-and-permissions.md): a page fault in the kernel
+ * at copy_user_insn resumes at copy_user_fault, and copy_user returns -1,
+ * instead of ending the process halfway through a system call. Needed
+ * where a call writes into the process after blocking (recv, wait4):
+ * meanwhile another thread may have unmapped that memory.
+ */
+int copy_user(void * to, const void * from, uint32_t n);
+extern char copy_user_insn[], copy_user_fault[];
+__asm__ (".pushsection .text\n"
+	 ".globl copy_user\n"
+	 "copy_user:\n"
+	 "   pushl %esi\n"
+	 "   pushl %edi\n"
+	 "   movl 12(%esp), %edi\n"
+	 "   movl 16(%esp), %esi\n"
+	 "   movl 20(%esp), %ecx\n"
+	 "   cld\n"
+	 ".globl copy_user_insn\n"
+	 "copy_user_insn:\n"
+	 "   rep movsb\n"
+	 "   xorl %eax, %eax\n"
+	 "copy_user_out:\n"
+	 "   popl %edi\n"
+	 "   popl %esi\n"
+	 "   ret\n"
+	 ".globl copy_user_fault\n"
+	 "copy_user_fault:\n"
+	 "   movl $-1, %eax\n"
+	 "   jmp copy_user_out\n"
+	 ".popsection\n");
+
+int copy_to_user(void * user, const void * kernel, uint32_t n) {
+  if (!__mem_userArea(user, n)) return -1;
+  return copy_user(user, kernel, n);
+}
+
+int copy_from_user(void * kernel, const void * user, uint32_t n) {
+  if (!__mem_userArea(user, n)) return -1;
+  return copy_user(kernel, user, n);
+}
+
+/* a fault in copy_user: resume at its fix-up (frame: pushal's registers,
+   then eip) */
+static int copy_user_fixup(uint32_t * frame) {
+  if (frame[8] != (uint32_t)copy_user_insn) return 0;
+  frame[8] = (uint32_t)copy_user_fault;
+  return 1;
+}
+
 static void __userSegfault(uint32_t addr) {
   printk("process ");
   print_ulong(currProcess);
@@ -516,7 +568,7 @@ static void __userSegfault(uint32_t addr) {
   sched();         /* switches to another process, never returns */
 }
 
-void _page_fault_handler(uint32_t addr, uint32_t errcode) {
+void _page_fault_handler(uint32_t addr, uint32_t errcode, uint32_t * frame) {
   uint32_t * pte;
 
 #ifdef DEBUG
@@ -553,6 +605,7 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   if ((*(uint32_t*)__GET_PAGE_DIR_ENTRY(__ADDRESS_PD_INDEX(addr)) &
        PF_PRESENT) == 0) {
     if (errcode & 4) __userSegfault(addr);
+    if (copy_user_fixup(frame)) return;
     /* the kernel, in a system call, on a bad pointer of the process: end
        the process, not the system */
     if (addr >= USER_AREA_START && addr < USER_AREA_END) __userSegfault(addr);
@@ -577,6 +630,7 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   if (!((*pte) & PF_LOGICAL_PRESENT) &&
       !((*pte) & PF_COW)) { // not allocated & not cow
     if (errcode & 4) __userSegfault(addr);
+    if (copy_user_fixup(frame)) return;
     if (addr >= USER_AREA_START && addr < USER_AREA_END) __userSegfault(addr);
     kernel_on_screen = 1;
     printk("kernel page fault at ");

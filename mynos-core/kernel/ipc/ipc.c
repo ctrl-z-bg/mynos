@@ -55,7 +55,7 @@ int32_t __OS_ipc_send(int32_t c, void * start, uint32_t size,
 
   // check if I'm a channel partner
   channel = getMyReadChannel(c);
-  if (channel->receiver != processTable[currProcess]->pid)
+  if (channel == NULL || channel->receiver != processTable[currProcess]->pid)
     return MYNOS_ERR_DENY;
 
   // check if the channel is broken
@@ -154,7 +154,7 @@ int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg,
 
   // if no more message then check if channel is broken, otw wait
   if (msg == NULL) {
-    if (isChannelBroken(c)) return MYNOS_ERR_BROKEN;
+    if (isChannelBroken(c)) { UNLOCK_CHANNEL(rc); return MYNOS_ERR_BROKEN; }
     rc->sem = currThread->privSem;
     
     // timer on?
@@ -173,7 +173,7 @@ int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg,
     msg = nextMsg(rc);
   }
 
-  if (msg == NULL) return MYNOS_ERR_BROKEN;
+  if (msg == NULL) { UNLOCK_CHANNEL(rc); return MYNOS_ERR_BROKEN; }
 
   if (trace_on) {
     unichannel_t * other = getMyWriteChannel(c);
@@ -186,19 +186,29 @@ int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg,
     __OS_sem_V(msg->sem);
   }
 
+  /* the description into the receiver's memory: it may have waited, and
+     another of its threads may have unmapped that memory meanwhile, so
+     copied with copy_to_user, which fails instead of faulting */
   if (mmsg != NULL) {
-    mmsg->isShort = 0;
+    mynos_msg_t m;
+    int bad = 0;
+    m.isShort = 0;
     if (!(msg->isShort)) {
-      mmsg->start = msg->start;
+      m.start = msg->start;
     } else {
       if (shortmsg) {
-	kmemcpy(shortmsg, msg->shortmsg, msg->size);
-	mmsg->start = shortmsg;
-	mmsg->isShort = 1;
+	bad = copy_to_user(shortmsg, msg->shortmsg, msg->size) < 0;
+	m.start = shortmsg;
+	m.isShort = 1;
       } else
-	mmsg->start = NULL;
+	m.start = NULL;
     }
-    mmsg->size = msg->size;
+    m.size = msg->size;
+    if (bad || copy_to_user(mmsg, &m, sizeof m) < 0) {
+      freeMsg(msg);
+      UNLOCK_CHANNEL(rc);
+      return MYNOS_ERR_INVALID;
+    }
   }
 
   freeMsg(msg);

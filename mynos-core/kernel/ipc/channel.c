@@ -48,7 +48,8 @@ static uint32_t generation[MAXCNLS];
 /* a free slot */
 int32_t getFreeChannel() {
   static uint32_t i = 0;
-  if (cTable.free == 0) return MYNOS_ERR_FULL;
+  static int said = 0;
+  if (cTable.free == 0) { ktableFull("channel", &said); return MYNOS_ERR_FULL; }
   
   while (cTable.table[i] != NULL) i = (i + 1) % MAXCNLS;
   return i;
