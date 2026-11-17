@@ -8,4 +8,6 @@ start consoled
 start tmpfs.byte
 start ata.byte
 start fatfs.byte
+start netd
+start httpd.byte
 respawn sh.byte

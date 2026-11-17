@@ -14,7 +14,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 log=$tmp/log1 log2=$tmp/log2 log3=$tmp/log3 log4=$tmp/log4 log5=$tmp/log5
 log6=$tmp/log6 log7=$tmp/log7 log8=$tmp/log8 log9=$tmp/log9 logf=$tmp/logf
-logs=$tmp/logs
+logs=$tmp/logs logn=$tmp/logn
 
 timeout "${WAIT:-10}" tools/run-qemu.sh \
     "$ocamlrun" \
@@ -32,6 +32,29 @@ if [ -f tests/effects/effects.byte ]; then
     timeout "${WAIT:-10}" tools/run-qemu.sh "$ocamlrun" tests/effects/effects.byte \
         -- -display none -serial null -serial "file:$log2" || true
     cat "$log2" >> "$log"
+fi
+
+# the network: netd (lwIP and the NE2000 driver) with QEMU's user network;
+# on the host, a TCP server (47001) and a client of MyNOS's port 80
+# (forwarded from 47080)
+net_fetched=
+if [ -f tests/net/ramdisk.dsk ]; then
+    tools/net-peer.py echo 47001 & echo_pid=$!
+    tools/net-peer.py fetch 47080 "$tmp/fetched" & fetch_pid=$!
+    NET=1 HTTP=47080 timeout "${WAIT_NET:-40}" tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        tests/net/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$logn" &
+    qemu=$!
+    i=0
+    while [ $i -lt "${WAIT_NET:-40}" ] &&
+          ! grep -aq 'net: all checks passed\|net: FAIL\|PANIC' "$logn" 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    kill $qemu $echo_pid $fetch_pid 2>/dev/null || true
+    wait $qemu 2>/dev/null || true
+    cat "$logn" >> "$log"
+    grep -q "hello from a server in MyNOS" "$tmp/fetched" 2>/dev/null && net_fetched=yes
 fi
 
 # ninth boot: the ATA driver (OCaml) on a QEMU disk: 2048 sectors, each
@@ -125,7 +148,8 @@ if [ -f tests/stress/ramdisk.dsk ]; then
           ! grep -aq 'stress: all checks passed\|checks failed\|PANIC' "$logs" 2>/dev/null; do
         sleep 1; i=$((i + 1))
     done
-    kill $qemu 2>/dev/null; wait $qemu 2>/dev/null || true
+    kill $qemu 2>/dev/null || true
+    wait $qemu 2>/dev/null || true
     cat "$logs" >> "$log"
 fi
 
@@ -246,6 +270,14 @@ expect "Hello from memrofs!"
 expect "abi: all checks passed"
 if [ -f tests/stress/ramdisk.dsk ]; then
     expect "stress: all checks passed"
+fi
+if [ -f tests/net/ramdisk.dsk ]; then
+    expect "net: all checks passed"
+    if [ -n "$net_fetched" ]; then
+        echo "ok    the host fetched a page from a server in MyNOS"
+    else
+        echo "FAIL  the host fetched a page from a server in MyNOS"; fail=1
+    fi
 fi
 if [ -f tests/effects/effects.byte ]; then
     expect "effects ok"

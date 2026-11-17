@@ -3,8 +3,10 @@
 #
 # With the dev toolchain, it boots MyNOS with the system RAM disk (system/):
 # ocamlrun runs init, which starts the services (console, tmpfs, the ATA
-# driver and fatfs, which mounts system/disk.img at /disk) and the shell,
-# the OCaml toplevel. Type OCaml phrases ended by ;; for instance help ();;
+# driver and fatfs, which mounts system/disk.img at /disk, the network with
+# an NE2000 card on QEMU's user network, httpd) and sh. Type help; "ocaml"
+# opens the OCaml toplevel. NET= (empty) boots without a network card;
+# HTTP=PORT forwards another host port to httpd.
 #
 # Otherwise (legacy toolchain, or DEMO=2008) it boots the system as it was in
 # 2004-2008: the OCaml runtime with a test bytecode, the registry, keyboard
@@ -22,6 +24,14 @@ ocamlrun=$(tools/ocamlrun-path.sh)
 
 if [ "${DEMO:-}" != 2008 ] && [ -f system/ramdisk.dsk ]; then
     [ -f system/disk.img ] && export DISK=${DISK:-system/disk.img}
+    # the network, and the host's port 8080 to httpd if it is free
+    export NET=${NET-1}
+    if [ -n "$NET" ] && [ -z "${HTTP+set}" ]; then
+        if python3 -c 'import socket; socket.socket().bind(("127.0.0.1", 8080))' 2>/dev/null
+        then export HTTP=8080; echo "run-demo.sh: http://localhost:8080/ is MyNOS's httpd" >&2
+        else echo "run-demo.sh: port 8080 is busy, no web server forwarding" >&2
+        fi
+    fi
     MEM=${MEM:-256} exec tools/run-qemu.sh \
         "$ocamlrun" \
         services/registry/registry \

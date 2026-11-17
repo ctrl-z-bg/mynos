@@ -331,12 +331,33 @@ let copy src dst =
 let help out =
   output_string out
     "MyNOS sh. Built in: cd pwd echo cat ls [-l] cp mv rm mkdir rmdir touch\n\
-     export unset env which source free clear help exit.\n\
+     export unset env which source free clear help exit;\n\
+     network: ifconfig, ping HOST [COUNT], host NAME.\n\
      Programs: edit FILE, ocamlc, kilo, hello, ocaml (the OCaml toplevel)...\n\
      Syntax: 'quotes' \"quotes\" $VAR $? NAME=value ; && || < > >> | *.ml\n\
      Files: / is the RAM disk, /tmp is in memory, /disk is the FAT disk.\n"
 
 exception Exit_shell of int
+
+(* the network service, when there is one *)
+let net = ref None
+let with_net f =
+  match
+    (match !net with
+     | Some n -> n
+     | None -> let n = Net.connect () in net := Some n; n)
+  with
+  | n -> (try f n; 0 with
+      | Ipc.Remote_error (_, m) -> error "%s" m; 1
+      | Mynos.Error _ -> net := None; error "the network service is not answering"; 1)
+  | exception Mynos.Error _ -> error "no network (netd is not running)"; 1
+
+let is_address s =
+  match String.split_on_char '.' s with
+  | [ _; _; _; _ ] as parts -> List.for_all (fun p -> int_of_string_opt p <> None) parts
+  | _ -> false
+
+let resolve n host = if is_address host then host else Net.call n (Net.Resolve host)
 
 let rec builtin name args c out =
   let ok = ref 0 in
@@ -385,6 +406,26 @@ let rec builtin name args c out =
    | "free", _ ->
      let p = (Mynos.stats ()).Mynos.free_pages in
      Printf.fprintf out "%d KB free\n" (p * 4)
+   | "ifconfig", [] ->
+     ok := with_net (fun n ->
+         let c = Net.call n Net.Config in
+         Printf.fprintf out "e0: %s\n    address %s netmask %s\n    gateway %s dns %s\n"
+           c.Net.mac c.address c.netmask c.gateway c.dns)
+   | "ping", host :: count ->
+     let count = match count with
+       | [ k ] -> Option.value (int_of_string_opt k) ~default:3 | _ -> 3 in
+     ok := with_net (fun n ->
+         let a = resolve n host in
+         for i = 1 to count do
+           (match Net.call n (Net.Ping (a, 2000)) with
+            | ms -> Printf.fprintf out "reply from %s: time %d ms\n%!" a ms
+            | exception Ipc.Remote_error (_, m) ->
+              Printf.fprintf out "%s: %s\n%!" a m);
+           if i < count then Mynos.sleep 1.0
+         done)
+   | "host", [ name ] ->
+     ok := with_net (fun n -> Printf.fprintf out "%s has address %s\n" name
+                        (Net.call n (Net.Resolve name)))
    | "clear", _ -> output_string out "\027[H\027[2J"
    | "help", _ -> help out
    | "true", _ -> ()
@@ -397,7 +438,7 @@ let rec builtin name args c out =
 and is_builtin = function
   | "cd" | "pwd" | "echo" | "cat" | "ls" | "cp" | "mv" | "rm" | "mkdir" | "rmdir"
   | "touch" | "export" | "unset" | "env" | "which" | "source" | "." | "free"
-  | "clear" | "help" | "exit" | "true" | "false" -> true
+  | "clear" | "help" | "exit" | "true" | "false" | "ifconfig" | "ping" | "host" -> true
   | _ -> false
 
 (* ---- running ---- *)
@@ -547,7 +588,8 @@ let common_prefix = function
 
 let builtins = [ "cd"; "pwd"; "echo"; "cat"; "ls"; "cp"; "mv"; "rm"; "mkdir";
                  "rmdir"; "touch"; "export"; "unset"; "env"; "which"; "source";
-                 "free"; "clear"; "help"; "exit"; "true"; "false"; "ocaml" ]
+                 "free"; "clear"; "help"; "exit"; "true"; "false"; "ocaml";
+                 "ifconfig"; "ping"; "host" ]
 
 (* the commands starting with prefix: built-ins, and the programs of PATH
    (NAME.byte as NAME, and files without an extension) *)

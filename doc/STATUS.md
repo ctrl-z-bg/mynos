@@ -155,6 +155,18 @@ All services are linked statically against `libmynos` and placed at
   on top of the `ata` block service. The whole FAT is kept in memory and
   written to every copy after each change. The demo's disk is
   `system/disk.img` (FAT32, 64 MB, made once and kept).
+- `netd` (2026): **the network** (`services/net/`): the lwIP 2.2.1 TCP/IP
+  stack (`third_party/lwip`, BSD licence) and an NE2000 driver
+  (`ne2k.c`, I/O ports, polled every 10 ms) in one C process, so that a
+  frame is a function call. DHCP (else QEMU's 10.0.2.15), ARP, IPv4, ICMP,
+  TCP, DNS. Programs use it over typed IPC, protocol "net/1": module `Net`
+  (`Config`, `Ping`, `Resolve`, `Connect`, `Listen`, `Accept`, `Send`,
+  `Recv`, `Close`), the first protocol with a C service, through
+  `mynos_wire.h`. One lwIP thread; a second one receives the requests;
+  requests that wait (`Recv`, `Accept`...) keep their channel open until
+  lwIP's callback replies. `sh` has `ifconfig`, `ping`, `host`; `httpd`
+  (`httpd/httpd.ml`, OCaml) serves `/disk` over HTTP, and
+  `tools/run-demo.sh` forwards the host's port 8080 to it.
 - `tmpfs` (2026): **the first MyNOS service written in OCaml**
   (`services/tmpfs/tmpfs.ml`), a writable filesystem in memory. It speaks
   the same protocol, which has `WRITE` and `UNLINK` too; `fileio.c` sends
@@ -388,6 +400,9 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | — | `mynos-core/kernel/threads.c` | Native MyNOS threads (`mynos_threadCreate`) share their creator's TLS: code that uses the C library should use pthreads. |
 | — | `mynos-lib/src/fileio.c` | `/` (memrofs) is read-only and flat, `/tmp` (tmpfs) flat and in memory; `/disk` (fatfs) has directories. `rename` within one service; paths up to 63 characters inside a service. |
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
+| mynos-t9l | `mynos-lib/` | C programs have no sockets API yet: only OCaml programs reach the network (module `Net`). |
+| mynos-c9h | `services/net/netd.c` | Sockets have no owner (any process may use any socket number) and stay open when their process dies; no UDP for programs yet. |
+| mynos-8v4 | `mynos-core/kernel/irq.c` | Only IRQs 1, 3 and 4 reach user space: the NE2000 and the ATA disk are polled. |
 | — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently; the stdio of C programs (musl's direct system calls) is not redirected. |
 
 ### Not started
@@ -410,7 +425,9 @@ Planned work, in order. Details live in the beads issues.
    OCaml service, threads and domains (mynos-l9h): done.
 4. Storage (mynos-rf4, done): the ATA driver and the FAT filesystem, both
    in OCaml, `/disk` in the shell.
-5. Later: networking (mynos-4f6), a GUI toolkit (mynos-9lr), distinctive
+5. Typed IPC (mynos-tc3, done) and networking (mynos-4f6, done): lwIP
+   and an NE2000 driver in netd, `Net` over "net/1", `httpd`.
+6. Later: a GUI toolkit (mynos-9lr), distinctive
    applications (mynos-3h1), several CPUs (mynos-awn).
 
 The old SourceForge site is archived in `doc/website/` (mynos-db2).
@@ -599,3 +616,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   removed), callable from the toplevel; tests of the format, of every
   block request, and of malformed messages to the live driver. Closed
   mynos-tc3; next, the network (mynos-4f6) on it.
+- **2026-11-17** — The network: netd (lwIP 2.2.1 and an NE2000 driver in
+  C, one process), typed IPC "net/1" with the C side of the wire format
+  (`mynos_wire.h`), module `Net`; DHCP, ping, DNS (to the internet through
+  QEMU), TCP both ways. `sh` gets `ifconfig`, `ping`, `host`; `httpd` in
+  OCaml serves `/disk`, at http://localhost:8080/ from the host in the
+  demo. `tests/net` with a TCP server and a client on the host. Follow-up:
+  mynos-t9l (C sockets), mynos-c9h (socket owners, UDP), mynos-8v4 (IRQs).
+  Closed mynos-4f6.

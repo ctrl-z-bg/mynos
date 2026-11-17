@@ -30,6 +30,9 @@ make -C services/ata clean
 make -C tests/storage clean
 make -C services/fatfs clean
 make -C tests/fat clean
+make -C services/net clean
+make -C tests/net clean
+make -C httpd clean
 make -C shell clean
 make -C system clean
 ' >/dev/null

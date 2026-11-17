@@ -46,6 +46,10 @@ tests/files/AUTOEXEC.BAT
 tests/spawn/ocamlrun
 system/ocamlrun
 system/consoled
+system/netd
+services/net/netd
+tests/net/netd
+tests/net/ocamlrun
 tests/storage/ocamlrun
 tests/fat/ocamlrun
 tests/fat/content/

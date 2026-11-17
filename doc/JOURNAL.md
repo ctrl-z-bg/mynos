@@ -1156,3 +1156,41 @@ length is itself a zigzag int (7 is the byte 14), which the test caught.
 
 *Lesson:* the useful check for "is this still MyNOS?" was a document
 written twenty years ago; worth re-reading before each new layer.
+
+## 2026-11-17 — The network: lwIP and an NE2000 in one process
+
+**Shape.** netd is one C process holding lwIP (2.2.1, the raw API with
+`NO_SYS`: no threads inside lwIP) and the NE2000 driver: a frame goes from
+the card to the stack with a function call, not two IPC messages. lwIP's
+raw API is callback-based, which fits a server answering typed IPC: a
+request that has to wait (`Recv`, `Accept`, `Connect`, `Ping`, `Resolve`)
+keeps its channel open, and the lwIP callback that ends the wait sends the
+reply on it. Since MyNOS has no "wait for any of these" call, a second
+thread (a pthread, so that it has its own TLS) blocks in `listenPort`,
+queues each request and signals a condition variable; the lwIP thread
+waits on it with a 10 ms timeout, polls the card, runs lwIP's timers and
+handles the queue. Polling, because the kernel only routes IRQs 1, 3 and
+4 to user space (mynos-8v4).
+
+**The card.** The DP8390 is driven through I/O ports only, so no kernel
+support for DMA was needed. QEMU's PROM holds each MAC byte twice; its
+remote DMA wraps at the end of the receive ring by itself, so a frame that
+wraps is read in one go. The ring is empty when the page after BNRY is
+CURR.
+
+**Typed IPC across languages.** "net/1" is defined by the OCaml GADT in
+`net.ml`; the C side follows its case numbers with `mynos_wire.h` (a
+writer that grows, a reader that never fails loudly but sets an error
+flag). The OCaml test sends the same malformed messages to netd as to the
+OCaml block driver, and both answer them with an error reply.
+
+**Small things.** lwIP's `init.c` includes PPP's option headers even with
+PPP off; `lwip_strerr` lives in the netconn API we did not import. An
+or-pattern over GADT constructors does not refine the type (`Ping _ |
+Connect _ -> Wire.int` does not compile): one case each. In
+`run-tests.sh`, `kill` of a helper that had already ended stopped the
+whole script under `set -e`.
+
+It worked the first time it booted: DHCP from QEMU's user network, ping,
+DNS to the internet through the host, TCP both ways (the host fetches a
+page from httpd, in OCaml, through a forwarded port).
