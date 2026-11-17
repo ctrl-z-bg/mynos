@@ -21,10 +21,15 @@
 #ifndef __IRQ_H__
 #define __IRQ_H__
 
+#include "global.h"
+
 /* the init function */
 void __OS_initExternalIRQs();
 
 int __OS_driverRegister(char * name, uint32_t irq, 
 			uint32_t * io, uint32_t * mem);
+int __OS_irq_valid(uint32_t irq);
+void __OS_irq_processEnded(int pid);
+uint32_t __OS_irq_count(int n);
 
 #endif

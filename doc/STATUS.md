@@ -102,8 +102,11 @@ talking through IPC.
   user; the file services keep their C protocol (`mynos_fs.h`), which
   libmynos speaks for the C library.
 - **Drivers in user space:** a process calls `mynos_driverRegister(name, irq, …)`
-  and gets a semaphore. The kernel signals it (`V`) on every interrupt of that
-  IRQ.
+  for any IRQ but 0 (the timer) and 2 (the cascade), and gets a semaphore.
+  On every interrupt of that line the kernel acknowledges the PICs, signals
+  it (`V`), and if the CPU was idle switches to the driver at once. A line
+  nobody registered for is masked; a driver's lines are freed when it ends
+  (`kernel/irq.c`).
 - **Two syscall interfaces:**
   - `int 0x90`: the native MyNOS API (send/recv, ports, semaphores, IRQs,
     threads, timer, stats, spawn). See `kernel/syscalls.c` and `mynos-lib`.
@@ -157,7 +160,7 @@ All services are linked statically against `libmynos` and placed at
   `system/disk.img` (FAT32, 64 MB, made once and kept).
 - `netd` (2026): **the network** (`services/net/`): the lwIP 2.2.1 TCP/IP
   stack (`third_party/lwip`, BSD licence) and an NE2000 driver
-  (`ne2k.c`, I/O ports, polled every 10 ms) in one C process, so that a
+  (`ne2k.c`, I/O ports, IRQ 9 for received frames) in one C process, so that a
   frame is a function call. DHCP (else QEMU's 10.0.2.15), ARP, IPv4, ICMP,
   TCP, DNS. Programs use it over typed IPC, protocol "net/1": module `Net`
   (`Config`, `Ping`, `Resolve`, `Connect`, `Listen`, `Accept`, `Send`,
@@ -412,7 +415,7 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
 | mynos-t9l | `mynos-lib/` | C programs have no sockets API yet: only OCaml programs reach the network (module `Net`). |
 | mynos-c9h | `services/net/netd.c` | Sockets have no owner (any process may use any socket number) and stay open when their process dies; no UDP for programs yet. |
-| mynos-8v4 | `mynos-core/kernel/irq.c` | Only IRQs 1, 3 and 4 reach user space: the NE2000 and the ATA disk are polled. |
+| — | `services/ata/ata.ml` | The disk is polled (PIO: the driver copies every word anyway, and QEMU completes commands at once); IRQ 14 is free for it. |
 | — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently; the stdio of C programs (musl's direct system calls) is not redirected. |
 
 ### Not started
@@ -646,3 +649,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   Perfetto file (served by httpd). Tests: a registry exchange recorded,
   `sh -> fatfs -> ata0` nested in a recording made in sh, the JSON checked
   on the host. Next: mynos-6yr. Closed mynos-cub.
+- **2026-11-17** — Interrupts for drivers in user space: handlers for IRQs
+  1, 3-15, acknowledged by the kernel, the driver run at once when the CPU
+  was idle, unclaimed lines masked, lines freed with their driver; the
+  recorder records interrupts. netd waits for the NE2000's IRQ 9 instead
+  of polling every 10 ms: a small page from httpd in 10.7 ms instead of
+  42.6 (median of 20). Closed mynos-8v4.

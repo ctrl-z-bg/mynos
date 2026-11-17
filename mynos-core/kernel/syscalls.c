@@ -320,13 +320,13 @@ int32_t _mynos_syscall_setTimer(ulong32_t usec) {
 }
 
 int _mynos_syscall_enableIrq(ushort16_t n) {
-  if (n >= 16) return MYNOS_ERR_INVALID;
+  if (!__OS_irq_valid(n)) return MYNOS_ERR_INVALID;
   enable_irq(n);
   return 0;
 }
 
 int _mynos_syscall_disableIrq(ushort16_t n) {
-  if (n >= 16) return MYNOS_ERR_INVALID;
+  if (!__OS_irq_valid(n)) return MYNOS_ERR_INVALID;
   disable_irq(n);
   return 0;
 }

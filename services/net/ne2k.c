@@ -12,8 +12,8 @@
 /*
  * The NE2000 network card (a National Semiconductor DP8390 with 16 KB of
  * on-board memory), driven through I/O ports from user space: MyNOS
- * processes have I/O privilege. Polled: the card's interrupts are off
- * (the kernel routes only a few IRQs to processes yet).
+ * processes have I/O privilege. The card interrupts when a frame arrives
+ * (ne2k_init's caller waits for its IRQ); transmission is polled.
  *
  * The on-board memory is addressed in 256-byte pages: one transmit buffer
  * at TX_PAGE, and a receive ring from RX_START to RX_STOP that the card
@@ -137,7 +137,7 @@ int ne2k_init(unsigned short iobase, unsigned char mac[6]) {
   outb(REG(DCR), 0x49);          /* 16-bit transfers, normal, FIFO 8 bytes */
   outb(REG(RBCR0), 0);
   outb(REG(RBCR1), 0);
-  outb(REG(IMR), 0);             /* no interrupts: we poll */
+  outb(REG(IMR), 0);             /* no interrupts while we set up */
   outb(REG(ISR), 0xFF);
   outb(REG(RCR), 0x20);          /* monitor mode while we set up */
   outb(REG(TCR), 0x02);          /* loopback */
@@ -161,6 +161,8 @@ int ne2k_init(unsigned short iobase, unsigned char mac[6]) {
   outb(REG(RCR), 0x04);          /* our address and broadcasts */
   outb(REG(TCR), 0x00);          /* normal transmission */
   outb(REG(CR), CR_NODMA | CR_START);
+  /* interrupts: a frame received, a receive error, the ring full */
+  outb(REG(IMR), ISR_PRX | 0x04 | ISR_OVW);
   return 0;
 }
 
@@ -220,16 +222,16 @@ int ne2k_recv(void * buf) {
   unsigned int len;
 
   if (inb(REG(ISR)) & ISR_OVW) { overflow(); return 0; }
+  /* acknowledge first, then look: a frame that comes meanwhile raises
+     the interrupt again */
+  outb(REG(ISR), ISR_PRX | 0x04);
 
   outb(REG(CR), CR_PAGE1 | CR_NODMA | CR_START);
   curr = inb(REG(CURR));
   outb(REG(CR), CR_NODMA | CR_START);
   next = inb(REG(BNRY)) + 1;
   if (next >= RX_STOP) next = RX_START;
-  if (next == curr) {                    /* empty */
-    outb(REG(ISR), ISR_PRX);
-    return 0;
-  }
+  if (next == curr) return 0;            /* empty */
 
   /* each frame starts with a header: status, next page, length (with the
      header) */

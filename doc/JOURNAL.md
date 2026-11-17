@@ -1242,3 +1242,33 @@ sector writes (the data, both FAT copies, the directory entry) and
 (`ushort16_t`) and no `kstrcmp`. The sender of a message received after
 the sender freed its end of the channel is unknown to the kernel: the
 player takes it from the channel's ends.
+
+## 2026-11-17 — Interrupts for every driver, and a web page 4 times faster
+
+The 2004 kernel had handlers for IRQs 1, 3 and 4 only (the keyboard and
+the serial ports), each a `V` on the driver's semaphore; the driver sent
+the EOI to the PIC itself, from user space. Every other line went nowhere,
+so netd polled the card every 10 ms and the disk driver polled its status.
+
+Now one dispatcher serves IRQs 1 and 3-15 (0 is the timer, 2 the cascade
+to the second PIC): it acknowledges the PICs (the second one too for
+8-15), `V`s the driver's semaphore, and, if the idle thread was running,
+calls `sched()` as the timer does, so the driver runs at once instead of
+at the next tick. A line with no driver is masked; a driver's lines are
+freed when it ends; a line can be taken by one live process only, and 0
+and 2 cannot be taken or masked by anyone. The old drivers still send
+their own EOI: by then nothing is in service, and a non-specific EOI with
+nothing in service does nothing, so they work unchanged (the legacy demo's
+`keyboardd` and `seriald` too).
+
+The NE2000 now interrupts on received frames. A subtle point: the driver
+acknowledges the card's "received" bit *before* looking at the ring, not
+after finding it empty; otherwise a frame arriving between the look and
+the acknowledgement would raise no new interrupt (the line is edge
+triggered) and wait for the next one. netd's loop still wakes every
+100 ms for lwIP's timers.
+
+Measured from the host, a small page from httpd: 42.6 ms median before,
+10.7 ms after. The recorder, which now records interrupts too, shows the
+IRQ waking netd while the CPU was idle, and the rest of the time: httpd
+opens the file twice and seeks three times to learn its size.

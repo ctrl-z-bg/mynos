@@ -22,6 +22,7 @@ type kind =
   | Send      (** [pid] sent [size] bytes to [peer] on [channel] *)
   | Recv      (** [pid] received [size] bytes from [peer] on [channel] *)
   | Free      (** [pid] freed its end of [channel] *)
+  | Irq       (** interrupt [arg] for the driver [pid], interrupting [peer] *)
   | Other of int
 
 type event = {

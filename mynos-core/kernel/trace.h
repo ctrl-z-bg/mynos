@@ -36,7 +36,9 @@ enum {
   TRACE_CONNECT,       /* pid: the client, peer: the server, channel, arg: port */
   TRACE_SEND,          /* pid, peer: the receiver, channel, size, data */
   TRACE_RECV,          /* pid, peer: the sender, channel, size */
-  TRACE_FREE           /* pid, peer: the other side, channel */
+  TRACE_FREE,          /* pid, peer: the other side, channel */
+  TRACE_IRQ            /* pid: the driver, peer: the process interrupted,
+			  arg: the IRQ */
 };
 
 /* trace system call operations */

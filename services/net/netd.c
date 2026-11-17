@@ -18,9 +18,10 @@
  *
  * One thread calls lwIP (its raw API, NO_SYS): the main loop. Another
  * thread waits for connections on the service's port, receives each
- * request and queues it with its channel. The main loop wakes on a request
- * or every 10 ms, reads the frames the card received, runs lwIP's timers,
- * and handles the requests. A request that has to wait (Recv, Accept,
+ * request and queues it with its channel; a third waits for the card's
+ * interrupt. The main loop wakes on a request, an interrupt, or every
+ * 100 ms, reads the frames the card received, runs lwIP's timers, and
+ * handles the requests. A request that has to wait (Recv, Accept,
  * Connect, Ping, Resolve) keeps its channel open, and gets its reply from
  * the lwIP callback that ends the wait.
  */
@@ -51,6 +52,8 @@
 #define SERVICE     "net"
 #define PROTOCOL    "net/1"
 #define NE2K_IOBASE 0x300
+#define NE2K_IRQ    9         /* QEMU's ne2k_isa: tools/run-qemu.sh */
+#define WAKE_MS     100       /* the loop runs at least this often */
 #define MAXSOCK     64
 #define MAXBACKLOG  8
 #define MAXRECV     16384
@@ -669,6 +672,20 @@ struct request {
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t wake = PTHREAD_COND_INITIALIZER;
 static struct request * queue, ** queue_end = &queue;
+static int interrupted = 0;
+
+/* the card's interrupts: wake the main loop */
+static void * irq_thread(void * arg) {
+  int sem = IDX(arg);
+  for (;;) {
+    if (mynos_P(sem) < 0) return NULL;
+    pthread_mutex_lock(&lock);
+    interrupted = 1;
+    pthread_cond_signal(&wake);
+    pthread_mutex_unlock(&lock);
+  }
+  return NULL;
+}
 
 /* the requests: received here, handled by the main loop */
 static void * listener(void * arg) {
@@ -723,6 +740,16 @@ int main(void) {
   started = sys_now();
   dhcp_start(&netif);
 
+  {
+    int sem = mynos_driverRegister("ne2k", NE2K_IRQ, NULL, NULL);
+    if (sem < 0)
+      mynos_log("netd: no IRQ %d (%d): polling every %d ms\n", NE2K_IRQ, sem, WAKE_MS);
+    else {
+      mynos_enableIrq(NE2K_IRQ);
+      pthread_create(&t, NULL, irq_thread, ARG(sem));
+    }
+  }
+
   icmp_pcb = raw_new(IP_PROTO_ICMP);
   raw_recv(icmp_pcb, on_icmp, NULL);
   raw_bind(icmp_pcb, IP_ADDR_ANY);
@@ -739,9 +766,9 @@ int main(void) {
     struct timespec until;
 
     pthread_mutex_lock(&lock);
-    if (queue == NULL || !ready) {
+    if ((queue == NULL || !ready) && !interrupted) {
       clock_gettime(CLOCK_REALTIME, &until);
-      until.tv_nsec += 10000000;
+      until.tv_nsec += WAKE_MS * 1000000L;
       if (until.tv_nsec >= 1000000000) { until.tv_sec++; until.tv_nsec -= 1000000000; }
       pthread_cond_timedwait(&wake, &lock, &until);
     }
@@ -750,6 +777,7 @@ int main(void) {
       queue = NULL;
       queue_end = &queue;
     }
+    interrupted = 0;
     pthread_mutex_unlock(&lock);
 
     poll_card();

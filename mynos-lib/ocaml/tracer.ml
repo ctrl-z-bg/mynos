@@ -5,7 +5,7 @@ external control : int -> int = "caml_mynos_trace_control"
 external read_raw : int -> string = "caml_mynos_trace_read"
 external info_raw : unit -> string = "caml_mynos_trace_info"
 
-type kind = Process | Spawn | Exit | Connect | Send | Recv | Free | Other of int
+type kind = Process | Spawn | Exit | Connect | Send | Recv | Free | Irq | Other of int
 
 type event = {
   seq : int; time : float; kind : kind; pid : int; tid : int; peer : int;
@@ -74,7 +74,7 @@ let of_raw ~raw i =
       let nd = min (u16 36) 56 in
       let kind = match u16 12 with
         | 1 -> Process | 2 -> Spawn | 3 -> Exit | 4 -> Connect | 5 -> Send
-        | 6 -> Recv | 7 -> Free | k -> Other k in
+        | 6 -> Recv | 7 -> Free | 8 -> Irq | k -> Other k in
       let e = { seq = int_of_float (u32 raw o); time = (tsc o -. t0) /. i.khz;
                 kind; pid = u16 14; tid = i32 raw (o + 16); peer = i32 raw (o + 20);
                 channel = i32 raw (o + 24); size = int_of_float (u32 raw (o + 28));
@@ -305,6 +305,7 @@ let describe r e =
   | Exit -> Printf.sprintf "status %d" e.arg
   | Connect -> Printf.sprintf "port %d" e.arg
   | Recv -> Printf.sprintf "%d bytes" e.size
+  | Irq -> Printf.sprintf "IRQ %d" e.arg
   | Free | Other _ -> ""
 
 let print_events oc r =
@@ -336,6 +337,7 @@ let print_events oc r =
       | Send -> line "->" other (describe r e)
       | Recv -> line "<-" other (Printf.sprintf "received %d bytes" e.size)
       | Free -> line "" "" (Printf.sprintf "free channel %d" e.channel)
+      | Irq -> line "!" other (Printf.sprintf "IRQ %d (interrupted %s)" e.arg other)
       | Other k -> line "?" "" (Printf.sprintf "event %d" k))
     r.events
 
@@ -472,6 +474,8 @@ let to_json r =
                    (json_string ("spawn " ^ name r ~seq:e.seq e.peer)) e.pid e.tid (us e.time)
       | Exit -> add "{\"ph\": \"i\", \"s\": \"p\", \"name\": %s, \"pid\": %d, \"tid\": %d, \"ts\": %.3f}"
                   (json_string (Printf.sprintf "exit %d" e.arg)) e.pid e.tid (us e.time)
+      | Irq -> add "{\"ph\": \"i\", \"s\": \"p\", \"name\": %s, \"pid\": %d, \"tid\": 0, \"ts\": %.3f}"
+                 (json_string (Printf.sprintf "IRQ %d" e.arg)) e.pid (us e.time)
       | _ -> ()) r.events;
   (* calls: a box on the client while it waits, one on the server while it
      serves, an arrow from one to the other *)

@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "irq.h"
 #include "trace.h"
 #include "global.h"
 #include "mem/mem.h"
@@ -592,6 +593,7 @@ void killProcess(int status) {
     __OS_sem_freeSemaphore(tss->privSem);
   __OS_sem_freeSemaphore(self->childSem);
   __OS_sem_freeProcessSemaphores(currProcess);
+  __OS_irq_processEnded(currProcess);
 
   /* the children become orphans: nobody will wait for them */
   for (i = 1; i < (int)numProcess; i++) {
