@@ -41,50 +41,60 @@ void initPortTable() {
   kbzero(pTable.table, MAXPORTS * sizeof(port_t*));
 }
 
+/* Port ids carry a generation (doc/decisions/identity-and-permissions.md):
+   id = slot + MAXPORTS * generation, so that the id of a freed port does
+   not name a later one. Well-known ports (below MYNOS_FIRST_FREE_PORT:
+   the registry's, 0) keep generation 0: their number is their id. */
+#define PORT_GENERATIONS (0x7fffffff / MAXPORTS)
+static uint32_t portGeneration[MAXPORTS];
+
 port_t * getPort(int32_t p) {
-  if ((p < 0) || (p >= MAXPORTS)) return NULL;
-  return pTable.table[p];
+  port_t * port;
+  if (p < 0) return NULL;
+  port = pTable.table[p % MAXPORTS];
+  return (port && port->id == p) ? port : NULL;
 }
 
-/* Ports below FIRST_FREE_PORT are well known (MYNOS_PORT_REGISTRY, 0):
-   only allocPortP takes them. getFreePort gave them out too, so a program
-   that allocated a port before the registry started took port 0, and the
-   registry ended ("Error registry allocating port"): at boot, now and
-   then, the stress test hung. */
-#define FIRST_FREE_PORT (MYNOS_PORT_REGISTRY + 1)
-
+/* a free slot for a port. Slots below MYNOS_FIRST_FREE_PORT are well
+   known: given out too, a program that allocated a port before the
+   registry started took port 0, and the registry ended (at boot, now and
+   then, the stress test hung). */
 int32_t getFreePort() {
-  static uint32_t i = FIRST_FREE_PORT;
+  static uint32_t i = MYNOS_FIRST_FREE_PORT;
   uint32_t n;
-  for (n = FIRST_FREE_PORT; n < MAXPORTS; n++) {
+  for (n = MYNOS_FIRST_FREE_PORT; n < MAXPORTS; n++) {
     if (pTable.table[i] == NULL) return i;
-    if (++i == MAXPORTS) i = FIRST_FREE_PORT;
+    if (++i == MAXPORTS) i = MYNOS_FIRST_FREE_PORT;
   }
   return MYNOS_ERR_FULL;
 }
 
-int32_t __OS_port_allocPort(pid_t pid) {
-  int p = getFreePort();
-  if (p < 0) return p;
-  return __OS_port_allocPortP(p, pid);
+static int32_t newPort(uint32_t slot) {
+  port_t * p = kmalloc(sizeof(port_t));
+  if (p == NULL) return MYNOS_ERR_FULL;
+  pTable.free--;
+  initPort(p, CURRPID);
+  p->id = slot + MAXPORTS * portGeneration[slot];
+  pTable.table[slot] = p;
+  listInsert(processTable[currProcess]->portList, (void*)p->id);
+  return p->id;
 }
 
-int32_t __OS_port_allocPortP(int32_t port, pid_t pid) {
-  port_t * p;
+/* allocPort (20): a port of the caller */
+int32_t __OS_port_allocPort(void) {
+  int slot = getFreePort();
+  if (slot < 0) return slot;
+  return newPort(slot);
+}
 
-  if (port < 0 || port >= MAXPORTS) return MYNOS_ERR_INVALID;
-  if (pTable.table[port] != NULL)
-    return MYNOS_ERR_BUSY;
-
-  pTable.free--;
-  p = kmalloc(sizeof(port_t));
-  initPort(p, pid);
-  pTable.table[port] = p;
-
-  // insert this port into the pid's port list
-  listInsert(processTable[pid]->portList, (void*)port);
-
-  return port;
+/* allocPortP (21): a well-known port, by number, for a privileged
+   process (the registry) */
+int32_t __OS_port_allocPortP(int32_t port) {
+  if (port < 0 || port >= MYNOS_FIRST_FREE_PORT) return MYNOS_ERR_INVALID;
+  if (!(processTable[currProcess]->privileges & MYNOS_PRIV_IO))
+    return MYNOS_ERR_DENY;
+  if (pTable.table[port] != NULL) return MYNOS_ERR_BUSY;
+  return newPort(port);
 }
 
 void initPort(port_t * p, pid_t pid) {
@@ -109,20 +119,22 @@ int32_t __OS_port_freePort(int32_t p) {
   // TODO free the req queue
   __OS_sem_freeSemaphore(port->sem);
   kfree(port);
-  pTable.table[p] = NULL;
+  pTable.table[p % MAXPORTS] = NULL;
+  if (p % MAXPORTS >= MYNOS_FIRST_FREE_PORT)
+    portGeneration[p % MAXPORTS] =
+      (portGeneration[p % MAXPORTS] + 1) % PORT_GENERATIONS;
   return 0;
 }
 
 int32_t __OS_port_changeOwner(int32_t port, pid_t newpid) {
   port_t * p = getPort(port);
   if (p == NULL) return MYNOS_ERR_INVALID;
-  if (newpid < 0 || newpid >= MAXPROCESSES || processTable[newpid] == NULL ||
-      !processTable[newpid]->isAlive)
+  if (proc(newpid) == NULL || !proc(newpid)->isAlive)
     return MYNOS_ERR_INVALID;
   if (p->owner != processTable[currProcess]->pid) return MYNOS_ERR_DENY;
 
   listExtractElem(processTable[currProcess]->portList, (void*)port, NULL);
-  listInsert(processTable[newpid]->portList, (void*)port);
+  listInsert(proc(newpid)->portList, (void*)port);
 
   p->owner = newpid;
   return 0;
@@ -162,7 +174,7 @@ int32_t __OS_port_listenPort(int32_t p) {
   req = nextReq(port);
   if (req == NULL) KPANIC("PANIC IN listenPort!");
   channel = allocChannel(processTable[currProcess]->pid, req->pid);
-  TRACE(TRACE_CONNECT, req->pid, currProcess, channel, 0, p, NULL, 0);
+  TRACE(TRACE_CONNECT, req->pid, CURRPID, channel, 0, p, NULL, 0);
   *(req->chan) = channel;
   __OS_sem_V(req->sem);
   kfree(req);   /* (it was never freed: one leak per connection) */

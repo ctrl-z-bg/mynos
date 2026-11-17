@@ -2,6 +2,8 @@
    (init.byte). It reads init.rc and starts what it lists:
 
      start PROGRAM ARGS...     start it and leave it running (services)
+     driver PROGRAM ARGS...    the same, with the io privilege (port I/O,
+                               IRQs: doc/decisions/identity-and-permissions.md)
      respawn PROGRAM ARGS...   start it, and again whenever it ends (the
                                shell)
 
@@ -9,7 +11,7 @@
    children: it restarts the ones marked respawn, logs the others' end.
    Its messages go to the kernel log (Mynos.log). *)
 
-type entry = { respawn : bool; argv : string list }
+type entry = { respawn : bool; io : bool; argv : string list }
 
 let log fmt = Printf.ksprintf (fun s -> Mynos.log ("init: " ^ s)) fmt
 
@@ -20,8 +22,9 @@ let parse_line line =
   match words with
   | [] -> None
   | w :: _ when w.[0] = '#' -> None
-  | "start" :: (_ :: _ as argv) -> Some { respawn = false; argv }
-  | "respawn" :: (_ :: _ as argv) -> Some { respawn = true; argv }
+  | "start" :: (_ :: _ as argv) -> Some { respawn = false; io = false; argv }
+  | "driver" :: (_ :: _ as argv) -> Some { respawn = false; io = true; argv }
+  | "respawn" :: (_ :: _ as argv) -> Some { respawn = true; io = false; argv }
   | _ -> log "init.rc: cannot read %S" line; None
 
 let read_config file =
@@ -37,7 +40,7 @@ let start e =
     match e.argv with
     | prog :: _ when Filename.check_suffix prog ".byte" -> "ocamlrun" :: e.argv
     | argv -> argv in
-  match Mynos.spawn (List.hd argv) (Array.of_list argv) with
+  match Mynos.spawn ~io:e.io (List.hd argv) (Array.of_list argv) with
   | pid -> log "started %s (pid %d)" (describe e) pid; Some pid
   | exception Mynos.Error (_, code) ->
     log "cannot start %s: %s" (describe e) (Mynos.error_name code); None

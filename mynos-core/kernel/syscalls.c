@@ -31,6 +31,7 @@
 #include "time.h"
 #include "process.h"
 #include "mynos.h"
+#include "ipc/channel.h"
 
 extern uint32_t currProcess;
 
@@ -76,6 +77,10 @@ __asm__ (".pushsection .text\n" \
 	 "   je .mynos_freePort\n"\
 	 "   cmpl $25, %eax\n"\
 	 "   je .mynos_changePortOwner\n"\
+	 "   cmpl $26, %eax\n"\
+	 "   je .mynos_channelPeer\n"\
+	 "   cmpl $27, %eax\n"\
+	 "   je .mynos_processInfo\n"\
 	 "   cmpl $30, %eax\n"\
 	 "   je .mynos_spawn\n"\
 	 "   cmpl $31, %eax\n"\
@@ -133,17 +138,17 @@ __asm__ (".pushsection .text\n" \
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_P:\n"\
 	 "   pushl %ebx\n"
-	 "   call __OS_sem_P     \n"\
+	 "   call __OS_sem_userP  \n"\
 	 "   popl %ebx\n"
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_tryP:\n"\
 	 "   pushl %ebx\n"
-	 "   call __OS_sem_tryP     \n"\
+	 "   call __OS_sem_userTryP  \n"\
 	 "   popl %ebx\n"
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_V:\n"\
 	 "   pushl %ebx\n"
-	 "   call __OS_sem_V     \n"\
+	 "   call __OS_sem_userV  \n"\
 	 "   popl %ebx\n"
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_semInit:\n"\
@@ -153,7 +158,7 @@ __asm__ (".pushsection .text\n" \
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_semFree:\n"\
 	 "   pushl %ebx\n"
-	 "   call __OS_sem_freeSemaphore\n"\
+	 "   call __OS_sem_userFree\n"\
 	 "   popl %ebx\n"
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_driverRegister:\n"\
@@ -211,7 +216,18 @@ __asm__ (".pushsection .text\n" \
 	 "   popl %ebx\n"
 	 "   popl %ecx\n"
 	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_channelPeer:\n"\
+	 "   pushl %ebx\n"\
+	 "   call _mynos_syscall_channelPeer\n"\
+	 "   popl  %ebx\n"\
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_processInfo:\n"\
+	 "   pushl %ebx\n"\
+	 "   call _mynos_syscall_processInfo\n"\
+	 "   popl  %ebx\n"\
+	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_spawn:\n"\
+	 "   pushl %edi\n"\
 	 "   pushl %esi\n"
 	 "   pushl %edx\n"
 	 "   pushl %ecx\n"
@@ -221,6 +237,7 @@ __asm__ (".pushsection .text\n" \
 	 "   popl %ecx\n"
 	 "   popl %edx\n"\
 	 "   popl %esi\n"
+	 "   popl %edi\n"\
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_trace:\n"\
 	 "   pushl %edx\n"\
@@ -296,11 +313,33 @@ int32_t _mynos_syscall_WRONGSYSCALL(uint32_t syscall_id) {
    in the caller's memory, with arguments and environment (NULL-terminated
    vectors, either may be NULL). Returns the pid or a MYNOS_ERR_* code. */
 int _mynos_syscall_spawn(uint32_t * elf, uint32_t len, char ** argv,
-			 char ** envp) {
+			 char ** envp, uint32_t privileges) {
   if (!__mem_userArea(elf, len) || __mem_userVector(argv, 1024, 4096) < 0 ||
       __mem_userVector(envp, 1024, 4096) < 0)
     return MYNOS_ERR_INVALID;
-  return createProcess(elf, len, argv, envp, currProcess);
+  /* a child gets at most its parent's privileges */
+  if (privileges & ~processTable[currProcess]->privileges)
+    return MYNOS_ERR_DENY;
+  return createProcess(elf, len, argv, envp, CURRPID, privileges);
+}
+
+/* channelPeer (26): the pid of the process at the other end of one of the
+   caller's channels (doc/decisions/identity-and-permissions.md); an error
+   if the channel is not the caller's, or the other end freed it */
+int _mynos_syscall_channelPeer(int32_t c) {
+  unichannel_t * other = getMyWriteChannel(c);
+  if (other == NULL || getMyReadChannel(c) == NULL) return MYNOS_ERR_INVALID;
+  if (other->receiver < 0) return MYNOS_ERR_BROKEN;
+  return other->receiver;
+}
+
+/* processInfo (27): a process's privileges, with MYNOS_PROC_ALIVE while
+   it runs; MYNOS_ERR_INVALID if there is no such pid (it ended and was
+   collected, or never was) */
+int _mynos_syscall_processInfo(pid_t pid) {
+  process_descriptor_t * p = proc(pid);
+  if (p == NULL) return MYNOS_ERR_INVALID;
+  return (int)(p->privileges & 0xFF) | (p->isAlive ? MYNOS_PROC_ALIVE : 0);
 }
 
 /* log (31): write a message of a program to the kernel log (the log port,
@@ -319,14 +358,17 @@ int32_t _mynos_syscall_setTimer(ulong32_t usec) {
   return 0;
 }
 
+/* enableIrq (100), disableIrq (101): the caller's own lines only */
 int _mynos_syscall_enableIrq(ushort16_t n) {
   if (!__OS_irq_valid(n)) return MYNOS_ERR_INVALID;
+  if (__OS_irq_owner(n) != CURRPID) return MYNOS_ERR_DENY;
   enable_irq(n);
   return 0;
 }
 
 int _mynos_syscall_disableIrq(ushort16_t n) {
   if (!__OS_irq_valid(n)) return MYNOS_ERR_INVALID;
+  if (__OS_irq_owner(n) != CURRPID) return MYNOS_ERR_DENY;
   disable_irq(n);
   return 0;
 }

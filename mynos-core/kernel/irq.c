@@ -66,7 +66,7 @@ static void irq_dispatch(int n) {
     disable_irq(n);
     return;
   }
-  TRACE(TRACE_IRQ, irqOwner[n], currProcess, -1, 0, n, NULL, 0);
+  TRACE(TRACE_IRQ, irqOwner[n], CURRPID, -1, 0, n, NULL, 0);
   __OS_sem_V(irqSem[n]);
   /* the idle thread was running: give the CPU to the driver now */
   if (currThread->pid == 0) sched();
@@ -95,18 +95,29 @@ int __OS_irq_valid(uint32_t irq) {
   return irq < NIRQ && irq != 0 && irq != 2;
 }
 
+/* the process that holds a line, or -1 */
+int __OS_irq_owner(uint32_t irq) {
+  return irq < NIRQ ? irqOwner[irq] : -1;
+}
+
+/* driverRegister (10): a line for the calling driver, which needs the io
+   privilege; the semaphore the kernel V's at each interrupt is returned,
+   and belongs to the driver */
 int __OS_driverRegister(char * name, uint32_t irq,
 			uint32_t * io, uint32_t * mem) {
   int sem;
+  if (!(processTable[currProcess]->privileges & MYNOS_PRIV_IO))
+    return MYNOS_ERR_DENY;
   if (!__OS_irq_valid(irq)) return MYNOS_ERR_INVALID;
-  if (irqOwner[irq] >= 0 && irqOwner[irq] != (int)currProcess &&
-      processTable[irqOwner[irq]] && processTable[irqOwner[irq]]->isAlive)
+  if (irqOwner[irq] >= 0 && irqOwner[irq] != CURRPID &&
+      proc(irqOwner[irq]) && proc(irqOwner[irq])->isAlive)
     return MYNOS_ERR_BUSY;
   if (__OS_service_registerService(name) == -1) return -1;
   if ((sem = __OS_sem_allocateSemaphore(0)) < 0) return sem;
   if (irqOwner[irq] >= 0) __OS_sem_freeSemaphore(irqSem[irq]);
+  __OS_sem_setOwner(sem, CURRPID);
   irqSem[irq] = sem;
-  irqOwner[irq] = currProcess;
+  irqOwner[irq] = CURRPID;
   return sem;
 }
 

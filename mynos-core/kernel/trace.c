@@ -104,7 +104,7 @@ int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2) {
     for (i = 0; i < numProcess; i++) {
       process_descriptor_t * p = processTable[i];
       if (p && p->isAlive)
-	trace_event(TRACE_PROCESS, i, p->ppid, -1, 0, 0, p->name,
+	trace_event(TRACE_PROCESS, p->pid, p->ppid, -1, 0, 0, p->name,
 		    strlen16(p->name));
     }
     return 0;

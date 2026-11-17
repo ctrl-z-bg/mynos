@@ -19,7 +19,7 @@ let fails f = match f () with _ -> false | exception Sys_error _ -> true
 let () =
   let ok = ref true in
   let ( &&& ) r b = r := !r && b in
-  List.iter (fun p -> ignore (Mynos.spawn "ocamlrun" [| "ocamlrun"; p |]))
+  List.iter (fun p -> ignore (Mynos.spawn ~io:(p = "ata.byte") "ocamlrun" [| "ocamlrun"; p |]))
     [ "ata.byte"; "fatfs.byte" ];
   wait_for "/disk" 100;
   ok &&& check "/disk is a directory" (Sys.is_directory "/disk");

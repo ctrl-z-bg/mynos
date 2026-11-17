@@ -79,7 +79,7 @@ int32_t __OS_ipc_send(int32_t c, void * start, uint32_t size,
     destpageaddr = destpage << 12;
   }
 
-  TRACE(TRACE_SEND, currProcess, channel->receiver, c, size, 0,
+  TRACE(TRACE_SEND, CURRPID, channel->receiver, c, size, 0,
 	justSync ? NULL : start, size);
   msg = kmalloc(sizeof(msg_t));
 
@@ -177,7 +177,7 @@ int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg,
 
   if (trace_on) {
     unichannel_t * other = getMyWriteChannel(c);
-    trace_event(TRACE_RECV, currProcess, other ? other->receiver : -1, c,
+    trace_event(TRACE_RECV, CURRPID, other ? other->receiver : -1, c,
 		msg->size, 0, NULL, 0);
   }
 

@@ -29,6 +29,12 @@ int mynos_spawnImage(void * elf, unsigned int len, char ** argv, char ** envp)
   return __mynos_syscall(30, (int)elf, (int)len, (int)argv, (int)envp, 0);
 }
 
+/* processInfo (27): MYNOS_PROC_ALIVE | privileges, or an error */
+int mynos_processInfo(int pid)
+{
+  return __mynos_syscall(27, pid, 0, 0, 0, 0);
+}
+
 const char * mynos_cwd(void);   /* fileio.c */
 extern char ** environ;
 
@@ -49,7 +55,22 @@ static char ** child_env(char ** envp, char * pwd_var)
   return env;
 }
 
+static int spawn_file(const char * path, char ** argv, char ** envp,
+		      int privileges);
+
 int mynos_spawn(const char * path, char ** argv, char ** envp)
+{
+  return spawn_file(path, argv, envp, 0);
+}
+
+int mynos_spawnPriv(const char * path, char ** argv, char ** envp,
+		    int privileges)
+{
+  return spawn_file(path, argv, envp, privileges);
+}
+
+static int spawn_file(const char * path, char ** argv, char ** envp,
+		      int privileges)
 {
   struct stat st;
   char * image;
@@ -84,7 +105,8 @@ int mynos_spawn(const char * path, char ** argv, char ** envp)
   }
   if (!envp) envp = environ;      /* by default, our own environment */
   env = child_env(envp, pwd_var);
-  pid = mynos_spawnImage(image, done, argv, env ? env : envp);
+  pid = __mynos_syscall(30, (int)image, (int)done, (int)argv,
+                        (int)(env ? env : envp), privileges);
   free(env);
   free(image);
   return pid;

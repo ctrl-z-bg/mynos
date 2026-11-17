@@ -234,7 +234,17 @@ static void free_strings(char ** v)
   caml_stat_free(v);
 }
 
-CAMLprim value caml_mynos_spawn(value path, value argv, value env)
+CAMLprim value caml_mynos_channel_peer(value channel)
+{
+  return check("channel_peer", mynos_channelPeer(Int_val(channel)));
+}
+
+CAMLprim value caml_mynos_process_info(value pid)
+{
+  return Val_int(mynos_processInfo(Int_val(pid)));
+}
+
+CAMLprim value caml_mynos_spawn(value path, value argv, value env, value io)
 {
   int ret;
   char * p = caml_stat_strdup(String_val(path));
@@ -242,7 +252,8 @@ CAMLprim value caml_mynos_spawn(value path, value argv, value env)
   char ** e = c_strings(env);
   caml_enter_blocking_section();
   /* no environment given: the child gets ours */
-  ret = mynos_spawn(p, a, Wosize_val(env) ? e : NULL);
+  ret = mynos_spawnPriv(p, a, Wosize_val(env) ? e : NULL,
+                        Bool_val(io) ? MYNOS_PRIV_IO : 0);
   caml_leave_blocking_section();
   caml_stat_free(p);
   free_strings(a);

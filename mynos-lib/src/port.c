@@ -24,17 +24,18 @@
 #include <unistd.h>
 
 int mynos_allocPort() {
-  int ret;
-  pid_t pid = getpid();
-  ret = __mynos_syscall(20, (int)pid, 0, 0, 0, 0);
-  return ret;    
+  return __mynos_syscall(20, 0, 0, 0, 0, 0);
 }
 
+/* a well-known port (below MYNOS_FIRST_FREE_PORT), privileged processes
+   only */
 int mynos_allocPortP(int port) {
-  int ret;
-  pid_t pid = getpid();
-  ret = __mynos_syscall(21, (int)port, (int)pid, 0, 0, 0);
-  return ret;
+  return __mynos_syscall(21, (int)port, 0, 0, 0, 0);
+}
+
+/* the pid at the other end of one of our channels */
+int mynos_channelPeer(int channel) {
+  return __mynos_syscall(26, channel, 0, 0, 0, 0);
 }
 
 int mynos_connectToPort(int port) {

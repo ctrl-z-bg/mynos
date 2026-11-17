@@ -22,7 +22,7 @@ let rec device tries =
 let () =
   let ok = ref true in
   let ( &&& ) r b = r := !r && b in
-  ignore (Mynos.spawn "ocamlrun" [| "ocamlrun"; "ata.byte" |]);
+  ignore (Mynos.spawn ~io:true "ocamlrun" [| "ocamlrun"; "ata.byte" |]);
   let d = device 50 in
   ok &&& check "disk size" (Block.sectors d = 2048);
   ok &&& check "read sector 0" (Block.read d 0 1 = sector_text 0);

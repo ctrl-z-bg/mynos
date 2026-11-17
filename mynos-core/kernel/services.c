@@ -131,7 +131,7 @@ int __OS_service_registerService(char * name) {
   } while (servicesRegistry[lastInsertedEntry].pid != 0);
 
   numEntry++;
-  servicesRegistry[lastInsertedEntry].pid = currProcess;
+  servicesRegistry[lastInsertedEntry].pid = CURRPID;
   kmemcpy(servicesRegistry[lastInsertedEntry].name, name, 
 	  MIN(kstrlen(name) + 1, SERVICENAMEMAXLEN));
   printk("Service ");
@@ -149,7 +149,7 @@ int __OS_service_registerClient(char * name) {
     return -1;
 
   if ((clientEntry = insertInClientProcList(entry)) == -1) return -1;
-  insertInProcList(entry, currProcess);
+  insertInProcList(entry, CURRPID);
   return clientEntry;
 }
 

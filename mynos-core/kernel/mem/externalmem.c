@@ -59,10 +59,10 @@ void __mem_unmapFrame(uint32_t saved) {
 static void __mapProcessPD(pid_t pid) {
   uint32_t phyPageAddress;
 
-  if (!processTable[pid] || !processTable[pid]->isAlive)
+  if (!proc(pid) || !proc(pid)->isAlive)
     KPANIC("Try to alloc a inexistent process PD!!!");
 
-  phyPageAddress = (uint32_t)((processTable[pid]->tss)->pgdir);
+  phyPageAddress = (uint32_t)((proc(pid)->tss)->pgdir);
   __mapPageToAppPage(phyPageAddress >> 12);
 }
 
@@ -71,7 +71,7 @@ static int32_t __mapProcessPT(pid_t pid, uint32_t table) {
   uint32_t phyPageAddress;
   uint32_t * pd;
 
-  if (!processTable[pid] || !processTable[pid]->isAlive)
+  if (!proc(pid) || !proc(pid)->isAlive)
     KPANIC("Try to alloc a inexistent process PT!!!");
 
   /* map the process PD */
@@ -228,7 +228,7 @@ int32_t __OS_mapPagesTo(pid_t pid, uint32_t lpage,
   // the area should be checked before this function
 
   // alloc a new area in the receiver linear space
-  newLPage = __lmt_allocArea(&(processTable[pid]->lmemmap),
+  newLPage = __lmt_allocArea(&(proc(pid)->lmemmap),
 			     npages);
 
   for (i = 0; i < npages; i++)

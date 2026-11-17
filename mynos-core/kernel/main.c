@@ -346,7 +346,8 @@ void mynos_main(multiboot_info_t *boot_info) {
       if ((*((char*)modinfo[i].start) == 0x7F) &&
 	  !kmemcmp((char*)modinfo[i].start + 1, "ELF", 3)) {
 	if (createProcess(modinfo[i].start, modinfo[i].len,
-			  i < MAXMODULES ? module_args(i) : NULL, NULL, 0) < 0)
+			  i < MAXMODULES ? module_args(i) : NULL, NULL, 0,
+			  MYNOS_PRIV_IO) < 0)
 	  printk("module is not a valid MyNOS program\n");
       }
     }

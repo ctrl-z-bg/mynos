@@ -404,7 +404,7 @@ int _linux_syscall_clock_nanosleep64(uint32_t clock, int flags,
    the target exists. Signals to other processes are not supported. */
 int _linux_syscall_kill(int pid, int sig) {
   /* oneself: the process (pid) or one of its threads (tkill, tgkill) */
-  if (pid != 0 && pid != (int)currProcess) {
+  if (pid != 0 && pid != CURRPID) {
     tss_t * t;
     for (t = processTable[currProcess]->tss; t && t->tid != pid; t = t->next) ;
     if (!t) return -1; /* -EPERM */
@@ -510,18 +510,19 @@ int _linux_syscall_wait4(int pid, int * status, int options, void * rusage) {
     int i, children = 0;
     for (i = 1; i < (int)numProcess; i++) {
       process_descriptor_t * p = processTable[i];
-      if (!p || p->ppid != (int)currProcess || p->reaped) continue;
-      if (pid > 0 && i != pid) continue;
+      if (!p || p->ppid != CURRPID || p->reaped) continue;
+      if (pid > 0 && p->pid != pid) continue;
       children++;
       if (!p->isAlive) {
 	if (status) *status = p->exitStatus;
 	/* free its memory now (if not done yet), then its descriptor */
 	reapZombies();
+	pid = p->pid;
 	if (p->memFreed)
-	  freeProcessDescriptor(i);
+	  freeProcessDescriptor(pid);
 	else
 	  p->reaped = 1;   /* the reaper will free it */
-	return i;
+	return pid;
       }
     }
     if (!children) return -ECHILD;
@@ -678,7 +679,7 @@ int _linux_syscall_write(int fd, const void *buf, size_t count) {
 }
 
 int _linux_syscall_getpid() {
-  return currProcess;
+  return CURRPID;
 }
 
 int _linux_syscall_getppid() {
@@ -854,25 +855,25 @@ int _linux_syscall_fork() {
   numProcesses++;
   numThreads += processTable[currProcess]->numThreads;
 
-  processTable[new_pid] = 
+  processTable[PSLOT(new_pid)] = 
     (process_descriptor_t*)kmalloc(sizeof(process_descriptor_t));
 
   /* copy the whole structure */
-  kmemcpy(processTable[new_pid], 
+  kmemcpy(processTable[PSLOT(new_pid)], 
 	  processTable[currProcess],
 	  sizeof(process_descriptor_t));
 
   /* copy the linear space map */
-  processTable[new_pid]->lmemmap = 
+  processTable[PSLOT(new_pid)]->lmemmap = 
     __lmt_copyList(processTable[currProcess]->lmemmap);
 
   /* initialize the channel and port lists */
-  listInit(processTable[new_pid]->channelList);
-  listInit(processTable[new_pid]->portList);
+  listInit(processTable[PSLOT(new_pid)]->channelList);
+  listInit(processTable[PSLOT(new_pid)]->portList);
 
   /* copy the tsses */
   mirror = 
-    copyThreads(processTable[new_pid], processTable[currProcess], 
+    copyThreads(processTable[PSLOT(new_pid)], processTable[currProcess], 
 		pdc, new_pid);
 
   // TODO: other threads!!!
@@ -880,7 +881,7 @@ int _linux_syscall_fork() {
 #if 0
   // insert the threads into the readyQueue
   {
-    tss_t * thread = processTable[new_pid]->tss;
+    tss_t * thread = processTable[PSLOT(new_pid)]->tss;
     while (thread) {
       readyQueueInsert(thread);
       thread = thread->next;
@@ -888,19 +889,19 @@ int _linux_syscall_fork() {
   }
 #endif
 
-  processTable[new_pid]->pid = new_pid;
-  processTable[new_pid]->ppid = currProcess;
-  TRACE(TRACE_SPAWN, currProcess, new_pid, -1, 0, 0, processTable[new_pid]->name,
-	kstrlen(processTable[new_pid]->name));
-  processTable[new_pid]->isAlive = 1;
-  processTable[new_pid]->exitStatus = 0;
-  processTable[new_pid]->reaped = 0;
-  processTable[new_pid]->childSem = __OS_sem_allocateSemaphore(0);
-  processTable[new_pid]->deadThreads = NULL;   /* the parent's are its own */
-  processTable[new_pid]->memFreed = 0;
-  processTable[new_pid]->nextZombie = NULL;
+  processTable[PSLOT(new_pid)]->pid = new_pid;
+  processTable[PSLOT(new_pid)]->ppid = CURRPID;
+  TRACE(TRACE_SPAWN, CURRPID, new_pid, -1, 0, 0, processTable[PSLOT(new_pid)]->name,
+	kstrlen(processTable[PSLOT(new_pid)]->name));
+  processTable[PSLOT(new_pid)]->isAlive = 1;
+  processTable[PSLOT(new_pid)]->exitStatus = 0;
+  processTable[PSLOT(new_pid)]->reaped = 0;
+  processTable[PSLOT(new_pid)]->childSem = __OS_sem_allocateSemaphore(0);
+  processTable[PSLOT(new_pid)]->deadThreads = NULL;   /* the parent's are its own */
+  processTable[PSLOT(new_pid)]->memFreed = 0;
+  processTable[PSLOT(new_pid)]->nextZombie = NULL;
 
-  processTable[new_pid]->ptsMirror = (void*)LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
+  processTable[PSLOT(new_pid)]->ptsMirror = (void*)LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
   __OS_releasePages(lastPT, 1, 0, 0);
   __OS_releasePages(pdc, 1, 0, 0);
   

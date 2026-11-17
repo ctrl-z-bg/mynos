@@ -23,7 +23,7 @@ let rec recv_all n s acc =
 let () =
   let ok = ref true in
   let ( &&& ) r b = r := !r && b in
-  ignore (Mynos.spawn "netd" [| "netd" |]);
+  ignore (Mynos.spawn ~io:true "netd" [| "netd" |]);
   let n = Net.connect () in
   let c = Net.call n Net.Config in
   Printf.printf "net: %s address %s netmask %s gateway %s dns %s\n%!"

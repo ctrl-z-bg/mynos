@@ -1363,3 +1363,47 @@ out, not merely taken first by convention. And a rare hang is worth a
 look when it appears: here it was the boot order, and any program could
 have met it.
 
+## 2026-11-17 — Who is calling: generational ids and one privilege
+
+**The state found.** Every process ran with IOPL 3 (the 2002 default in
+`INITIAL_EFLAGS`): any program, even a phrase typed in the toplevel, could
+reprogram the interrupt controller or the disk with `Mynos.outb`. Any
+process could `P`, `V` or free any semaphore, including a thread's private
+one. `allocPort` took the owner's pid as an argument from user space. Pids
+were reused round robin over 999 slots, and channel ids over 100.
+
+**Identity.** The first draft added a serial to each process, never
+reused. The owner asked whether it could be more elegant: two numbers for
+one identity leave the pid ambiguous everywhere else. The kernel already
+had the answer, from the semaphore fix of a few days ago: ids that carry
+their slot and a generation (`id % size` is the slot, the object keeps its
+id, a lookup compares). Pids, channels and ports now follow it; a slot's
+generation grows when its object is freed. `proc(pid)` replaced 71 direct
+`processTable[pid]` lookups; `currProcess` stays the slot, `CURRPID` is
+the pid. Well-known ports keep generation 0, so the registry's port stays
+0 across restarts.
+
+**A trap.** Thread ids (for threads other than a process's first) moved
+above the pids, first at 2^30. Every multi-threaded program then aborted
+(signal 6): musl keeps a mutex's owner as `tid & 0x3fffffff` and uses the
+bits above as flags (`FUTEX_OWNER_DIED` is 2^30). Thread ids are now
+between 10^9 (pids stay below) and 2^30 - 1.
+
+**Privilege.** One, `io`: IOPL 3 and IRQs. Boot modules have it; `spawn`
+has a flags argument (the native call had a free register) and a child
+gets at most its parent's; `init.rc` says `driver consoled`, `driver
+ata.byte`, `driver netd`. A process without it runs with IOPL 0, and `inb`
+ends it with a protection fault. Semaphores made by `initSem` belong to
+their process (the system calls check it; the kernel's own, owner -1, are
+out of reach), an IRQ's semaphore to its driver; `enableIrq` and
+`disableIrq` act on the caller's own lines only.
+
+**Two calls.** `channelPeer(ch)`: the pid at the other end, which a service
+asks about the channel of a request. `processInfo(pid)`: privileges, and
+whether it still runs; with generations, "no such pid" is final.
+
+**Lesson.** An invariant that already worked in one place (semaphore ids)
+was the right shape for the others; asking "is there a more elegant way"
+before writing the code avoided a second identity that every later
+feature would have had to carry.
+

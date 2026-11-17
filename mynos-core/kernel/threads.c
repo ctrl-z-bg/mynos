@@ -30,8 +30,12 @@
 #include "mynos.h"
 
 /* thread ids for threads other than a process's first one (whose tid is
-   its pid): above the pids, so that the two never meet */
-static int32_t nextTid = MAXPROCESSES;
+   its pid): above the pids (below 10^9), so that the two never meet, and
+   below 2^30: the C library keeps a mutex's owner as tid & 0x3fffffff,
+   the bits above being flags (FUTEX_OWNER_DIED...) */
+#define FIRST_TID 1000000000
+#define LAST_TID  0x3fffffff
+static int32_t nextTid = FIRST_TID;
 
 /*
  * A new thread of the current process, as a copy of the current thread:
@@ -60,10 +64,10 @@ tss_t * threadAlloc(void) {
   }
 
   kmemcpy(tss, currThread, sizeof(tss_t));
-  tss->pid = currProcess;
+  tss->pid = CURRPID;
   tss->kstack = kstack;
   tss->tid = nextTid++;
-  if (nextTid < MAXPROCESSES) nextTid = MAXPROCESSES;
+  if (nextTid > LAST_TID) nextTid = FIRST_TID;
   tss->clearTid = NULL;
   tss->queue = NULL;
   tss->timeToWake = 0;
@@ -101,7 +105,8 @@ int32_t __OS_threadCreate(uint32_t entry_point,
 
   tss->eip = entry_point;
   tss->esp = stack;
-  tss->eflags = INITIAL_EFLAGS;
+  tss->eflags = INITIAL_EFLAGS |
+    ((processTable[currProcess]->privileges & MYNOS_PRIV_IO) ? IOPL3 : 0);
   tss->esp0 = tss->kstack + KERNEL_STACK_NPAGES * PAGE_SIZE - 1;
 
   /* initialize the kernel stack for the new thread */

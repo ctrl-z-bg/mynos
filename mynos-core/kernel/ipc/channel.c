@@ -39,6 +39,13 @@ void initChannelTable() {
   kbzero(cTable.table, MAXCNLS * sizeof(channel_t*));
 }
 
+/* Channel ids carry a generation, as pids and ports do: id = slot +
+   MAXCNLS * generation, so that a freed channel's id, kept by mistake,
+   does not name a later channel of other processes. */
+#define CHANNEL_GENERATIONS (0x7fffffff / MAXCNLS)
+static uint32_t generation[MAXCNLS];
+
+/* a free slot */
 int32_t getFreeChannel() {
   static uint32_t i = 0;
   if (cTable.free == 0) return MYNOS_ERR_FULL;
@@ -49,8 +56,10 @@ int32_t getFreeChannel() {
 
 channel_t * getChannel(uint32_t c) {
   /* an id from a process: any value (unsigned, so negatives too) */
-  if (c >= MAXCNLS) return NULL;
-  return cTable.table[c];
+  channel_t * channel;
+  if (c > 0x7fffffff) return NULL;
+  channel = cTable.table[c % MAXCNLS];
+  return (channel && channel->id == (int32_t)c) ? channel : NULL;
 }
 
 unichannel_t * allocUnichannel(pid_t p) {
@@ -67,18 +76,20 @@ unichannel_t * allocUnichannel(pid_t p) {
 
 int32_t allocChannel(pid_t p1, pid_t p2) {
   channel_t * c;
-  int id = getFreeChannel();
-  if (id < 0)
-    return id;
+  int slot = getFreeChannel(), id;
+  if (slot < 0)
+    return slot;
+  id = slot + MAXCNLS * generation[slot];
   c = kmalloc(sizeof(channel_t));
+  c->id = id;
   c->c1 = allocUnichannel(p1);
   c->c2 = allocUnichannel(p2);
-  cTable.table[id] = c;
+  cTable.table[slot] = c;
   cTable.free--;
 
   // insert this channel into the each process channel list
-  listInsert(processTable[p1]->channelList, (void*)id);
-  listInsert(processTable[p2]->channelList, (void*)id);
+  listInsert(proc(p1)->channelList, (void*)id);
+  listInsert(proc(p2)->channelList, (void*)id);
 
   return id;
 }
@@ -158,7 +169,7 @@ int32_t __OS_ipc_freeChannel(int32_t c) {
 
   if (trace_on) {
     unichannel_t * other = getMyWriteChannel(c);
-    trace_event(TRACE_FREE, currProcess, other ? other->receiver : -1, c,
+    trace_event(TRACE_FREE, CURRPID, other ? other->receiver : -1, c,
 		0, 0, NULL, 0);
   }
 
@@ -191,7 +202,8 @@ int32_t __OS_ipc_freeChannel(int32_t c) {
 #endif
 
   freeChannel(chan);
-  cTable.table[c] = NULL;
+  cTable.table[c % MAXCNLS] = NULL;
+  generation[c % MAXCNLS] = (generation[c % MAXCNLS] + 1) % CHANNEL_GENERATIONS;
   cTable.free++;
 
   return 0;

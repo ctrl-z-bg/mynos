@@ -117,6 +117,73 @@ static int badptr(int port) {
   return refused == calls ? 0 : 20;
 }
 
+/* ---- permissions (doc/decisions/identity-and-permissions.md) ---- */
+
+static int spawn_child(char ** argv);
+
+/* a child without privileges: no IRQ, no semaphore of another process
+   (the parent's, given in argv), no port taken by number; it tells its pid
+   to the parent through a connection, whose other end the parent checks */
+static int unprivileged(int port, int sem) {
+  int ch, pid = getpid(), bad = 0;
+  if (mynos_driverRegister("x", 5, NULL, NULL) != MYNOS_ERR_DENY) bad |= 1;
+  if (mynos_V(sem) != MYNOS_ERR_DENY) bad |= 2;
+  if (mynos_freeSem(sem) != MYNOS_ERR_DENY) bad |= 4;
+  if (mynos_allocPortP(1) != MYNOS_ERR_DENY) bad |= 8;
+  if (mynos_spawnPriv("stress", NULL, NULL, MYNOS_PRIV_IO) != MYNOS_ERR_DENY)
+    bad |= 16;
+  if ((ch = mynos_connectToPort(port)) < 0) return 100;
+  mynos_send(ch, &pid, sizeof pid, 0);
+  mynos_freeChannel(ch);
+  return bad;
+}
+
+/* port I/O without the privilege: the process ends (protection fault) */
+static int unprivileged_io(void) {
+  unsigned char v;
+  __asm__ volatile ("inb $0x70, %0" : "=a"(v));
+  return 0;                     /* not reached */
+}
+
+static int permissions(int port, char * ps) {
+  int ok = 1, st, pid, ch, peer, sem = mynos_initSem(1);
+  char ss[16];
+  char * argv[] = { "stress", "unpriv", ps, ss, NULL };
+  char * argv_io[] = { "stress", "unpriv-io", NULL };
+  mynos_msg_t * msg;
+#define C(what, e) do { if (!(e)) { printf("stress: permissions: %s\n", what); ok = 0; } } while (0)
+  snprintf(ss, sizeof ss, "%d", sem);
+  pid = spawn_child(argv);
+  ch = mynos_listenPort(port);
+  peer = mynos_channelPeer(ch);
+  C("a connection from the child", ch >= 0 && mynos_recv(ch, &msg, 0, 0) >= 0);
+  C("channelPeer names the child", peer == pid && *(int *)msg->start == pid);
+  mynos_freeMsg(&msg);
+  /* (it may have ended already, not collected yet: then not ALIVE) */
+  C("the child has no privileges",
+    mynos_processInfo(pid) >= 0 && (mynos_processInfo(pid) & 0xFF) == 0);
+  mynos_freeChannel(ch);
+  C("the child was refused everything",
+    waitpid(pid, &st, 0) == pid && WIFEXITED(st) && WEXITSTATUS(st) == 0);
+  if (WIFEXITED(st) && WEXITSTATUS(st)) printf("stress: refusals missing: %x\n", WEXITSTATUS(st));
+  C("an ended process is not found by its pid",
+    mynos_processInfo(pid) == MYNOS_ERR_INVALID);
+  C("this process has the io privilege",
+    mynos_processInfo(getpid()) == (MYNOS_PROC_ALIVE | MYNOS_PRIV_IO));
+  C("the semaphore is still ours", mynos_P(sem) == 0 && mynos_freeSem(sem) == 0);
+  C("the kernel's semaphores are not ours", mynos_V(0) == MYNOS_ERR_DENY);
+  pid = spawn_child(argv_io);
+  C("port I/O without the privilege ends the process",
+    pid >= 0 && waitpid(pid, &st, 0) == pid && WIFSIGNALED(st));
+  {
+    int pid2 = spawn_child(argv_io);
+    C("pids are not reused", pid2 >= 0 && pid2 != pid);
+    waitpid(pid2, &st, 0);
+  }
+#undef C
+  return ok;
+}
+
 /* ---- the test ---- */
 
 static int spawn_child(char ** argv) {
@@ -325,6 +392,8 @@ static int test(void) {
           pid >= 0 && waitpid(pid, &st, 0) == pid && WIFEXITED(st) &&
           WEXITSTATUS(st) == 0);
   }
+  check("permissions: privileges, owners, channelPeer",
+        permissions(port, ps));
   check("the system still starts programs after it",
         ipc_rounds(port, 2) == 0);
 
@@ -340,6 +409,10 @@ int main(int argc, char ** argv) {
     return client(atoi(argv[2]), (unsigned int)atoi(argv[3]));
   if (argc == 3 && !strcmp(argv[1], "badptr"))
     return badptr(atoi(argv[2]));
+  if (argc == 4 && !strcmp(argv[1], "unpriv"))
+    return unprivileged(atoi(argv[2]), atoi(argv[3]));
+  if (argc == 2 && !strcmp(argv[1], "unpriv-io"))
+    return unprivileged_io();
   if (argc == 2 && atoi(argv[1]) > 0) repeat = atoi(argv[1]);
   if (test() == 0) printf("stress: all checks passed\n");
   else printf("stress: %d checks failed\n", failures);

@@ -155,7 +155,7 @@ void sched() {
      that reached it in the round robin waited up to 10 ms */
   if (currThread->pid == 0 && readyQueueNElem() > 1)
     currThread = readyQueueNext();
-  currProcess = currThread->pid;
+  currProcess = PSLOT(currThread->pid);
 
   if (currThread != oldThread)
     switchTo(oldThread, currThread);

@@ -438,7 +438,8 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
   tss->ldt = 0;
 
-  tss->eflags = INITIAL_EFLAGS;  // iopl = 3
+  tss->eflags = INITIAL_EFLAGS |
+    ((desc->privileges & MYNOS_PRIV_IO) ? IOPL3 : 0);
   tss->esp = tss->ebp = ustackBottomAddr + PAGE_SIZE * USER_STACK_NPAGES -
     initialStack;
   tss->esp0 = tss->esp1 = tss->esp2 = kstackBottomAddr + PAGE_SIZE * KERNEL_STACK_NPAGES;
@@ -494,8 +495,10 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   return desc;
 }
 
-/* a free pid: the slots of ended processes are reused, in a cycle so that
-   a pid is not given again soon after its process ended */
+/* the generation of each slot: incremented when its process is freed */
+static uint32_t generation[MAXPROCESSES];
+
+/* a new pid: a free slot (taken in a cycle), with its generation */
 int allocPid(void) {
   static uint32_t last = 0;
   uint32_t i, p;
@@ -504,7 +507,7 @@ int allocPid(void) {
     if (processTable[p] == NULL) {
       last = p;
       if (p >= numProcess) numProcess = p + 1;
-      return p;
+      return p + MAXPROCESSES * generation[p];
     }
   }
   return -1;
@@ -515,7 +518,7 @@ int allocPid(void) {
  * process read: mynos_spawn). Returns its pid, or a MYNOS_ERR_* code.
  */
 int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
-		  pid_t ppid) {
+		  pid_t ppid, uint32_t privileges) {
   process_descriptor_t * desc;
   int pid;
 
@@ -524,6 +527,7 @@ int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
   if (desc == NULL) return MYNOS_ERR_FULL;
   desc->pid = pid;
   desc->ppid = ppid;
+  desc->privileges = privileges;
   trace_setName(desc->name, argv);
   if (spawnProcess(desc, elf, len, argv, envp) == NULL) {
     /* a bad image fails before allocating; out of memory, after (and
@@ -533,7 +537,7 @@ int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
   }
   desc->tss->pid = pid;
   desc->tss->tid = pid;
-  processTable[pid] = desc;
+  processTable[PSLOT(pid)] = desc;
   TRACE(TRACE_SPAWN, ppid, pid, -1, 0, 0, desc->name, kstrlen(desc->name));
   return pid;
 }
@@ -557,7 +561,7 @@ void killProcess(int status) {
   process_descriptor_t * parent;
   process_descriptor_t * self = processTable[currProcess];
 
-  TRACE(TRACE_EXIT, currProcess, -1, -1, 0, status, NULL, 0);
+  TRACE(TRACE_EXIT, self->pid, -1, -1, 0, status, NULL, 0);
   self->isAlive = 0;
   numThreads -= processTable[currProcess]->numThreads;
   numProcesses--;
@@ -586,27 +590,27 @@ void killProcess(int status) {
 
 
   /* threads waiting on futexes */
-  futexForget(currProcess);
+  futexForget(self->pid);
 
   /* semaphores: the threads' private ones and the children's */
   for (tss = self->tss; tss; tss = tss->next)
     __OS_sem_freeSemaphore(tss->privSem);
   __OS_sem_freeSemaphore(self->childSem);
-  __OS_sem_freeProcessSemaphores(currProcess);
-  __OS_irq_processEnded(currProcess);
+  __OS_sem_freeProcessSemaphores(self->pid);
+  __OS_irq_processEnded(self->pid);
 
   /* the children become orphans: nobody will wait for them */
   for (i = 1; i < (int)numProcess; i++) {
     process_descriptor_t * c = processTable[i];
-    if (!c || c == self || c->ppid != (pid_t)currProcess) continue;
+    if (!c || c == self || c->ppid != self->pid) continue;
     c->ppid = 0;
     if (!c->isAlive && c->memFreed)
-      freeProcessDescriptor(i);
+      freeProcessDescriptor(c->pid);
   }
 
   /* tell the parent, which may be waiting for it */
   self->exitStatus = status;
-  parent = processTable[self->ppid];
+  parent = proc(self->ppid);
   if (self->ppid != 0 && parent && parent->isAlive)
     __OS_sem_V(parent->childSem);
 
@@ -618,8 +622,11 @@ void killProcess(int status) {
 }
 
 void freeProcessDescriptor(pid_t pid) {
-  kfree(processTable[pid]);
-  processTable[pid] = NULL;
+  uint32_t slot = PSLOT(pid);
+  if (slot == 0 || proc(pid) == NULL) return;
+  kfree(processTable[slot]);
+  processTable[slot] = NULL;
+  generation[slot] = (generation[slot] + 1) % PID_GENERATIONS;
 }
 
 /* drop one reference to a physical page (it is free at the last one) */
@@ -692,7 +699,7 @@ void reapZombies(void) {
   while (*pz) {
     process_descriptor_t * z = *pz;
     tss_t * t, * next;
-    if (z->pid == (pid_t)currProcess) {
+    if (z == processTable[currProcess]) {
       pz = (process_descriptor_t **)&z->nextZombie;
       continue;
     }
@@ -706,8 +713,8 @@ void reapZombies(void) {
     z->memFreed = 1;
 
     /* nobody will collect its status */
-    if (z->ppid == 0 || z->reaped || !processTable[z->ppid] ||
-	!processTable[z->ppid]->isAlive)
+    if (z->ppid == 0 || z->reaped || !proc(z->ppid) ||
+	!proc(z->ppid)->isAlive)
       freeProcessDescriptor(z->pid);
   }
 }

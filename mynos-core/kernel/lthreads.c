@@ -90,7 +90,7 @@ static struct {
 static int futexWake(int32_t * addr, int n) {
   int i, woken = 0;
   for (i = 0; i < MAXFUTEXWAITERS && woken < n; i++)
-    if (waiters[i].thread && waiters[i].pid == (pid_t)currProcess &&
+    if (waiters[i].thread && waiters[i].pid == CURRPID &&
 	waiters[i].addr == addr) {
       tss_t * t = waiters[i].thread;
       waiters[i].thread = NULL;
@@ -119,7 +119,7 @@ static int32_t futexWait(int32_t * addr, int32_t val, int32_t ms) {
   for (i = 0; i < MAXFUTEXWAITERS && waiters[i].thread; i++) ;
   if (i == MAXFUTEXWAITERS) return -ENOMEM;
   waiters[i].thread = currThread;
-  waiters[i].pid = currProcess;
+  waiters[i].pid = CURRPID;
   waiters[i].addr = addr;
   waiters[i].timed = ms > 0;
   if (ms > 0) timerQueueInsert(currThread, ms);
@@ -135,7 +135,7 @@ static int32_t futexRequeue(int32_t * addr, int n, int nmove,
 			    int32_t * addr2) {
   int i, woken = futexWake(addr, n), moved = 0;
   for (i = 0; i < MAXFUTEXWAITERS && moved < nmove; i++)
-    if (waiters[i].thread && waiters[i].pid == (pid_t)currProcess &&
+    if (waiters[i].thread && waiters[i].pid == CURRPID &&
 	waiters[i].addr == addr) {
       waiters[i].addr = addr2;
       moved++;

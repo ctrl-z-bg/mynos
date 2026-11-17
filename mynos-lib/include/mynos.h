@@ -35,8 +35,16 @@
 #define MYNOS_IPC_SHARED     0x1
 #define MYNOS_IPC_NONBLOCK   0x2
 
-/* PREDEFINED PORTS */
+/* PREDEFINED PORTS: the ones below MYNOS_FIRST_FREE_PORT are taken by
+   number only (allocPortP), by privileged processes */
 #define MYNOS_PORT_REGISTRY 0
+#define MYNOS_FIRST_FREE_PORT 16
+
+/* privileges of a process (doc/decisions/identity-and-permissions.md):
+   given at spawn, at most the parent's own */
+#define MYNOS_PRIV_IO 1        /* port I/O and IRQs: drivers */
+/* processInfo's result: the privileges, and this bit while it runs */
+#define MYNOS_PROC_ALIVE 0x100
 
 // under this size (byte) the message is copied if not shared
 // (copied twice, to be honest)
@@ -73,6 +81,9 @@ int mynos_allocPortP(int port);
 int mynos_connectToPort(int port);
 int mynos_listenPort(int port);
 int mynos_changePortOwner(int port, int newpid);
+/* the pid of the process at the other end of a channel of ours: a
+   service's caller (doc/decisions/identity-and-permissions.md) */
+int mynos_channelPeer(int channel);
 int mynos_freePort(int port);
 
 /* Semaphore */
@@ -135,6 +146,13 @@ int mynos_trace(int op, void * arg1, unsigned int arg2);
    the child starts in our current directory (PWD). Wait for it with
    waitpid. */
 int mynos_spawn(const char * path, char ** argv, char ** envp);
+/* the same, giving the child privileges (MYNOS_PRIV_*): at most ours */
+int mynos_spawnPriv(const char * path, char ** argv, char ** envp,
+		    int privileges);
+/* a process's privileges, | MYNOS_PROC_ALIVE while it runs; an error if
+   there is no such pid (pids are not reused: a slot's next process gets
+   another one) */
+int mynos_processInfo(int pid);
 /* the same, from an ELF image in memory */
 int mynos_spawnImage(void * elf, unsigned int len, char ** argv, char ** envp);
 

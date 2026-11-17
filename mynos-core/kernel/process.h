@@ -28,7 +28,18 @@
 
 #define MAXPROCESSES (1000)
 #define MAXOPENSERVICES (100)
-#define INITIAL_EFLAGS (0x3200)
+/* user mode, interrupts on; IOPL 3 (port I/O) for privileged processes
+   only (doc/decisions/identity-and-permissions.md) */
+#define INITIAL_EFLAGS (0x0200)
+#define IOPL3          (0x3000)
+
+/* Pids carry a generation (doc/decisions/identity-and-permissions.md):
+   pid = slot + MAXPROCESSES * generation, the slot being the index in
+   processTable. A pid names one process for its whole life: when its slot
+   is reused, the new process has another pid. Generations wrap at
+   PID_GENERATIONS, so that pids stay below 10^9 (thread ids are above). */
+#define PID_GENERATIONS (1000000)
+#define PSLOT(pid) ((uint32_t)(pid) % MAXPROCESSES)
 
 typedef int servicesTable_t;
 
@@ -80,12 +91,25 @@ typedef struct {
 
   /* the program's name, for the event recorder (trace.c) */
   char name[16];
+  uint32_t privileges;        /* MYNOS_PRIV_* */
 } process_descriptor_t;
 
 extern process_descriptor_t * processTable[];
 extern uint32_t numProcess;
-extern uint32_t currProcess;
+extern uint32_t currProcess;      /* the current process's slot */
 extern tss_t * currThread;
+
+/* the current process's pid */
+#define CURRPID (processTable[currProcess]->pid)
+
+/* the process of a pid (alive, or ended and not collected yet), or NULL:
+   no such pid, or its slot holds a later process */
+static inline process_descriptor_t * proc(pid_t pid) {
+  process_descriptor_t * p;
+  if (pid < 0) return NULL;
+  p = processTable[PSLOT(pid)];
+  return (p && p->pid == pid) ? p : NULL;
+}
 
 /* the number of running processes */
 extern uint32_t numProcesses;
@@ -101,7 +125,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 				    uint32_t * test_start, uint32_t test_len,
 				    char ** argv, char ** envp);
 int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
-		  pid_t ppid);
+		  pid_t ppid, uint32_t privileges);
 void killProcess(int status);
 int allocPid(void);
 void reapZombies(void);

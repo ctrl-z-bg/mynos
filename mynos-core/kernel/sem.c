@@ -27,8 +27,10 @@
 #include "procqueue.h"
 #include "video.h"
 #include "sched.h"
+#include "mynos.h"
 
-#define MAXSEM ((MAXPROCESSES)*2)
+/* ids: slot + MAXSEM * n (id % MAXSEM finds the slot) */
+#define MAXSEM 4096
 #define MAXSEMVALUE 100
 
 typedef struct _semaphore_t {
@@ -154,8 +156,38 @@ int __OS_sem_allocateSemaphore(uint32_t n) {
    leaked with each process, until the table was full) */
 int __OS_sem_allocateUserSemaphore(uint32_t n) {
     int id = __OS_sem_allocateSemaphore(n);
-    if (id >= 0) semaphores.list[id % MAXSEM].owner = currProcess;
+    if (id >= 0) semaphores.list[id % MAXSEM].owner = CURRPID;
     return id;
+}
+
+/* a kernel semaphore given to a process (an IRQ's, to its driver) */
+void __OS_sem_setOwner(int semid, int pid) {
+    if (semid >= 0 && semaphores.list[semid % MAXSEM].used &&
+	semaphores.list[semid % MAXSEM].id == semid)
+	semaphores.list[semid % MAXSEM].owner = pid;
+}
+
+/* The system calls P (6), tryP (7), V (8), semFree (13): on the calling
+   process's own semaphores only. The kernel's (threads' private ones,
+   ports') and other processes' are refused. */
+static int mine(int semid) {
+    semaphore_t * s;
+    if (semid < 0) return 0;
+    s = &semaphores.list[semid % MAXSEM];
+    return s->used && s->id == semid && s->owner >= 0 && s->owner == CURRPID;
+}
+
+int __OS_sem_userP(int semid) {
+    return mine(semid) ? __OS_sem_P(semid) : MYNOS_ERR_DENY;
+}
+int __OS_sem_userTryP(int semid) {
+    return mine(semid) ? __OS_sem_tryP(semid) : MYNOS_ERR_DENY;
+}
+int __OS_sem_userV(int semid) {
+    return mine(semid) ? __OS_sem_V(semid) : MYNOS_ERR_DENY;
+}
+int __OS_sem_userFree(int semid) {
+    return mine(semid) ? __OS_sem_freeSemaphore(semid) : MYNOS_ERR_DENY;
 }
 
 /* the semaphores a process made: at its end */

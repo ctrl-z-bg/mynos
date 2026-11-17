@@ -3,7 +3,8 @@
 - **Issues:** mynos-nn7 (permissions, safe copies from user memory),
   mynos-c9h (sockets owned by their process; UDP)
 - **Date:** 2026-11-17
-- **Status:** proposed
+- **Status:** accepted (2026-11-17), with generational ids instead of a
+  serial (the owner's choice); in progress
 
 ## The problem
 
@@ -31,24 +32,49 @@ MyNOS trusts every process with everything:
 
 ## Choices
 
-### 1. A process's identity: pid and serial
+### 1. Ids that are never reused soon: generations
 
-Each process gets a **serial**: a 32-bit counter of processes started
-since boot, never reused (until 4 billion processes). The pair (pid,
-serial) names one process for its whole life; a pid alone may name a later
-one. Two native calls:
+A first draft gave each process a second number, a serial never reused,
+next to its pid. Two numbers for one identity: the pid would have stayed
+ambiguous everywhere else (`waitpid`, the recorder, logs). Instead, the
+kernel's ids carry a **generation**, as semaphore ids already did
+(`id % MAXSEM` is the slot):
 
-- `peer(channel)`: the process at the other end of a channel: pid, serial,
-  privileges (below). A service calls it on the channel of a request;
-- `alive(pid, serial)`: whether that process still runs.
+```
+pid     = slot + 1000 * generation      (processTable has 1000 slots)
+channel = slot + 4096 * generation
+port    = slot + 10000 * generation     (well-known ports: generation 0)
+```
+
+A slot's generation grows each time its object is freed, so an id names
+one object for its whole life: the next process in the same slot has
+another pid, and a stale channel id no longer reaches someone else's new
+channel. Looking an id up is the slot, then a comparison with the id kept
+in the object (`proc(pid)` in the kernel). Generations wrap so that pids
+stay below 10^9; thread ids live between 10^9 and 2^30 (the C library
+keeps a mutex's owner as `tid & 0x3fffffff`, the bits above are flags).
+This is the "generational index" (slot map) pattern.
+
+Two native calls:
+
+- `channelPeer(channel)` (26): the pid at the other end of one of the
+  caller's channels. A service calls it on the channel of a request;
+- `processInfo(pid)` (27): its privileges, with `MYNOS_PROC_ALIVE` while it
+  runs; an error once it is gone.
 
 No message from the kernel when a process ends: a service that keeps
 something for its clients (netd's sockets, the registry's names) checks
-its owners with `alive` from time to time (netd: every second, in its
-loop; the registry: when a name is looked up or registered again). It is
-simple, it cannot lose a notification, and the cost is one system call per
-owner per second. A notification (a semaphore the kernel `V`s when a
+its owners with `processInfo` from time to time (netd: every second, in
+its loop; the registry: when a name is looked up or registered again). It
+is simple, it cannot lose a notification, and the cost is one system call
+per owner per second. A notification (a semaphore the kernel `V`s when a
 process ends) can come later if a service needs to react at once.
+
+**Table sizes.** They were set in 2002-2004 and never reached then: 1000
+processes (a pointer each: the real limit is memory, tens of KB per
+process), 2000 semaphores (a static array), 100 channels for the whole
+system (one per call in progress, one per request waiting in netd: the
+tightest). Channels go to 4096 and semaphores to 4096.
 
 ### 2. Privileges: one, for drivers
 
@@ -80,15 +106,16 @@ Finer grants (the I/O bitmap of the TSS: `ata` gets ports 0x1F0-0x1F7 and
   driver that registered the line.
 - **IRQ lines**: enabled and disabled by their driver only.
 - **Ports**: already checked (`listenPort`, `freePort`, `changeOwner`
-  require the owner). Well-known ports (the registry's, 0) are taken by
-  number only (done: `getFreePort`).
+  require the owner); `allocPort` took the owner's pid from the caller,
+  now it is the caller. Well-known ports (0-15; the registry's is 0) are
+  taken by number only, by privileged processes (`allocPortP`).
 
 ### 4. Typed IPC: the handler knows its caller
 
 `Ipc.serve`'s handler gets the caller:
 
 ```ocaml
-type caller = { pid : int; serial : int; io : bool }
+type caller = { pid : int; io : bool }
 type handler = { handle : 'a. caller -> 'a request -> 'a }
 ```
 
@@ -101,7 +128,7 @@ existing services (`ata`, the tests) take the new argument and ignore it.
 - A socket belongs to the process that made it (`Connect`, `Connect_tls`,
   `Listen`, and `Accept`'s new socket to the caller of `Accept`). A
   request on someone else's socket: `"not your socket"`. Once a second,
-  netd checks its owners with `alive` and closes the sockets of those that
+  netd checks its owners with `processInfo` and closes the sockets of those that
   ended (listening ones too).
 - **UDP** in "net/1" (cases 11-13): `Udp_bind port` (0: any) → a socket;
   `Send_to (s, address, port, data)`; `Recv_from (s, max)` → `(address,
@@ -139,7 +166,8 @@ that "the system hangs" becomes "the semaphore table is full".
 
 ## Order
 
-1. Kernel: serials, `peer` and `alive`; the `io` privilege (IOPL, IRQs,
+1. Kernel: generational pids, channels and ports, larger tables;
+   `channelPeer` and `processInfo`; the `io` privilege (IOPL, IRQs,
    `spawn` flags) and `driver` in `init.rc`; semaphores and IRQ lines
    owned. Tests in `tests/stress`: an unprivileged child is ended by `inb`
    and refused an IRQ and someone else's semaphore.

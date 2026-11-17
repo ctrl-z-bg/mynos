@@ -187,6 +187,17 @@ All services are linked statically against `libmynos` and placed at
   rebuilt from channels and nested, and the Chrome trace event format for
   Perfetto. The `trace` program: `trace COMMAND`, `trace -s SECONDS`,
   `trace show|calls|json FILE`.
+- **Identity and permissions** (2026,
+  `doc/decisions/identity-and-permissions.md`): pids, channel and port ids
+  carry a generation (`slot + size * generation`), so an id names one
+  object for its whole life; `channelPeer` tells a service who calls,
+  `processInfo` whether a process still runs. One privilege, `io` (port
+  I/O through IOPL 3, IRQs): boot modules have it, `init` gives it to the
+  `driver` lines of `init.rc` (consoled, ata, netd), a child gets at most
+  its parent's; `sh` and what it starts have none (an `outb` ends the
+  program). Semaphores are their process's own, IRQ lines their driver's;
+  well-known ports (0-15) are taken by privileged processes only. Tables:
+  4096 channels (was 100 for the whole system), 4096 semaphores.
 - **Random numbers** (2026, `kernel/random.c`): `getrandom` serves bytes
   for cryptography: the time-stamp counter at every timer tick and
   interrupt, and RDRAND/RDSEED at boot when the processor has them
@@ -422,7 +433,7 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | mynos-pg9 | `mynos-byterun/src/floats.c` | `frexp()`/`modf()` return 1.0 (legacy 3.06 runtime only; the 5.5 runtime uses musl's libm). |
 | mynos-09i | `mynos-runtime/` | No OCaml `Thread` module yet (needs systhreads and unix stubs); domains work. |
 | mynos-awn | `mynos-core/kernel/` | One CPU: threads and domains run in turn, not in parallel. |
-| mynos-nn7 | `mynos-core/kernel/` | No permissions between processes (any process can free another's semaphore or enable an IRQ); a bad user pointer met halfway through a system call ends the process with kernel state possibly half updated. |
+| mynos-nn7 | `mynos-core/kernel/` | A bad user pointer met halfway through a system call ends the process with kernel state possibly half updated; the io privilege is all or nothing (no per-port I/O bitmap yet). |
 | — | `mynos-core/kernel/threads.c` | Native MyNOS threads (`mynos_threadCreate`) share their creator's TLS: code that uses the C library should use pthreads. |
 | — | `mynos-lib/src/fileio.c` | `/` (memrofs) is read-only and flat, `/tmp` (tmpfs) flat and in memory; `/disk` (fatfs) has directories. `rename` within one service; paths up to 63 characters inside a service. |
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
@@ -690,3 +701,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   drivers (IOPL, IRQs; `driver` lines in `init.rc`), semaphores owned,
   the caller in typed IPC, netd's sockets owned and closed with their
   process, UDP, safe user copies.
+- **2026-11-17** — Note accepted with generational ids instead of a serial.
+  Step 1, the kernel: generational pids, channels and ports; `channelPeer`
+  (26), `processInfo` (27); the `io` privilege (IOPL 3 only for it, IRQs,
+  `spawn` flags, `driver` in `init.rc`); semaphores and IRQ lines owned;
+  `allocPort` no longer takes the owner's pid from the caller; 4096
+  channels and semaphores. Stress test: an unprivileged child is refused
+  an IRQ, the parent's semaphore, a well-known port and a privileged
+  spawn, and ended by `inb`; `channelPeer` names it.

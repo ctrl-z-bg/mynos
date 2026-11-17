@@ -28,7 +28,7 @@
 #define UNLOCK_CHANNEL(p) {p->locked = 0;}
 
 // max channels
-#define MAXCNLS 100
+#define MAXCNLS 4096
 
 // max messages per channel
 #define MAXMSGS 10
@@ -44,6 +44,7 @@ typedef struct {
 } unichannel_t;  // unidirectional channel
 
 typedef struct {
+  int32_t id;     // slot + MAXCNLS * generation
   unichannel_t * c1;
   unichannel_t * c2;
 } channel_t;

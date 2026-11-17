@@ -61,9 +61,19 @@ external lookup : string -> int = "caml_mynos_registry_lookup"
 
 type status = Exited of int | Signaled of int
 
-external spawn_raw : string -> string array -> string array -> int
+external spawn_raw : string -> string array -> string array -> bool -> int
   = "caml_mynos_spawn"
-let spawn ?(env = [||]) path argv = spawn_raw path argv env
+let spawn ?(env = [||]) ?(io = false) path argv = spawn_raw path argv env io
+
+external channel_peer : int -> int = "caml_mynos_channel_peer"
+
+type process_info = { alive : bool; io : bool }
+
+external process_info_raw : int -> int = "caml_mynos_process_info"
+let process_info pid =
+  let r = process_info_raw pid in
+  if r < 0 then None
+  else Some { alive = r land 0x100 <> 0; io = r land 1 <> 0 }
 
 external wait_raw : int -> int * int = "caml_mynos_wait"
 let decode s = if s land 0x7f = 0 then Exited ((s lsr 8) land 0xff)

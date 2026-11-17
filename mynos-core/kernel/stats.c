@@ -25,7 +25,7 @@ void __OS_fillStats(mynos_stats_t * st) {
   if (!__mem_userArea(st, sizeof(mynos_stats_t))) return;
   st->numProcesses = numProcesses;
   st->numThreads = numThreads;
-  st->pid = currProcess;
+  st->pid = CURRPID;
   st->ppid = processTable[currProcess]->ppid;
   st->freeppages = __number_of_free_physical_pages;
 }

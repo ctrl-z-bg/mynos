@@ -81,14 +81,27 @@ type status =
   | Exited of int     (** the program called [exit] with this code *)
   | Signaled of int   (** killed: 11 for an invalid memory access *)
 
-val spawn : ?env:string array -> string -> string array -> int
+val spawn : ?env:string array -> ?io:bool -> string -> string array -> int
 (** [spawn path argv] starts the ELF program in file [path] as a child
     process with arguments [argv] ([argv.(0)] is by convention the program
     name) and returns its pid. A name without [/] is looked for at the root
     of the RAM disk, then in the current directory. The child starts in
     the current directory, with environment [env] (by default, ours). A bytecode program is
     started through the runtime:
-    [spawn "ocamlrun" [| "ocamlrun"; "prog.byte"; "arg" |]]. *)
+    [spawn "ocamlrun" [| "ocamlrun"; "prog.byte"; "arg" |]].
+    [~io:true] gives the child the [io] privilege (port I/O, IRQs: a
+    driver), which only a process that has it can give. *)
+
+val channel_peer : int -> int
+(** The pid of the process at the other end of one of our channels: who
+    calls a service (doc/decisions/identity-and-permissions.md). *)
+
+type process_info = { alive : bool; io : bool }
+
+val process_info : int -> process_info option
+(** [None]: no such process (it ended and was collected). Pids are not
+    reused: when a process's slot is taken again, the new one has another
+    pid. *)
 
 val environment : unit -> string array
 (** Our environment, as ["NAME=value"] strings. A child gets it unless
