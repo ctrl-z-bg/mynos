@@ -684,3 +684,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   registry started, which then ended; the stress test hung about 1 run in
   10 (3 in 10 with TLS's timings). Ports below 1 are now only taken by
   number.
+- **2026-11-17** — Decision note (proposed):
+  `doc/decisions/identity-and-permissions.md` for mynos-nn7 and mynos-c9h:
+  process serials, `peer` and `alive` calls, one `io` privilege for
+  drivers (IOPL, IRQs; `driver` lines in `init.rc`), semaphores owned,
+  the caller in typed IPC, netd's sockets owned and closed with their
+  process, UDP, safe user copies.
