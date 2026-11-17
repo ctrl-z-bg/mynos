@@ -148,13 +148,19 @@ def need(cond, message, status=400, kind="invalid_request_error"):
         raise Bad(status, kind, message)
 
 
+def fill(schema, text):
+    """a tool's input: each property of its schema set to the request's text"""
+    return {k: text for k in schema.get("properties", {})}
+
+
 def last_text(blocks):
     return "".join(b["text"] for b in blocks if b.get("type") == "text")
 
 
 def anthropic(headers, req):
     """Claude's Messages API: a text that echoes the last user text (and
-    the system prompt); with tools, a call of the first one, after a
+    the system prompt); with tools, a call of the first one (each
+    property of its input set to the last user text), after a
     thinking block that must come back unchanged; after a tool result, a
     text that quotes it"""
     need(headers.get("x-api-key") == KEY, "invalid x-api-key", 401,
@@ -198,7 +204,8 @@ def anthropic(headers, req):
         content = [{"type": "thinking", "thinking": "", "signature": "sig-1"},
                    {"type": "tool_use", "id": "toolu_1",
                     "name": req["tools"][0]["name"],
-                    "input": {"text": last_text(last["content"])}}]
+                    "input": fill(req["tools"][0]["input_schema"],
+                                  last_text(last["content"]))}]
         stop = "tool_use"
     else:
         text = "echo: " + last_text(last["content"])
@@ -244,7 +251,9 @@ def openai(headers, req):
         message["tool_calls"] = [{
             "id": "call_1", "type": "function",
             "function": {"name": req["tools"][0]["function"]["name"],
-                         "arguments": json.dumps({"text": last["content"]})}}]
+                         "arguments": json.dumps(fill(
+                             req["tools"][0]["function"]["parameters"],
+                             last["content"]))}}]
         finish = "tool_calls"
     else:
         message["content"] = "echo: " + last["content"]

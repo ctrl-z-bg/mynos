@@ -191,8 +191,10 @@ All services are linked statically against `libmynos` and placed at
   API) and `openai` (Chat Completions: OpenAI, vLLM, Ollama...). Tool
   calls and results are translated; a provider's own blocks (Claude's
   thinking) travel back as `Opaque`. The `llm` command (`llm -l`, `llm -p
-  PROFILE -v QUESTION`). Tests: `tools/net-peer.py llm`, a fake provider
-  that checks both APIs' requests.
+  PROFILE -v QUESTION`). `ask REQUEST` in `sh`: the model proposes a
+  command line (tool `propose_command`), `sh` runs it once the user says
+  yes. Tests: `tools/net-peer.py llm`, a fake provider that checks both
+  APIs' requests.
 - **The event recorder** (2026, `doc/decisions/tracer.md`): while a
   recording is on, the kernel (`kernel/trace.c`) writes an event for every
   spawn, exit, IPC connection, message (with its first 56 bytes) and
@@ -484,7 +486,7 @@ Planned work, in order. Details live in the beads issues.
    and an NE2000 driver in netd, `Net` over "net/1", `httpd`; TLS
    (mynos-dhp, done): `https://` clients, `Http`, `Json`, `fetch`.
 6. Language models (mynos-wsd, `doc/decisions/llm.md`): `llmd` and `llm/1`
-   (done), `ask` in `sh`, protocols that describe themselves, an agent
+   (done), `ask` in `sh` (done), protocols that describe themselves, an agent
    loop with the recorder on.
 7. Then: a GUI toolkit (mynos-9lr), distinctive
    applications (mynos-3h1), several CPUs (mynos-awn).
@@ -766,3 +768,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   questions and a tool loop through both APIs against a fake provider
   (`tools/net-peer.py llm`); by hand, `llm` in MyNOS got its answer from
   Claude Opus 5.5 over HTTPS.
+- 2026-11-17: `ask` in `sh` (mynos-wsd.1): a request in natural language;
+  the model (llmd) gets the shell's syntax, commands, directory and files,
+  and proposes one command line through a tool; `sh` shows it and runs it
+  only after a yes (a key, or a line from a redirected input). Network
+  test: `sh -c "ask ..."` with yes and no, through both APIs. By hand, with
+  Claude: "elenca i file in /disk con le loro dimensioni" became `ls -l
+  /disk`, explained in Italian.

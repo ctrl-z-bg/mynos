@@ -26,10 +26,20 @@ cacert.pem: tls/ca.pem
 llmd.byte: ../../services/llm/llmd.byte
 	cp $< $@
 
-FILES = init.byte net_child.byte ocamlrun netd cacert.pem llmd.byte llm-test.env
+sh.byte: ../../sh/sh.byte
+	cp $< $@
+
+ask-yes.txt:
+	echo y > $@
+
+ask-no.txt:
+	echo n > $@
+
+FILES = init.byte net_child.byte ocamlrun netd cacert.pem llmd.byte llm-test.env \
+	sh.byte ask-yes.txt ask-no.txt
 
 ramdisk.dsk: $(FILES)
 	../../services/fs/memrofs/tool/createDisk $(FILES) >/dev/null
 
 clean:
-	rm -f *.cm[io] *.byte ocamlrun netd cacert.pem ramdisk.dsk
+	rm -f *.cm[io] *.byte ocamlrun netd cacert.pem ramdisk.dsk ask-yes.txt ask-no.txt

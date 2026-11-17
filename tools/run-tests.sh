@@ -292,6 +292,7 @@ if [ -f tests/stress/ramdisk.dsk ]; then
 fi
 if [ -f tests/net/ramdisk.dsk ]; then
     expect "net: all checks passed"
+    expect "asked-ok"           # ask in sh: the proposed command ran
     if [ -n "$net_fetched" ]; then
         echo "ok    the host fetched a page from a server in MyNOS"
     else

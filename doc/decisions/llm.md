@@ -2,8 +2,8 @@
 
 - **Issue:** mynos-wsd (an "AI-OS" direction, from Alessandro's idea)
 - **Date:** 2026-11-17
-- **Status:** accepted (2026-11-17); step 1 (`llmd`, `llm/1`, `llm`)
-  implemented the same day. Next: `ask` in `sh`.
+- **Status:** accepted (2026-11-17); steps 1 (`llmd`, `llm/1`, `llm`) and
+  2 (`ask`) implemented the same day.
 
 ## The idea
 
@@ -157,6 +157,20 @@ as the real ones), answers with a text built from the request, and with a
 tool call when tools are given. The network test starts `llmd` with a
 configuration of two profiles, one per API, on that server, and runs a
 tool loop through each. A real provider is tried by hand, with a key.
+
+### 7. `ask` in `sh`
+
+A built-in, since what it proposes must run in the shell itself (`cd`,
+variables): `ask [-p PROFILE] REQUEST...`. The model gets, as its system
+prompt, what the shell is (its syntax and what it lacks: no arithmetic,
+no loops), its commands (the built-ins and the programs in `PATH`), the
+current directory and its files; and one tool, `propose_command`
+(`command`, `explanation`). `sh` shows the explanation and the command and
+asks "Run it? [y/N]": a key on the console, or a line when its input is a
+file. Nothing runs without a yes, in a script either. A model that
+answers in text (a question needing no command) has its text shown. The
+proposals are commands of `sh`, not OCaml for the toplevel: `ocaml` is
+one of the commands it may propose.
 
 ## Not now
 

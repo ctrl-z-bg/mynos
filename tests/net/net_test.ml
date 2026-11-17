@@ -181,4 +181,18 @@ let () =
   ok &&& check "llm: an unknown profile"
     (match Llm.ask ~profile:"nope" l "hello" with
      | _ -> false | exception Ipc.Remote_error _ -> true);
+  (* ask in sh (mynos-wsd.1): the fake model proposes the request itself as
+     the command; it runs only when the answer read is "y" (from a file
+     here, a key on the console). Its output, "asked-ok", is not in the
+     command shown, so tools/run-tests.sh can tell that it ran. *)
+  let ask profile answer_file =
+    let request = "X=ok; echo asked-$X" in
+    match Mynos.spawn ~env:[| "MYNOS_STDIN=" ^ answer_file; "PATH=/" |] "ocamlrun"
+            [| "ocamlrun"; "sh.byte"; "-c"; "ask -p " ^ profile ^ " '" ^ request ^ "'" |] with
+    | pid -> Mynos.wait pid
+    | exception e -> print_endline (error e); Mynos.Exited 99 in
+  ok &&& check "ask: a command proposed and run (Claude's API)"
+    (ask "claude" "/ask-yes.txt" = Mynos.Exited 0);
+  ok &&& check "ask: and with Chat Completions" (ask "local" "/ask-yes.txt" = Mynos.Exited 0);
+  ok &&& check "ask: not run without a yes" (ask "claude" "/ask-no.txt" = Mynos.Exited 1);
   print_endline (if !ok then "net: all checks passed" else "net: FAIL")

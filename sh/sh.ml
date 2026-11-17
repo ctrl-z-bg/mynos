@@ -9,7 +9,8 @@
    redirections < > >>; pipes | (run one after the other, through a file
    in /tmp); * and ? in file names; comments with #. Built in: cd, pwd,
    echo, cat, ls, cp, mv, rm, mkdir, rmdir, touch, export, unset, env,
-   which, source (.), free, clear, help, exit. Other commands are searched
+   which, source (.), free, clear, help, exit; ask REQUEST (a language
+   model proposes a command, run once confirmed). Other commands are searched
    in PATH (also as NAME.byte): bytecode runs on ocamlrun. "ocaml" is the
    OCaml toplevel.
 
@@ -288,6 +289,23 @@ let run_program file args c =
 
 (* ---- built-in commands ---- *)
 
+let builtins = [ "cd"; "pwd"; "echo"; "cat"; "ls"; "cp"; "mv"; "rm"; "mkdir";
+                 "rmdir"; "touch"; "export"; "unset"; "env"; "which"; "source";
+                 "free"; "clear"; "help"; "exit"; "true"; "false"; "ocaml";
+                 "ifconfig"; "ping"; "host"; "ask" ]
+
+(* every command: built-ins, and the programs of PATH (NAME.byte as NAME,
+   and files without an extension) *)
+let commands () =
+  let progs = List.concat_map (fun d ->
+      match Sys.readdir d with
+      | names -> Array.to_list names |> List.filter_map (fun f ->
+          if Filename.check_suffix f ".byte" then Some (Filename.chop_suffix f ".byte")
+          else if not (String.contains f '.') && is_file (Filename.concat d f) then Some f
+          else None)
+      | exception Sys_error _ -> []) (path_dirs ()) in
+  List.sort_uniq compare (builtins @ progs)
+
 let read_all_stdin () =
   let b = Buffer.create 256 in
   (try while true do Buffer.add_string b (input_line stdin); Buffer.add_char b '\n' done
@@ -334,7 +352,8 @@ let help out =
      export unset env which source free clear help exit;\n\
      network: ifconfig, ping HOST [COUNT], host NAME.\n\
      Programs: edit FILE, ocamlc, kilo, hello, ocaml (the OCaml toplevel),\n\
-     trace COMMAND (record what the system does meanwhile)...\n\
+     trace COMMAND (record what the system does meanwhile), llm QUESTION...\n\
+     ask REQUEST: a command for it, from a language model; run if you agree.\n\
      Syntax: 'quotes' \"quotes\" $VAR $? NAME=value ; && || < > >> | *.ml\n\
      Files: / is the RAM disk, /tmp is in memory, /disk is the FAT disk.\n"
 
@@ -359,6 +378,96 @@ let is_address s =
   | _ -> false
 
 let resolve n host = if is_address host then host else Net.call n (Net.Resolve host)
+
+(* ---- ask: a request in natural language, a command proposed by a
+   language model (llmd, doc/decisions/llm.md), run only once the user
+   agrees ---- *)
+
+let propose_tool = {
+  Llm.name = "propose_command";
+  description = "Propose one command line for MyNOS sh that does what the user asked. \
+                 The user sees it and its explanation, and runs it only if they agree.";
+  schema = {|{"type":"object","properties":{
+    "command":{"type":"string","description":"one line for MyNOS sh (commands may be joined with ; && ||)"},
+    "explanation":{"type":"string","description":"what the command does, in one short sentence, in the language of the request"}},
+    "required":["command","explanation"]}|} }
+
+(* what the model needs to know: the shell, its commands, where we are *)
+let ask_context () =
+  let here = Sys.getcwd () in
+  let files = match Sys.readdir here with
+    | names ->
+      let l = List.sort compare (Array.to_list names) in
+      let n = List.length l in
+      String.concat " " (List.filteri (fun i _ -> i < 60) l)
+      ^ (if n > 60 then Printf.sprintf " ... (%d in all)" n else "")
+    | exception Sys_error _ -> "" in
+  String.concat "\n" [
+    "You are the assistant of the command shell (sh) of MyNOS, a small \
+     microkernel operating system written in C and OCaml, running on i386. \
+     The user writes a request in natural language; you answer by calling \
+     propose_command with ONE command line for this shell that does it. The \
+     user will see the command and run it only if they agree. Do not run \
+     anything yourself. If the request is a question that needs no command, \
+     or cannot be done with the commands below, answer in a few words of \
+     text instead, in the user's language.";
+    "";
+    "The shell: words with 'quotes' and \"quotes\", $VAR and ${VAR}, $?, \
+     NAME=value, commands joined by ; && ||, redirections < > >>, pipes | \
+     (run one after the other), * and ? in file names, # comments. There is \
+     no arithmetic, no if/for/while, no functions, no command substitution.";
+    "Built in: cd pwd echo cat ls (ls -l: sizes) cp mv rm mkdir rmdir touch \
+     export unset env which source free clear help exit true false; \
+     ifconfig, ping HOST [COUNT], host NAME (DNS). Programs: fetch [-i] [-o \
+     FILE] [-H 'Name: value'] [-d DATA] URL (HTTP and HTTPS); llm QUESTION \
+     (a language model); trace COMMAND; edit FILE and kilo FILE (editors); \
+     ocamlc; ocaml (the OCaml toplevel).";
+    "Files: / is the RAM disk (read-only), /tmp is in memory, /disk is the \
+     FAT disk (kept across reboots). Paths in a directory are up to 63 \
+     characters.";
+    "All the commands: " ^ String.concat " " (commands ());
+    "The current directory: " ^ here;
+    "Its files: " ^ files ]
+
+let llm_service = ref None
+
+(* the answer to "run it? [y/N]": a key on the console, a line otherwise *)
+let confirm () =
+  print_string "Run it? [y/N] "; flush stdout;
+  let answer =
+    if Sys.getenv_opt "MYNOS_STDIN" <> None then
+      (match In_channel.input_line stdin with Some l -> String.trim l | None -> "")
+    else begin
+      Mynos.console_mode ~canon:false ~echo:false ();
+      Fun.protect ~finally:(fun () -> Mynos.console_mode ~canon:true ~echo:true ())
+        (fun () -> match input_char stdin with
+           | c -> String.make 1 c
+           | exception End_of_file -> "")
+    end in
+  print_endline (if answer = "" || answer.[0] = '\n' || answer.[0] = '\r' then "" else answer);
+  String.length answer > 0 && (answer.[0] = 'y' || answer.[0] = 'Y')
+
+(* the model's proposal: Some (command, explanation), or its text *)
+let propose profile request =
+  let l = match !llm_service with
+    | Some l -> l
+    | None -> let l = Llm.connect () in llm_service := Some l; l in
+  let a = Llm.call l (Llm.Chat { Llm.chat with
+                                 profile; system = ask_context ();
+                                 messages = [ Llm.user request ];
+                                 tools = [ propose_tool ] }) in
+  let proposal = List.find_map (function
+      | Llm.Tool_call { name = "propose_command"; input; _ } ->
+        (match Json.of_string input with
+         | j -> (match Json.(member "command" j |> to_string_value,
+                             member "explanation" j) with
+             | c, e -> Some (String.trim c, (match e with Json.String s -> s | _ -> ""))
+             | exception Json.Error _ -> None)
+         | exception Json.Error _ -> None)
+      | _ -> None) a.content in
+  match proposal with
+  | Some (c, e) when c <> "" -> Ok (c, e)
+  | _ -> Error (String.trim (Llm.text a))
 
 let rec builtin name args c out =
   let ok = ref 0 in
@@ -429,6 +538,21 @@ let rec builtin name args c out =
                         (Net.call n (Net.Resolve name)))
    | "clear", _ -> output_string out "\027[H\027[2J"
    | "help", _ -> help out
+   | "ask", _ ->
+     let profile, words = match args with
+       | "-p" :: p :: rest -> (p, rest) | _ -> ("", args) in
+     if words = [] then fail "usage: ask [-p PROFILE] REQUEST..."
+     else (match propose profile (String.concat " " words) with
+         | Ok (command, explanation) ->
+           if explanation <> "" then print_endline explanation;
+           print_endline ("  " ^ command);
+           if confirm () then (run_line command; ok := !last_status)
+           else ok := 1
+         | Error "" -> fail "ask: the model proposed nothing"
+         | Error text -> print_endline text
+         | exception Ipc.Remote_error (_, m) -> fail "ask: %s" m
+         | exception Mynos.Error _ ->
+           llm_service := None; fail "ask: no language model service (llmd)")
    | "true", _ -> ()
    | "false", _ -> ok := 1
    | "exit", [] -> raise (Exit_shell !last_status)
@@ -439,7 +563,8 @@ let rec builtin name args c out =
 and is_builtin = function
   | "cd" | "pwd" | "echo" | "cat" | "ls" | "cp" | "mv" | "rm" | "mkdir" | "rmdir"
   | "touch" | "export" | "unset" | "env" | "which" | "source" | "." | "free"
-  | "clear" | "help" | "exit" | "true" | "false" | "ifconfig" | "ping" | "host" -> true
+  | "clear" | "help" | "exit" | "true" | "false" | "ifconfig" | "ping" | "host"
+  | "ask" -> true
   | _ -> false
 
 (* ---- running ---- *)
@@ -587,22 +712,9 @@ let common_prefix = function
         go 0) (String.length first) rest in
     String.sub first 0 n
 
-let builtins = [ "cd"; "pwd"; "echo"; "cat"; "ls"; "cp"; "mv"; "rm"; "mkdir";
-                 "rmdir"; "touch"; "export"; "unset"; "env"; "which"; "source";
-                 "free"; "clear"; "help"; "exit"; "true"; "false"; "ocaml";
-                 "ifconfig"; "ping"; "host" ]
-
-(* the commands starting with prefix: built-ins, and the programs of PATH
-   (NAME.byte as NAME, and files without an extension) *)
+(* the commands starting with prefix: built-ins, and the programs of PATH *)
 let complete_command prefix =
-  let progs = List.concat_map (fun d ->
-      match Sys.readdir d with
-      | names -> Array.to_list names |> List.filter_map (fun f ->
-          if Filename.check_suffix f ".byte" then Some (Filename.chop_suffix f ".byte")
-          else if not (String.contains f '.') && is_file (Filename.concat d f) then Some f
-          else None)
-      | exception Sys_error _ -> []) (path_dirs ()) in
-  List.sort_uniq compare (builtins @ progs)
+  commands ()
   |> List.filter (fun c -> String.starts_with ~prefix c)
   |> List.map (fun c -> (c, false))
 
