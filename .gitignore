@@ -47,6 +47,8 @@ tests/spawn/ocamlrun
 system/ocamlrun
 system/consoled
 system/netd
+system/displayd
+services/display/displayd
 services/net/netd
 tests/net/netd
 tests/net/ocamlrun
