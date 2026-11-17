@@ -58,3 +58,6 @@ tests/fat/content/
 system/ocamlc.byte
 third_party/kilo/kilo
 system/kilo
+
+# Language model keys (llm.env.example is the reference)
+llm.env

@@ -6,7 +6,8 @@
 # driver and fatfs, which mounts system/disk.img at /disk, the network with
 # an NE2000 card on QEMU's user network, httpd) and sh. Type help; "ocaml"
 # opens the OCaml toplevel. NET= (empty) boots without a network card;
-# HTTP=PORT forwards another host port to httpd.
+# HTTP=PORT forwards another host port to httpd. llm.env, if there is one
+# (see llm.env.example), is copied into the disk as /disk/llm.env, for llmd.
 #
 # Otherwise (legacy toolchain, or DEMO=2008) it boots the system as it was in
 # 2004-2008: the OCaml runtime with a test bytecode, the registry, keyboard
@@ -24,6 +25,15 @@ ocamlrun=$(tools/ocamlrun-path.sh)
 
 if [ "${DEMO:-}" != 2008 ] && [ -f system/ramdisk.dsk ]; then
     [ -f system/disk.img ] && export DISK=${DISK:-system/disk.img}
+    # the language models' configuration, into the disk (mtools: on the
+    # host if it has them, else in the build container)
+    if [ -f llm.env ] && [ -n "${DISK:-}" ]; then
+        if command -v mcopy >/dev/null; then
+            mcopy -o -i "$DISK" llm.env ::/llm.env
+        else
+            tools/in-container.sh dev mcopy -o -i "$DISK" llm.env ::/llm.env
+        fi && echo "run-demo.sh: llm.env copied to /disk/llm.env" >&2
+    fi
     # the network, and the host's port 8080 to httpd if it is free
     export NET=${NET-1}
     if [ -n "$NET" ] && [ -z "${HTTP+set}" ]; then

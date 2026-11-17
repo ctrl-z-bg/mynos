@@ -1,6 +1,6 @@
 # Network test: a RAM disk with the runtime, netd, init.byte
-# (net_test.ml) and the test authority's certificate. Built in the dev
-# container (tools/build-all.sh).
+# (net_test.ml), the test authority's certificate, and llmd with its
+# test configuration. Built in the dev container (tools/build-all.sh).
 
 OCAMLC = ocamlc -use-prims ../../mynos-runtime/primitives -I ../../mynos-lib/ocaml
 MYNOS = ../../mynos-lib/ocaml/mynos.cma ../../mynos-runtime/primitives
@@ -23,8 +23,13 @@ netd: ../../services/net/netd
 cacert.pem: tls/ca.pem
 	cp $< $@
 
-ramdisk.dsk: init.byte net_child.byte ocamlrun netd cacert.pem
-	../../services/fs/memrofs/tool/createDisk init.byte net_child.byte ocamlrun netd cacert.pem >/dev/null
+llmd.byte: ../../services/llm/llmd.byte
+	cp $< $@
+
+FILES = init.byte net_child.byte ocamlrun netd cacert.pem llmd.byte llm-test.env
+
+ramdisk.dsk: $(FILES)
+	../../services/fs/memrofs/tool/createDisk $(FILES) >/dev/null
 
 clean:
 	rm -f *.cm[io] *.byte ocamlrun netd cacert.pem ramdisk.dsk

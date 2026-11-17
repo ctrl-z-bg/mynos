@@ -65,10 +65,12 @@ if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
   make -C tests/storage
   make -C tests/fat
   make -C services/net
-  make -C tests/net
   make -C httpd
   make -C trace
   make -C fetch
+  make -C services/llm
+  make -C llm
+  make -C tests/net
   make -C shell
   make -C system
 fi

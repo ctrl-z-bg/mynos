@@ -135,4 +135,50 @@ let () =
     (List.for_all refused [ "\255"; "\010net/2\000"; "\010net/1\040";
                             "\010net/1\002\200" ]);
   ok &&& check "and netd goes on" ((Net.call n Net.Config).address = c.address);
+  (* language models (doc/decisions/llm.md): llmd with three profiles on
+     the host's fake provider (tools/net-peer.py llm 47090), one per API
+     and one with a wrong key *)
+  ignore (Mynos.spawn "ocamlrun" [| "ocamlrun"; "llmd.byte"; "/llm-test.env" |]);
+  let l = Llm.connect () in
+  ok &&& check "llm: the profiles, the default first"
+    (match Llm.call l Llm.Profiles with
+     | ps -> ps = [ ("claude", "anthropic", "fake-claude"); ("local", "openai", "fake-local");
+                    ("bad_key", "anthropic", "fake-claude") ]
+     | exception e -> print_endline (error e); false);
+  let asks profile =
+    match Llm.ask ~profile ~system:"be brief" l "hello" with
+    | a -> a = "echo: hello (system: be brief)"
+    | exception e -> print_endline ("net: " ^ error e); false in
+  ok &&& check "llm: a question (Claude's API)" (asks "");
+  ok &&& check "llm: a question (Chat Completions)" (asks "local");
+  (* a tool loop: the model calls the tool, gets its result, answers *)
+  let tool_loop profile =
+    let tool = { Llm.name = "shout"; description = "Says a text in capitals";
+                 schema = {|{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}|} } in
+    let c = { Llm.chat with profile; tools = [ tool ]; messages = [ Llm.user "quiet" ] } in
+    match Llm.call l (Llm.Chat c) with
+    | { Llm.stop = Tool_use; content; _ } as a1 ->
+      let results = List.filter_map (function
+          | Llm.Tool_call { id; name = "shout"; input } ->
+            let text = Json.(member "text" (of_string input) |> to_string_value) in
+            Some (Llm.Tool_result { id; content = String.uppercase_ascii text; error = false })
+          | _ -> None) content in
+      let c = { c with messages = c.messages @ [ { Llm.role = Assistant; content };
+                                                 { role = User; content = results } ] } in
+      (match Llm.call l (Llm.Chat c) with
+       | a2 -> a2.stop = End && Llm.text a2 = "tool said: QUIET"
+               && a1.input_tokens > 0 && a1.model <> ""
+       | exception e -> print_endline ("net: " ^ error e); false)
+    | _ -> print_endline "net: no tool call"; false
+    | exception e -> print_endline ("net: " ^ error e); false in
+  ok &&& check "llm: a tool loop (Claude's API)" (tool_loop "claude");
+  ok &&& check "llm: a tool loop (Chat Completions)" (tool_loop "local");
+  ok &&& check "llm: a provider's error is the call's"
+    (match Llm.ask ~profile:"bad_key" l "hello" with
+     | _ -> false
+     | exception Ipc.Remote_error (_, m) -> print_endline ("net: " ^ m);
+       m = "bad_key: 401 authentication_error: invalid x-api-key");
+  ok &&& check "llm: an unknown profile"
+    (match Llm.ask ~profile:"nope" l "hello" with
+     | _ -> false | exception Ipc.Remote_error _ -> true);
   print_endline (if !ok then "net: all checks passed" else "net: FAIL")

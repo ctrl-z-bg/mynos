@@ -1,0 +1,168 @@
+# Decision: language models as a service
+
+- **Issue:** mynos-wsd (an "AI-OS" direction, from Alessandro's idea)
+- **Date:** 2026-11-17
+- **Status:** accepted (2026-11-17); step 1 (`llmd`, `llm/1`, `llm`)
+  implemented the same day. Next: `ask` in `sh`.
+
+## The idea
+
+MyNOS has a high-level language (OCaml), typed services, and an event
+recorder that shows every message between processes. Language models are
+becoming a commodity, called like any other service; the interesting part
+is what sits above them: agents that use the system's own services as their
+tools, with the recorder showing what they did. The plan, in order:
+
+1. **`llmd`**, a service with the protocol `llm/1`: one way for any program
+   to ask a model, whichever provider runs it;
+2. **`ask` in `sh`**: a request in natural language; the system proposes a
+   command, and runs it only once confirmed;
+3. **protocols that describe themselves**: a typed service answers a
+   `Describe` request with its requests and their types, from which a
+   model's tools are made;
+4. **an agent loop in OCaml**, with the recorder on.
+
+Then the GUI. This note is about step 1, and what all four rely on.
+
+## Choices
+
+### 1. Optional
+
+Nothing in MyNOS depends on a model. `llmd` starts from `init.rc` like the
+other services; without a configuration it answers every request with "no
+model configured: see /disk/llm.env", and `ask` and the agent say so. The
+system boots and works the same with or without it.
+
+### 2. Configuration: a `.env` file
+
+`/disk/llm.env`, with the syntax of a `.env` file (`NAME=value`, `#`
+comments, optional quotes): what one keeps API keys in elsewhere. `/disk`
+is the only place that survives a reboot, where `ca.pem` already is. `llmd`
+reads it at every request, so an edit takes effect at once.
+
+On the host, `llm.env` at the root of the repository (ignored by git;
+`llm.env.example` is the reference) is copied into the demo's disk image by
+`tools/run-demo.sh` each time it starts: the keys are kept where they are
+kept for any other project, and MyNOS gets them.
+
+Several **profiles**, each a name (lower case in requests):
+
+```
+LLM_DEFAULT=claude
+LLM_CLAUDE_API=anthropic          # anthropic | openai
+LLM_CLAUDE_MODEL=claude-opus-5-5
+LLM_CLAUDE_KEY=sk-ant-...
+LLM_CLAUDE_URL=...                # optional: the API's base, with /v1
+LLM_CLAUDE_MAX_TOKENS=16000       # optional
+LLM_CLAUDE_EFFORT=high            # optional (anthropic)
+LLM_CLAUDE_FALLBACKS=default      # optional (anthropic)
+```
+
+**The key in MyNOS.** MyNOS has no users and its file services do not check
+who reads what: any program in MyNOS can read `/disk/llm.env`. For a
+development system that is acceptable, and said. Who does not want the key
+inside MyNOS points `URL` at a proxy on the host (`http://10.0.2.2:PORT/v1`)
+that adds it, and leaves `KEY` empty. When MyNOS has users (identity is
+there since `identity-and-permissions.md`), the file becomes `llmd`'s.
+
+### 3. Providers: two APIs cover them
+
+Most providers speak one of two HTTP APIs:
+
+- **`anthropic`**: Claude's Messages API (`POST {URL}/messages`, headers
+  `x-api-key` and `anthropic-version`), default URL
+  `https://api.anthropic.com/v1`;
+- **`openai`**: the Chat Completions API (`POST {URL}/chat/completions`,
+  `Authorization: Bearer`), default URL `https://api.openai.com/v1`. Spoken
+  by OpenAI (ChatGPT's models), and by the servers one runs oneself:
+  **vLLM** (`http://HOST:8000/v1`), **Ollama** (`http://HOST:11434/v1`),
+  llama.cpp's server, LM Studio; and by routers such as OpenRouter.
+
+So `llmd` has two adapters, not one per provider. A model "on the host"
+(Ollama, vLLM, reached at 10.0.2.2) is the local model worth having; one
+running inside MyNOS (i386, one CPU, no vector unit to speak of) would be
+a toy.
+
+Requests are not streamed: an answer comes whole (`max_tokens` defaults to
+16000, and `llmd` waits up to 5 minutes for it). Streaming can come with
+the GUI, where text appearing as it is written matters.
+
+For Claude: thinking is left to the model's default (adaptive on current
+models); `EFFORT` sets `output_config.effort`; `FALLBACKS=default` turns on
+the server-side fallback when a model declines a request (beta
+`server-side-fallback-2026-07-01`), and is on in the example. For OpenAI's
+own API the token limit is sent as `max_completion_tokens` (its newer
+models refuse `max_tokens`); other `openai` servers get `max_tokens`.
+
+### 4. The protocol `llm/1`
+
+Typed IPC (`typed-ipc.md`), the same for every provider:
+
+```ocaml
+type block =
+  | Text of string
+  | Tool_call of { id : string; name : string; input : string }  (* JSON *)
+  | Tool_result of { id : string; content : string; error : bool }
+  | Opaque of string     (* a provider's block, as JSON, given back as is *)
+
+type message = { role : [ `User | `Assistant ]; content : block list }
+type tool = { name : string; description : string; schema : string }
+
+type chat = {
+  profile : string;          (* "" : the default *)
+  system : string;
+  messages : message list;
+  tools : tool list;
+  max_tokens : int;          (* 0 : the profile's *)
+}
+
+type stop = End | Tool_use | Max_tokens | Refusal | Other of string
+type answer = {
+  content : block list; stop : stop; model : string;
+  input_tokens : int; output_tokens : int;
+}
+
+type _ request =
+  | Profiles : (string * string * string) list request  (* name, api, model *)
+  | Chat : chat -> answer request
+```
+
+- **Tools from the start**: steps 3 and 4 need them, and both APIs have
+  them, in different shapes; `llmd` translates (Claude's `tool_use` and
+  `tool_result` blocks, OpenAI's `tool_calls` and `tool` messages).
+- **`Opaque`**: what a provider returns that the other cannot read (Claude's
+  thinking blocks, which must be given back unchanged in a tool loop) is
+  kept as its JSON, sent back to the same API and dropped for the other.
+- **Keys and URLs never leave `llmd`**: `Profiles` names models, nothing
+  else. A provider's error (a bad key, a rate limit) is the call's error,
+  with the provider's message.
+
+### 5. `llmd`
+
+In OCaml (`services/llm/llmd.ml`), on the modules `Http`, `Json`, `Net`
+and `Ipc`. An answer takes seconds, so requests are served by a few
+domains at once (as `httpd`): the main domain accepts connections and
+queues them; workers read, call the provider, answer. It needs no
+privilege. Argument: the configuration's path (`/disk/llm.env` by
+default; the tests give another).
+
+`llm`, a command, to use it by hand: `llm "question"`, `llm -p local
+"question"`, `llm -l` (the profiles).
+
+### 6. Tests without keys
+
+`tools/net-peer.py llm PORT` is a fake provider on the host: it speaks both
+APIs, checks the headers and the shape of each request (a 400 otherwise,
+as the real ones), answers with a text built from the request, and with a
+tool call when tools are given. The network test starts `llmd` with a
+configuration of two profiles, one per API, on that server, and runs a
+tool loop through each. A real provider is tried by hand, with a key.
+
+## Not now
+
+- **Streaming**, images, documents, and prompt caching (worth it for the
+  agent's long, repeated prompts: with step 4).
+- **Costs**: `answer` reports tokens; budgets per process can come with the
+  agent.
+- **Who may ask**: every process may use `llmd`. With users, a profile can
+  be restricted to some.

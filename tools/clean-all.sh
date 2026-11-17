@@ -35,6 +35,8 @@ make -C tests/net clean
 make -C httpd clean
 make -C trace clean
 make -C fetch clean
+make -C services/llm clean
+make -C llm clean
 make -C shell clean
 make -C system clean
 ' >/dev/null

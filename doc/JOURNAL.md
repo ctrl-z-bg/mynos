@@ -1501,3 +1501,38 @@ above `max_int` would have turned negative, years of uptime from now.
 shared object and lets the kernel guess the side from the caller works
 only while "caller" and "side" are the same thing.
 
+## 2026-11-17 — A model as a service: two APIs, one protocol
+
+**The question.** The AI direction (mynos-wsd) needs a way for any program
+to ask a language model, optional, configured like keys usually are (a
+`.env` file), and not tied to one provider: at least Claude, OpenAI's
+models, vLLM and Ollama.
+
+**Finding.** Four providers are two APIs: OpenAI, vLLM, Ollama (and
+llama.cpp, LM Studio, OpenRouter) speak Chat Completions; Claude speaks
+the Messages API. So `llmd` has two adapters, and "llm/1" is a neutral
+shape: blocks of text, tool calls, tool results. The two APIs differ most
+where agents need them: tool results are blocks of a user message for
+Claude and separate `tool` messages for Chat Completions (which must
+follow the assistant's `tool_calls`), and Claude returns thinking blocks
+that must come back unchanged in the next request of a tool loop. Those
+travel as `Opaque` (their JSON), given back to the API that made them.
+OpenAI's own newer models refuse `max_tokens` (`max_completion_tokens`),
+the self-hosted servers expect `max_tokens`: chosen by the URL.
+
+**Tests without keys.** The fake provider (`tools/net-peer.py llm`) is
+strict where the real ones are (headers, block types, non-empty text,
+tool results answering known calls, the thinking block back unchanged),
+so the network test exercises the translation, not just the plumbing.
+
+**First real call, and a false alarm.** The first try with a real key got
+"401 invalid x-api-key". The key was valid from the host; the copy in the
+disk image differed from `llm.env` inside the key: the file had been saved
+again one second after the copy. A second copy worked: `llm` in MyNOS,
+through llmd, netd and TLS, got Claude Opus 5.5's answer.
+
+**Lesson.** When an external service says the credential is wrong, compare
+what was sent with what was meant (here: the disk's copy against the
+file, byte for byte, without printing the key) before suspecting the
+code.
+

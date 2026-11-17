@@ -46,13 +46,19 @@ http.cmi: http.mli net.cmi
 http.cmo: http.ml http.cmi
 	$(OCAMLC) -c http.ml
 
+llm.cmi: llm.mli ipc.cmi
+	$(OCAMLC) -c llm.mli
+
+llm.cmo: llm.ml llm.cmi
+	$(OCAMLC) -c llm.ml
+
 tracer.cmi: tracer.mli
 	$(OCAMLC) -c tracer.mli
 
 tracer.cmo: tracer.ml tracer.cmi
 	$(OCAMLC) -c tracer.ml
 
-MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo net.cmo json.cmo http.cmo tracer.cmo
+MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo net.cmo json.cmo http.cmo llm.cmo tracer.cmo
 
 mynos.cma: $(MODULES)
 	$(OCAMLC) -a -o $@ $(MODULES)

@@ -181,6 +181,18 @@ All services are linked statically against `libmynos` and placed at
   (`httpd/httpd.ml`, OCaml) serves `/disk` over HTTP with 8 worker domains
   (idle connections time out after 10 s), and
   `tools/run-demo.sh` forwards the host's port 8080 to it.
+- **Language models** (2026, `doc/decisions/llm.md`, mynos-wsd): `llmd`
+  (`services/llm/llmd.ml`, OCaml, no privilege) serves "llm/1" (module
+  `Llm`: `Profiles`, `Chat` with tools; `Llm.ask`) with 4 worker domains.
+  Optional: its configuration is `/disk/llm.env`, a `.env` file of
+  profiles (`llm.env.example`; `tools/run-demo.sh` copies the host's
+  `llm.env` into the disk), read at every request; without it, calls fail
+  with "no model configured". Two adapters: `anthropic` (Claude's Messages
+  API) and `openai` (Chat Completions: OpenAI, vLLM, Ollama...). Tool
+  calls and results are translated; a provider's own blocks (Claude's
+  thinking) travel back as `Opaque`. The `llm` command (`llm -l`, `llm -p
+  PROFILE -v QUESTION`). Tests: `tools/net-peer.py llm`, a fake provider
+  that checks both APIs' requests.
 - **The event recorder** (2026, `doc/decisions/tracer.md`): while a
   recording is on, the kernel (`kernel/trace.c`) writes an event for every
   spawn, exit, IPC connection, message (with its first 56 bytes) and
@@ -471,7 +483,10 @@ Planned work, in order. Details live in the beads issues.
 5. Typed IPC (mynos-tc3, done) and networking (mynos-4f6, done): lwIP
    and an NE2000 driver in netd, `Net` over "net/1", `httpd`; TLS
    (mynos-dhp, done): `https://` clients, `Http`, `Json`, `fetch`.
-6. Later: a GUI toolkit (mynos-9lr), distinctive
+6. Language models (mynos-wsd, `doc/decisions/llm.md`): `llmd` and `llm/1`
+   (done), `ask` in `sh`, protocols that describe themselves, an agent
+   loop with the recorder on.
+7. Then: a GUI toolkit (mynos-9lr), distinctive
    applications (mynos-3h1), several CPUs (mynos-awn).
 
 The old SourceForge site is archived in `doc/website/` (mynos-db2).
@@ -743,3 +758,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `mynos_test`, called from the first). The recorder still names the
   channel (the even id). Channel and port ids stay below 2^30, OCaml's
   `max_int` on i386. Closed mynos-9e1.
+- 2026-11-17: Language models, step 1 (mynos-wsd, `doc/decisions/llm.md`):
+  `llmd` (OCaml) serves "llm/1" (module `Llm`) from profiles in
+  `/disk/llm.env` (`llm.env.example`), through two adapters, Claude's
+  Messages API and Chat Completions (OpenAI, vLLM, Ollama...), with tool
+  calls; the `llm` command; `init.rc` starts it. The network test runs
+  questions and a tool loop through both APIs against a fake provider
+  (`tools/net-peer.py llm`); by hand, `llm` in MyNOS got its answer from
+  Claude Opus 5.5 over HTTPS.
