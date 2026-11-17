@@ -46,12 +46,21 @@ port_t * getPort(int32_t p) {
   return pTable.table[p];
 }
 
+/* Ports below FIRST_FREE_PORT are well known (MYNOS_PORT_REGISTRY, 0):
+   only allocPortP takes them. getFreePort gave them out too, so a program
+   that allocated a port before the registry started took port 0, and the
+   registry ended ("Error registry allocating port"): at boot, now and
+   then, the stress test hung. */
+#define FIRST_FREE_PORT (MYNOS_PORT_REGISTRY + 1)
+
 int32_t getFreePort() {
-  static uint32_t i = 0;
-  if (pTable.free == 0) return MYNOS_ERR_FULL;
-  
-  while (pTable.table[i] != NULL) i = (i + 1) % MAXPORTS;
-  return i;
+  static uint32_t i = FIRST_FREE_PORT;
+  uint32_t n;
+  for (n = FIRST_FREE_PORT; n < MAXPORTS; n++) {
+    if (pTable.table[i] == NULL) return i;
+    if (++i == MAXPORTS) i = FIRST_FREE_PORT;
+  }
+  return MYNOS_ERR_FULL;
 }
 
 int32_t __OS_port_allocPort(pid_t pid) {

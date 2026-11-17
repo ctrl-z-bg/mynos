@@ -31,6 +31,7 @@
 #include "process.h"
 #include "sched.h"
 #include "trace.h"
+#include "random.h"
 #include "mynos.h"
 
 /*
@@ -60,6 +61,7 @@ static void irq_dispatch(int n) {
   if (n >= 8) outportb(S_PIC, EOI);
   outportb(M_PIC, EOI);
   irqCount[n]++;
+  random_event(n);
   if (irqOwner[n] < 0) {               /* nobody wants it */
     disable_irq(n);
     return;

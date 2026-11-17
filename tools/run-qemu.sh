@@ -14,6 +14,8 @@
 #   KERNEL_ONLY  if set and no module is given, boot the bare kernel
 #   KERNEL   kernel image (default: mynos-core/kernel/kernel.elf)
 #   MEM      RAM in MB (default 32)
+#   CPU      QEMU's processor (default qemu32 with RDRAND and RDSEED, which
+#            seed the kernel's random numbers)
 #   DISK     a raw disk image, attached as the first IDE disk
 #   NET      if set, an NE2000 card (I/O 0x300) on QEMU's user network:
 #            MyNOS gets 10.0.2.15 by DHCP, the host is 10.0.2.2
@@ -42,6 +44,7 @@ if [ -z "$modules" ] && [ -z "${KERNEL_ONLY:-}" ]; then
 fi
 
 set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "${MEM:-32}" \
+    -cpu "${CPU:-qemu32,+rdrand,+rdseed}" \
     ${VERBOSE:+-append verbose} \
     ${DISK:+-drive file=$DISK,format=raw,if=ide,index=0} \
     ${NET:+-netdev user,id=n0${HTTP:+,hostfwd=tcp:127.0.0.1:$HTTP-:80}} \

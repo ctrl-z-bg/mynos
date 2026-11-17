@@ -6,6 +6,7 @@
       Net.call n Net.Config;;                  (* the address, by DHCP *)
       Net.call n (Net.Ping ("10.0.2.2", 1000));;   (* round trip, in ms *)
       let s = Net.call n (Net.Connect ("10.0.2.2", 8000));;
+      let t = Net.call n (Net.Connect_tls ("example.com", 443));;
       Net.call n (Net.Send (s, "hello"));;
       Net.call n (Net.Recv (s, 4096));;
     ]}
@@ -42,6 +43,13 @@ type _ request =
   | Set_timeout : int * int -> unit request
       (** [(socket, ms)]: a [Recv] or [Accept] on it that waits longer
           fails with ["timeout"]; 0: wait forever (the default) *)
+  | Connect_tls : string * int -> int request
+      (** [(host, port)]: a TCP socket with TLS over it (1.2 or 1.3).
+          [host] is a name (resolved by DNS) or an address. The server's
+          certificate must be valid for [host] and come from an authority
+          netd trusts: Mozilla's list ([/cacert.pem] on the RAM disk) and
+          the user's ([/disk/ca.pem], if any). [Send] and [Recv] then carry
+          the clear bytes. *)
 
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
 

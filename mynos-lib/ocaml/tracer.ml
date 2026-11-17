@@ -163,7 +163,8 @@ let protocols = [
   "net/1", [| "Config", [], [ S; S; S; S; S ]; "Ping", [ S; I ], [ I ];
               "Resolve", [ S ], [ S ]; "Connect", [ S; I ], [ I ]; "Listen", [ I ], [ I ];
               "Accept", [ I ], [ I; S; I ]; "Send", [ I; S ], [ I ];
-              "Recv", [ I; I ], [ S ]; "Close", [ I ], []; "Set_timeout", [ I; I ], [] |];
+              "Recv", [ I; I ], [ S ]; "Close", [ I ], []; "Set_timeout", [ I; I ], [];
+              "Connect_tls", [ S; I ], [ I ] |];
 ]
 
 let get_args c args =

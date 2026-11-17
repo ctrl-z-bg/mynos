@@ -151,5 +151,28 @@ let () =
                            && c.reply <> "" && c.finish >= c.start)
        (Tracer.calls r));
   ok &&& check "trace: process names" (Tracer.name r 0 = "kernel(0)");
+  (* JSON and HTTP's parsing (mynos-dhp) *)
+  let j = {|{"a": [1, 2.5, -3e2, true, null], "s": "x\"\u00e8\ud83d\ude00\n", "o": {}}|} in
+  ok &&& check "json: parse and print"
+    (match Json.of_string j with
+     | v ->
+       Json.(member "a" v |> index 2 |> to_int) = -300
+       && Json.(member "s" v |> to_string_value) = "x\"\xc3\xa8\xf0\x9f\x98\x80\n"
+       && Json.(to_string (member "a" v)) = "[1,2.5,-300,true,null]"
+       && Json.of_string (Json.to_string v) = v
+     | exception Json.Error m -> print_endline m; false);
+  ok &&& check "json: malformed text is refused"
+    (List.for_all (fun t -> match Json.of_string t with
+         | _ -> false | exception Json.Error _ -> true)
+        [ ""; "{"; "[1,]"; "{\"a\" 1}"; "tru"; "\"abc"; "1 2"; "[01x]" ]);
+  ok &&& check "http: URLs"
+    (Http.parse_url "https://example.com/a?b" = (true, "example.com", 443, "/a?b")
+     && Http.parse_url "http://10.0.2.2:8080" = (false, "10.0.2.2", 8080, "/")
+     && (match Http.parse_url "ftp://x" with _ -> false | exception Http.Error _ -> true));
+  ok &&& check "http: a chunked answer"
+    (let r = Http.parse_response
+         "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nX-A: b\r\n\r\n\
+          5\r\nhello\r\n7;x=1\r\n, world\r\n0\r\n\r\n" in
+     r.Http.status = 200 && r.body = "hello, world" && Http.header "x-a" r = Some "b");
   print_endline (if !ok then "mynos-ocaml: all checks passed"
                  else "mynos-ocaml: SOME CHECKS FAILED")

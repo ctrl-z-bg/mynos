@@ -27,6 +27,7 @@
 #include "pic.h"
 #include "pit.h"
 #include "time.h"
+#include "random.h"
 #include "idt.h"
 
 #include "tss.h"
@@ -250,6 +251,7 @@ void mynos_main(multiboot_info_t *boot_info) {
   set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT));
   printk("done.\n");
   time_init();
+  random_init();
   __OS_sem_initSemaphores();
 
   __OS_service_initServicesRegistry();

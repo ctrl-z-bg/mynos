@@ -31,6 +31,7 @@
 #include "sched.h"
 #include "sem.h"
 #include "time.h"
+#include "random.h"
 
 extern uint32_t currProcess;
 
@@ -544,21 +545,13 @@ int _linux_syscall_ioctl(int fd, uint32_t req, unsigned short * arg) {
   return -25;             /* -ENOTTY */
 }
 
-/* getrandom (355): bytes from a xorshift generator seeded with the
-   processor's time-stamp counter. Not cryptographic: it seeds OCaml's
-   Random and hash tables (which otherwise fall back on the time). */
+/* getrandom (355): the kernel's random numbers (random.c), at most 256
+   bytes per call, as Linux allows */
 int _linux_syscall_getrandom(unsigned char * buf, uint32_t len,
 			     uint32_t flags) {
-  static uint32_t x = 0;
-  uint32_t lo, hi, i;
+  if (len > 256) len = 256;
   USER(buf, len);
-  asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
-  x ^= lo ^ (hi << 16) ^ timerTicks ^ (currProcess << 24);
-  if (x == 0) x = 0x9E3779B9;
-  for (i = 0; i < len; i++) {
-    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
-    buf[i] = x >> 24;
-  }
+  random_get(buf, len);
   return len;
 }
 

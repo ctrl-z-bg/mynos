@@ -19,6 +19,7 @@
 */
 
 #include "pit.h"
+#include "random.h"
 #include "idt.h"
 #include "io.h"
 #include "video.h"
@@ -52,6 +53,7 @@ __asm__ (".pushsection .text\n" \
 uint32_t timerTicks = 0;
 void pit_handler() {
   timerTicks++;
+  random_event(0);
 
   outportb(0x20, 0x20);
   

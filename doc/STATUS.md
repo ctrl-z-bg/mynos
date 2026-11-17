@@ -41,7 +41,7 @@ talking through IPC.
 | `system/` | The system RAM disk: `init`, `init.rc`, services, the shell, interfaces, programs |
 | `editor/` | `edit`, the text editor, in OCaml on Notty |
 | `sh/` | `sh`, a bash-like command shell, in OCaml |
-| `third_party/` | kilo (C editor), Notty and uutf (OCaml terminal UI), with their licenses and MyNOS changes |
+| `third_party/` | kilo (C editor), Notty and uutf (OCaml terminal UI), lwIP (TCP/IP), mbedTLS (TLS), Mozilla's certificate authorities, with their licenses and MyNOS changes |
 | `mynos.mk` | Toolchain variables for user-space programs (`MYNOS_CC`, `MYNOS_LDFLAGS`) |
 
 #### mynos-core — the microkernel
@@ -164,8 +164,15 @@ All services are linked statically against `libmynos` and placed at
   frame is a function call. DHCP (else QEMU's 10.0.2.15), ARP, IPv4, ICMP,
   TCP, DNS. Programs use it over typed IPC, protocol "net/1": module `Net`
   (`Config`, `Ping`, `Resolve`, `Connect`, `Listen`, `Accept`, `Send`,
-  `Recv`, `Close`, `Set_timeout`), the first protocol with a C service, through
-  `mynos_wire.h`. One lwIP thread; a second one receives the requests;
+  `Recv`, `Close`, `Set_timeout`, `Connect_tls`), the first protocol with a C service, through
+  `mynos_wire.h`. **TLS** (1.2 and 1.3): mbedTLS 3.6 LTS
+  (`third_party/mbedtls`, used under GPL-2.0-or-later) under lwIP's
+  `altcp` layer (its port adapted to 3.6); the server's certificate is
+  checked against Mozilla's authorities (`/cacert.pem` on the RAM disk,
+  from curl's `cacert.pem`) and the user's (`/disk/ca.pem`), and against
+  the host name. Modules `Http` (HTTP/1.1 clients, `http://` and
+  `https://`, chunked answers) and `Json`; the `fetch` program, a small
+  curl (`fetch -i -H ... -d ... URL`). One lwIP thread; a second one receives the requests;
   requests that wait (`Recv`, `Accept`...) keep their channel open until
   lwIP's callback replies. `sh` has `ifconfig`, `ping`, `host`; `httpd`
   (`httpd/httpd.ml`, OCaml) serves `/disk` over HTTP with 8 worker domains
@@ -180,6 +187,12 @@ All services are linked statically against `libmynos` and placed at
   rebuilt from channels and nested, and the Chrome trace event format for
   Perfetto. The `trace` program: `trace COMMAND`, `trace -s SECONDS`,
   `trace show|calls|json FILE`.
+- **Random numbers** (2026, `kernel/random.c`): `getrandom` serves bytes
+  for cryptography: the time-stamp counter at every timer tick and
+  interrupt, and RDRAND/RDSEED at boot when the processor has them
+  (`tools/run-qemu.sh` gives QEMU's processor both), mixed with SHA-256's
+  compression function; output blocks from the pool and a counter, the
+  pool replaced after each request.
 - `tmpfs` (2026): **the first MyNOS service written in OCaml**
   (`services/tmpfs/tmpfs.ml`), a writable filesystem in memory. It speaks
   the same protocol, which has `WRITE` and `UNLINK` too; `fileio.c` sends
@@ -415,6 +428,7 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
 | mynos-t9l | `mynos-lib/` | C programs have no sockets API yet: only OCaml programs reach the network (module `Net`). |
 | mynos-c9h | `services/net/netd.c` | Sockets have no owner (any process may use any socket number) and stay open when their process dies; no UDP for programs yet. |
+| — | `services/net/netd.c` | TLS: clients only (no `Listen_tls`); no revocation checks (CRL, OCSP); Mozilla's list is parsed at the first TLS connection (about 1.5 s in QEMU), later handshakes take 0.2-0.4 s; the clear bytes travel between netd and the program over IPC. |
 | — | `services/ata/ata.ml` | The disk is polled (PIO: the driver copies every word anyway, and QEMU completes commands at once); IRQ 14 is free for it. |
 | — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently; the stdio of C programs (musl's direct system calls) is not redirected. |
 
@@ -439,7 +453,8 @@ Planned work, in order. Details live in the beads issues.
 4. Storage (mynos-rf4, done): the ATA driver and the FAT filesystem, both
    in OCaml, `/disk` in the shell.
 5. Typed IPC (mynos-tc3, done) and networking (mynos-4f6, done): lwIP
-   and an NE2000 driver in netd, `Net` over "net/1", `httpd`.
+   and an NE2000 driver in netd, `Net` over "net/1", `httpd`; TLS
+   (mynos-dhp, done): `https://` clients, `Http`, `Json`, `fetch`.
 6. Later: a GUI toolkit (mynos-9lr), distinctive
    applications (mynos-3h1), several CPUs (mynos-awn).
 
@@ -655,3 +670,17 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   recorder records interrupts. netd waits for the NE2000's IRQ 9 instead
   of polling every 10 ms: a small page from httpd in 10.7 ms instead of
   42.6 (median of 20). Closed mynos-8v4.
+- **2026-11-17** — TLS: mbedTLS 3.6 LTS in netd under lwIP's altcp (its
+  port written for mbedTLS 2.x, adapted), `Connect_tls` in "net/1",
+  certificates checked against Mozilla's authorities and the host name;
+  the kernel's `getrandom` made fit for keys (`random.c`: interrupt
+  timings, RDRAND/RDSEED, SHA-256). Modules `Http` and `Json`, program
+  `fetch`. From MyNOS: example.com, google.com, api.anthropic.com answer;
+  expired.badssl.com and wrong.host.badssl.com are refused with the
+  reason. Tests: HTTPS servers on the host with a test authority, an
+  unknown one and a wrong name. Closed mynos-dhp.
+- **2026-11-17** — A 2003 race at boot: the kernel could give the
+  registry's well-known port 0 to any program allocating a port before the
+  registry started, which then ended; the stress test hung about 1 run in
+  10 (3 in 10 with TLS's timings). Ports below 1 are now only taken by
+  number.

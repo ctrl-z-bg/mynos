@@ -1272,3 +1272,94 @@ Measured from the host, a small page from httpd: 42.6 ms median before,
 10.7 ms after. The recorder, which now records interrupts too, shows the
 IRQ waking netd while the CPU was idle, and the rest of the time: httpd
 opens the file twice and seeks three times to learn its size.
+
+## 2026-11-17 — TLS: an old port, a new mbedTLS, and where the randomness comes from
+
+**Goal.** Programs in MyNOS calling web APIs over `https://` (the LLM
+service of mynos-wsd first). TLS went into netd, under lwIP's `altcp`
+layer, which puts TLS or plain TCP under the same callbacks: netd's
+sockets moved from `tcp_*` to `altcp_*` calls, and one request,
+`Connect_tls (host, port)`, was added to "net/1". Clients do not change:
+`Send` and `Recv` carry the clear bytes.
+
+**Which mbedTLS.** lwIP 2.2.1's port (`altcp_tls_mbedtls.c`) says it is
+for mbedTLS 2.x, whose last branch, 2.28, has had no security fixes since
+the end of 2024. 4.x moved the cryptography to a separate PSA library.
+3.6 is the LTS; the port needed five changes: private fields of
+`mbedtls_ssl_context` (`MBEDTLS_ALLOW_PRIVATE_ACCESS`), the internal
+`mbedtls_ssl_flush_output` declared by hand, `mbedtls_pk_parse_key` with
+a random number generator, `mbedtls_ssl_get_max_out_record_payload` for
+the fragment length, and the `net_sockets.h` error codes. Two more are
+MyNOS's: a failed handshake leaves its mbedTLS error and the certificate
+check's flags in globals, so that the client gets "TLS: bad certificate:
+The certificate validity has expired" instead of "connection closed";
+and a list of authorities is accepted when some of its certificates
+cannot be parsed (the port refused the whole list). `psa_crypto_init()`
+is called at netd's start (TLS 1.3 needs PSA).
+
+**Randomness.** TLS keys are only as good as the random numbers, and
+`getrandom` was an xorshift seeded by the time-stamp counter: fine for
+OCaml's hash tables, predictable for an attacker. The kernel now keeps a
+pool (`random.c`): the time-stamp counter at every timer tick and every
+interrupt (keys, frames), whose low bits depend on when things really
+happen, plus RDRAND/RDSEED at boot when the processor has them. QEMU's
+default `qemu32` processor does not announce them, but TCG implements
+them: `-cpu qemu32,+rdrand,+rdseed` in `run-qemu.sh`. The mixing function
+is SHA-256's compression function (in the kernel: no library there);
+output blocks are the compression of the pool with a counter, and after
+each request the pool is replaced by another compression of itself, so
+an earlier output cannot be recomputed from a later state. mbedTLS on
+"Linux" asks for its entropy with `syscall(SYS_getrandom)`, which is
+this.
+
+**Smaller things.** TCP's window grew from 8 to 16 segments: lwIP warns
+that a window smaller than a TLS record (16 KB) can stall the receiving
+side. The certificates are read at the first `Connect_tls`, not at boot:
+parsing Mozilla's 118 roots takes about 1.5 s in QEMU, and most sessions
+never use TLS.
+
+**Tests.** A test authority, made once with openssl and kept in
+`tests/net/tls/` (20 years), replaces Mozilla's list on the test RAM disk.
+`net-peer.py https` serves HTTPS on the host: 47443 with a certificate
+for 10.0.2.2 from the test authority, 47444 from an unknown authority,
+47445 for another name. MyNOS posts to the first through `Http` and gets
+a chunked answer; the other two are refused, with the reason. By hand,
+from MyNOS: example.com in 1.9 s the first time (the certificates), 0.2 s
+after; google.com (87 KB), api.anthropic.com (401 without a key, as it
+should); expired.badssl.com and wrong.host.badssl.com refused.
+
+**Lesson.** The old port's comments listed its "mandatory security
+configuration" (a strong entropy source) but nothing checks it: TLS
+would have worked, with keys an attacker could guess. Behaviour tests
+do not show that; it had to be read and fixed on purpose.
+
+## 2026-11-17 — The stress test that hung: port 0 given away
+
+**Symptom.** After the TLS work, `tools/run-tests.sh` failed once: the
+stress test printed "allocPort ok" and nothing more. Alone, it hung 3 runs
+in 10; with the previous commit's kernel, 1 in 10: an old bug, made more
+frequent by new timings (the random number pool's work at each tick, the
+processor's options).
+
+**Diagnosis.** Phase prints placed the hang at the first `spawn`, which
+reads the program through memrofs and so asks the registry. A gdb script
+on the hung kernel (processes, ready and timer queues, semaphores with
+waiting threads) showed no registry process at all; memrofsd and stress
+were waiting on their private semaphores. The console said why: "Error
+registry allocating port: -2", then "process 1 exited".
+
+**Cause.** The registry takes the well-known port 0 with `allocPortP(0)`.
+`getFreePort`, behind `allocPort`, started its search at 0 too. All
+modules start at boot together; when stress ran its `allocPort` before the
+registry, it got port 0, and the registry, finding it busy, ended. Every
+client then waited forever for an answer on port 0, now stress's.
+
+**Fix.** `getFreePort` starts at 1 and wraps to 1 (`FIRST_FREE_PORT`); it
+also returns "full" instead of looping when only well-known ports are
+free. 15 runs in 15 pass.
+
+**Lesson.** A well-known resource must be reserved where it is handed
+out, not merely taken first by convention. And a rare hang is worth a
+look when it appears: here it was the boot order, and any program could
+have met it.
+

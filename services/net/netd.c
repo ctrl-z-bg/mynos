@@ -32,6 +32,8 @@
 #include <stdint.h>
 #include <time.h>
 #include <pthread.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <mynos.h>
 #include <mynos_wire.h>
 
@@ -39,6 +41,9 @@
 #include "lwip/netif.h"
 #include "lwip/timeouts.h"
 #include "lwip/tcp.h"
+#include "lwip/altcp.h"
+#include "lwip/altcp_tcp.h"
+#include "lwip/altcp_tls.h"
 #include "lwip/raw.h"
 #include "lwip/dns.h"
 #include "lwip/dhcp.h"
@@ -48,6 +53,11 @@
 #include "lwip/prot/ip4.h"
 #include "netif/ethernet.h"
 #include "ne2k.h"
+
+#include "mbedtls/ssl.h"
+#include "mbedtls/x509_crt.h"
+#include "mbedtls/error.h"
+#include "psa/crypto.h"
 
 #define SERVICE     "net"
 #define PROTOCOL    "net/1"
@@ -199,7 +209,9 @@ enum { W_NONE, W_CONNECT, W_RECV, W_ACCEPT };
 
 struct sock {
   int state;
-  struct tcp_pcb * pcb;         /* NULL once lwIP freed it (an error) */
+  struct altcp_pcb * pcb;       /* NULL once lwIP freed it (an error) */
+  int tls;                      /* TLS over TCP (Connect_tls) */
+  char host[256];               /* Connect_tls: the server's name */
   struct pbuf * rx;             /* received, not read yet */
   int eof;
   err_t err;
@@ -261,7 +273,7 @@ static void serve_recv(struct sock * s) {
     if (buf == NULL) return;              /* try again later */
     pbuf_copy_partial(s->rx, buf, (u16_t)n, 0);
     s->rx = pbuf_free_header(s->rx, (u16_t)n);
-    if (s->pcb) tcp_recved(s->pcb, (u16_t)n);
+    if (s->pcb) altcp_recved(s->pcb, (u16_t)n);
     reply_string(s->rx_ch, buf, n);
     free(buf);
   } else if (s->eof) {
@@ -281,17 +293,17 @@ static void serve_send(struct sock * s) {
     reply_error(s->tx_ch, err_text(s->err != ERR_OK ? s->err : ERR_CLSD));
   } else {
     while (s->tx_off < s->tx_len) {
-      unsigned int n = s->tx_len - s->tx_off, room = tcp_sndbuf(s->pcb);
+      unsigned int n = s->tx_len - s->tx_off, room = altcp_sndbuf(s->pcb);
       err_t e;
       if (n > room) n = room;
       if (n > 0xFFFF) n = 0xFFFF;
       if (n == 0) break;
-      e = tcp_write(s->pcb, s->tx + s->tx_off, (u16_t)n, TCP_WRITE_FLAG_COPY);
+      e = altcp_write(s->pcb, s->tx + s->tx_off, (u16_t)n, TCP_WRITE_FLAG_COPY);
       if (e == ERR_MEM) break;
       if (e != ERR_OK) { reply_error(s->tx_ch, err_text(e)); goto done; }
       s->tx_off += n;
     }
-    tcp_output(s->pcb);
+    altcp_output(s->pcb);
     if (s->tx_off < s->tx_len) return;    /* the rest when acknowledged */
     reply_int(s->tx_ch, s->tx_len);
   }
@@ -301,7 +313,7 @@ done:
   s->tx_ch = -1;
 }
 
-static err_t on_recv(void * arg, struct tcp_pcb * pcb, struct pbuf * p, err_t err) {
+static err_t on_recv(void * arg, struct altcp_pcb * pcb, struct pbuf * p, err_t err) {
   struct sock * s = &socks[IDX(arg)];
   (void)pcb;
   if (p == NULL) s->eof = 1;
@@ -312,10 +324,36 @@ static err_t on_recv(void * arg, struct tcp_pcb * pcb, struct pbuf * p, err_t er
   return ERR_OK;
 }
 
-static err_t on_sent(void * arg, struct tcp_pcb * pcb, u16_t len) {
+static err_t on_sent(void * arg, struct altcp_pcb * pcb, u16_t len) {
   (void)pcb; (void)len;
   serve_send(&socks[IDX(arg)]);
   return ERR_OK;
+}
+
+/* ---------------------------------------------------------------- TLS */
+
+/* altcp_tls_mbedtls.c (MyNOS's change): why the last handshake failed */
+extern int altcp_mbedtls_handshake_error;
+extern uint32_t altcp_mbedtls_verify_result;
+
+static const char * tls_error(err_t err) {
+  static char text[400];
+  char info[300], * p;
+  int e = altcp_mbedtls_handshake_error;
+  uint32_t v = altcp_mbedtls_verify_result;
+  altcp_mbedtls_handshake_error = 0;
+  altcp_mbedtls_verify_result = 0;
+  if (e == 0) return err_text(err);       /* TCP's, not TLS's */
+  if (e == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED && v != 0 && v != (uint32_t)-1) {
+    /* one line per reason: joined */
+    mbedtls_x509_crt_verify_info(info, sizeof info, "", v);
+    for (p = info; *p; p++) if (*p == '\n') *p = p[1] ? ';' : 0;
+    snprintf(text, sizeof text, "TLS: bad certificate: %s", info);
+  } else {
+    mbedtls_strerror(e, info, sizeof info);
+    snprintf(text, sizeof text, "TLS: %s", info);
+  }
+  return text;
 }
 
 /* lwIP freed the pcb */
@@ -324,7 +362,7 @@ static void on_err(void * arg, err_t err) {
   s->pcb = NULL;
   s->err = err;
   if (s->rx_kind == W_CONNECT) {
-    reply_error(s->rx_ch, err_text(err));
+    reply_error(s->rx_ch, s->tls ? tls_error(err) : err_text(err));
     s->state = S_FREE;                    /* the client never had it */
     return;
   }
@@ -332,14 +370,14 @@ static void on_err(void * arg, err_t err) {
   serve_send(s);
 }
 
-static void setup_pcb(struct tcp_pcb * pcb, int id) {
-  tcp_arg(pcb, ARG(id));
-  tcp_recv(pcb, on_recv);
-  tcp_sent(pcb, on_sent);
-  tcp_err(pcb, on_err);
+static void setup_pcb(struct altcp_pcb * pcb, int id) {
+  altcp_arg(pcb, ARG(id));
+  altcp_recv(pcb, on_recv);
+  altcp_sent(pcb, on_sent);
+  altcp_err(pcb, on_err);
 }
 
-static err_t on_connected(void * arg, struct tcp_pcb * pcb, err_t err) {
+static err_t on_connected(void * arg, struct altcp_pcb * pcb, err_t err) {
   struct sock * s = &socks[IDX(arg)];
   (void)pcb; (void)err;
   s->state = S_OPEN;
@@ -349,21 +387,20 @@ static err_t on_connected(void * arg, struct tcp_pcb * pcb, err_t err) {
   return ERR_OK;
 }
 
-static err_t on_accept(void * arg, struct tcp_pcb * pcb, err_t err) {
+static err_t on_accept(void * arg, struct altcp_pcb * pcb, err_t err) {
   struct sock * l = &socks[IDX(arg)];
   struct sock * c;
   int id;
   if (err != ERR_OK || pcb == NULL) return ERR_VAL;
   if (l->rx_kind != W_ACCEPT && l->nbacklog == MAXBACKLOG) {
-    tcp_abort(pcb);
+    altcp_abort(pcb);
     return ERR_ABRT;
   }
-  if ((id = alloc_sock()) < 0) { tcp_abort(pcb); return ERR_ABRT; }
+  if ((id = alloc_sock()) < 0) { altcp_abort(pcb); return ERR_ABRT; }
   c = &socks[id];
   c->state = S_OPEN;
   c->pcb = pcb;
-  ip_addr_copy(c->peer, pcb->remote_ip);
-  c->peer_port = pcb->remote_port;
+  altcp_get_tcp_addrinfo(pcb, 0, &c->peer, &c->peer_port);
   setup_pcb(pcb, id);
   if (l->rx_kind == W_ACCEPT) {
     reply_accept(l->rx_ch, c);
@@ -377,14 +414,14 @@ static err_t on_accept(void * arg, struct tcp_pcb * pcb, err_t err) {
 static void close_sock(struct sock * s) {
   int i;
   if (s->pcb) {
-    tcp_arg(s->pcb, NULL);
-    if (s->state == S_LISTEN) tcp_accept(s->pcb, NULL);
+    altcp_arg(s->pcb, NULL);
+    if (s->state == S_LISTEN) altcp_accept(s->pcb, NULL);
     else {
-      tcp_recv(s->pcb, NULL);
-      tcp_sent(s->pcb, NULL);
-      tcp_err(s->pcb, NULL);
+      altcp_recv(s->pcb, NULL);
+      altcp_sent(s->pcb, NULL);
+      altcp_err(s->pcb, NULL);
     }
-    if (tcp_close(s->pcb) != ERR_OK) tcp_abort(s->pcb);
+    if (altcp_close(s->pcb) != ERR_OK) altcp_abort(s->pcb);
   }
   if (s->rx) pbuf_free(s->rx);
   if (s->rx_ch >= 0) reply_error(s->rx_ch, "socket closed");
@@ -510,43 +547,134 @@ static void do_connect(int ch, const char * host, long long port) {
   if (port <= 0 || port > 65535) { reply_error(ch, "bad port"); return; }
   if ((id = alloc_sock()) < 0) { reply_error(ch, "too many sockets"); return; }
   s = &socks[id];
-  if ((s->pcb = tcp_new()) == NULL) { reply_error(ch, "out of memory"); return; }
+  if ((s->pcb = altcp_tcp_new()) == NULL) { reply_error(ch, "out of memory"); return; }
   s->state = S_CONNECTING;
   s->rx_kind = W_CONNECT;
   s->rx_ch = ch;
   ip_addr_copy(s->peer, addr);
   s->peer_port = (u16_t)port;
   setup_pcb(s->pcb, id);
-  e = tcp_connect(s->pcb, &addr, (u16_t)port, on_connected);
+  e = altcp_connect(s->pcb, &addr, (u16_t)port, on_connected);
   if (e != ERR_OK) {
-    tcp_abort(s->pcb);                    /* calls on_err: replies, frees */
+    altcp_abort(s->pcb);                    /* calls on_err: replies, frees */
     if (s->state != S_FREE) { s->state = S_FREE; reply_error(ch, err_text(e)); }
   }
 }
 
+/* The authorities netd trusts: the system's list (Mozilla's, on the RAM
+   disk) and the user's own, if any. Read at the first Connect_tls. */
+#define CA_SYSTEM "/cacert.pem"
+#define CA_USER   "/disk/ca.pem"
+
+static struct altcp_tls_config * tls_conf;
+
+/* a file at the end of buf (NUL-terminated) */
+static char * append_file(const char * path, char * buf, size_t * len) {
+  int fd = open(path, O_RDONLY);
+  ssize_t n;
+  if (fd < 0) return buf;
+  for (;;) {
+    char * b = realloc(buf, *len + 4096 + 1);
+    if (b == NULL) break;
+    buf = b;
+    if ((n = read(fd, buf + *len, 4096)) <= 0) break;
+    *len += n;
+  }
+  close(fd);
+  if (buf) buf[*len] = 0;
+  return buf;
+}
+
+static struct altcp_tls_config * tls_config(void) {
+  size_t len = 0;
+  char * pem;
+  if (tls_conf) return tls_conf;
+  pem = append_file(CA_SYSTEM, NULL, &len);
+  pem = append_file(CA_USER, pem, &len);
+  if (pem == NULL || len == 0) { free(pem); return NULL; }
+  tls_conf = altcp_tls_create_config_client((const u8_t *)pem, len + 1);
+  mynos_log("netd: TLS: %u KB of trusted certificates%s\n",
+            (unsigned)(len / 1024), tls_conf ? "" : ", not usable");
+  free(pem);
+  return tls_conf;
+}
+
+/* the server's address is known: connect, the handshake follows */
+static void tls_start(struct sock * s, const ip_addr_t * addr) {
+  int ch = s->rx_ch;
+  err_t e;
+  s->pcb = altcp_tls_new(tls_conf, IPADDR_TYPE_V4);
+  if (s->pcb == NULL) { s->state = S_FREE; reply_error(ch, "out of memory"); return; }
+  /* the name for the server (SNI) and for checking its certificate */
+  if (mbedtls_ssl_set_hostname(altcp_tls_context(s->pcb), s->host) != 0) {
+    altcp_abort(s->pcb);
+    s->state = S_FREE;
+    reply_error(ch, "TLS: bad host name");
+    return;
+  }
+  ip_addr_copy(s->peer, *addr);
+  setup_pcb(s->pcb, ID(s));
+  e = altcp_connect(s->pcb, addr, s->peer_port, on_connected);
+  if (e != ERR_OK) {
+    altcp_abort(s->pcb);                  /* calls on_err: replies, frees */
+    if (s->state != S_FREE) { s->state = S_FREE; reply_error(ch, err_text(e)); }
+  }
+}
+
+static void on_tls_resolved(const char * name, const ip_addr_t * addr, void * arg) {
+  struct sock * s = &socks[IDX(arg)];
+  (void)name;
+  if (addr) tls_start(s, addr);
+  else { s->state = S_FREE; reply_error(s->rx_ch, "host not found"); }
+}
+
+static void do_connect_tls(int ch, const char * host, long long port) {
+  ip_addr_t addr;
+  struct sock * s;
+  int id;
+  err_t e;
+  if (port <= 0 || port > 65535) { reply_error(ch, "bad port"); return; }
+  if (strlen(host) >= sizeof s->host) { reply_error(ch, "host name too long"); return; }
+  if (tls_config() == NULL) {
+    reply_error(ch, "TLS: no trusted certificates (" CA_SYSTEM ", " CA_USER ")");
+    return;
+  }
+  if ((id = alloc_sock()) < 0) { reply_error(ch, "too many sockets"); return; }
+  s = &socks[id];
+  s->state = S_CONNECTING;
+  s->rx_kind = W_CONNECT;
+  s->rx_ch = ch;
+  s->tls = 1;
+  s->peer_port = (u16_t)port;
+  strcpy(s->host, host);
+  e = dns_gethostbyname(host, &addr, on_tls_resolved, ARG(id));
+  if (e == ERR_OK) tls_start(s, &addr);
+  else if (e != ERR_INPROGRESS) { s->state = S_FREE; reply_error(ch, "cannot resolve"); }
+}
+
 static void do_listen(int ch, long long port) {
-  struct tcp_pcb * pcb, * lpcb;
+  struct altcp_pcb * pcb, * lpcb;
   struct sock * s;
   int id;
   err_t e;
   if (port <= 0 || port > 65535) { reply_error(ch, "bad port"); return; }
   if ((id = alloc_sock()) < 0) { reply_error(ch, "too many sockets"); return; }
-  if ((pcb = tcp_new()) == NULL) { reply_error(ch, "out of memory"); return; }
-  if ((e = tcp_bind(pcb, IP_ANY_TYPE, (u16_t)port)) != ERR_OK) {
-    tcp_close(pcb);
+  if ((pcb = altcp_tcp_new()) == NULL) { reply_error(ch, "out of memory"); return; }
+  if ((e = altcp_bind(pcb, IP_ANY_TYPE, (u16_t)port)) != ERR_OK) {
+    altcp_close(pcb);
     reply_error(ch, err_text(e));
     return;
   }
-  if ((lpcb = tcp_listen(pcb)) == NULL) {
-    tcp_close(pcb);
+  if ((lpcb = altcp_listen(pcb)) == NULL) {
+    altcp_close(pcb);
     reply_error(ch, "out of memory");
     return;
   }
   s = &socks[id];
   s->state = S_LISTEN;
   s->pcb = lpcb;
-  tcp_arg(lpcb, ARG(id));
-  tcp_accept(lpcb, on_accept);
+  altcp_arg(lpcb, ARG(id));
+  altcp_accept(lpcb, on_accept);
   reply_int(ch, id);
 }
 
@@ -655,6 +783,8 @@ static void handle(int ch, const char * msg, unsigned int len) {
   case 8: x = wire_get_int(&r); END(); do_close(ch, x); break;
   case 9: x = wire_get_int(&r); y = wire_get_int(&r); END();
     do_set_timeout(ch, x, y); break;
+  case 10: wire_get_cstring(&r, a, sizeof a); x = wire_get_int(&r); END();
+    do_connect_tls(ch, a, x); break;
   default: reply_error(ch, "unknown request"); break;
   }
 #undef END
@@ -729,6 +859,11 @@ int main(void) {
   }
   mynos_log("netd: NE2000 at 0x%x, %02x:%02x:%02x:%02x:%02x:%02x\n",
             NE2K_IOBASE, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+  /* mbedTLS's cryptography (PSA): its random numbers come from the
+     kernel's (getrandom) */
+  if (psa_crypto_init() != PSA_SUCCESS)
+    mynos_log("netd: no cryptography: TLS will fail\n");
 
   lwip_init();
   netif_add(&netif, IP4_ADDR_ANY4, IP4_ADDR_ANY4, IP4_ADDR_ANY4, NULL,

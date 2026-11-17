@@ -24,6 +24,7 @@
 #   tests/abi/abi                    system call checks
 #   tests/stress/stress, ramdisk.dsk kernel stress test
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
+#   fetch/fetch.byte                 HTTP and HTTPS from the command line (dev only)
 set -eu
 
 name=${1:-dev}
@@ -67,6 +68,7 @@ if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
   make -C tests/net
   make -C httpd
   make -C trace
+  make -C fetch
   make -C shell
   make -C system
 fi

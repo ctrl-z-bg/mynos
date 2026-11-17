@@ -34,10 +34,17 @@
 #define PBUF_POOL_SIZE          64
 
 #define TCP_MSS                 1460
-#define TCP_WND                 (8 * TCP_MSS)
+#define TCP_WND                 (16 * TCP_MSS)  /* more than a TLS record */
 #define TCP_SND_BUF             (8 * TCP_MSS)
 #define TCP_SND_QUEUELEN        (4 * TCP_SND_BUF / TCP_MSS)
 #define TCP_LISTEN_BACKLOG      1
+
+/* TLS: altcp (TCP, or TLS over TCP) with mbedTLS; mbedTLS's memory from
+   malloc */
+#define LWIP_ALTCP              1
+#define LWIP_ALTCP_TLS          1
+#define LWIP_ALTCP_TLS_MBEDTLS  1
+#define ALTCP_MBEDTLS_AUTHMODE  MBEDTLS_SSL_VERIFY_REQUIRED
 
 #define LWIP_STATS              0
 #define LWIP_DEBUG              0

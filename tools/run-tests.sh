@@ -35,12 +35,16 @@ if [ -f tests/effects/effects.byte ]; then
 fi
 
 # the network: netd (lwIP and the NE2000 driver) with QEMU's user network;
-# on the host, a TCP server (47001) and a client of MyNOS's port 80
-# (forwarded from 47080)
+# on the host, a TCP server (47001), a client of MyNOS's port 80
+# (forwarded from 47080) and HTTPS servers (47443-47445, tests/net/tls)
 net_fetched=
 if [ -f tests/net/ramdisk.dsk ]; then
     tools/net-peer.py echo 47001 & echo_pid=$!
     tools/net-peer.py fetch 47080 "$tmp/fetched" & fetch_pid=$!
+    tls=tests/net/tls
+    tools/net-peer.py https 47443 $tls/good.pem $tls/good.key & https_pid=$!
+    tools/net-peer.py https 47444 $tls/untrusted.pem $tls/untrusted.key & https2_pid=$!
+    tools/net-peer.py https 47445 $tls/wrongname.pem $tls/wrongname.key & https3_pid=$!
     NET=1 HTTP=47080 timeout "${WAIT_NET:-40}" tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         tests/net/ramdisk.dsk \
@@ -51,7 +55,7 @@ if [ -f tests/net/ramdisk.dsk ]; then
           ! grep -aq 'net: all checks passed\|net: FAIL\|PANIC' "$logn" 2>/dev/null; do
         sleep 1; i=$((i + 1))
     done
-    kill $qemu $echo_pid $fetch_pid 2>/dev/null || true
+    kill $qemu $echo_pid $fetch_pid $https_pid $https2_pid $https3_pid 2>/dev/null || true
     wait $qemu 2>/dev/null || true
     cat "$logn" >> "$log"
     grep -q "hello from a server in MyNOS" "$tmp/fetched" 2>/dev/null && net_fetched=yes
