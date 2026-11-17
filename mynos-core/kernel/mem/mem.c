@@ -184,6 +184,30 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
   return (void*)0;
 }
 
+/* physical memory that is not RAM (a device's: a frame buffer), mapped
+   into the current process: its address, or NULL. The pages are shared
+   (PF_SHARED: a fork keeps them as they are) and never counted as RAM. */
+void * __OS_mapPhysical(uint32_t phys, uint32_t npages) {
+  uint32_t start, i;
+  if (npages == 0 || (phys & 0xFFF) || (phys >> 12) < __total_phy_pages ||
+      (phys >> 12) + npages > 0x100000)
+    return NULL;
+  start = __lmt_allocArea(&(processTable[currProcess]->lmemmap), npages);
+  if (start < USERMINPAGE) return NULL;
+  if (__OS_askPagesFrom((void *)(start << 12), npages, 0, PF_USER | PF_READWRITE) == NULL) {
+    __lmt_freeArea(&(processTable[currProcess]->lmemmap), start, npages);
+    return NULL;
+  }
+  for (i = 0; i < npages; i++) {
+    uint32_t page = start + i;
+    uint32_t * pte = (uint32_t *)__GET_PAGE_TABLE_ENTRY(__PAGE_PD_INDEX(page),
+							 __PAGE_PT_INDEX(page));
+    *pte = (phys + (i << 12)) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED;
+    INVALIDATE_THE_CACHE(page << 12);
+  }
+  return (void *)(start << 12);
+}
+
 void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
 			 int alloc_now, uint32_t flags) {
   uint32_t page;

@@ -38,6 +38,8 @@ make -C fetch clean
 make -C services/llm clean
 make -C llm clean
 make -C agent clean
+make -C services/display clean
+make -C gui clean
 make -C shell clean
 make -C system clean
 ' >/dev/null

@@ -16,12 +16,16 @@ kilo: ../third_party/kilo/kilo
 	strip -o $@ $<
 netd: ../services/net/netd
 	strip -o $@ $<
+displayd: ../services/display/displayd
+	strip -o $@ $<
 
 # the bytecode compiler, to compile programs inside MyNOS
 ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2/bin/ocamlc.byte)
 	cp $< $@
 
-FILES = ../init/init.byte init.rc ocamlrun consoled kilo netd ../httpd/httpd.byte \
+FILES = ../init/init.byte init.rc ocamlrun consoled kilo netd displayd ../httpd/httpd.byte \
+	../gui/gui.byte ../gui/welcome.byte ../gui/clock.byte ../gui/services.byte ../gui/terminal.byte \
+	../third_party/fonts/terminus16.psf ../third_party/fonts/terminus16-bold.psf \
 	../trace/trace.byte ../fetch/fetch.byte ../llm/llm.byte ../agent/agent.byte \
 	../services/llm/llmd.byte \
 	../third_party/ca-certificates/cacert.pem \
@@ -35,6 +39,7 @@ FILES = ../init/init.byte init.rc ocamlrun consoled kilo netd ../httpd/httpd.byt
 	../mynos-lib/ocaml/wire.cmi ../mynos-lib/ocaml/ipc.cmi ../mynos-lib/ocaml/net.cmi \
 	../mynos-lib/ocaml/tracer.cmi ../mynos-lib/ocaml/json.cmi ../mynos-lib/ocaml/http.cmi \
 	../mynos-lib/ocaml/llm.cmi ../mynos-lib/ocaml/tools.cmi \
+	../mynos-lib/ocaml/gfx.cmi ../mynos-lib/ocaml/display.cmi ../mynos-lib/ocaml/gui.cmi \
 	../tests/hello/hello.byte ../tests/spawn/child.byte \
 	../tests/ramdisk/AUTOEXEC.BAT
 
@@ -50,4 +55,4 @@ disk.img:
 	rm -f README.TXT
 
 clean:
-	rm -f ocamlrun consoled kilo netd ocamlc.byte ramdisk.dsk
+	rm -f ocamlrun consoled kilo netd displayd ocamlc.byte ramdisk.dsk

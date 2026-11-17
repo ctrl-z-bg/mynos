@@ -58,13 +58,31 @@ tools.cmi: tools.mli llm.cmi json.cmi ipc.cmi
 tools.cmo: tools.ml tools.cmi
 	$(OCAMLC) -c tools.ml
 
+gfx.cmi: gfx.mli
+	$(OCAMLC) -c gfx.mli
+
+gfx.cmo: gfx.ml gfx.cmi
+	$(OCAMLC) -c gfx.ml
+
+display.cmi: display.mli gfx.cmi ipc.cmi
+	$(OCAMLC) -c display.mli
+
+display.cmo: display.ml display.cmi
+	$(OCAMLC) -c display.ml
+
+gui.cmi: gui.mli display.cmi
+	$(OCAMLC) -c gui.mli
+
+gui.cmo: gui.ml gui.cmi
+	$(OCAMLC) -c gui.ml
+
 tracer.cmi: tracer.mli
 	$(OCAMLC) -c tracer.mli
 
 tracer.cmo: tracer.ml tracer.cmi
 	$(OCAMLC) -c tracer.ml
 
-MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo tracer.cmo
+MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo gfx.cmo display.cmo gui.cmo tracer.cmo
 
 mynos.cma: $(MODULES)
 	$(OCAMLC) -a -o $@ $(MODULES)

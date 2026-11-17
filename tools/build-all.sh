@@ -71,6 +71,8 @@ if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
   make -C services/llm
   make -C llm
   make -C agent
+  make -C services/display
+  make -C gui
   make -C tests/net
   make -C shell
   make -C system

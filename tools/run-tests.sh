@@ -225,6 +225,73 @@ sys.exit(0 if b"nocom2-ok" in s else 1)' && nocom2=yes
     wait $qemu || true
 fi
 
+# the graphical session (doc/decisions/gui.md): displayd, windows of
+# programs, the mouse, back to text mode. QEMU's monitor moves the mouse
+# relatively: vmmouse (absolute) is off, the PS/2 mouse is used
+gui_ok=
+if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
+    : > "$tmp/logg"
+    MEM=256 tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        system/ramdisk.dsk \
+        -- -machine vmport=off -display none -serial null -serial "file:$tmp/logg" \
+           -monitor "unix:$tmp/mon-g,server,nowait" &
+    qemu=$!
+    i=0
+    while [ $i -lt 30 ] && ! grep -aq 'mynos:/' "$tmp/logg" 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    mon() { printf '%s\n' "$1" | socat - "UNIX-CONNECT:$tmp/mon-g" >/dev/null; sleep 0.12; }
+    gx=512 gy=384                        # the pointer starts in the middle
+    to() {
+        dx=$(($1 - gx)) dy=$(($2 - gy)); gx=$1 gy=$2
+        while [ $dx -ne 0 ] || [ $dy -ne 0 ]; do
+            sx=$dx sy=$dy
+            [ $sx -gt 40 ] && sx=40; [ $sx -lt -40 ] && sx=-40
+            [ $sy -gt 40 ] && sy=40; [ $sy -lt -40 ] && sy=-40
+            mon "mouse_move $sx $sy"; dx=$((dx - sx)) dy=$((dy - sy))
+        done
+    }
+    click() { to "$1" "$2"; mon "mouse_button 1"; mon "mouse_button 0"; }
+    tools/type-keys.py "$tmp/mon-g" 'gui check\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g" 'gui\n'; sleep 8
+    mon "screendump $tmp/gui1.ppm"
+    click 271 364; sleep 8               # the welcome window's Clock button
+    mon "screendump $tmp/gui2.ppm"
+    # a terminal window (the menu's first item): sh runs in it, its console
+    # is the window (MYNOS_CONSOLE); what it writes is checked from text mode
+    click 20 10; sleep 1; click 40 39; sleep 10
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo term-$X > /tmp/term.txt\n'; sleep 4
+    mon "screendump $tmp/gui4.ppm"
+    click 20 10; sleep 1; click 30 149; sleep 4    # the MyNOS menu, Exit
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt\n'; sleep 2
+    mon "screendump $tmp/gui3.ppm"; sleep 1
+    printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-g" >/dev/null || true
+    wait $qemu || true
+    cat "$tmp/logg" >> "$log"
+    python3 - "$tmp/gui1.ppm" "$tmp/gui2.ppm" "$tmp/gui3.ppm" "$tmp/gui4.ppm" <<'PY' && gui_ok=yes
+import sys
+def load(path):
+    d = open(path, "rb").read()
+    parts = d.split(b"\n", 3)
+    w, h = map(int, parts[1].split())
+    return w, h, parts[3]
+def px(img, x, y):
+    w, h, d = img
+    i = 3 * (y * w + x)
+    return (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]
+g1, g2, g3, g4 = (load(p) for p in sys.argv[1:5])
+assert g1[:2] == (1024, 768), "graphics mode"
+assert px(g1, 500, 10) == 0x111820, "the top bar"
+assert px(g1, 300, 86) == 0x2D6CA2, "the welcome window, focused"
+assert px(g2, 150, 114) == 0x2D6CA2, "the clock's window, focused"
+assert px(g2, 400, 86) == 0x4A5560, "the welcome window, behind"
+assert g3[:2] == (720, 400), "text mode again"
+assert px(g4, 500, 140) == 0x2D6CA2, "the terminal's window, focused"
+assert px(g4, 600, 520) == 0x0F1419, "the terminal's background"
+PY
+fi
+
 # seventh boot: the system RAM disk, init starts the services and sh, driven
 # through the keyboard: the OCaml toplevel (ocaml), programs, sh again
 history_saved= kilo_saved= edit_saved= sh_saved= trace_calls= trace_json=
@@ -517,6 +584,15 @@ PY
     else
         echo "FAIL  without COM2 (QEMU's window), the shell answers within seconds"; fail=1
     fi
+    if [ -n "$gui_ok" ]; then
+        echo "ok    gui: a session, windows of programs, a click, back to text"
+    else
+        echo "FAIL  gui: a session, windows of programs, a click, back to text"; fail=1
+    fi
+    expect "gui: displayd describes display/1 as display.ml does"
+    expect "gui: the graphical session ended"
+    expect "text-ok"
+    expect "term-ok"
     expect "dal-seriale"
     expect "incollata-2"
     expect "still-seriale"

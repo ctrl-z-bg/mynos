@@ -165,6 +165,18 @@ let () =
         = {|{"1":[{"0":1},{"1":[{"0":-2},{"0":3}]}]}|}
      && via_json Wire.(shape (list (option string))) {|["a",null]|} = {|["a",null]|}
      && via_json Wire.(shape (result int string)) {|{"error":"e"}|} = {|{"error":"e"}|});
+  (* drawing (doc/decisions/gui.md): Gfx's primitives, pixels read back *)
+  ok &&& check "gfx: fill, line, blit, get"
+    (let g = Gfx.create 64 32 in
+     Gfx.fill g 0 0 64 32 0x102030;
+     Gfx.fill g 10 10 5 5 0xFF0000;
+     Gfx.fill g (-5) (-5) 7 7 0x00FF00;               (* clipped *)
+     Gfx.line g 0 31 63 31 0x0000FF;
+     Gfx.blit g 10 10 g 40 2 5 5;
+     Gfx.get g 12 12 = 0xFF0000 && Gfx.get g 15 15 = 0x102030
+     && Gfx.get g 1 1 = 0x00FF00 && Gfx.get g 2 2 = 0x102030
+     && Gfx.get g 30 31 = 0x0000FF && Gfx.get g 42 4 = 0xFF0000
+     && Gfx.get g 64 0 = -1 && Gfx.cells "caff\xc3\xa8" = 5);
   (* a service served by a second domain of this process, called from the
      first: each end of a channel has its own id (mynos-9e1; the ends were
      told apart by pid, and the call hung) *)

@@ -81,6 +81,7 @@ void wire_reply_error(wire_writer * w, const char * message);
      O<x> L<x>          an option, a list of x
      (x,y,...)          a tuple
      name:x             a named component (Wire.field)
+     V(0:a=x,1:b=y)     a variant: case numbers, names, values
    e.g. "(socket:I,max:I)". Returns -1 on a malformed notation. */
 int wire_put_shape(wire_writer * w, const char * notation);
 

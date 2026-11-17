@@ -201,6 +201,37 @@ static int put_shape(wire_writer * w, const char ** p) {
     if (put_shape(w, p) < 0 || **p != '>') return -1;
     (*p)++;
     return 0;
+  case 'V': {                         /* V(0:name=x,1:other=y) */
+    int n = 1, depth = 0;
+    const char * c;
+    if (s[1] != '(') return -1;
+    for (c = s + 2; *c && !(depth == 0 && *c == ')'); c++) {
+      if (*c == '(' || *c == '<') depth++;
+      else if (*c == ')' || *c == '>') depth--;
+      else if (*c == ',' && depth == 0) n++;
+    }
+    if (*c != ')') return -1;
+    wire_put_int(w, SH_VARIANT);
+    wire_put_int(w, n);
+    *p = s + 2;
+    while (n-- > 0) {
+      int k = 0;
+      const char * name;
+      while (**p >= '0' && **p <= '9') k = k * 10 + (*(*p)++ - '0');
+      if (**p != ':') return -1;
+      name = ++*p;
+      while (is_name_char(**p)) (*p)++;
+      if (**p != '=') return -1;
+      wire_put_int(w, k);
+      wire_put_string(w, name, *p - name);
+      (*p)++;
+      if (put_shape(w, p) < 0) return -1;
+      if (**p == ',') (*p)++;
+    }
+    if (**p != ')') return -1;
+    (*p)++;
+    return 0;
+  }
   case '(': {
     /* the components at this depth, counted first */
     int n = 1, depth = 0;

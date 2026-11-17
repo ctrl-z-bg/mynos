@@ -1671,3 +1671,39 @@ default way of running the system (`tools/run-demo.sh`, a window) needs
 its own test, especially when a change touches hardware that may be
 absent. And a loop that waits on a device's status must have a bound.
 
+## 2026-11-17 — A graphical session that leaves the text console intact
+
+**Goal.** Windows, owned by separate processes, on QEMU's VGA, and a way
+back to the text console (`doc/decisions/gui.md`).
+
+**Shared video memory.** The first return to text mode showed coloured
+stripes. Two causes. QEMU's Bochs extension (BGA), when enabled, sets
+VGA's registers for graphics and does not restore them when disabled
+(a BIOS would set mode 3 again): `displayd` now saves the sequencer,
+CRTC, graphics and attribute registers before and writes them back after.
+And the frame buffer is the same memory as VGA's planes: drawing from its
+start would erase the text screen and the font (plane 2). The picture
+starts 256 KB in (BGA's Y offset) and the card is enabled with "keep the
+memory": the console returns as it was, font included.
+
+**Mouse bytes out of step.** In the tests, the pointer went to the wrong
+place. The PS/2 mouse answers its setup commands with 0xFA, whose bit 3,
+set, is the mark of a packet's first byte: the driver took it as one, and
+read every later packet one byte off. 0xFA is skipped outside a packet.
+QEMU's monitor, for its part, can only move the mouse relatively, which
+vmmouse in absolute mode ignores: the tests turn vmport off.
+
+**A window drawn with the wrong focus.** The graphical test found both
+windows' title bars blue: `set_focus` redrew the window losing the focus
+before changing `focus`, so it was redrawn as focused. In the first
+manual try a later redraw had hidden it.
+
+**31-bit time.** The clock showed "-5:-28:-19": on i386, OCaml's `int` has
+31 bits, and seconds since 1970 (1.79e9) overflow it. The time of day is
+now `Float.rem now 86400.`.
+
+**Lesson.** Hardware shared between two modes (text and graphics) needs
+its state saved by whoever changes it, as a BIOS would; and a graphical
+test that checks a few pixels' colours catches what a person's eye
+forgives.
+

@@ -29,6 +29,12 @@ int mynos_spawnImage(void * elf, unsigned int len, char ** argv, char ** envp)
   return __mynos_syscall(30, (int)elf, (int)len, (int)argv, (int)envp, 0);
 }
 
+/* mapPhysical (28): the address, or an error (a small negative number) */
+void * mynos_mapPhysical(unsigned long phys, int npages) {
+  unsigned long r = (unsigned long)__mynos_syscall(28, phys, npages, 0, 0, 0);
+  return r >= (unsigned long)-4096 ? NULL : (void *)r;
+}
+
 /* processInfo (27): MYNOS_PROC_ALIVE | privileges, or an error */
 int mynos_processInfo(int pid)
 {

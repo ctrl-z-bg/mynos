@@ -153,6 +153,9 @@ int mynos_spawnPriv(const char * path, char ** argv, char ** envp,
    there is no such pid (pids are not reused: a slot's next process gets
    another one) */
 int mynos_processInfo(int pid);
+/* a device's memory (not RAM: a frame buffer), npages from physical
+   address phys, mapped here (drivers only): its address, or NULL */
+void * mynos_mapPhysical(unsigned long phys, int npages);
 /* the same, from an ELF image in memory */
 int mynos_spawnImage(void * elf, unsigned int len, char ** argv, char ** envp);
 

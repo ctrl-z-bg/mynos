@@ -81,6 +81,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .mynos_channelPeer\n"\
 	 "   cmpl $27, %eax\n"\
 	 "   je .mynos_processInfo\n"\
+	 "   cmpl $28, %eax\n"\
+	 "   je .mynos_mapPhysical\n"\
 	 "   cmpl $30, %eax\n"\
 	 "   je .mynos_spawn\n"\
 	 "   cmpl $31, %eax\n"\
@@ -221,6 +223,13 @@ __asm__ (".pushsection .text\n" \
 	 "   call _mynos_syscall_channelPeer\n"\
 	 "   popl  %ebx\n"\
 	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_mapPhysical:\n"\
+	 "   pushl %ecx\n"\
+	 "   pushl %ebx\n"\
+	 "   call _mynos_syscall_mapPhysical\n"\
+	 "   popl  %ebx\n"\
+	 "   popl  %ecx\n"\
+	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_processInfo:\n"\
 	 "   pushl %ebx\n"\
 	 "   call _mynos_syscall_processInfo\n"\
@@ -331,6 +340,17 @@ int _mynos_syscall_channelPeer(int32_t c) {
   if (other == NULL || getMyReadChannel(c) == NULL) return MYNOS_ERR_INVALID;
   if (other->receiver < 0) return MYNOS_ERR_BROKEN;
   return other->receiver;
+}
+
+/* mapPhysical (28): npages of a device's memory (not RAM: a frame
+   buffer) from physical address phys, mapped into the caller: their
+   address. Drivers only (the io privilege). */
+int _mynos_syscall_mapPhysical(uint32_t phys, uint32_t npages) {
+  void * a;
+  if (!(processTable[currProcess]->privileges & MYNOS_PRIV_IO))
+    return MYNOS_ERR_DENY;
+  a = __OS_mapPhysical(phys, npages);
+  return a ? (int)a : MYNOS_ERR_INVALID;
 }
 
 /* processInfo (27): a process's privileges, with MYNOS_PROC_ALIVE while

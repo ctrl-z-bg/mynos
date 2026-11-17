@@ -10,7 +10,7 @@ CC = $(MYNOS_CC)
 OCAML_RUNTIME_LIB ?= /opt/ocaml-runtime-musl
 CFLAGS = -Wall -O2 -I$(OCAML_RUNTIME_LIB) -I../mynos-lib/include
 
-STUBS = mynos_stubs.c
+STUBS = mynos_stubs.c gfx_stubs.c
 
 all: ocamlrun
 
@@ -20,9 +20,9 @@ primitives prims.c: gen_prims.sh $(STUBS) $(OCAML_RUNTIME_LIB)/primitives
 prims.o: prims.c
 	$(CC) $(CFLAGS) -c prims.c
 
-ocamlrun: main.o mynos_stubs.o prims.o $(OCAML_RUNTIME_LIB)/libcamlrun.a \
+ocamlrun: main.o mynos_stubs.o gfx_stubs.o prims.o $(OCAML_RUNTIME_LIB)/libcamlrun.a \
           ../mynos-lib/lib/libmynos.a
-	$(CC) -o $@ main.o mynos_stubs.o prims.o \
+	$(CC) -o $@ main.o mynos_stubs.o gfx_stubs.o prims.o \
 	  $(OCAML_RUNTIME_LIB)/libcamlrun.a -L../mynos-lib/lib -lmynos \
 	  -lm -lpthread $(MYNOS_LDFLAGS)
 

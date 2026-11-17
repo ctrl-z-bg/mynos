@@ -107,6 +107,21 @@ static int service_port(const char * name, struct svc * cache)
 
 static struct svc console_cache = { -2, 0 };
 
+/* the console: the service "console" (consoled), or the one the
+   environment names (MYNOS_CONSOLE: a terminal window, doc/decisions/
+   gui.md), which then gets the output of fds 1 and 2 too */
+static const char * console_name(void)
+{
+  const char * c = getenv("MYNOS_CONSOLE");
+  return c && c[0] ? c : CONSOLE_SERVICE;
+}
+
+static int console_owns_output(void)
+{
+  const char * c = getenv("MYNOS_CONSOLE");
+  return c && c[0];
+}
+
 /* one request/reply exchange on a new connection; the channel stays open
    (in *channel_out) for a data message */
 static int call(int port, const void * req, int len, mynos_msg_t ** reply,
@@ -125,6 +140,32 @@ static int call(int port, const void * req, int len, mynos_msg_t ** reply,
 }
 
 /* ---- console ---- */
+
+/* output to a terminal's console service: a CONSOLE_WRITE request, the
+   bytes after it, in pieces */
+static ssize_t console_write(int port, const void * buf, size_t count)
+{
+  static char msg[sizeof(struct console_req) + 8192];
+  struct console_req req;
+  size_t done = 0;
+  while (done < count) {
+    size_t n = count - done > 8192 ? 8192 : count - done;
+    mynos_msg_t * reply;
+    memset(&req, 0, sizeof(req));
+    req.op = CONSOLE_WRITE;
+    req.len = n;
+    req.pid = getpid();
+    memcpy(msg, &req, sizeof(req));
+    memcpy(msg + sizeof(req), (const char *)buf + done, n);
+    if (call(port, msg, sizeof(req) + n, &reply, NULL) < 0) {
+      errno = EIO;
+      return done ? (ssize_t)done : -1;
+    }
+    mynos_freeMsg(&reply);
+    done += n;
+  }
+  return done;
+}
 
 static ssize_t console_read(int port, void * buf, size_t count)
 {
@@ -170,7 +211,7 @@ int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
 {
   struct console_req req;
   mynos_msg_t * msg;
-  if (service_port(CONSOLE_SERVICE, &console_cache) < 0) return -1;
+  if (service_port(console_name(), &console_cache) < 0) return -1;
   memset(&req, 0, sizeof(req));
   req.op = CONSOLE_MODE;
   req.pid = getpid();
@@ -208,7 +249,7 @@ int ioctl(int fd, IOCTL_REQ req, ...)
     errno = ENOTTY;
     return -1;
   }
-  if (fd >= 0 && fd <= 2 && service_port(CONSOLE_SERVICE, &console_cache) >= 0) {
+  if (fd >= 0 && fd <= 2 && service_port(console_name(), &console_cache) >= 0) {
     switch (req) {
     case TCGETS:
       tio_init();
@@ -621,7 +662,7 @@ ssize_t read(int fd, void * buf, size_t count)
   int slot;
 
   fd = std_fd(fd);
-  if (fd == 0 && service_port(CONSOLE_SERVICE, &console_cache) >= 0)
+  if (fd == 0 && service_port(console_name(), &console_cache) >= 0)
     return console_read(console_cache.port, buf, count);
   slot = file_slot(fd);
   if (slot < 0) return result(sys3(3 /* read */, fd, (long)buf, count));
@@ -675,6 +716,9 @@ ssize_t write(int fd, const void * buf, size_t count)
   fd = std_fd(fd);
   slot = file_slot(fd);
 
+  if (slot < 0 && (fd == 1 || fd == 2) && console_owns_output() &&
+      service_port(console_name(), &console_cache) >= 0)
+    return console_write(console_cache.port, buf, count);
   if (slot < 0) return result(sys3(4 /* write */, fd, (long)buf, count));
   while (done < count) {
     ssize_t n = fs_write(slot, (const char *)buf + done, count - done);

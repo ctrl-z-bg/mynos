@@ -202,6 +202,20 @@ All services are linked statically against `libmynos` and placed at
   on (`/tmp/agent.trc`).
   Tests: `tools/net-peer.py llm`, a fake provider that checks both
   APIs' requests.
+- **The graphical interface** (2026, `doc/decisions/gui.md`, mynos-9lr):
+  `displayd` (C, `services/display`, a `driver`) sets QEMU's VGA to
+  1024x768x32 (Bochs extension), maps its frame buffer (`mapPhysical`,
+  native call 28, `io` only) and composes windows whose pixels are their
+  programs' buffers, shared over IPC; PS/2 mouse and vmmouse (absolute);
+  keys from the console in raw mode; protocol "display/1", described.
+  Programs draw with `Gfx` (C primitives in the runtime, Terminus 8x16
+  font in `third_party/fonts`), build windows with `Display` and `Gui`
+  (immediate mode: labels, buttons, text fields, lists). `gui` starts a
+  session (welcome, clock, the service explorer, which makes a form for
+  any request of any typed service from its description, and terminal
+  windows: `sh` in a VT100 emulator, its console a service of the window,
+  `MYNOS_CONSOLE`); the MyNOS menu's Exit returns to the text console,
+  intact.
 - **The event recorder** (2026, `doc/decisions/tracer.md`): while a
   recording is on, the kernel (`kernel/trace.c`) writes an event for every
   spawn, exit, IPC connection, message (with its first 56 bytes) and
@@ -475,6 +489,7 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | — | `services/net/netd.c` | TLS: clients only (no `Listen_tls`); no revocation checks (CRL, OCSP); Mozilla's list is parsed at the first TLS connection (about 1.5 s in QEMU), later handshakes take 0.2-0.4 s; the clear bytes travel between netd and the program over IPC. |
 | — | `services/ata/ata.ml` | The disk is polled (PIO: the driver copies every word anyway, and QEMU completes commands at once); IRQ 14 is free for it. |
 | — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently; the stdio of C programs (musl's direct system calls) is not redirected. |
+| — | `gui/terminal.ml`, `mynos-lib/src/fileio.c` | Terminal windows get what programs `write`; musl's stdio (C programs such as kilo) writes with direct system calls and still goes to the text screen. One size, 80 x 25. |
 | — | `agent/`, `services/llm/` | The agent has no token budget (only `-n` model calls); answers are not streamed. |
 
 ### Not started
@@ -503,7 +518,9 @@ Planned work, in order. Details live in the beads issues.
 6. Language models (mynos-wsd, `doc/decisions/llm.md`): `llmd` and `llm/1`
    (done), `ask` in `sh` (done), protocols that describe themselves (done), an agent
    loop with the recorder on (done).
-7. Then: a GUI toolkit (mynos-9lr), distinctive
+7. The GUI (mynos-9lr, `doc/decisions/gui.md`): the display server, windows
+   the service explorer and terminal windows (done); the agent window and
+   the trace viewer next. Then distinctive
    applications (mynos-3h1), several CPUs (mynos-awn).
 
 The old SourceForge site is archived in `doc/website/` (mynos-db2).
@@ -835,4 +852,23 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   layouts, `SERIAL=1` for copy and paste with the host, language models:
   `llm.env`, `llm`, `ask`, `agent`); its status paragraph brought up to
   date.
+- **2026-11-17** — The graphical interface, phases 1 and 2 (mynos-9lr,
+  `doc/decisions/gui.md`): `mapPhysical` (28) in the kernel (device pages
+  are not counted as RAM); `displayd` (C): BGA 1024x768x32 past the text
+  memory, VGA registers saved and restored, PS/2 mouse and vmmouse, keys
+  from the console, windows in shared memory composed with title bars, a
+  menu and a clock, "display/1" described (variants in `wire_put_shape`);
+  `Gfx` (C primitives in the runtime, Terminus 8x16), `Display`, `Gui`;
+  programs `gui`, `welcome`, `clock`, `services` (forms from descriptions,
+  calls through `Tools`). Tests: Gfx's pixels; a graphical boot driven
+  through QEMU's monitor (screen dumps: the top bar, focus, a click
+  opening a window, Exit back to text mode); `gui check` (displayd's
+  description is `display.ml`'s).
+- **2026-11-17** — The GUI, phase 3: terminal windows. `libmynos` sends a
+  program's console (reads, modes, and the output of fds 1 and 2, with the
+  new `CONSOLE_WRITE`) to the service `MYNOS_CONSOLE` names; `terminal`
+  (OCaml) is such a service, runs `sh` in it, and draws its output
+  through a VT100 emulator. `sh`, pipes and `edit` (full screen) run in a
+  window. The graphical test opens one, runs a command in it, and reads
+  its effect from the text console after Exit.
 

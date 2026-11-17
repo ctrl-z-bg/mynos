@@ -11,6 +11,7 @@ start tmpfs.byte
 driver ata.byte
 start fatfs.byte
 driver netd
+driver displayd
 start llmd.byte
 start httpd.byte
 respawn sh.byte

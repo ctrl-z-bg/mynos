@@ -21,6 +21,8 @@
 #define CONSOLE_MODE 2   /* mode, vmin, vtime -> 0 bytes */
 #define CONSOLE_KEYMAP 3 /* mode: a layout (CONSOLE_LAYOUT_*), or -1 -> one
                             byte, the layout in use */
+#define CONSOLE_WRITE 4  /* len bytes after the request -> 0 bytes: output, to
+                            a terminal's console service (MYNOS_CONSOLE) */
 #define CONSOLE_LAYOUT_US 0
 #define CONSOLE_LAYOUT_IT 1
 

@@ -201,6 +201,7 @@ void mem_reserveAtBoot(uint32_t start, uint32_t len);
    'pageaddr' on success
    'NULL'     if some problem occours
 */
+void * __OS_mapPhysical(uint32_t phys, uint32_t npages);
 void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
 			 int alloc_now, uint32_t flags);
 

@@ -89,7 +89,10 @@ void pmem_createPhyMemManager() {
   }
 }
 
+/* pages beyond RAM (a device's memory, mapped by mapPhysical) are not
+   counted: they are never allocated nor freed */
 void pmem_set(uint32_t page) {
+  if (page >= __total_phy_pages) return;
   /* if the manager is not yet created I do the basic stuff */
   if (!initialized) {
     __SET_MEMORY_BITMAP_PAGE_BIT(page);
@@ -105,6 +108,7 @@ void pmem_set(uint32_t page) {
 }
 
 void pmem_unset(uint32_t page) {
+  if (page >= __total_phy_pages) return;
   /* if the manager is not yet created I do the basic stuff */
   if (!initialized) {
     __RESET_MEMORY_BITMAP_PAGE_BIT(page);
@@ -134,6 +138,7 @@ void pmem_unset(uint32_t page) {
 }
 
 ushort16_t pmem_countref(uint32_t page) {
+  if (page >= __total_phy_pages) return 1;     /* a device's: always in use */
   return pmemdes.page[page].countref;
 }
 
