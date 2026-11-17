@@ -466,14 +466,257 @@ and run_file f args =
 
 (* ---- main ---- *)
 
+(* ---- line editing ----
+   The interactive shell reads the console key by key (raw mode) and edits
+   the line itself, as bash does with readline: Tab completes commands and
+   file names, Up and Down recall the history (kept in /disk/.sh_history),
+   and the usual keys move and edit. *)
+
+let history_file = "/disk/.sh_history"
+let history_max = 200
+let history : string list ref = ref []        (* the most recent first *)
+
+let history_load () =
+  match In_channel.with_open_bin history_file In_channel.input_lines with
+  | lines ->
+    let lines = List.filter (fun l -> l <> "") lines in
+    let n = List.length lines in
+    history := List.rev (List.filteri (fun i _ -> i >= n - history_max) lines)
+  | exception Sys_error _ -> ()
+
+let history_add line =
+  if line <> "" && (match !history with l :: _ -> l <> line | [] -> true) then begin
+    history := line :: !history;
+    (try
+       Out_channel.with_open_gen [ Open_wronly; Open_creat; Open_append; Open_binary ]
+         0o644 history_file (fun oc -> output_string oc (line ^ "\n"))
+     with Sys_error _ -> ())
+  end
+
+(* keys, from the bytes the console sends in raw mode *)
+type key =
+  | Char of char | Enter | Backspace | Delete | Tab
+  | Left | Right | Up | Down | Home | End_ | Ctrl of char | Eof
+
+let pending = Buffer.create 16
+let byte () =
+  if Buffer.length pending = 0 then begin
+    let b = Bytes.create 64 in
+    let n = input stdin b 0 64 in
+    if n = 0 then raise End_of_file;
+    Buffer.add_subbytes pending b 0 n
+  end;
+  let c = Buffer.nth pending 0 in
+  let rest = Buffer.sub pending 1 (Buffer.length pending - 1) in
+  Buffer.clear pending; Buffer.add_string pending rest;
+  c
+
+let rec key () =
+  match byte () with
+  | exception End_of_file -> Eof
+  | '\r' | '\n' -> Enter
+  | '\127' | '\b' -> Backspace
+  | '\t' -> Tab
+  | '\027' ->
+    (match byte () with
+     | '[' | 'O' ->
+       (match byte () with
+        | 'A' -> Up | 'B' -> Down | 'C' -> Right | 'D' -> Left
+        | 'H' -> Home | 'F' -> End_
+        | '0' .. '9' as d ->
+          let rec upto acc = match byte () with
+            | '~' -> acc | c -> upto (acc ^ String.make 1 c) in
+          (match upto (String.make 1 d) with
+           | "1" | "7" -> Home | "4" | "8" -> End_ | "3" -> Delete | _ -> key ())
+        | _ -> key ())
+     | _ -> key ()
+     | exception End_of_file -> Eof)
+  | c when c < ' ' -> Ctrl (Char.chr (Char.code c + 64))
+  | c -> Char c
+
+(* ---- completion ---- *)
+
+let common_prefix = function
+  | [] -> ""
+  | first :: rest ->
+    let n = List.fold_left (fun n s ->
+        let m = min n (String.length s) in
+        let rec go i = if i < m && s.[i] = first.[i] then go (i + 1) else i in
+        go 0) (String.length first) rest in
+    String.sub first 0 n
+
+let builtins = [ "cd"; "pwd"; "echo"; "cat"; "ls"; "cp"; "mv"; "rm"; "mkdir";
+                 "rmdir"; "touch"; "export"; "unset"; "env"; "which"; "source";
+                 "free"; "clear"; "help"; "exit"; "true"; "false"; "ocaml" ]
+
+(* the commands starting with prefix: built-ins, and the programs of PATH
+   (NAME.byte as NAME, and files without an extension) *)
+let complete_command prefix =
+  let progs = List.concat_map (fun d ->
+      match Sys.readdir d with
+      | names -> Array.to_list names |> List.filter_map (fun f ->
+          if Filename.check_suffix f ".byte" then Some (Filename.chop_suffix f ".byte")
+          else if not (String.contains f '.') && is_file (Filename.concat d f) then Some f
+          else None)
+      | exception Sys_error _ -> []) (path_dirs ()) in
+  List.sort_uniq compare (builtins @ progs)
+  |> List.filter (fun c -> String.starts_with ~prefix c)
+  |> List.map (fun c -> (c, false))
+
+(* the files starting with the word: (completion, is a directory) *)
+let complete_file word =
+  let dir, base =
+    match String.rindex_opt word '/' with
+    | Some i -> (String.sub word 0 (i + 1), String.sub word (i + 1) (String.length word - i - 1))
+    | None -> ("", word) in
+  match Sys.readdir (if dir = "" then "." else dir) with
+  | names ->
+    Array.to_list names
+    |> List.filter (fun f ->
+        String.starts_with ~prefix:base f && (f.[0] <> '.' || (base <> "" && base.[0] = '.')))
+    |> List.sort compare
+    |> List.map (fun f ->
+        let full = dir ^ f in
+        (full, (try Sys.is_directory full with Sys_error _ -> false)))
+  | exception Sys_error _ -> []
+
+(* ---- the editor ---- *)
+
+let columns = 80
+
+let read_line_edited prompt =
+  let line = Buffer.create 80 in
+  let text () = Buffer.contents line in
+  let pos = ref 0 in                    (* the cursor, in the line *)
+  let hist = ref (-1) and saved = ref "" in
+  let last_tab = ref false in
+  let set s p = Buffer.clear line; Buffer.add_string line s; pos := p in
+  (* the line from the left of the screen: the prompt and the part of the
+     text around the cursor that fits *)
+  let redraw () =
+    let t = text () in
+    let room = columns - String.length prompt - 1 in
+    let start = if !pos < room then 0 else !pos - room + 1 in
+    let shown = String.sub t start (min room (String.length t - start)) in
+    print_string ("\r" ^ prompt ^ shown ^ "\027[K");
+    let back = String.length shown - (!pos - start) in
+    if back > 0 then Printf.printf "\027[%dD" back;
+    flush stdout in
+  let insert s =
+    let t = text () in
+    set (String.sub t 0 !pos ^ s ^ String.sub t !pos (String.length t - !pos)) (!pos + String.length s) in
+  let delete_range a b =
+    let t = text () in
+    set (String.sub t 0 a ^ String.sub t b (String.length t - b)) a in
+  let complete () =
+    let t = text () in
+    let start = (match String.rindex_from_opt t (max 0 (!pos - 1)) ' ' with
+        | Some i when !pos > 0 -> i + 1 | _ -> 0) in
+    let start = if !pos = 0 then 0 else start in
+    let word = String.sub t start (!pos - start) in
+    let first = String.trim (String.sub t 0 start) = "" in
+    let cands =
+      if first && not (String.contains word '/') then complete_command word
+      else complete_file word in
+    match cands with
+    | [] -> ()
+    | [ (c, dir) ] ->
+      delete_range start !pos;
+      insert (c ^ (if dir then "/" else " "))
+    | _ ->
+      let p = common_prefix (List.map fst cands) in
+      if String.length p > String.length word then (delete_range start !pos; insert p)
+      else if !last_tab then begin
+        (* the second Tab: show them *)
+        print_string "\n";
+        let names = List.map (fun (c, d) ->
+            let b = match String.rindex_opt c '/' with
+              | Some i when i < String.length c - 1 -> String.sub c (i + 1) (String.length c - i - 1)
+              | _ -> c in
+            b ^ (if d then "/" else "")) cands in
+        let width = 2 + List.fold_left (fun m s -> max m (String.length s)) 0 names in
+        let per_line = max 1 (columns / width) in
+        List.iteri (fun i s ->
+            print_string s;
+            if (i + 1) mod per_line = 0 then print_string "\n"
+            else print_string (String.make (width - String.length s) ' '))
+          names;
+        if List.length names mod per_line <> 0 then print_string "\n"
+      end in
+  print_string prompt; flush stdout;
+  let rec loop () =
+    let k = key () in
+    let was_tab = !last_tab in
+    last_tab := false;
+    match k with
+    | Enter -> print_string "\n"; flush stdout; Some (text ())
+    | Eof -> None
+    | Ctrl 'D' when text () = "" -> print_string "\n"; None
+    | Ctrl 'C' -> print_string "^C\n"; set "" 0; print_string prompt; flush stdout; loop ()
+    | k ->
+      (match k with
+       | Char c -> insert (String.make 1 c)
+       | Backspace -> if !pos > 0 then delete_range (!pos - 1) !pos
+       | Delete | Ctrl 'D' ->
+         if !pos < Buffer.length line then delete_range !pos (!pos + 1)
+       | Left -> if !pos > 0 then decr pos
+       | Right -> if !pos < Buffer.length line then incr pos
+       | Home | Ctrl 'A' -> pos := 0
+       | End_ | Ctrl 'E' -> pos := Buffer.length line
+       | Ctrl 'K' -> delete_range !pos (Buffer.length line)
+       | Ctrl 'U' -> delete_range 0 !pos
+       | Ctrl 'W' ->
+         let t = text () in
+         let i = ref !pos in
+         while !i > 0 && t.[!i - 1] = ' ' do decr i done;
+         while !i > 0 && t.[!i - 1] <> ' ' do decr i done;
+         delete_range !i !pos
+       | Ctrl 'L' -> print_string "\027[H\027[2J"
+       | Tab -> last_tab := was_tab; complete (); last_tab := true
+       | Up ->
+         let h = Array.of_list !history in
+         if !hist + 1 < Array.length h then begin
+           if !hist = -1 then saved := text ();
+           incr hist;
+           set h.(!hist) (String.length h.(!hist))
+         end
+       | Down ->
+         let h = Array.of_list !history in
+         if !hist >= 0 then begin
+           decr hist;
+           let s = if !hist = -1 then !saved else h.(!hist) in
+           set s (String.length s)
+         end
+       | _ -> ());
+      redraw ();
+      loop () in
+  loop ()
+
+(* a line, edited in raw mode; the console is back in line mode while the
+   command runs, for the programs *)
+let read_command prompt =
+  Mynos.console_mode ~canon:false ~echo:false ();
+  Fun.protect ~finally:(fun () -> Mynos.console_mode ~canon:true ~echo:true ())
+    (fun () -> read_line_edited prompt)
+
 let interactive () =
   print_string "MyNOS sh. help lists the commands, ocaml starts the OCaml \
-                toplevel;\nexit or Ctrl-D leaves.\n";
+                toplevel;\nTab completes, Up and Down recall; exit or Ctrl-D \
+                leaves.\n";
+  (* with standard input from a file, no line editing *)
+  let redirected = Sys.getenv_opt "MYNOS_STDIN" <> None in
+  if not redirected then history_load ();
   let rec loop () =
-    Printf.printf "mynos:%s$ %!" (Sys.getcwd ());
-    match input_line stdin with
-    | line -> run_line line; loop ()
-    | exception End_of_file -> print_newline () in
+    let prompt = Printf.sprintf "mynos:%s$ " (Sys.getcwd ()) in
+    let line =
+      if redirected then (print_string prompt; flush stdout; In_channel.input_line stdin)
+      else read_command prompt in
+    match line with
+    | Some line ->
+      if not redirected then history_add (String.trim line);
+      run_line line;
+      loop ()
+    | None -> () in
   loop ()
 
 let () =

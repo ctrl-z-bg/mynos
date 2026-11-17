@@ -146,8 +146,11 @@ let () =
 
 (* FAT date and time of now (UTC) *)
 let fat_now () =
-  let t = int_of_float (Mynos.time ()) in
-  let days = t / 86400 and secs = t mod 86400 in
+  (* the seconds since 1970 do not fit an OCaml int on i386 (31 bits):
+     split them into days and seconds while still a float *)
+  let t = Mynos.time () in
+  let days = int_of_float (t /. 86400.) in
+  let secs = int_of_float (t -. Float.of_int days *. 86400.) in
   (* days since 1970-01-01 to a civil date (Howard Hinnant's algorithm) *)
   let z = days + 719468 in
   let era = z / 146097 in

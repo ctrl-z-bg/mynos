@@ -156,9 +156,12 @@ the files stay on `/disk`.
 
 #### sh
 
-`sh` (`sh/sh.ml`) is a small bash-like command shell, next to the
-toplevel (`sh ();;` starts it, `exit` comes back; `ocaml` in it starts a
-toplevel): quotes, variables (expanded when each command runs), `;`, `&&`,
+`sh` (`sh/sh.ml`) is a small bash-like command shell, the login shell
+(`ocaml` in it starts the toplevel). It edits its own line in raw mode, as
+bash with readline: Tab completes commands and file names (a second Tab
+lists them), Up and Down recall its history (`/disk/.sh_history`), and
+the usual keys edit (arrows, Home, End, Delete, Ctrl-A/E/K/U/W/L/C/D). Its
+language: quotes, variables (expanded when each command runs), `;`, `&&`,
 `||`, `<`, `>`, `>>`, `|`, `*`/`?`, built-in file commands, programs
 found in `PATH` (`/disk/bin:/`, also as `NAME.byte`), scripts (`sh FILE`,
 `source`). MyNOS programs inherit no file descriptors, so a program's
@@ -536,6 +539,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   applied by libmynos; `Mynos.environment`. Closed mynos-z8v.
 - **2026-11-17** — `sh` is the login shell (the owner's choice): `ocaml`
   opens the toplevel, `#quit;;` comes back.
+- **2026-11-17** — `sh` edits its line itself: Tab completion of commands
+  and file names, its own history, readline-like keys. Fixed the dates
+  fatfs wrote (the seconds since 1970 overflowed OCaml's 31-bit int).
+  Closed mynos-rix.
 - **2026-11-16** — The original website (mynos.sourceforge.net, from the
   Wayback Machine) archived as static files in `doc/website/`, with the
   2002-2004 news posts and the 2002 and 2004 test packages. Closed

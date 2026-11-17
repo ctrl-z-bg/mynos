@@ -1043,3 +1043,19 @@ One shell bug worth noting: the first version expanded variables while
 reading the line, so `X=5; echo $X` printed nothing and `$?` was always
 the status before the line. Words now keep their parts (quoted text,
 unquoted text, variables) and are expanded when their command runs.
+
+## 2026-11-17 — Tab completion, and a date in 1980
+
+Tab completion cannot live in the console service, which knows nothing
+of commands or of the shell's current directory; as in Unix, where bash
+links readline, the shell edits its own line. `sh` switches the console
+to raw mode while it reads a command, and back to line mode while the
+command runs, so that programs see the console as before. Long lines
+scroll horizontally, which keeps the redrawing to one screen line.
+
+Checking the demo disk with mtools showed files dated `1980-10-30 31:63`.
+fatfs computed the date from `int_of_float (Mynos.time ())`: about 1.8
+billion seconds since 1970, which does not fit OCaml's 31-bit `int` on
+i386 (the same trap as the FAT32 fields, in another place). Days and
+seconds are now split while the value is still a float; the FAT test
+checks the year of a file MyNOS wrote.

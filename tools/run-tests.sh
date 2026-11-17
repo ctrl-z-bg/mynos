@@ -75,6 +75,11 @@ if [ -f tests/fat/ramdisk.dsk ]; then
              grep -q "A Longer Name Than Eight.txt"; then
             fat_checks="$fat_checks $img:mtools-ok"
         fi
+        # the file's date: this century, from the clock (not 1980)
+        if tools/in-container.sh dev mdir -i tests/fat/run-$img.img ::/new.ml 2>/dev/null |
+             grep -q " 20[2-9][0-9]-"; then
+            fat_checks="$fat_checks $img:date-ok"
+        fi
         rm -f tests/fat/run-$img.img
     done
 fi
@@ -155,7 +160,7 @@ if [ -f system/ramdisk.dsk ]; then
     while [ $i -lt 60 ] && ! grep -aq 'mynos:/' "$log7" 2>/dev/null; do
         sleep 1; i=$((i + 1))
     done
-    for phrase in 'ocaml\n' '' '1 + 2;;\n' 'List.map (fun x -> x * x) [1; 2; 3];;\n' \
+    for phrase in 'ec{tab}completed by tab\n' 'ocaml\n' '' '1 + 2;;\n' 'List.map (fun x -> x * x) [1; 2; 3];;\n' \
                   'cat "AUTOEXEC.BAT";;\n' 'ls ();;\n' \
                   'run "child.byte" ["4"];;\n' '1 + "one";;\n' \
                   '6 * 7;;\n' '{up}\n' '1 + 1;;\n' 'x{up}{up}{down}\n' \
@@ -230,7 +235,8 @@ fi
 if [ -f tests/fat/ramdisk.dsk ]; then
     expect "fat (fat16): all checks passed"
     expect "fat (fat32): all checks passed"
-    for c in fat16:fsck-ok fat32:fsck-ok fat16:mtools-ok fat32:mtools-ok; do
+    for c in fat16:fsck-ok fat32:fsck-ok fat16:mtools-ok fat32:mtools-ok \
+             fat16:date-ok fat32:date-ok; do
         case " $fat_checks " in
             *" $c "*) echo "ok    host check $c" ;;
             *) echo "FAIL  host check $c"; fail=1 ;;
@@ -281,6 +287,11 @@ if [ -f system/ramdisk.dsk ]; then
     expect "- : int = 40000"
     expect "AUTOEXEC.BAT: Read-only file system"
     expect "init: sh.byte (pid"
+    if grep -aqx 'completed by tab' "$log7"; then
+        echo "ok    sh: Tab completes a command"
+    else
+        echo "FAIL  sh: Tab completes a command"; fail=1
+    fi
     if [ -n "$sh_saved" ] || [ ! -f tests/fat/fat16.img ]; then
         echo "ok    sh: variables, redirections, a pipe, on /disk"
     else
