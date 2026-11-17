@@ -333,7 +333,8 @@ let help out =
     "MyNOS sh. Built in: cd pwd echo cat ls [-l] cp mv rm mkdir rmdir touch\n\
      export unset env which source free clear help exit;\n\
      network: ifconfig, ping HOST [COUNT], host NAME.\n\
-     Programs: edit FILE, ocamlc, kilo, hello, ocaml (the OCaml toplevel)...\n\
+     Programs: edit FILE, ocamlc, kilo, hello, ocaml (the OCaml toplevel),\n\
+     trace COMMAND (record what the system does meanwhile)...\n\
      Syntax: 'quotes' \"quotes\" $VAR $? NAME=value ; && || < > >> | *.ml\n\
      Files: / is the RAM disk, /tmp is in memory, /disk is the FAT disk.\n"
 

@@ -118,6 +118,15 @@ int mynos_consoleMode(int canon, int echo, int vmin, int vtime);
    the screen, once the system has started. For services' messages. */
 void mynos_log(const char * fmt, ...);
 
+/* EVENT RECORDER (doc/decisions/tracer.md, mynos-core/kernel/trace.h) */
+#define MYNOS_TRACE_START 0
+#define MYNOS_TRACE_STOP  1
+#define MYNOS_TRACE_READ  2   /* arg1: buffer, arg2: events -> how many */
+#define MYNOS_TRACE_INFO  3   /* arg1: 9 words */
+#define MYNOS_TRACE_FREE  4
+#define MYNOS_TRACE_EVENT_SIZE 96
+int mynos_trace(int op, void * arg1, unsigned int arg2);
+
 /* PROCESSES */
 /* start the ELF program in file path as a child process, with arguments
    and environment (NULL-terminated; argv may be NULL, envp NULL means our

@@ -66,6 +66,7 @@ if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
   make -C services/net
   make -C tests/net
   make -C httpd
+  make -C trace
   make -C shell
   make -C system
 fi

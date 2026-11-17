@@ -392,3 +392,37 @@ CAMLprim value caml_mynos_environment(value unit)
   for (i = 0; i < n; i++) Store_field(r, i, caml_copy_string(environ[i]));
   CAMLreturn(r);
 }
+
+/* ---- the event recorder ---- */
+
+/* start, stop, free the buffer */
+CAMLprim value caml_mynos_trace_control(value op)
+{
+  return check("trace", mynos_trace(Int_val(op), NULL, 0));
+}
+
+/* the events recorded so far, at most max of them (96 bytes each) */
+CAMLprim value caml_mynos_trace_read(value max)
+{
+  CAMLparam1(max);
+  CAMLlocal1(r);
+  int n = Int_val(max);
+  char * buf;
+  if (n < 1) n = 1;
+  buf = malloc(n * MYNOS_TRACE_EVENT_SIZE);
+  if (buf == NULL) caml_raise_out_of_memory();
+  n = mynos_trace(MYNOS_TRACE_READ, buf, n);
+  if (n < 0) { free(buf); mynos_error("trace", n); }
+  r = caml_alloc_initialized_string(n * MYNOS_TRACE_EVENT_SIZE, buf);
+  free(buf);
+  CAMLreturn(r);
+}
+
+/* the recorder's state: 9 words, as a 36-byte string */
+CAMLprim value caml_mynos_trace_info(value unit)
+{
+  unsigned int w[9];
+  int ret = mynos_trace(MYNOS_TRACE_INFO, w, 0);
+  if (ret < 0) mynos_error("trace", ret);
+  return caml_alloc_initialized_string(sizeof w, (char *)w);
+}

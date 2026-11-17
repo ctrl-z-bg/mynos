@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "trace.h"
 #include "global.h"
 #include "mem/mem.h"
 #include "gdt.h"
@@ -522,6 +523,7 @@ int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
   if (desc == NULL) return MYNOS_ERR_FULL;
   desc->pid = pid;
   desc->ppid = ppid;
+  trace_setName(desc->name, argv);
   if (spawnProcess(desc, elf, len, argv, envp) == NULL) {
     /* a bad image fails before allocating; out of memory, after (and
        leaks what it took: processes do not free memory yet) */
@@ -531,6 +533,7 @@ int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
   desc->tss->pid = pid;
   desc->tss->tid = pid;
   processTable[pid] = desc;
+  TRACE(TRACE_SPAWN, ppid, pid, -1, 0, 0, desc->name, kstrlen(desc->name));
   return pid;
 }
 
@@ -553,6 +556,7 @@ void killProcess(int status) {
   process_descriptor_t * parent;
   process_descriptor_t * self = processTable[currProcess];
 
+  TRACE(TRACE_EXIT, currProcess, -1, -1, 0, status, NULL, 0);
   self->isAlive = 0;
   numThreads -= processTable[currProcess]->numThreads;
   numProcesses--;

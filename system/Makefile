@@ -22,6 +22,7 @@ ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2
 	cp $< $@
 
 FILES = ../init/init.byte init.rc ocamlrun consoled kilo netd ../httpd/httpd.byte \
+	../trace/trace.byte \
 	../services/tmpfs/tmpfs.byte ../services/ata/ata.byte \
 	../services/fatfs/fatfs.byte ../editor/edit.byte ../sh/sh.byte \
 	../shell/shell.byte ../shell/shell.cmi ../mynos-lib/ocaml/mynos.cmi \
@@ -30,6 +31,7 @@ FILES = ../init/init.byte init.rc ocamlrun consoled kilo netd ../httpd/httpd.byt
 	ocamlc.byte ../mynos-runtime/primitives \
 	../mynos-lib/ocaml/mynos.cma ../mynos-lib/ocaml/block.cmi \
 	../mynos-lib/ocaml/wire.cmi ../mynos-lib/ocaml/ipc.cmi ../mynos-lib/ocaml/net.cmi \
+	../mynos-lib/ocaml/tracer.cmi \
 	../tests/hello/hello.byte ../tests/spawn/child.byte \
 	../tests/ramdisk/AUTOEXEC.BAT
 

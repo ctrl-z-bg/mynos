@@ -34,7 +34,13 @@ net.cmi: net.mli ipc.cmi
 net.cmo: net.ml net.cmi
 	$(OCAMLC) -c net.ml
 
-MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo net.cmo
+tracer.cmi: tracer.mli
+	$(OCAMLC) -c tracer.mli
+
+tracer.cmo: tracer.ml tracer.cmi
+	$(OCAMLC) -c tracer.ml
+
+MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo net.cmo tracer.cmo
 
 mynos.cma: $(MODULES)
 	$(OCAMLC) -a -o $@ $(MODULES)

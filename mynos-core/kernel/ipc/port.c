@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "trace.h"
 #include "port.h"
 #include "kutils.h"
 #include "mem/dynalloc.h"
@@ -152,6 +153,7 @@ int32_t __OS_port_listenPort(int32_t p) {
   req = nextReq(port);
   if (req == NULL) KPANIC("PANIC IN listenPort!");
   channel = allocChannel(processTable[currProcess]->pid, req->pid);
+  TRACE(TRACE_CONNECT, req->pid, currProcess, channel, 0, p, NULL, 0);
   *(req->chan) = channel;
   __OS_sem_V(req->sem);
   kfree(req);   /* (it was never freed: one leak per connection) */

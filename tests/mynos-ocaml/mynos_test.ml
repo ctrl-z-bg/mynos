@@ -138,5 +138,18 @@ let () =
           "\014block/1\018";                       (* request 9 *)
           "\014block/1\002\002";                  (* Read without count *)
           Block.request_message Block.Info ^ "x" ]);
+  (* the event recorder: an IPC exchange with the registry, recorded *)
+  Tracer.start ();
+  (try ignore (Mynos.lookup "tracedservice") with Mynos.Error _ -> ());
+  let r = Tracer.stop_and_get () in
+  let sends = Array.to_list r.Tracer.events
+              |> List.filter (fun e -> e.Tracer.kind = Tracer.Send) in
+  ok &&& check "trace: a request to the registry is recorded"
+    (List.exists (fun e -> Tracer.describe r e = "registry LOOKUP \"tracedservice\"") sends);
+  ok &&& check "trace: and its reply, as a call"
+    (List.exists (fun c -> c.Tracer.request = "registry LOOKUP \"tracedservice\""
+                           && c.reply <> "" && c.finish >= c.start)
+       (Tracer.calls r));
+  ok &&& check "trace: process names" (Tracer.name r 0 = "kernel(0)");
   print_endline (if !ok then "mynos-ocaml: all checks passed"
                  else "mynos-ocaml: SOME CHECKS FAILED")

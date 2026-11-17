@@ -19,6 +19,8 @@ let help () =
     \  free ();;                   free memory\n\
     \  let d = Block.connect ();;  a service, called with typed IPC:\n\
     \  Block.call d Block.Info;;   the disk's size, in sectors\n\
+    \  Tracer.start (); ...; Tracer.print_calls stdout (Tracer.stop_and_get ());;\n\
+    \                             record what the system does meanwhile\n\
      The MyNOS system calls are in module Mynos (#show Mynos;;).\n\
      Line editing: Backspace; Up and Down recall previous lines.\n\
      #quit;; or Ctrl-D leaves the toplevel.\n";

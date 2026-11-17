@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "trace.h"
 #include "global.h"
 #include "video.h"
 #include "mem/mem.h"
@@ -896,6 +897,8 @@ int _linux_syscall_fork() {
 
   processTable[new_pid]->pid = new_pid;
   processTable[new_pid]->ppid = currProcess;
+  TRACE(TRACE_SPAWN, currProcess, new_pid, -1, 0, 0, processTable[new_pid]->name,
+	kstrlen(processTable[new_pid]->name));
   processTable[new_pid]->isAlive = 1;
   processTable[new_pid]->exitStatus = 0;
   processTable[new_pid]->reaped = 0;

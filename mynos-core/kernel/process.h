@@ -77,6 +77,9 @@ typedef struct {
   uint32_t pgdirPhys;
   uint32_t memFreed;
   void * nextZombie;
+
+  /* the program's name, for the event recorder (trace.c) */
+  char name[16];
 } process_descriptor_t;
 
 extern process_descriptor_t * processTable[];

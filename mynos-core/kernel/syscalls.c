@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "trace.h"
 #include "mem/mem.h"
 #include "global.h"
 #include "video.h"
@@ -77,6 +78,10 @@ __asm__ (".pushsection .text\n" \
 	 "   je .mynos_changePortOwner\n"\
 	 "   cmpl $30, %eax\n"\
 	 "   je .mynos_spawn\n"\
+	 "   cmpl $31, %eax\n"\
+	 "   je .mynos_log\n"\
+	 "   cmpl $32, %eax\n"\
+	 "   je .mynos_trace\n"\
 	 "   cmpl $31, %eax\n"\
 	 "   je .mynos_log\n"\
 	 "   cmpl $100, %eax\n"\
@@ -216,6 +221,13 @@ __asm__ (".pushsection .text\n" \
 	 "   popl %ecx\n"
 	 "   popl %edx\n"\
 	 "   popl %esi\n"
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_trace:\n"\
+	 "   pushl %edx\n"\
+	 "   pushl %ecx\n"\
+	 "   pushl %ebx\n"\
+	 "   call _mynos_syscall_trace\n"\
+	 "   addl $12, %esp\n"\
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_log:\n"\
 	 "   pushl %ecx\n"

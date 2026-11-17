@@ -2,7 +2,10 @@
 
 - **Issue:** mynos-cub (the owner's idea, 2026-11-17)
 - **Date:** 2026-11-17
-- **Status:** proposed
+- **Status:** accepted (2026-11-17) and implemented: `mynos-core/kernel/trace.c`,
+  module `Tracer` (`mynos-lib/ocaml/tracer.mli`; `Trace` is taken by the
+  toplevel's compiler libraries), the `trace` program (`trace/`). Messages
+  keep their first 56 bytes (events are 96 bytes). Next: mynos-6yr.
 
 ## Goal
 

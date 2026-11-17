@@ -1210,3 +1210,35 @@ per-socket timeout in "net/1" (`Set_timeout`, added as a new case, so old
 clients still work), which netd checks in its loop, so that idle
 connections free their worker after 10 s. *Lesson:* a server tested with
 `curl` only is tested with the politest client there is.
+
+## 2026-11-17 — The event recorder: what a `cat` really does
+
+The owner's idea: record every interaction between the parts of the
+system and play it back. In a microkernel every interaction already goes
+through the kernel, so the recorder is a few hooks (spawn, exit, the IPC
+connection, send, receive, free) writing 96-byte events into a ring
+buffer; programs read it with a system call. Processes got a name for it
+(the program's base name, or the bytecode's for `ocamlrun X.byte`).
+
+The first bytes of a message are enough to say what it means: typed IPC
+messages start with their protocol id and case number, and the old C
+protocols have fixed layouts known by the service's name. Calls are
+rebuilt from channels, as spans in distributed tracing: with one
+connection per call, the client's first send and its last receive on a
+channel bound the call; the server's own calls in between are nested in
+it.
+
+The first recording of `cat /disk/README.TXT` under `sh` was a lesson in
+itself: `sh -c` starting means reading the 530 KB `ocamlrun` image from
+memrofs in 16 KB requests; the runtime looks for itself in `PATH` (a
+`NOT_FOUND` from fatfs for `bin/ocamlrun`), reads its own trailer, looks
+for `ld.conf`; then `cat` itself is a handful of fatfs calls, each a
+sector read on ata0, and writing 57 bytes to a file costs fatfs five
+sector writes (the data, both FAT copies, the directory entry) and
+3.6 ms.
+
+*Snags:* the OCaml toplevel's compiler libraries already have a module
+`Trace` (for `#trace`): ours is `Tracer`. The kernel has no `uint16_t`
+(`ushort16_t`) and no `kstrcmp`. The sender of a message received after
+the sender freed its end of the channel is unknown to the kernel: the
+player takes it from the channel's ends.

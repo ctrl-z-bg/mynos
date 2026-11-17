@@ -187,7 +187,7 @@ fi
 
 # seventh boot: the system RAM disk, init starts the services and sh, driven
 # through the keyboard: the OCaml toplevel (ocaml), programs, sh again
-history_saved= kilo_saved= edit_saved= sh_saved=
+history_saved= kilo_saved= edit_saved= sh_saved= trace_calls= trace_json=
 if [ -f system/ramdisk.dsk ]; then
     # a disk, for /disk and the shell's history: a copy of the FAT16 test image
     [ -f tests/fat/fat16.img ] && cp tests/fat/fat16.img tests/fat/run-shell.img
@@ -219,6 +219,8 @@ if [ -f system/ramdisk.dsk ]; then
                   'run "kilo" ["/disk/k.txt"];;\n' 'typed in kilo' '{ctrl-s}' '{ctrl-q}' \
                   'edit "/disk/e.txt";;\n' '' 'second\n{up}first {ctrl-k}{ctrl-u}{ctrl-u}' '{ctrl-s}' '{ctrl-q}' \
                   'sh ();;\n' 'cd /disk; echo from sh > s.txt; X=4; echo "v$X" >> s.txt; cat s.txt | cat\n' \
+                  'trace -o /disk/t.trc cat s.txt > /tmp/tout.txt\n' '' \
+                  'trace calls /disk/t.trc > calls.txt; trace json /disk/t.trc t.json\n' '' \
                   'exit\n' \
                   '#quit;;\n' 'exit\n'; do
         tools/type-keys.py "$tmp/mon7" "$phrase"
@@ -244,6 +246,16 @@ if [ -f system/ramdisk.dsk ]; then
           "$(printf 'first second\nfirst second\n')" ] && edit_saved=yes
         [ "$(tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/s.txt 2>/dev/null)" = \
           "$(printf 'from sh\nv4\n')" ] && sh_saved=yes
+        tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/calls.txt \
+            2>/dev/null > "$tmp/calls.txt" || true
+        grep -q 'sh(.*-> fatfs(.*fs OPEN "s.txt"' "$tmp/calls.txt" &&
+            grep -q '^ .*  fatfs(.*-> ata(.*block/1 Read' "$tmp/calls.txt" && trace_calls=yes
+        tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/t.json \
+            2>/dev/null > "$tmp/t.json" || true
+        python3 -c 'import json, sys
+d = json.load(open(sys.argv[1]))["traceEvents"]
+assert any(e["ph"] == "X" and e["name"].startswith("block/1 Read") for e in d)
+assert any(e["ph"] == "f" for e in d)' "$tmp/t.json" 2>/dev/null && trace_json=yes
         rm -f tests/fat/run-shell.img
     fi
 fi
@@ -340,6 +352,16 @@ if [ -f system/ramdisk.dsk ]; then
     expect "- : int = 40000"
     expect "AUTOEXEC.BAT: Read-only file system"
     expect "init: sh.byte (pid"
+    if [ -n "$trace_calls" ]; then
+        echo "ok    trace: sh -> fatfs -> ata0, nested calls"
+    else
+        echo "FAIL  trace: sh -> fatfs -> ata0, nested calls"; fail=1
+    fi
+    if [ -n "$trace_json" ]; then
+        echo "ok    trace: a Perfetto file"
+    else
+        echo "FAIL  trace: a Perfetto file"; fail=1
+    fi
     if grep -aqx 'completed by tab' "$log7"; then
         echo "ok    sh: Tab completes a command"
     else

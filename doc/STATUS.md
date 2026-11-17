@@ -168,6 +168,15 @@ All services are linked statically against `libmynos` and placed at
   (`httpd/httpd.ml`, OCaml) serves `/disk` over HTTP with 8 worker domains
   (idle connections time out after 10 s), and
   `tools/run-demo.sh` forwards the host's port 8080 to it.
+- **The event recorder** (2026, `doc/decisions/tracer.md`): while a
+  recording is on, the kernel (`kernel/trace.c`) writes an event for every
+  spawn, exit, IPC connection, message (with its first 56 bytes) and
+  channel freed into a ring buffer, read with native call 32. Module
+  `Tracer` decodes it: typed messages (`block/1 Read (2061, 1)`), the C
+  protocols (`fs OPEN "a.txt"`, `registry LOOKUP "fatfs"`), calls
+  rebuilt from channels and nested, and the Chrome trace event format for
+  Perfetto. The `trace` program: `trace COMMAND`, `trace -s SECONDS`,
+  `trace show|calls|json FILE`.
 - `tmpfs` (2026): **the first MyNOS service written in OCaml**
   (`services/tmpfs/tmpfs.ml`), a writable filesystem in memory. It speaks
   the same protocol, which has `WRITE` and `UNLINK` too; `fileio.c` sends
@@ -630,3 +639,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   send nothing. Now 8 worker domains, and `Set_timeout` in "net/1" (as
   `SO_RCVTIMEO`) so that idle connections end after 10 s. 50-70 ms a page
   with six idle connections open.
+- **2026-11-17** — The event recorder (the owner's idea, mynos-cub): the
+  kernel records spawns, exits, IPC connections, messages and frees;
+  processes have names; module `Tracer` and the `trace` program show
+  recordings as events, as nested calls with their durations, and as a
+  Perfetto file (served by httpd). Tests: a registry exchange recorded,
+  `sh -> fatfs -> ata0` nested in a recording made in sh, the JSON checked
+  on the host. Next: mynos-6yr. Closed mynos-cub.

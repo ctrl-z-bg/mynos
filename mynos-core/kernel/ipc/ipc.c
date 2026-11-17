@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "trace.h"
 #include "ipc.h"
 #include "msg.h"
 #include "port.h"
@@ -78,6 +79,8 @@ int32_t __OS_ipc_send(int32_t c, void * start, uint32_t size,
     destpageaddr = destpage << 12;
   }
 
+  TRACE(TRACE_SEND, currProcess, channel->receiver, c, size, 0,
+	justSync ? NULL : start, size);
   msg = kmalloc(sizeof(msg_t));
 
   // set the msg->start field
@@ -171,6 +174,12 @@ int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg,
   }
 
   if (msg == NULL) return MYNOS_ERR_BROKEN;
+
+  if (trace_on) {
+    unichannel_t * other = getMyWriteChannel(c);
+    trace_event(TRACE_RECV, currProcess, other ? other->receiver : -1, c,
+		msg->size, 0, NULL, 0);
+  }
 
   // check if sender his waiting
   if (msg->sem != -1) {

@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "trace.h"
 #include "channel.h"
 #include "msg.h"
 #include "mem/dynalloc.h"
@@ -154,6 +155,12 @@ int32_t __OS_ipc_freeChannel(int32_t c) {
   if (uc == NULL) return MYNOS_ERR_INVALID;
   if (uc->receiver != processTable[currProcess]->pid)
     return MYNOS_ERR_DENY;
+
+  if (trace_on) {
+    unichannel_t * other = getMyWriteChannel(c);
+    trace_event(TRACE_FREE, currProcess, other ? other->receiver : -1, c,
+		0, 0, NULL, 0);
+  }
 
   // check if broken BEFORE erasing the receiver field
   // it could interfer with isChannelBroken 
