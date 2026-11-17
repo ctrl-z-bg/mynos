@@ -2,7 +2,9 @@
 
 - **Epic:** mynos-a2j (a small demonstrable OS with a terminal)
 - **Date:** 2026-11-16
-- **Status:** accepted (2026-11-16): option B
+- **Status:** accepted (2026-11-16): option B. Update 2026-11-17: the login
+  shell is now `sh`, a command shell in OCaml; the toplevel is its `ocaml`
+  command.
 
 ## Goal
 

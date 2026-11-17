@@ -467,7 +467,8 @@ and run_file f args =
 (* ---- main ---- *)
 
 let interactive () =
-  print_string "MyNOS sh. help lists the commands; exit or Ctrl-D leaves.\n";
+  print_string "MyNOS sh. help lists the commands, ocaml starts the OCaml \
+                toplevel;\nexit or Ctrl-D leaves.\n";
   let rec loop () =
     Printf.printf "mynos:%s$ %!" (Sys.getcwd ());
     match input_line stdin with

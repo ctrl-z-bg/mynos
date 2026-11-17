@@ -173,8 +173,8 @@ runs from the RAM disk (`OCAMLLIB=/`), and `compile "/disk/a.ml"` makes
 
 `init` (`init/init.ml`, OCaml) is the first program: `ocamlrun` runs
 `init.byte` from the RAM disk. It reads `init.rc` and starts each line's
-program, `start` for services (consoled, tmpfs), `respawn` for the shell, which it
-restarts when it ends (`#quit;;`). Its messages go to the kernel log. The
+program, `start` for services (consoled, tmpfs, ata, fatfs), `respawn` for
+the login shell, `sh`, which it restarts when it ends (`exit`). Its messages go to the kernel log. The
 system RAM disk (`system/ramdisk.dsk`) holds init and `init.rc`, a stripped
 `ocamlrun`, `consoled`, the shell with the standard library's and
 `Mynos`'s `.cmi` files, and a few programs; only the registry and memrofs,
@@ -228,9 +228,10 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 **The original system builds and runs again**, as it did in 2004–2008
 (tag `revival-baseline`), **with both the 2008 toolchain and a modern one**:
 `tools/build-all.sh [dev|legacy]` then `tools/run-demo.sh`. With the modern
-toolchain **MyNOS boots into a shell, the OCaml toplevel**, in about a
-second: phrases typed on the keyboard are compiled and run, files of the RAM
-disk can be read and programs started (`help ();;`). With the 2008 toolchain
+toolchain **MyNOS boots into `sh`**, a command shell in OCaml, in about a
+second; `ocaml` opens the OCaml toplevel, where phrases typed on the
+keyboard are compiled and run. Programs can be edited, compiled and run
+inside MyNOS, and kept on the disk. With the 2008 toolchain
 (or `DEMO=2008`) the demo is the original one: a test OCaml program
 (`tests/hello`) on `ocamlrun`, the registry, the keyboard and serial
 drivers and memrofs, whose built-in test reads a file from the RAM disk over
@@ -533,6 +534,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
 - **2026-11-16** — `sh`, a bash-like command shell in OCaml; redirections
   of a program's standard input and output through its environment,
   applied by libmynos; `Mynos.environment`. Closed mynos-z8v.
+- **2026-11-17** — `sh` is the login shell (the owner's choice): `ocaml`
+  opens the toplevel, `#quit;;` comes back.
 - **2026-11-16** — The original website (mynos.sourceforge.net, from the
   Wayback Machine) archived as static files in `doc/website/`, with the
   2002-2004 news posts and the 2002 and 2004 test packages. Closed

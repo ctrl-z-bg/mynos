@@ -19,7 +19,7 @@ let help () =
     \  free ();;                   free memory\n\
      The MyNOS system calls are in module Mynos (#show Mynos;;).\n\
      Line editing: Backspace; Up and Down recall previous lines.\n\
-     #quit;; or Ctrl-D ends the shell (init starts a new one).\n";
+     #quit;; or Ctrl-D leaves the toplevel.\n";
   flush stdout
 
 let size name =

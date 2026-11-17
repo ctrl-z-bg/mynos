@@ -8,4 +8,4 @@ start consoled
 start tmpfs.byte
 start ata.byte
 start fatfs.byte
-respawn shell.byte
+respawn sh.byte

@@ -41,10 +41,13 @@ unmodified, while MyNOS-specific features (IPC, ports, semaphores, IRQs,
 threads, starting programs) go through `libmynos`, which also turns file and
 keyboard I/O into IPC with the filesystem and console services. `ocamlrun`
 then runs `init.byte` from the RAM disk: `init`, written in OCaml, which
-starts the console service and the shell, the OCaml toplevel.
+starts the services and `sh`, a command shell in OCaml; `ocaml` opens the
+OCaml toplevel, where the system is programmable in OCaml.
 
 ```
-MyNOS shell. Type help ();; for help.
+mynos:/$ cd /disk; edit hello.ml
+mynos:/disk$ ocamlc -o hello.byte hello.ml && ./hello
+mynos:/disk$ ocaml
 OCaml version 5.5.2
 # let rec fact n = if n = 0 then 1 else n * fact (n - 1);;
 val fact : int -> int = <fun>
@@ -88,7 +91,8 @@ the standard system, like `tools/run-demo.sh`. See the scripts for details.
 Development stopped at the end of 2004, after the IPC, threads, copy-on-write
 and the bytecode interpreter port were in place. In 2026 the original system
 was rebuilt, ported to a modern toolchain and moved to OCaml 5.5; it runs
-again in QEMU, and boots into an OCaml toplevel that can start programs. No
+again in QEMU, and boots into a command shell, with the OCaml toplevel, an
+editor and the OCaml compiler inside. No
 OCaml services exist yet, and storage is a read-only RAM disk. The current
 state, known issues and a work log are kept in
 [`doc/STATUS.md`](doc/STATUS.md).

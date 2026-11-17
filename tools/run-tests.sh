@@ -138,8 +138,8 @@ if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     cat "$log4" >> "$log"
 fi
 
-# seventh boot: the system RAM disk, init starts consoled and the shell (the
-# OCaml toplevel), driven through the keyboard
+# seventh boot: the system RAM disk, init starts the services and sh, driven
+# through the keyboard: the OCaml toplevel (ocaml), programs, sh again
 history_saved= kilo_saved= edit_saved= sh_saved=
 if [ -f system/ramdisk.dsk ]; then
     # a disk, for /disk and the shell's history: a copy of the FAT16 test image
@@ -152,10 +152,10 @@ if [ -f system/ramdisk.dsk ]; then
            -monitor "unix:$tmp/mon7,server,nowait" &
     qemu=$!
     i=0
-    while [ $i -lt 60 ] && ! grep -aq '^# ' "$log7" 2>/dev/null; do
+    while [ $i -lt 60 ] && ! grep -aq 'mynos:/' "$log7" 2>/dev/null; do
         sleep 1; i=$((i + 1))
     done
-    for phrase in '1 + 2;;\n' 'List.map (fun x -> x * x) [1; 2; 3];;\n' \
+    for phrase in 'ocaml\n' '' '1 + 2;;\n' 'List.map (fun x -> x * x) [1; 2; 3];;\n' \
                   'cat "AUTOEXEC.BAT";;\n' 'ls ();;\n' \
                   'run "child.byte" ["4"];;\n' '1 + "one";;\n' \
                   '6 * 7;;\n' '{up}\n' '1 + 1;;\n' 'x{up}{up}{down}\n' \
@@ -173,16 +173,17 @@ if [ -f system/ramdisk.dsk ]; then
                   'edit "/disk/e.txt";;\n' '' 'second\n{up}first {ctrl-k}{ctrl-u}{ctrl-u}' '{ctrl-s}' '{ctrl-q}' \
                   'sh ();;\n' 'cd /disk; echo from sh > s.txt; X=4; echo "v$X" >> s.txt; cat s.txt | cat\n' \
                   'exit\n' \
-                  '#quit;;\n'; do
+                  '#quit;;\n' 'exit\n'; do
         tools/type-keys.py "$tmp/mon7" "$phrase"
         sleep 2
     done
-    # init starts a new shell
+    # init starts a new sh (the third banner: the first sh, the one started
+    # from the toplevel, this one)
     i=0
-    while [ $i -lt 30 ] && [ "$(grep -ac 'MyNOS shell. Type' "$log7")" -lt 2 ]; do
+    while [ $i -lt 30 ] && [ "$(grep -ac 'MyNOS sh. help' "$log7")" -lt 3 ]; do
         sleep 1; i=$((i + 1))
     done
-    tools/type-keys.py "$tmp/mon7" '2 + 3;;\n'
+    tools/type-keys.py "$tmp/mon7" 'echo restarted\n'
     sleep 2
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null || true
     wait $qemu || true
@@ -258,7 +259,7 @@ if [ -f tests/spawn/ramdisk.dsk ]; then
 fi
 if [ -f system/ramdisk.dsk ]; then
     expect "init: started consoled"
-    expect "init: started shell.byte"
+    expect "init: started sh.byte"
     expect "MyNOS shell. Type help ();; for help."
     expect "- : int = 3"
     expect "- : int list = [1; 4; 9]"
@@ -279,7 +280,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "t.ml"
     expect "- : int = 40000"
     expect "AUTOEXEC.BAT: Read-only file system"
-    expect "init: shell.byte (pid"
+    expect "init: sh.byte (pid"
     if [ -n "$sh_saved" ] || [ ! -f tests/fat/fat16.img ]; then
         echo "ok    sh: variables, redirections, a pipe, on /disk"
     else
@@ -310,11 +311,11 @@ if [ -f system/ramdisk.dsk ]; then
     else
         echo "FAIL  the shell history is saved on /disk"; fail=1
     fi
-    if [ "$(grep -ac 'MyNOS shell. Type' "$log7")" -ge 2 ] &&
-       grep -aqx -- '- : int = 5' "$log7"; then
-        echo "ok    init restarts the shell after #quit"
+    if [ "$(grep -ac 'MyNOS sh. help' "$log7")" -ge 3 ] &&
+       grep -aqx -- 'restarted' "$log7"; then
+        echo "ok    init restarts sh after exit"
     else
-        echo "FAIL  init restarts the shell after #quit"; fail=1
+        echo "FAIL  init restarts sh after exit"; fail=1
     fi
 fi
 if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
