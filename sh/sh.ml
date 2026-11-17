@@ -306,7 +306,7 @@ let run_program file args c =
 let builtins = [ "cd"; "pwd"; "echo"; "cat"; "ls"; "cp"; "mv"; "rm"; "mkdir";
                  "rmdir"; "touch"; "export"; "unset"; "env"; "which"; "source";
                  "free"; "clear"; "help"; "exit"; "true"; "false"; "ocaml";
-                 "ifconfig"; "ping"; "host"; "ask" ]
+                 "ifconfig"; "ping"; "host"; "ask"; "keymap" ]
 
 (* every command: built-ins, and the programs of PATH (NAME.byte as NAME,
    and files without an extension) *)
@@ -369,6 +369,7 @@ let help out =
      trace COMMAND (record what the system does meanwhile), llm QUESTION,\n\
      agent TASK (a language model does it with tools, asking first)...\n\
      ask REQUEST: a command for it, from a language model; run if you agree.\n\
+     keymap [us|it]: the keyboard layout. Shift+PgUp/PgDn: lines scrolled away.\n\
      Syntax: 'quotes' \"quotes\" $VAR $? NAME=value ; && || < > >> | *.ml\n\
      Files: / is the RAM disk, /tmp is in memory, /disk is the FAT disk.\n"
 
@@ -443,6 +444,21 @@ let ask_context () =
     "All the commands: " ^ String.concat " " (commands ());
     "The current directory: " ^ here;
     "Its files: " ^ files ]
+
+(* the keyboard layout (consoled's CONSOLE_KEYMAP, mynos_console.h: a
+   struct of six ints; the reply, one byte) *)
+let layouts = [ "us"; "it" ]
+let console_keymap mode =
+  let ch = Mynos.connect (Mynos.lookup "console") in
+  Fun.protect ~finally:(fun () -> try Mynos.free_channel ch with Mynos.Error _ -> ())
+    (fun () ->
+       let b = Bytes.make 24 '\000' in
+       List.iteri (fun i v -> Bytes.set_int32_le b (4 * i) (Int32.of_int v))
+         [ 3; 0; Mynos.getpid (); mode; 0; 0 ];
+       Mynos.send ch (Bytes.to_string b);
+       let r = Mynos.recv ~timeout:2.0 ch in
+       List.nth_opt layouts (if r = "" then 0 else Char.code r.[0])
+       |> Option.value ~default:"?")
 
 let llm_service = ref None
 
@@ -553,6 +569,14 @@ let rec builtin name args c out =
                         (Net.call n (Net.Resolve name)))
    | "clear", _ -> output_string out "\027[H\027[2J"
    | "help", _ -> help out
+   | "keymap", [] ->
+     (try output_string out (console_keymap (-1) ^ "\n")
+      with Mynos.Error _ -> fail "keymap: no console service")
+   | "keymap", [ name ] ->
+     (match List.find_index (( = ) name) layouts with
+      | Some i -> (try ignore (console_keymap i)
+                   with Mynos.Error _ -> fail "keymap: no console service")
+      | None -> fail "keymap: %s: the layouts are %s" name (String.concat ", " layouts))
    | "ask", _ ->
      let profile, words = match args with
        | "-p" :: p :: rest -> (p, rest) | _ -> ("", args) in
@@ -579,7 +603,7 @@ and is_builtin = function
   | "cd" | "pwd" | "echo" | "cat" | "ls" | "cp" | "mv" | "rm" | "mkdir" | "rmdir"
   | "touch" | "export" | "unset" | "env" | "which" | "source" | "." | "free"
   | "clear" | "help" | "exit" | "true" | "false" | "ifconfig" | "ping" | "host"
-  | "ask" -> true
+  | "ask" | "keymap" -> true
   | _ -> false
 
 (* ---- running ---- *)
@@ -677,7 +701,7 @@ let history_add line =
 
 (* keys, from the bytes the console sends in raw mode *)
 type key =
-  | Char of char | Enter | Backspace | Delete | Tab
+  | Char of char | Text of string | Enter | Backspace | Delete | Tab
   | Left | Right | Up | Down | Home | End_ | Ctrl of char | Eof
 
 let pending = Buffer.create 16
@@ -714,6 +738,12 @@ let rec key () =
      | _ -> key ()
      | exception End_of_file -> Eof)
   | c when c < ' ' -> Ctrl (Char.chr (Char.code c + 64))
+  | c when Char.code c >= 0xC0 ->        (* a UTF-8 character: its bytes *)
+    let n = if Char.code c >= 0xF0 then 3 else if Char.code c >= 0xE0 then 2 else 1 in
+    let b = Buffer.create 4 in
+    Buffer.add_char b c;
+    (try for _ = 1 to n do Buffer.add_char b (byte ()) done with End_of_file -> ());
+    Text (Buffer.contents b)
   | c -> Char c
 
 (* ---- completion ---- *)
@@ -754,6 +784,14 @@ let complete_file word =
 
 let columns = 80
 
+(* UTF-8: the line moves and erases whole characters, and its width on
+   screen is its characters *)
+let is_cont c = Char.code c land 0xC0 = 0x80
+let cells s = String.fold_left (fun n c -> if is_cont c then n else n + 1) 0 s
+let prev_char t p = let p = ref (p - 1) in while !p > 0 && is_cont t.[!p] do decr p done; !p
+let next_char t p =
+  let p = ref (p + 1) in while !p < String.length t && is_cont t.[!p] do incr p done; !p
+
 let read_line_edited prompt =
   let line = Buffer.create 80 in
   let text () = Buffer.contents line in
@@ -765,11 +803,20 @@ let read_line_edited prompt =
      text around the cursor that fits *)
   let redraw () =
     let t = text () in
-    let room = columns - String.length prompt - 1 in
-    let start = if !pos < room then 0 else !pos - room + 1 in
-    let shown = String.sub t start (min room (String.length t - start)) in
+    (* the characters, and the one the cursor is on *)
+    let chars = ref [] and i = ref 0 in
+    while !i < String.length t do
+      let j = next_char t !i in
+      chars := String.sub t !i (j - !i) :: !chars; i := j
+    done;
+    let chars = Array.of_list (List.rev !chars) in
+    let cur = cells (String.sub t 0 !pos) in
+    let room = columns - cells prompt - 1 in
+    let start = if cur < room then 0 else cur - room + 1 in
+    let n = min room (Array.length chars - start) in
+    let shown = String.concat "" (Array.to_list (Array.sub chars start n)) in
     print_string ("\r" ^ prompt ^ shown ^ "\027[K");
-    let back = String.length shown - (!pos - start) in
+    let back = n - (cur - start) in
     if back > 0 then Printf.printf "\027[%dD" back;
     flush stdout in
   let insert s =
@@ -826,11 +873,12 @@ let read_line_edited prompt =
     | k ->
       (match k with
        | Char c -> insert (String.make 1 c)
-       | Backspace -> if !pos > 0 then delete_range (!pos - 1) !pos
+       | Text s -> insert s
+       | Backspace -> if !pos > 0 then delete_range (prev_char (text ()) !pos) !pos
        | Delete | Ctrl 'D' ->
-         if !pos < Buffer.length line then delete_range !pos (!pos + 1)
-       | Left -> if !pos > 0 then decr pos
-       | Right -> if !pos < Buffer.length line then incr pos
+         if !pos < Buffer.length line then delete_range !pos (next_char (text ()) !pos)
+       | Left -> if !pos > 0 then pos := prev_char (text ()) !pos
+       | Right -> if !pos < Buffer.length line then pos := next_char (text ()) !pos
        | Home | Ctrl 'A' -> pos := 0
        | End_ | Ctrl 'E' -> pos := Buffer.length line
        | Ctrl 'K' -> delete_range !pos (Buffer.length line)

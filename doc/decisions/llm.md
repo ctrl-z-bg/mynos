@@ -206,6 +206,14 @@ with no tool call (or after 20 model calls, `-n`). Its tools:
   input from an empty file and its output, and its programs' output,
   into a file of `/tmp`, sent back with the exit status), `read_file`,
   `write_file`, `list_directory`;
+- OCaml (mynos-vdj): `run_ocaml` compiles a program with `ocamlc` inside
+  MyNOS, against its libraries (`Mynos`, `Net`, `Http`, `Json`, `Llm`,
+  `Tools`...). The type checker speaks first: a program that does not
+  type-check comes back with the compiler's errors, and nothing runs; one
+  that does is shown, confirmed, run. `ocaml_signature` gives a module's
+  interface (the toplevel's `#show_module`), so the model looks before it
+  writes. The type checker is the contract between the model and the
+  system's interfaces;
 - every request of the typed services it is given (`-s net,llm`; `net` by
   default), from their descriptions (`Tools`).
 

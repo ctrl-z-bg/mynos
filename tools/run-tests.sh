@@ -172,11 +172,17 @@ fi
 
 # fourth boot: typing on the keyboard, read by OCaml through consoled
 if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
+    # COM2 is a terminal too (doc/decisions/console.md): tools/serial-peer.py
+    # logs it, and types what is appended to $tmp/com2.in
+    : > "$tmp/com2.in"
     tools/run-qemu.sh "$ocamlrun" tests/console/echo.byte \
         services/registry/registry services/console/consoled \
-        -- -display none -serial null -serial "file:$log4" \
+        -- -display none -serial null \
+           -chardev "socket,id=com2,path=$tmp/com2,server=on,wait=on" \
+           -serial chardev:com2 \
            -monitor "unix:$tmp/mon,server,nowait" &
     qemu=$!
+    tools/serial-peer.py "$tmp/com2" "$log4" "$tmp/com2.in" & peer=$!
     sleep 4
     keys() {
         for k in "$@"; do printf 'sendkey %s\n' "$k"; done |
@@ -185,26 +191,45 @@ if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     }
     keys h i ret
     keys shift-o shift-k x backspace ret
+    # from the serial port: UTF-8, a Backspace (DEL) erasing a whole
+    # character, Enter as \r
+    printf 'from serial \303\250\177\303\251\r' >> "$tmp/com2.in"
+    sleep 2
     keys ctrl-d
     sleep 2
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon" >/dev/null || true
     wait $qemu || true
+    kill $peer 2>/dev/null || true
     cat "$log4" >> "$log"
 fi
 
 # seventh boot: the system RAM disk, init starts the services and sh, driven
 # through the keyboard: the OCaml toplevel (ocaml), programs, sh again
 history_saved= kilo_saved= edit_saved= sh_saved= trace_calls= trace_json=
+serial_same_sh=
 if [ -f system/ramdisk.dsk ]; then
     # a disk, for /disk and the shell's history: a copy of the FAT16 test image
     [ -f tests/fat/fat16.img ] && cp tests/fat/fat16.img tests/fat/run-shell.img
-    DISK=$([ -f tests/fat/run-shell.img ] && echo tests/fat/run-shell.img) \
+    # the agent's model: the fake provider (tests/net/llm-test.env); a file
+    # of characters the screen's font lacks (doc/decisions/console.md)
+    if [ -f tests/fat/run-shell.img ]; then
+        printf '\303\210 cos\303\254: \342\202\2545\n' > tests/fat/run-utf8.txt
+        tools/in-container.sh dev sh -c "mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/llm.env && mcopy -i tests/fat/run-shell.img tests/fat/run-utf8.txt ::/utf8.txt"
+        rm -f tests/fat/run-utf8.txt
+    fi
+    tools/net-peer.py llm 47090 & llm7_pid=$!
+    NET=1 DISK=$([ -f tests/fat/run-shell.img ] && echo tests/fat/run-shell.img) \
     MEM=256 tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
-        -- -display none -serial null -serial "file:$log7" \
+        -- -display none -serial null \
+           -chardev "socket,id=com2,path=$tmp/com2-7,server=on,wait=on" \
+           -serial chardev:com2 \
            -monitor "unix:$tmp/mon7,server,nowait" &
     qemu=$!
+    # COM2: the log, and a terminal (tools/serial-peer.py)
+    : > "$tmp/com2-7.in"
+    tools/serial-peer.py "$tmp/com2-7" "$log7" "$tmp/com2-7.in" & peer7=$!
     i=0
     while [ $i -lt 60 ] && ! grep -aq 'mynos:/' "$log7" 2>/dev/null; do
         sleep 1; i=$((i + 1))
@@ -241,8 +266,53 @@ if [ -f system/ramdisk.dsk ]; then
     done
     tools/type-keys.py "$tmp/mon7" 'echo restarted\n'
     sleep 2
+    # the console (doc/decisions/console.md). The screen's characters, read
+    # from VGA's memory through QEMU's monitor
+    screen() {
+        printf 'xp /2000hx 0xb8000\n' | socat - "UNIX-CONNECT:$tmp/mon7" | python3 -c '
+import re, sys
+cells = []
+for line in sys.stdin:
+    m = re.match(r"^[0-9a-f]+:((?: 0x[0-9a-f]{4})+)", line.strip())
+    if m:
+        cells += [int(x, 16) & 0xFF for x in m.group(1).split()]
+sys.stdout.buffer.write(bytes(cells))' > "$1"
+    }
+    waitfor() {   # a text in the log, within $2 seconds
+        i=0
+        while [ $i -lt "$2" ] && ! grep -aqF -- "$1" "$log7"; do sleep 1; i=$((i + 1)); done
+    }
+    # the Italian layout (and AltGr), typed characters as UTF-8
+    tools/type-keys.py "$tmp/mon7" 'keymap it\n'; sleep 1
+    tools/type-keys.py "$tmp/mon7" 'echo caff{bracket_left} perch{shift-bracket_left} a{alt_r-semicolon}b{ctrl-alt-semicolon}\n'
+    sleep 2
+    tools/type-keys.py "$tmp/mon7" 'keymap us\n'; sleep 1
+    tools/type-keys.py "$tmp/mon7" 'cat /disk/utf8.txt\n'; sleep 2
+    screen "$tmp/screen1"
+    # the scrollback: Shift+PgUp shows older lines, marked top right
+    printf 'sendkey shift-pgup\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null; sleep 1
+    screen "$tmp/screen2"
+    printf 'sendkey shift-pgdn\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null; sleep 1
+    # the agent writes OCaml: run once it type-checks, refused when not
+    # (the fake model calls the tool named in brackets)
+    tools/type-keys.py "$tmp/mon7" "agent -y '[run_ocaml] let () = print_endline (string_of_int (6 * 7) ^ {shift-apostrophe}-from-ocaml{shift-apostrophe})'\n"
+    waitfor "42-from-ocaml" 90
+    tools/type-keys.py "$tmp/mon7" "agent -y '[run_ocaml] let () = print_endline 42'\n"
+    waitfor "It does not compile" 90
+    sleep 2
+    # the host's terminal on COM2: a line typed, then two pasted at once
+    # (a burst: the shell must not read an end of file), then the keyboard
+    banners=$(grep -ac 'MyNOS sh. help' "$log7")
+    printf 'X=seriale; echo dal-$X\r' >> "$tmp/com2-7.in"
+    waitfor "dal-seriale" 15
+    printf 'echo incollata-1\recho incollata-2\r' >> "$tmp/com2-7.in"
+    waitfor "incollata-2" 15
+    tools/type-keys.py "$tmp/mon7" 'echo still-$X\n'
+    waitfor "still-seriale" 15
+    [ "$(grep -ac 'MyNOS sh. help' "$log7")" = "$banners" ] && serial_same_sh=yes
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null || true
     wait $qemu || true
+    kill $llm7_pid $peer7 2>/dev/null || true
     cat "$log7" >> "$log"
     if [ -f tests/fat/run-shell.img ]; then
         tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/.history \
@@ -270,9 +340,9 @@ fi
 fail=0
 expect() {
     if grep -aqF -- "$1" "$log"; then
-        echo "ok    $1"
+        printf 'ok    %s\n' "$1"
     else
-        echo "FAIL  $1"; fail=1
+        printf 'FAIL  %s\n' "$1"; fail=1
     fi
 }
 reject() {
@@ -408,6 +478,29 @@ if [ -f system/ramdisk.dsk ]; then
     else
         echo "FAIL  the shell history is saved on /disk"; fail=1
     fi
+    expect "caffè perché a@b@"
+    python3 - "$tmp/screen1" "$tmp/screen2" <<'PY' && echo "ok    console: UTF-8 shown in code page 437 (È, €: redrawn glyphs)" || { echo "FAIL  console: UTF-8 shown in code page 437 (È, €: redrawn glyphs)"; fail=1; }
+import sys
+s = open(sys.argv[1], "rb").read()
+assert b"caff\x8a perch\x82 a@b@" in s, "è é"
+assert b"\x9f cos\x8d: \xf95" in s, "È ì €"
+PY
+    python3 - "$tmp/screen2" <<'PY' && echo "ok    console: Shift+PgUp shows the scrollback" || { echo "FAIL  console: Shift+PgUp shows the scrollback"; fail=1; }
+import re, sys
+s = open(sys.argv[1], "rb").read()
+assert re.search(rb"\[-\d+\]$", s[:80]), s[:80]
+PY
+    expect "dal-seriale"
+    expect "incollata-2"
+    expect "still-seriale"
+    if [ -n "$serial_same_sh" ]; then
+        echo "ok    console: input from COM2 (a paste), the same shell goes on"
+    else
+        echo "FAIL  console: input from COM2 (a paste), the same shell goes on"; fail=1
+    fi
+    expect "42-from-ocaml"
+    expect "It does not compile"
+    expect "but an expression was expected of type"
     if [ "$(grep -ac 'MyNOS sh. help' "$log7")" -ge 3 ] &&
        grep -aqx -- 'restarted' "$log7"; then
         echo "ok    init restarts sh after exit"
@@ -418,7 +511,8 @@ fi
 if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     expect 'console: line 1: "hi"'
     expect 'console: line 2: "OK"'
-    expect "console: end of input after 2 lines"
+    expect 'console: line 3: "from serial \195\169"'
+    expect "console: end of input after 3 lines"
 fi
 reject "PANIC"
 reject "page fault (?)"

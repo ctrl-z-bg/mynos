@@ -19,6 +19,10 @@
 #define CONSOLE_READ 1   /* len: max bytes -> up to len bytes of input
                             (0 bytes: end of file, or a VTIME timeout) */
 #define CONSOLE_MODE 2   /* mode, vmin, vtime -> 0 bytes */
+#define CONSOLE_KEYMAP 3 /* mode: a layout (CONSOLE_LAYOUT_*), or -1 -> one
+                            byte, the layout in use */
+#define CONSOLE_LAYOUT_US 0
+#define CONSOLE_LAYOUT_IT 1
 
 /* mode bits (as termios ICANON and ECHO, which libmynos translates) */
 #define CONSOLE_CANON 1  /* line editing: input comes by whole lines */

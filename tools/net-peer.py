@@ -148,6 +148,17 @@ def need(cond, message, status=400, kind="invalid_request_error"):
         raise Bad(status, kind, message)
 
 
+def pick(tools, text, name_of):
+    """the tool to call: the one named by a "[name] " at the start of the
+    request (then the rest is the text), or the first"""
+    if text.startswith("["):
+        name, _, rest = text[1:].partition("] ")
+        for t in tools:
+            if name_of(t) == name:
+                return t, rest
+    return tools[0], text
+
+
 def fill(schema, text):
     """a tool's input: each property of its schema set to the request's text"""
     return {k: text for k in schema.get("properties", {})}
@@ -203,11 +214,10 @@ def anthropic(headers, req):
         content = [{"type": "text", "text": "tool said: " + results[0]["content"]}]
         stop = "end_turn"
     elif req.get("tools"):
+        tool, text = pick(req["tools"], last_text(last["content"]), lambda t: t["name"])
         content = [{"type": "thinking", "thinking": "", "signature": "sig-1"},
-                   {"type": "tool_use", "id": "toolu_1",
-                    "name": req["tools"][0]["name"],
-                    "input": fill(req["tools"][0]["input_schema"],
-                                  last_text(last["content"]))}]
+                   {"type": "tool_use", "id": "toolu_1", "name": tool["name"],
+                    "input": fill(tool["input_schema"], text)}]
         stop = "tool_use"
     else:
         text = "echo: " + last_text(last["content"])
@@ -250,12 +260,12 @@ def openai(headers, req):
         message["content"] = "tool said: " + last["content"]
         finish = "stop"
     elif req.get("tools"):
+        tool, text = pick(req["tools"], last["content"], lambda t: t["function"]["name"])
         message["tool_calls"] = [{
             "id": "call_1", "type": "function",
-            "function": {"name": req["tools"][0]["function"]["name"],
+            "function": {"name": tool["function"]["name"],
                          "arguments": json.dumps(fill(
-                             req["tools"][0]["function"]["parameters"],
-                             last["content"]))}}]
+                             tool["function"]["parameters"], text))}}]
         finish = "tool_calls"
     else:
         message["content"] = "echo: " + last["content"]

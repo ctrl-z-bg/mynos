@@ -8,6 +8,10 @@
 # opens the OCaml toplevel. NET= (empty) boots without a network card;
 # HTTP=PORT forwards another host port to httpd. llm.env, if there is one
 # (see llm.env.example), is copied into the disk as /disk/llm.env, for llmd.
+# SERIAL=1 makes this terminal a console of MyNOS too (its second serial
+# port: doc/decisions/console.md), with the host's copy and paste,
+# scrollback and fonts; QEMU's window shows the same. Ctrl-C goes to MyNOS:
+# close the window, or type Ctrl-A then X, to stop QEMU.
 #
 # Otherwise (legacy toolchain, or DEMO=2008) it boots the system as it was in
 # 2004-2008: the OCaml runtime with a test bytecode, the registry, keyboard
@@ -42,12 +46,18 @@ if [ "${DEMO:-}" != 2008 ] && [ -f system/ramdisk.dsk ]; then
         else echo "run-demo.sh: port 8080 is busy, no web server forwarding" >&2
         fi
     fi
+    [ "${1:-}" = "--" ] && shift
+    if [ -n "${SERIAL:-}" ]; then
+        set -- -chardev stdio,id=term,signal=off,mux=on -serial null \
+            -serial chardev:term -mon chardev=term,mode=readline "$@"
+        echo "run-demo.sh: this terminal is MyNOS's console (Ctrl-A X stops QEMU)" >&2
+    fi
     MEM=${MEM:-256} exec tools/run-qemu.sh \
         "$ocamlrun" \
         services/registry/registry \
         services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
-        "$@"
+        -- "$@"
 fi
 
 keyboard=services/keyboard/keyboardd

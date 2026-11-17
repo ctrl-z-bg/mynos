@@ -8,9 +8,11 @@
      agent -n TURNS ...         at most so many model calls (20)
      agent -t FILE ...          the recording's file (/tmp/agent.trc)
 
-   Tools: run_command (a line of sh, its output back), read_file,
-   write_file, list_directory, and every request of the services given,
-   from their descriptions (module Tools). What changes things (commands,
+   Tools: run_command (a line of sh, its output back), run_ocaml (a
+   program, type-checked by ocamlc against MyNOS's libraries: the errors
+   go back to the model; run once confirmed), read_file, write_file,
+   list_directory, and every request of the services given, from their
+   descriptions (module Tools). What changes things (commands,
    writes, requests not marked safe) is shown and run only once confirmed:
    y, n, or a (yes to all). The event recorder runs meanwhile: "trace
    calls FILE" shows what the agent, the model service and every other
@@ -68,6 +70,20 @@ let own_tools = [
     description = "Run one command line in MyNOS sh (the user confirms it first): \
                    its exit status and its output (standard output and errors).";
     schema = schema [ "command", "one line for MyNOS sh" ] };
+  { name = "run_ocaml";
+    description = "Compile an OCaml 5 program with ocamlc, against MyNOS's libraries \
+                   (Mynos: processes, IPC, files; Net: the network; Http; Json; Llm: \
+                   language models; Ipc, Wire, Tools: typed services; and the \
+                   standard library). If it does not type-check, the compiler's \
+                   errors come back and nothing runs. If it does, the user confirms, \
+                   then it runs: its exit status and output come back. Prefer it to \
+                   run_command for anything a typed interface does better.";
+    schema = schema [ "code", "the program: an OCaml compilation unit (let () = ...)" ] };
+  { name = "ocaml_signature";
+    description = "The signature of an OCaml module of MyNOS or of the standard \
+                   library (its types and functions), as the toplevel shows it: \
+                   Mynos, Net, Http, Json, Llm, Ipc, Wire, Tools, Block, List...";
+    schema = schema [ "module", "the module's name, such as Net" ] };
   { name = "read_file"; description = "The contents of a file.";
     schema = schema [ "path", "the file's path" ] };
   { name = "write_file";
@@ -85,29 +101,89 @@ let arg input name =
 
 let counter = ref 0
 
-(* a command line, run by sh with its output into a file of /tmp *)
-let run_command command =
+let temp ext =
   incr counter;
-  let out = Printf.sprintf "/tmp/.agent-%d-%d" (Mynos.getpid ()) !counter in
+  Printf.sprintf "/tmp/.agent-%d-%d%s" (Mynos.getpid ()) !counter ext
+
+(* a bytecode program run with its input from an empty file and its
+   output (and its children's) into a file of /tmp: (exit status, output) *)
+let capture ?(input = "") argv =
+  let out = temp ".out" in
   let inp = out ^ ".in" in
-  Out_channel.with_open_bin inp (fun _ -> ());
+  Out_channel.with_open_bin inp (fun oc -> output_string oc input);
   Out_channel.with_open_bin out (fun _ -> ());
   let env = Array.of_list (
       List.filter (fun kv ->
           not (List.exists (fun p -> String.starts_with ~prefix:(p ^ "=") kv)
-                 [ "MYNOS_STDIN"; "MYNOS_STDOUT"; "MYNOS_STDERR" ]))
+                 [ "MYNOS_STDIN"; "MYNOS_STDOUT"; "MYNOS_STDERR"; "OCAMLLIB" ]))
         (Array.to_list (Mynos.environment ()))
-      @ [ "MYNOS_STDIN=" ^ inp; "MYNOS_STDOUT=>>" ^ out; "MYNOS_STDERR=>>" ^ out ]) in
+      @ [ "MYNOS_STDIN=" ^ inp; "MYNOS_STDOUT=>>" ^ out; "MYNOS_STDERR=>>" ^ out;
+          "OCAMLLIB=/" ]) in
   let status =
-    match Mynos.spawn ~env "ocamlrun" [| "ocamlrun"; "/sh.byte"; "-c"; command |] with
+    match Mynos.spawn ~env "ocamlrun" (Array.of_list ("ocamlrun" :: argv)) with
     | pid -> (match Mynos.wait pid with
-        | Mynos.Exited n -> string_of_int n
-        | Mynos.Signaled s -> "signal " ^ string_of_int s)
-    | exception Mynos.Error (_, code) -> "cannot start sh: " ^ Mynos.error_name code in
+        | Mynos.Exited n -> n
+        | Mynos.Signaled s -> 128 + s)
+    | exception Mynos.Error (_, code) ->
+      failwith ("cannot start ocamlrun: " ^ Mynos.error_name code) in
   let output = try In_channel.with_open_bin out In_channel.input_all with Sys_error _ -> "" in
   (try Sys.remove out with Sys_error _ -> ());
   (try Sys.remove inp with Sys_error _ -> ());
-  Printf.sprintf "exit status %s\n%s" status (clip output)
+  (status, output)
+
+(* a command line, run by sh *)
+let run_command command =
+  let status, output = capture [ "/sh.byte"; "-c"; command ] in
+  Printf.sprintf "exit status %d\n%s" status (clip output)
+
+(* a module's signature, as the toplevel shows it *)
+let ocaml_signature m =
+  if m = "" || not (String.for_all (fun c ->
+      match c with 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' | '.' -> true | _ -> false) m)
+  then failwith "a module's name, such as Net or Llm"
+  else
+    let _, output = capture ~input:("#show_module " ^ m ^ ";;\n") [ "/shell.byte" ] in
+    (* from the signature on: the toplevel's banner and prompts, out *)
+    let lines = String.split_on_char '\n' output in
+    let rec from = function
+      | l :: _ as ls when String.starts_with ~prefix:"# module" l
+                         || String.starts_with ~prefix:"module" l
+                         || String.starts_with ~prefix:"Unbound" l
+                         || String.starts_with ~prefix:"# Unbound" l -> ls
+      | _ :: rest -> from rest
+      | [] -> lines in
+    let lines = List.filter (fun l -> String.trim l <> "#" && String.trim l <> "")
+        (from lines) in
+    clip (String.concat "\n" (List.map (fun l ->
+        if String.starts_with ~prefix:"# " l then String.sub l 2 (String.length l - 2) else l)
+        lines))
+
+(* an OCaml program: compiled (the type checker's word first), then run if
+   the user agrees: (result, is an error) *)
+let run_ocaml code =
+  let src = temp ".ml" in
+  let exe = Filename.chop_suffix src ".ml" ^ ".byte" in
+  Out_channel.with_open_bin src (fun oc -> output_string oc code);
+  let cleanup () =
+    List.iter (fun f -> try Sys.remove f with Sys_error _ -> ())
+      [ src; exe; Filename.chop_suffix src ".ml" ^ ".cmi";
+        Filename.chop_suffix src ".ml" ^ ".cmo" ] in
+  Fun.protect ~finally:cleanup (fun () ->
+      say "  compile (%d lines of OCaml)" (List.length (String.split_on_char '\n' code));
+      match capture [ "/ocamlc.byte"; "-use-prims"; "/primitives"; "mynos.cma";
+                      "-o"; exe; src ] with
+      | 0, warnings ->
+        let lines = String.split_on_char '\n' code in
+        let shown = List.filteri (fun i _ -> i < 12) lines in
+        if confirm ("run this OCaml program:\n    "
+                    ^ String.concat "\n    " shown
+                    ^ (if List.length lines > 12 then "\n    ..." else "")) then
+          let status, output = capture [ exe ] in
+          (Printf.sprintf "%sexit status %d\n%s"
+             (if String.trim warnings = "" then "" else "compiler warnings:\n" ^ warnings ^ "\n")
+             status (clip output), false)
+        else ("It compiles, but the user did not allow running it.", true)
+      | _, errors -> ("It does not compile:\n" ^ clip errors, true))
 
 let list_directory path =
   let names = List.sort compare (Array.to_list (Sys.readdir path)) in
@@ -125,6 +201,11 @@ let execute service_tools name input =
     let c = arg input "command" in
     if confirm ("run: " ^ c) then (run_command c, false)
     else ("The user did not allow this command.", true)
+  | "run_ocaml" -> run_ocaml (arg input "code")
+  | "ocaml_signature" ->
+    let m = arg input "module" in
+    say "  signature of %s" m;
+    (ocaml_signature m, false)
   | "read_file" ->
     let p = arg input "path" in
     say "  read %s" p;
@@ -178,6 +259,11 @@ let system_prompt services =
     "Files: / is the RAM disk (read-only), /tmp is in memory, /disk is the \
      FAT disk (kept across reboots). Paths are up to 63 characters in a \
      directory.";
+    "run_ocaml compiles OCaml 5 against MyNOS's libraries: the compiler \
+     checks your program's types before anything runs, so prefer it when a \
+     typed interface helps (Net.call n (Net.Resolve \"example.com\"), \
+     Http.get, Json, Llm.ask...). ocaml_signature shows a module's \
+     interface: look before you write.";
     "Besides, your tools include the requests of these MyNOS services, \
      described by the services themselves: " ^ String.concat ", " services ^ ".";
     "The current directory: " ^ Sys.getcwd () ]

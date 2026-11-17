@@ -213,6 +213,7 @@ void mynos_main(multiboot_info_t *boot_info) {
   //boot_info_global = boot_info;
 
   clear_screen();
+  video_font_init();
 
   init_memory();
 

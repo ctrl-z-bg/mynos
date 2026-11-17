@@ -361,7 +361,14 @@ IPC; typed keys are echoed on screen and sent to the serial port.
   screen. The console service has a raw input mode (keys one by one, the
   arrows and editing keys as escape sequences) that `libmynos` maps from
   termios (`tcgetattr`, `tcsetattr`), with the window size (80x25). kilo
-  (`third_party/kilo`) runs on it.
+  (`third_party/kilo`) runs on it. Since `doc/decisions/console.md`:
+  output is UTF-8, shown in VGA's code page 437 (À È Ì Ò Ù and € on six
+  redrawn glyphs, other characters as `?`); the last 500 lines scrolled
+  off are kept (Shift + Page Up / Down); keyboard layouts `us` and `it`
+  (AltGr, or Ctrl + Alt; `keymap it`, kept in `/disk/.keymap`); line
+  editing by characters, not bytes; and the second serial port is a
+  console too: `SERIAL=1 tools/run-demo.sh` makes the host's terminal
+  one, with its copy and paste.
 - **Screen and log.** Once user space starts, the screen belongs to the
   programs: kernel messages, and services' messages (`mynos_log`, native
   call 31, `Mynos.log` in OCaml), go only to the log on the second serial
@@ -761,46 +768,61 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   write: an error, the process lives (with the previous kernel, the
   process was killed). Also: `recv` left a broken channel locked; `send`
   on a channel not ours dereferenced NULL. Closed mynos-nn7.
-- 2026-11-17: Channel ends have their own ids (mynos-9e1): `2 * (slot +
-  4096 * generation) + side`; the kernel knows the end from the id, no
+- **2026-11-17** — Channel ends have their own ids (mynos-9e1): `2 * (slot
+  + 4096 * generation) + side`; the kernel knows the end from the id, no
   longer from the caller's pid, so threads and domains of one process call
-  each other over IPC (test: a `Block` service served by a second domain of
-  `mynos_test`, called from the first). The recorder still names the
+  each other over IPC (test: a `Block` service served by a second domain
+  of `mynos_test`, called from the first). The recorder still names the
   channel (the even id). Channel and port ids stay below 2^30, OCaml's
   `max_int` on i386. Closed mynos-9e1.
-- 2026-11-17: Language models, step 1 (mynos-wsd, `doc/decisions/llm.md`):
-  `llmd` (OCaml) serves "llm/1" (module `Llm`) from profiles in
-  `/disk/llm.env` (`llm.env.example`), through two adapters, Claude's
-  Messages API and Chat Completions (OpenAI, vLLM, Ollama...), with tool
-  calls; the `llm` command; `init.rc` starts it. The network test runs
-  questions and a tool loop through both APIs against a fake provider
-  (`tools/net-peer.py llm`); by hand, `llm` in MyNOS got its answer from
-  Claude Opus 5.5 over HTTPS.
-- 2026-11-17: `ask` in `sh` (mynos-wsd.1): a request in natural language;
-  the model (llmd) gets the shell's syntax, commands, directory and files,
-  and proposes one command line through a tool; `sh` shows it and runs it
-  only after a yes (a key, or a line from a redirected input). Network
-  test: `sh -c "ask ..."` with yes and no, through both APIs. By hand, with
-  Claude: "elenca i file in /disk con le loro dimensioni" became `ls -l
-  /disk`, explained in Italian.
-- 2026-11-17: Protocols that describe themselves (mynos-wsd.2): `Wire`
-  codecs carry their shape (`Wire.shape`, `Wire.field`, named variant
-  cases); `Ipc.PROTOCOL` has `summary` and `requests` (block/1, net/1,
-  llm/1 described); `Ipc.Make` services answer `"describe"`, netd too
-  (`wire_put_shape`, a compact notation in C). Module `Tools`: a
+- **2026-11-17** — Language models, step 1 (mynos-wsd,
+  `doc/decisions/llm.md`): `llmd` (OCaml) serves "llm/1" (module `Llm`)
+  from profiles in `/disk/llm.env` (`llm.env.example`), through two
+  adapters, Claude's Messages API and Chat Completions (OpenAI, vLLM,
+  Ollama...), with tool calls; the `llm` command; `init.rc` starts it. The
+  network test runs questions and a tool loop through both APIs against a
+  fake provider (`tools/net-peer.py llm`); by hand, `llm` in MyNOS got its
+  answer from Claude Opus 5.5 over HTTPS.
+- **2026-11-17** — `ask` in `sh` (mynos-wsd.1): a request in natural
+  language; the model (llmd) gets the shell's syntax, commands, directory
+  and files, and proposes one command line through a tool; `sh` shows it
+  and runs it only after a yes (a key, or a line from a redirected input).
+  Network test: `sh -c "ask ..."` with yes and no, through both APIs. By
+  hand, with Claude: "elenca i file in /disk con le loro dimensioni"
+  became `ls -l /disk`, explained in Italian.
+- **2026-11-17** — Protocols that describe themselves (mynos-wsd.2):
+  `Wire` codecs carry their shape (`Wire.shape`, `Wire.field`, named
+  variant cases); `Ipc.PROTOCOL` has `summary` and `requests` (block/1,
+  net/1, llm/1 described); `Ipc.Make` services answer `"describe"`, netd
+  too (`wire_put_shape`, a compact notation in C). Module `Tools`: a
   description becomes model tools (JSON Schema), called from JSON. Tests:
   shapes, JSON round trips, block/1's description (mynos-ocaml); netd's
   description equals `net.ml`'s, and `net_config`, `net_ping` and
   `llm_chat` called from JSON (network test).
-- 2026-11-17: The agent (mynos-wsd.3): `agent TASK` runs the model's tool
-  loop with its own tools (`run_command`, `read_file`, `write_file`,
+- **2026-11-17** — The agent (mynos-wsd.3): `agent TASK` runs the model's
+  tool loop with its own tools (`run_command`, `read_file`, `write_file`,
   `list_directory`) and the typed services' (`-s`, from descriptions);
   what changes things is confirmed first (y/n/a, `-y`); the recorder runs
   meanwhile (`/tmp/agent.trc`). llmd asks Claude to cache prompts, and
   counts cached tokens in `input_tokens`. `sh` now gives its own
-  redirections to its programs (a `sh -c` whose output goes to a file
-  sent its programs' output to the console, and their input read the
-  console). Network test: three runs (confirmed, `-y`, refused) and the
-  recording's nested calls. With Claude: a task in Italian (the IP
-  address, the Date of https://example.com, into `/disk/note.txt`, read
-  back) done with `net_config`, `fetch -i`, `write_file`, `read_file`.
+  redirections to its programs (a `sh -c` whose output goes to a file sent
+  its programs' output to the console, and their input read the console).
+  Network test: three runs (confirmed, `-y`, refused) and the recording's
+  nested calls. With Claude: a task in Italian (the IP address, the Date
+  of https://example.com, into `/disk/note.txt`, read back) done with
+  `net_config`, `fetch -i`, `write_file`, `read_file`.
+- **2026-11-17** — The console (mynos-59g, `doc/decisions/console.md`):
+  scrollback in the kernel's terminal (500 lines, Shift + Page Up / Down
+  through `consoled`); UTF-8 output decoded to code page 437, six glyphs
+  of VGA's font redrawn at boot as À È Ì Ò Ù €; keyboard layouts `us` and
+  `it` with AltGr (`keymap`, `CONSOLE_KEYMAP`); UTF-8 line editing in
+  `consoled` and `sh`; `consoled` reads COM2 (IRQ 3), so the host's
+  terminal is a console with copy and paste (`SERIAL=1
+  tools/run-demo.sh`). Found on the way: a burst of input (a paste) left
+  `consoled`'s semaphore ahead of its queue, and the next reads returned
+  an end of file (the shell exited). Also the agent's `run_ocaml` and
+  `ocaml_signature` (mynos-vdj): OCaml type-checked by `ocamlc` inside
+  MyNOS before it runs. Tests: the screen read from VGA's memory through
+  QEMU's monitor (CP437 bytes, the scrollback's mark), the Italian layout,
+  input and a paste over COM2, `run_ocaml` with a program that compiles
+  and one that does not.

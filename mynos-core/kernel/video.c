@@ -160,10 +160,175 @@ static int params[8], nparams, private_mark;
 static char saved_screen[2 * COLUMNS * ROWS];
 static int saved_screen_row, saved_screen_col, on_alternate = 0;
 
+/* ---- characters: UTF-8 in, code page 437 on screen ----
+   (doc/decisions/console.md) Programs write UTF-8; each character is shown
+   with the glyph of VGA's font (code page 437) that draws it. Six glyphs
+   MyNOS has no use for are redrawn at boot (video_font_init) as the
+   letters the font lacks: their slots below hold the new characters. */
+
+/* the characters of glyphs 0x80-0xFF */
+static const ushort16_t cp437_high[128] = {
+  0xC7, 0xFC, 0xE9, 0xE2, 0xE4, 0xE0, 0xE5, 0xE7,
+  0xEA, 0xEB, 0xE8, 0xEF, 0xEE, 0xEC, 0xC4, 0xC5,
+  0xC9, 0xE6, 0xC6, 0xF4, 0xF6, 0xF2, 0xFB, 0xF9,
+  0xFF, 0xD6, 0xDC, 0xA2, 0xA3, 0xA5, 0xC0 /* was U+20A7 */, 0xC8 /* was ƒ */,
+  0xE1, 0xED, 0xF3, 0xFA, 0xF1, 0xD1, 0xAA, 0xBA,
+  0xBF, 0xCC /* was U+2310 */, 0xAC, 0xBD, 0xBC, 0xA1, 0xAB, 0xBB,
+  0x2591, 0x2592, 0x2593, 0x2502, 0x2524, 0x2561, 0x2562, 0x2556,
+  0x2555, 0x2563, 0x2551, 0x2557, 0x255D, 0x255C, 0x255B, 0x2510,
+  0x2514, 0x2534, 0x252C, 0x251C, 0x2500, 0x253C, 0x255E, 0x255F,
+  0x255A, 0x2554, 0x2569, 0x2566, 0x2560, 0x2550, 0x256C, 0x2567,
+  0x2568, 0x2564, 0x2565, 0x2559, 0x2558, 0x2552, 0x2553, 0x256B,
+  0x256A, 0x2518, 0x250C, 0x2588, 0x2584, 0x258C, 0x2590, 0x2580,
+  0x3B1, 0xDF, 0x393, 0x3C0, 0x3A3, 0x3C3, 0xB5, 0x3C4,
+  0x3A6, 0x398, 0x3A9, 0x3B4, 0x221E, 0x3C6, 0x3B5, 0x2229,
+  0x2261, 0xB1, 0x2265, 0x2264, 0xD2 /* was U+2320 */, 0xD9 /* was U+2321 */, 0xF7, 0x2248,
+  0xB0, 0x20AC /* was U+2219 */, 0xB7, 0x221A, 0x207F, 0xB2, 0x25A0, 0xA0
+};
+
+/* the characters of glyphs 0x01-0x1F (shown as glyphs, not as control
+   characters, when they come as UTF-8) */
+static const ushort16_t cp437_low[32] = {
+  0, 0x263A, 0x263B, 0x2665, 0x2666, 0x2663, 0x2660, 0x2022,
+  0x25D8, 0x25CB, 0x25D9, 0x2642, 0x2640, 0x266A, 0x266B, 0x263C,
+  0x25BA, 0x25C4, 0x2195, 0x203C, 0xB6, 0xA7, 0x25AC, 0x21A8,
+  0x2191, 0x2193, 0x2192, 0x2190, 0x221F, 0x2194, 0x25B2, 0x25BC
+};
+
+/* Latin-1 letters without a glyph: the letter without its accent */
+static const char latin1_base[] =
+  "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYTsaaaaaaaceeeeiiiidnooooo/ouuuuyty";
+
+static unsigned char glyph_of(ulong32_t u)
+{
+  int i;
+  if (u < 0x80) return (unsigned char)u;
+  for (i = 0; i < 128; i++) if (cp437_high[i] == u) return 0x80 + i;
+  for (i = 1; i < 32; i++) if (cp437_low[i] == u) return i;
+  if (u == 0x2302) return 0x7F;
+  if (u >= 0xC0 && u <= 0xFF) return latin1_base[u - 0xC0];
+  switch (u) {
+  case 0x2018: case 0x2019: case 0x201A: case 0x2032: return '\'';
+  case 0x201C: case 0x201D: case 0x201E: case 0x2033: return '"';
+  case 0x2010: case 0x2011: case 0x2012: case 0x2013: case 0x2014:
+  case 0x2212: return '-';
+  case 0x2026: return '.';
+  case 0x2039: return '<';
+  case 0x203A: return '>';
+  case 0x2192: return 0x1A;
+  case 0x2713: case 0x2714: return 0xFB;    /* check marks: the root */
+  }
+  return '?';
+}
+
+/* the UTF-8 decoder of programs' output */
+static ulong32_t utf8_char;
+static int utf8_left = 0;
+
+/* ---- the font: the six redrawn glyphs ---- */
+
+#define FONT ((volatile unsigned char *)0xA0000)   /* plane 2: 32 bytes a glyph */
+
+static void font_access(int on)
+{
+  static const unsigned char seq_on[] = { 0x00, 0x01, 0x02, 0x04, 0x04, 0x07, 0x00, 0x03 };
+  static const unsigned char seq_off[] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x03, 0x00, 0x03 };
+  static const unsigned char gc_on[] = { 0x04, 0x02, 0x05, 0x00, 0x06, 0x04 };
+  static const unsigned char gc_off[] = { 0x04, 0x00, 0x05, 0x10, 0x06, 0x0E };
+  const unsigned char * s = on ? seq_on : seq_off, * g = on ? gc_on : gc_off;
+  int i;
+  for (i = 0; i < 8; i += 2) { outportb(0x3C4, s[i]); outportb(0x3C5, s[i + 1]); }
+  for (i = 0; i < 6; i += 2) { outportb(0x3CE, g[i]); outportb(0x3CF, g[i + 1]); }
+}
+
+/* a capital with a grave accent: the letter one row lower, the accent on
+   the two rows above it */
+static void grave_capital(unsigned char slot, char base)
+{
+  int r;
+  for (r = 15; r >= 1; r--) FONT[32 * slot + r] = FONT[32 * base + r - 1];
+  FONT[32 * slot + 0] = 0x30;
+  FONT[32 * slot + 1] = 0x18;
+}
+
+void video_font_init(void)
+{
+  static const unsigned char euro[16] =
+    { 0x00, 0x00, 0x1C, 0x36, 0x62, 0x60, 0xFC, 0x60,
+      0xF8, 0x60, 0x62, 0x36, 0x1C, 0x00, 0x00, 0x00 };
+  int r;
+  font_access(1);
+  grave_capital(0x9E, 'A');
+  grave_capital(0x9F, 'E');
+  grave_capital(0xA9, 'I');
+  grave_capital(0xF4, 'O');
+  grave_capital(0xF5, 'U');
+  for (r = 0; r < 16; r++) FONT[32 * 0xF9 + r] = euro[r];
+  font_access(0);
+}
+
+/* ---- scrollback (doc/decisions/console.md) ----
+   The lines scrolled off the top of the main screen, the last SB_LINES of
+   them. While one looks back (view > 0 lines), the live screen is kept in
+   live[] and the screen shows older lines; any output brings it back. */
+
+#define SB_LINES 500
+static char sb[SB_LINES][2 * COLUMNS];
+static int sb_count = 0, sb_next = 0;     /* lines kept, the next slot */
+static int view = 0;
+static char live[2 * COLUMNS * ROWS];
+
+static void sb_push(int r)
+{
+  kmemcpy(sb[sb_next], CELL(r, 0), 2 * COLUMNS);
+  sb_next = (sb_next + 1) % SB_LINES;
+  if (sb_count < SB_LINES) sb_count++;
+}
+
+static void view_set(int v);
+
 static void show_cursor(void)
 {
   if (cursor_on) update_cursor(row, col);
   else update_cursor(ROWS, 0);        /* off the screen */
+}
+
+static void view_set(int v)
+{
+  int r;
+  if (on_alternate) v = 0;
+  if (v > sb_count) v = sb_count;
+  if (v < 0) v = 0;
+  if (v == view) return;
+  if (view == 0) kmemcpy(live, (char *)BASE_VIDEO, sizeof(live));
+  view = v;
+  if (v == 0) {
+    kmemcpy((char *)BASE_VIDEO, live, sizeof(live));
+    show_cursor();
+    return;
+  }
+  for (r = 0; r < ROWS; r++) {
+    int k = r - v;                    /* < 0: k lines above the live screen */
+    kmemcpy(CELL(r, 0),
+	    k >= 0 ? live + 2 * COLUMNS * k : sb[(sb_next + k + SB_LINES) % SB_LINES],
+	    2 * COLUMNS);
+  }
+  {                                   /* where we are, top right */
+    char tag[12];
+    int n = 0, c, x = v;
+    char digits[8];
+    int nd = 0;
+    tag[n++] = '[';
+    tag[n++] = '-';
+    do { digits[nd++] = '0' + x % 10; x /= 10; } while (x && nd < 7);
+    while (nd) tag[n++] = digits[--nd];
+    tag[n++] = ']';
+    for (c = 0; c < n; c++) {
+      *CELL(0, COLUMNS - n + c) = tag[c];
+      *(CELL(0, COLUMNS - n + c) + 1) = 0x70;
+    }
+  }
+  update_cursor(ROWS, 0);             /* no cursor while looking back */
 }
 
 static void erase(int r, int c0, int c1)    /* row r, columns c0..c1-1 */
@@ -178,6 +343,8 @@ static void erase(int r, int c0, int c1)    /* row r, columns c0..c1-1 */
 static void scroll_up(int top, int n)       /* lines top.. move up by n */
 {
   int r;
+  if (top == 0 && !on_alternate)
+    for (r = 0; r < n && r < ROWS; r++) sb_push(r);
   for (r = top; r < ROWS; r++) {
     if (r + n < ROWS) kmemcpy(CELL(r, 0), CELL(r + n, 0), 2 * COLUMNS);
     else erase(r, 0, COLUMNS);
@@ -286,6 +453,15 @@ static void alternate(int on)
 static void csi(char final)
 {
   int n = param(0, 1), r, c;
+  if (private_mark && final == 'v') {  /* consoled: the scrollback */
+    switch (param(0, 0)) {
+    case 1: view_set(view + ROWS - 1); break;
+    case 2: view_set(view - (ROWS - 1)); break;
+    default: view_set(0);
+    }
+    return;
+  }
+  if (view) view_set(0);
   wrap_pending = 0;
   if (private_mark) {                 /* CSI ? ... h / l */
     int on = final == 'h';
@@ -393,7 +569,28 @@ static void term_char(char c)
     }
     return;
   }
-  if (c == 0x1B) { esc_state = 1; return; }
+  if (c == 0x1B) { utf8_left = 0; esc_state = 1; return; }
+  if (c == 0) return;                 /* NUL: nothing to show */
+  if (view) view_set(0);
+  {
+    unsigned char b = (unsigned char)c;
+    if (utf8_left > 0) {
+      if ((b & 0xC0) == 0x80) {
+	utf8_char = (utf8_char << 6) | (b & 0x3F);
+	if (--utf8_left == 0) put((char)glyph_of(utf8_char), attr);
+	return;
+      }
+      utf8_left = 0;                  /* a cut character */
+      put('?', attr);
+    }
+    if (b >= 0x80) {
+      if ((b & 0xE0) == 0xC0) { utf8_char = b & 0x1F; utf8_left = 1; }
+      else if ((b & 0xF0) == 0xE0) { utf8_char = b & 0x0F; utf8_left = 2; }
+      else if ((b & 0xF8) == 0xF0) { utf8_char = b & 0x07; utf8_left = 3; }
+      else put('?', attr);            /* not UTF-8 */
+      return;
+    }
+  }
   if (!control(c) && (unsigned char)c >= ' ') put(c, attr);
 }
 
@@ -402,6 +599,7 @@ void _print_char(char c, char attrib) {
   if (attrib == CHAR_KERNEL_ATTRIB) {
     if (!kernel_on_screen)
       return;
+    if (view) view_set(0);
     if (!control(c)) put(c, attrib);
   } else
     term_char(c);

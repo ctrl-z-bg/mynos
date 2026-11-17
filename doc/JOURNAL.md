@@ -1604,3 +1604,41 @@ once as a model repeating itself. The recorder made the rest visible: the
 second run's file shows the agent, llmd, netd, fatfs, ata and fetch, each
 call nested in the one that caused it.
 
+## 2026-11-17 — The console: glyphs, fake shifts, and a semaphore ahead of its queue
+
+**What was asked.** Lines scrolled off the screen, accented letters, and
+copy and paste with the host (`doc/decisions/console.md`).
+
+**Glyphs.** VGA text mode draws code page 437: à è é ì ò ù are there, À
+È Ì Ò Ù and € are not. Rather than a font of our own, the kernel redraws
+six glyphs MyNOS has no use for (₧ ƒ ⌐ ⌠ ⌡ ∙) at boot, through plane 2:
+each capital is the font's own letter one row lower, with two rows of
+accent above; € is drawn. The tests read the screen back from VGA's
+memory through QEMU's monitor (`xp`) and look for the code page's bytes.
+
+**Fake shifts.** Shift + Page Up did nothing. With Shift held, a keyboard
+sends grey keys wrapped in "fake shifts" (`E0 AA` before, `E0 2A` after)
+so that old software sees an unshifted key; `consoled` took `E0 AA` for
+the release of Shift. They are now ignored. QEMU's `altgr` key, for its
+part, arrived as a plain Alt: Ctrl + Alt is AltGr too, as on Windows,
+which also serves keyboards without the key.
+
+**An extra byte.** The scrollback then opened and closed at once:
+`consoled` wrote its 5-byte sequences with a length of 6, and the
+trailing NUL counted as output, which returns the view to the live
+screen. The lengths are right now, and the terminal ignores NUL.
+
+**A semaphore ahead of its queue.** Typing on the serial port (as a host
+terminal does), the shell ran the command and then exited, again and
+again. Each piece of input V's `available`; a reader P's once and takes
+the whole queue. A burst (a paste, a terminal sending a line at once)
+left `available` ahead by the number of bytes taken together, and the
+next reads woke to an empty queue: 0 bytes, an end of file. The keyboard
+rarely showed it, one key per interrupt. A wake-up to an empty queue
+without an end of file now waits again; the test pastes two lines and
+checks that the same shell goes on.
+
+**Lesson.** Count-based semaphores and "take everything" readers do not
+mix: either one V per read, or a reader that tolerates being woken for
+nothing. A second input device made a latent race ordinary.
+

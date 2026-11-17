@@ -34,6 +34,7 @@
 #define CHAR_USER_ATTRIB 0x7
 
 void printk(char *s);
+void video_font_init(void);     /* the glyphs VGA's font lacks (video.c) */
 void print_ulong(ulong32_t n);
 #define print_uint(N) print_ulong((ulong32_t)N)
 #define print_ushort(N) print_ulong((ulong32_t)N)
