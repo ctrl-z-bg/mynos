@@ -560,6 +560,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
 - **2026-11-16** — `sh`, a bash-like command shell in OCaml; redirections
   of a program's standard input and output through its environment,
   applied by libmynos; `Mynos.environment`. Closed mynos-z8v.
+- **2026-11-16** — The original website (mynos.sourceforge.net, from the
+  Wayback Machine) archived as static files in `doc/website/`, with the
+  2002-2004 news posts and the 2002 and 2004 test packages. Closed
+  mynos-db2.
 - **2026-11-17** — `sh` is the login shell (the owner's choice): `ocaml`
   opens the toplevel, `#quit;;` comes back.
 - **2026-11-17** — `sh` edits its line itself: Tab completion of commands
@@ -574,7 +578,3 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   takes one), clobbered registers, two semaphore leaks and a linear space
   list leak; `KPANIC` now stops the machine. 2400 processes run with no
   memory lost. Follow-up: mynos-nn7. Closed mynos-0fw.
-- **2026-11-16** — The original website (mynos.sourceforge.net, from the
-  Wayback Machine) archived as static files in `doc/website/`, with the
-  2002-2004 news posts and the 2002 and 2004 test packages. Closed
-  mynos-db2.
