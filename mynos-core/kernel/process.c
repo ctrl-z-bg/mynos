@@ -413,7 +413,10 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   desc->tss = (tss_t*)kmalloc(sizeof(tss_t));
 
   tss = desc->tss;
-  tss->tls_base = tss->tls_limit = tss->tls_pages = 0;
+  /* every field not set below is 0: justForked, queue, kstack, clearTid,
+     the general registers (with garbage in justForked the scheduler took
+     the new process for a forked one) */
+  kbzero(tss, sizeof(tss_t));
 
   /* set the new process tss */
   tss->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(newPD);
@@ -584,6 +587,7 @@ void killProcess(int status) {
   for (tss = self->tss; tss; tss = tss->next)
     __OS_sem_freeSemaphore(tss->privSem);
   __OS_sem_freeSemaphore(self->childSem);
+  __OS_sem_freeProcessSemaphores(currProcess);
 
   /* the children become orphans: nobody will wait for them */
   for (i = 1; i < (int)numProcess; i++) {

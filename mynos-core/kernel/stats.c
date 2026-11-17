@@ -22,6 +22,7 @@
 #include "mem/mem.h"
 
 void __OS_fillStats(mynos_stats_t * st) {
+  if (!__mem_userArea(st, sizeof(mynos_stats_t))) return;
   st->numProcesses = numProcesses;
   st->numThreads = numThreads;
   st->pid = currProcess;

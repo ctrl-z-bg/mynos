@@ -1059,3 +1059,71 @@ billion seconds since 1970, which does not fit OCaml's 31-bit `int` on
 i386 (the same trap as the FAT32 fields, in another place). Days and
 seconds are now split while the value is still a float; the FAT test
 checks the year of a file MyNOS wrote.
+
+## 2026-11-17 — A new kernel heap, and what a stress test found
+
+**The allocator.** Four bugs in two days in `dynalloc.c` (2003), all about
+which page belonged to which block, were reason enough to replace it
+rather than review it again. The new one has size classes (32 bytes to
+2 KB, each with a free list, one page taken at a time) and whole pages
+above; every block has a header with a magic number, so a double free or
+the free of something that is not a block is reported with its caller
+instead of corrupting the heap.
+
+**Twenty years of zeroed memory.** With `HEAP_CHECK` (freed blocks filled
+with `0xDB`) the first boot faulted with the kernel executing on a user
+stack. Leaving the poison in one size class at a time pointed at the
+256-byte class, and there at `tss_t`: `createProcess` never set
+`justForked`, `queue`, `kstack` or the general registers. Blocks used to
+come almost always from fresh, zeroed pages; with garbage in `justForked`
+the scheduler took the new process for a forked one. The tss is now
+cleared, and `kmalloc` always returns zeroed blocks. *Lesson: poisoning
+freed memory finds bugs that zeroed memory hides; test with it on.*
+
+**The stress test** (`tests/stress`) starts copies of itself as clients
+that send messages of awkward sizes (1, 8, 9, 4095, 4096, 4097... 64 KB),
+runs threads whose timers expire together, ping-pongs semaphores, and
+passes invalid arguments and pointers to every system call it can. Each
+step found something:
+
+- *Unchecked indexes.* `changeOwner(3000)` read past the port table and
+  page-faulted the kernel; `allocPortP` too; semaphore calls turned a
+  negative id into an index before the table (and locked a "mutex"
+  there). A negative channel was a "kernel channel": a 2003 stub that
+  answered 0 to anything.
+- *A panic that did not stop.* `KPANIC` printed and spun with interrupts
+  on: the timer kept switching to other processes, which ran on a broken
+  kernel and produced nonsense (system call numbers that were ASCII
+  text). It now disables interrupts and halts.
+- *Clobbered registers.* The native system call entry let the C handlers
+  change `ecx` and `edx`. libmynos declares them clobbered, so only the
+  test's raw calls noticed; the entry now saves them, as Linux's does.
+- *Pointers.* The kernel used processes' pointers as given. One into the
+  kernel (below 1 GB) does not even fault: `recv` and `stats` would have
+  written their results into the kernel. `send` mapped the kernel's own
+  pages into the receiver ("TODO CHECK AREA", 2003). `__mem_userArea`
+  now checks every pointer a system call reads or writes, native and
+  Linux: inside the user part of the address space, user pages only (a
+  thread's kernel stack lives there too), no wrap around. A kernel page
+  fault on a user address now ends the process instead of the system.
+  One false start: `mmap2` passes its arguments as a struct on the
+  *kernel* stack (the entry pushes the registers), which the check
+  refused; only the old `mmap` gets a user pointer.
+- *Leaks that only a long run shows.* With `stress 20` (2400 processes),
+  everything stopped after 660 processes: semaphores ran out, 682 in use
+  for 9 processes. Two causes. `allocateSemaphore` used the first slot
+  looked at as the id, but the semaphore went into the first *free* slot
+  after it: when slots were skipped, `freeSemaphore` looked in the wrong
+  slot and gave up. And libmynos's `malloc` makes a semaphore in every
+  process, which nobody freed: semaphores now record the process that
+  made them (`initSem`), and are freed when it ends. Then memory: 20
+  pages lost; `HEAP_CHECK` now counts blocks in use by caller, and the
+  count for `__lmt_newPdListEl` grew by one per process. `lmemtrack`'s
+  forced allocation, splitting the *first* free area, created the new
+  element but did not make it the head of the list: one element lost per
+  process, and with it the free space between a program and its stack.
+
+*Lessons:* a short stress run finds the crashes, only a long one finds
+the leaks; count resources (semaphores, channels, heap blocks by caller)
+from gdb when something runs out; check pointers at the system call
+boundary, because the kernel's own addresses never fault.

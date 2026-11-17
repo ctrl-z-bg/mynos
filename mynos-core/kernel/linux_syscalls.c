@@ -40,8 +40,14 @@ struct tms {
               clock_t tms_cutime; /* user time of children */
               clock_t tms_cstime; /* system time of children */
        };
+/* a pointer from the process: its own memory, or -EFAULT (the kernel
+   could write into itself through a pointer below the user space, where
+   no page fault stops it) */
+#define USER(P, N) do { if (!__mem_userArea((P), (N))) return -14; } while (0)
+
 void _linux_syscall_times(struct tms *buf) {
   static uint32_t tm = 0;
+  if (!__mem_userArea(buf, sizeof(struct tms))) return;
   tm += 10;
   buf->tms_utime = buf->tms_stime = tm;
 }
@@ -201,7 +207,7 @@ __asm__ (".pushsection .text\n" \
 	 "   call _linux_syscall_getppid\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_mmap:\n"\
-	 "   call _linux_syscall_mmap\n"\
+	 "   call _linux_syscall_old_mmap\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_munmap:\n"\
 	 "   call _linux_syscall_munmap\n"\
@@ -294,6 +300,8 @@ __asm__ (".pushsection .text\n" \
 /* writev (146): musl's stdio writes through it */
 int _linux_syscall_writev(int fd, const struct iovec * iov, int iovcnt) {
   int i, total = 0;
+  if (iovcnt < 0 || iovcnt > 1024) return -22;
+  USER(iov, iovcnt * sizeof(struct iovec));
   for (i = 0; i < iovcnt; i++) {
     int n = _linux_syscall_write(fd, iov[i].iov_base, iov[i].iov_len);
     if (n < 0) return total ? total : n;
@@ -313,6 +321,7 @@ struct timeval32  { int32_t tv_sec; int32_t tv_usec; };
 /* time (13) */
 int _linux_syscall_time(int32_t * t) {
   uint32_t sec, nsec;
+  if (t) USER(t, sizeof *t);
   time_now(CLOCK_REALTIME, &sec, &nsec);
   if (t) *t = sec;
   return sec;
@@ -321,6 +330,7 @@ int _linux_syscall_time(int32_t * t) {
 /* gettimeofday (78) */
 int _linux_syscall_gettimeofday(struct timeval32 * tv, void * tz) {
   uint32_t sec, nsec;
+  if (tv) USER(tv, sizeof *tv);
   time_now(CLOCK_REALTIME, &sec, &nsec);
   if (tv) { tv->tv_sec = sec; tv->tv_usec = nsec / 1000; }
   return 0;
@@ -329,6 +339,7 @@ int _linux_syscall_gettimeofday(struct timeval32 * tv, void * tz) {
 /* clock_gettime (265) and its time64 variant (403), used by musl on i386 */
 int _linux_syscall_clock_gettime(uint32_t clock, struct timespec32 * ts) {
   uint32_t sec, nsec;
+  USER(ts, sizeof *ts);
   time_now(clock, &sec, &nsec);
   ts->tv_sec = sec; ts->tv_nsec = nsec;
   return 0;
@@ -336,6 +347,7 @@ int _linux_syscall_clock_gettime(uint32_t clock, struct timespec32 * ts) {
 
 int _linux_syscall_clock_gettime64(uint32_t clock, struct timespec64 * ts) {
   uint32_t sec, nsec;
+  USER(ts, sizeof *ts);
   time_now(clock, &sec, &nsec);
   ts->tv_sec = sec; ts->tv_nsec = nsec;
   return 0;
@@ -357,6 +369,8 @@ static int sleep_for(uint32_t clock, int flags, uint32_t sec, uint32_t nsec) {
 
 /* nanosleep (162); the remaining time is always 0: no signals interrupt */
 int _linux_syscall_nanosleep(struct timespec32 * req, struct timespec32 * rem) {
+  USER(req, sizeof *req);
+  if (rem) USER(rem, sizeof *rem);
   if (req->tv_sec < 0 || req->tv_nsec < 0 || req->tv_nsec >= 1000000000)
     return -22; /* EINVAL */
   sleep_for(CLOCK_MONOTONIC, 0, req->tv_sec, req->tv_nsec);
@@ -436,6 +450,7 @@ void tls_load(void * t) {
 }
 
 int _linux_syscall_set_thread_area(struct user_desc * u_info) {
+  USER(u_info, sizeof *u_info);
   if (u_info->entry_number != (uint32_t)-1 &&
       u_info->entry_number != GDT_TLS_INDEX)
     return -22; /* EINVAL */
@@ -488,6 +503,7 @@ void _linux_syscall_exit(int status) {
 
 int _linux_syscall_wait4(int pid, int * status, int options, void * rusage) {
   process_descriptor_t * self = processTable[currProcess];
+  if (status) USER(status, sizeof *status);
   while (1) {
     int i, children = 0;
     for (i = 1; i < (int)numProcess; i++) {
@@ -518,7 +534,7 @@ int _linux_syscall_wait4(int pid, int * status, int options, void * rusage) {
    console service. */
 int _linux_syscall_ioctl(int fd, uint32_t req, unsigned short * arg) {
   if (fd >= 0 && fd <= 2 && req == 0x5413 /* TIOCGWINSZ */) {
-    if ((uint32_t)arg < ((uint32_t)USERMINPAGE << 12)) return -14;
+    USER(arg, 4 * sizeof *arg);
     arg[0] = 25;          /* rows */
     arg[1] = 80;          /* columns */
     arg[2] = arg[3] = 0;
@@ -534,7 +550,7 @@ int _linux_syscall_getrandom(unsigned char * buf, uint32_t len,
 			     uint32_t flags) {
   static uint32_t x = 0;
   uint32_t lo, hi, i;
-  if ((uint32_t)buf < ((uint32_t)USERMINPAGE << 12)) return -14; /* -EFAULT */
+  USER(buf, len);
   asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
   x ^= lo ^ (hi << 16) ^ timerTicks ^ (currProcess << 24);
   if (x == 0) x = 0x9E3779B9;
@@ -580,6 +596,7 @@ int _linux_syscall_close(int fd) {
 
 int _linux_syscall_read(int fd, const void *buf, size_t count) {
   if (fd < 3) return 0;   /* no stdin yet: end of file */
+  USER(buf, count);
   if (bytecode_pos >= bytecode.len) return 0;
   if (count > bytecode.len - bytecode_pos)
     count = bytecode.len - bytecode_pos;
@@ -648,16 +665,19 @@ static int bytecode_stat(struct stat64 * st) {
 
 /* stat64 (195), fstat64 (197) */
 int _linux_syscall_stat64(char * path, struct stat64 * st) {
+  USER(st, sizeof *st);
   return bytecode_stat(st);
 }
 
 int _linux_syscall_fstat64(int fd, struct stat64 * st) {
+  USER(st, sizeof *st);
   return bytecode_stat(st);
 }
 
 int _linux_syscall_write(int fd, const void *buf, size_t count) {
   int i;
 
+  USER(buf, count);
   for (i = 0; i < count; i++)
     _print_char(((char*)buf)[i], CHAR_USER_ATTRIB);
   return count;
@@ -680,16 +700,31 @@ int _linux_syscall_munmap(void *start, size_t length) {
   print_long((long32_t)length);
   print_char('\n');
 #endif
+  if (length == 0 || (uint32_t)start < USER_AREA_START ||
+      (uint32_t)start + length < (uint32_t)start ||
+      (uint32_t)start + length > USER_AREA_END)
+    return -22;
   npages = (length - 1) / PAGE_SIZE + 1;
   if (__OS_releasePages(start, npages, 1, 1) == NULL)
     return -1;
   return 0;
 }
 
+/* mmap2 (192) passes the arguments in registers: args points to them on
+   the kernel stack (the system call entry pushed them); the old mmap (90)
+   passes a pointer to a struct in the process's memory */
+void * _linux_syscall_mmap(struct mmap_args * args);
+
+void * _linux_syscall_old_mmap(struct mmap_args * args) {
+  if (!__mem_userArea(args, sizeof *args)) return (void *)-14;
+  return _linux_syscall_mmap(args);
+}
+
 void * _linux_syscall_mmap(struct mmap_args * args) {
   uint32_t npages;
   void * ret;
 
+  if (args->length == 0) return (void *)-22;
   npages = (args->length - 1) / PAGE_SIZE + 1;
   ret =__OS_askPages(npages, 0, PF_READWRITE | PF_USER);
   if (ret == NULL)

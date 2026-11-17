@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "mem/mem.h"
 #include "global.h"
 #include "pic.h"
 #include "io.h"
@@ -27,6 +28,7 @@
 #include "sem.h"
 #include "irq.h"
 #include "services.h"
+#include "mynos.h"
 
 #define NUMSEM 20
 
@@ -60,6 +62,7 @@ void __OS_initExternalIRQs() {
 
 int __OS_driverRegister(char * name, uint32_t irq, 
 			uint32_t * io, uint32_t * mem) {
+  if (irq >= NUMSEM) return MYNOS_ERR_INVALID;
   if (__OS_service_registerService(name) == -1) return -1;
   return (irqSemTable[irq] = __OS_sem_allocateSemaphore(0));
 }

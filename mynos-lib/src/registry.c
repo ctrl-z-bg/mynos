@@ -61,7 +61,10 @@ int mynos_registryRegister(char * name) {
   mynos_send(channel, &cmd, sizeof(mynos_reg_cmd_t), 0);
 
   /* wait the response */
-  mynos_recv(channel, &msg, 0, 0);
+  if (mynos_recv(channel, &msg, 0, 0) < 0) {
+    mynos_freeChannel(channel);
+    return MYNOS_ERR_BROKEN;
+  }
 
   port = *((int*)(msg->start));
 

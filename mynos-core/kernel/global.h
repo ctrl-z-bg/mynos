@@ -38,7 +38,11 @@
 
 /* kernel messages go to the screen too (see video.c); a panic always does */
 extern int kernel_on_screen;
-#define KPANIC(MSG) {kernel_on_screen = 1; printk(MSG); while(1){}}
+/* a kernel error it cannot go on from: print it and stop the machine
+   (with interrupts off: other processes must not run on a broken kernel) */
+#define KPANIC(MSG) { __asm__ volatile ("cli"); kernel_on_screen = 1; \
+                      printk("\nKERNEL PANIC: "); printk(MSG); \
+                      for (;;) __asm__ volatile ("hlt"); }
 
 typedef char           byte_t;
 typedef unsigned char  ubyte_t;

@@ -22,6 +22,7 @@
 #   system/ramdisk.dsk               the system RAM disk: init, consoled, the shell
 #                                    (the OCaml toplevel), programs (dev only)
 #   tests/abi/abi                    system call checks
+#   tests/stress/stress, ramdisk.dsk kernel stress test
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 set -eu
 
@@ -35,6 +36,7 @@ make -C mynos-lib
 make -C services
 make -C ${MYNOS_RUNTIME:-mynos-byterun/src}
 make -C tests/abi
+make -C tests/stress
 if [ "${MYNOS_RUNTIME:-}" = mynos-runtime ]; then
   make -C mynos-lib/ocaml
   (cd tests/mynos-ocaml && ocamlc -use-prims ../../mynos-runtime/primitives \

@@ -36,6 +36,8 @@ typedef struct _semaphore_t {
     ubyte_t used;
     int id;
     uint32_t value;
+    int owner;      /* the process that made it (initSem), or -1: the
+		       kernel's, freed by the kernel */
     process_queue_t queue[1];
 } semaphore_t;
 
@@ -112,15 +114,19 @@ int __OS_sem_allocateSemaphore(uint32_t n) {
     for (i = 0; 
 	 (i < MAXSEM) && semaphores.list[(i+semaphores.last)%MAXSEM].used; 
 	 i++);
-    l = semaphores.last;
-    semaphores.last += i + 1;
-    i = (i+l)%MAXSEM;
-    /* i contains a free semaphore index */
-
     if ( i == MAXSEM ) {
 	__unlock(&(semaphores.mutex));
 	return(-1);
     }
+    /* the id: the free slot's index plus a multiple of MAXSEM, so that
+       id % MAXSEM finds the slot again (an id of semaphores.last, the
+       first slot looked at, missed when slots were skipped: freeing that
+       semaphore then failed, and the table filled up) */
+    l = semaphores.last + i;
+    if (l >= 0x40000000) l %= MAXSEM;      /* ids stay positive */
+    semaphores.last = l + 1;
+    i = l % MAXSEM;
+    /* i contains a free semaphore index */
 
     semaphores.nused++;    
     
@@ -131,6 +137,7 @@ int __OS_sem_allocateSemaphore(uint32_t n) {
     semaphores.list[i].used = 1; 
     semaphores.list[i].id = l;
     semaphores.list[i].value = n;
+    semaphores.list[i].owner = -1;
     __unlock(&(semaphores.list[i].mutex));
     __unlock(&(semaphores.mutex));
 #ifdef DEBUG
@@ -142,9 +149,27 @@ int __OS_sem_allocateSemaphore(uint32_t n) {
 }
 
 
+/* initSem (9): a semaphore of the calling process, freed when it ends if
+   it does not free it (libmynos's malloc makes one in every process: one
+   leaked with each process, until the table was full) */
+int __OS_sem_allocateUserSemaphore(uint32_t n) {
+    int id = __OS_sem_allocateSemaphore(n);
+    if (id >= 0) semaphores.list[id % MAXSEM].owner = currProcess;
+    return id;
+}
+
+/* the semaphores a process made: at its end */
+void __OS_sem_freeProcessSemaphores(int pid) {
+    uint32_t i;
+    for (i = 0; i < MAXSEM; i++)
+	if (semaphores.list[i].used && semaphores.list[i].owner == pid)
+	    __OS_sem_freeSemaphore(semaphores.list[i].id);
+}
+
 /* [*] WARNING: DEADLOCK ALLOCATE-FREE (it should be ok)*/
 int __OS_sem_freeSemaphore(int semid) {
     uint32_t i = semid%MAXSEM;
+    if (semid < 0) return(-1);   /* a negative id indexed before the table */
 
     /* It could steal the semaphore to someone, the programmer should take care
        of freeing only _dead_ semaphores */
@@ -166,6 +191,7 @@ int __OS_sem_freeSemaphore(int semid) {
 int __OS_sem_P(int semid) {
     uint32_t *sm;
     int i=semid%MAXSEM;
+    if (semid < 0) return(-1);   /* a negative id indexed before the table */
     
     sm = &(semaphores.list[i].mutex);
 
@@ -213,6 +239,7 @@ int __OS_sem_P(int semid) {
 int __OS_sem_tryP(int semid) {
     uint32_t *sm;
     uint32_t i=semid%MAXSEM;
+    if (semid < 0) return(-1);   /* a negative id indexed before the table */
     
     sm = &(semaphores.list[i].mutex);
     __lock(sm);
@@ -242,6 +269,7 @@ int __OS_sem_V(int semid) {
     tss_t * p;
     uint32_t i=semid%MAXSEM;
     uint32_t tw;
+    if (semid < 0) return(-1);   /* a negative id indexed before the table */
     
     sm = &(semaphores.list[i].mutex);
     __lock(sm);

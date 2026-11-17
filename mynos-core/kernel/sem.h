@@ -21,6 +21,8 @@
 int __OS_sem_initSemaphores();
 int __OS_sem_allocateSemaphore(uint32_t n);
 int __OS_sem_freeSemaphore(int semid);
+int __OS_sem_allocateUserSemaphore(uint32_t n);
+void __OS_sem_freeProcessSemaphores(int pid);
 int __OS_sem_P(int semid);
 int __OS_sem_tryP(int semid);
 int __OS_sem_V(int semid);

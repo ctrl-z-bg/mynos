@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "mem/mem.h"
 #include "global.h"
 #include "video.h"
 #include "sem.h"
@@ -120,8 +121,8 @@ static int findService(char * name) {
 }
 
 int __OS_service_registerService(char * name) {
+  if (__mem_userString(name, 256) < 0) return -1;
   if (numEntry == MAXSERVICES) return -1;
-  /* TODO: check on name */
   do {
     if (lastInsertedEntry < (MAXSERVICES - 1))
       lastInsertedEntry++;
@@ -143,7 +144,7 @@ int __OS_service_registerClient(char * name) {
   int entry;
   int clientEntry;
 
-  /* TODO: check the name */
+  if (__mem_userString(name, 256) < 0) return -1;
   if ((entry = findService(name)) == -1)
     return -1;
 

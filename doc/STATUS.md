@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-16
+Last updated: 2026-11-17
 
 ---
 
@@ -56,7 +56,12 @@ talking through IPC.
   the current process's page tables so the kernel can edit them (full layout in
   `mynos-core/doc/MyNOS-note.txt`). Physical pages are tracked with a bitmap
   (`physicalmem.c`); each process's free linear space is a list of areas
-  (`lmemtrack.c`). The kernel allocator is `kmalloc`/`kfree` (`dynalloc.c`).
+  (`lmemtrack.c`). The kernel allocator is `kmalloc`/`kfree` (`dynalloc.c`):
+  size classes from 32 bytes to 2 KB, whole pages above, a header with a
+  magic number on every block, blocks given zeroed; `HEAP_CHECK` adds
+  poisoning of freed blocks and a count of blocks in use by caller.
+  Pointers from processes are checked by `__mem_userArea` (user pages of
+  the caller, never the kernel's) before the kernel reads or writes them.
   The RAM disk is mapped read-only from `0x40400000` in every process, by
   page tables shared between processes (up to 64 MB).
   `externalmem.c` lets the kernel manipulate another process's virtual memory.
@@ -254,7 +259,12 @@ IPC; typed keys are echoed on screen and sent to the serial port.
     OCaml 3.06 (see the journal); that is where the Linux ABI work began.
 - **Tests.** `tools/run-tests.sh` boots the whole system headless and checks
   the console output, which the kernel mirrors to COM2. `tests/abi` checks
-  the system call fixes; with the dev toolchain, OCaml tests cover effects,
+  the system call fixes; `tests/stress` (C, both toolchains) stresses the
+  kernel: 120 client processes sending messages from 1 byte to 64 KB, timers
+  of 16 threads expiring together, semaphore ping-pong, invalid arguments,
+  unknown calls and bad pointers, and checks that the memory comes back
+  (`stress N` repeats it N times: 20 runs 2400 processes). With the dev
+  toolchain, OCaml tests cover effects,
   the `Mynos` library, files, the console, spawning programs
   (`tests/spawn`) and the shell, typing phrases through QEMU's monitor
   (`tools/type-keys.py`). Both toolchains pass.
@@ -317,6 +327,18 @@ IPC; typed keys are echoed on screen and sent to the serial port.
   - The RAM size probe in `start.asm` (2002) wrote `0x12345678` into the
     last dword of every megabyte without restoring it, corrupting modules
     that crossed a megabyte boundary. The size now comes from multiboot.
+  - Found by the kernel stress test (2026-11-17): a new process's tss had
+    uninitialized fields (a garbage `justForked` sent the scheduler down
+    the fork path); `KPANIC` spun with interrupts on, so other processes
+    ran on a broken kernel; `changeOwner` and `allocPortP` indexed the port
+    table unchecked, and semaphore calls the semaphore table with negative
+    ids; a negative channel was a "kernel channel" stub that accepted
+    anything; the kernel read and wrote through processes' pointers
+    unchecked, even into itself; the native system call entry clobbered
+    `ecx` and `edx`; semaphores whose slot was found after skipping used
+    ones could never be freed, and libmynos's `malloc` made one per
+    process that nobody freed; `lmemtrack` lost an element (and an area of
+    the process's linear space) at every process creation.
   - The Linux syscall entry did not preserve registers; multiboot modules
     above 4 MB were neither reserved nor mapped; pages allocated on first use
     were not zeroed; the bytecode "file" had no real seek semantics. Found
@@ -350,6 +372,7 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 | mynos-pg9 | `mynos-byterun/src/floats.c` | `frexp()`/`modf()` return 1.0 (legacy 3.06 runtime only; the 5.5 runtime uses musl's libm). |
 | mynos-09i | `mynos-runtime/` | No OCaml `Thread` module yet (needs systhreads and unix stubs); domains work. |
 | mynos-awn | `mynos-core/kernel/` | One CPU: threads and domains run in turn, not in parallel. |
+| mynos-nn7 | `mynos-core/kernel/` | No permissions between processes (any process can free another's semaphore or enable an IRQ); a bad user pointer met halfway through a system call ends the process with kernel state possibly half updated. |
 | — | `mynos-core/kernel/threads.c` | Native MyNOS threads (`mynos_threadCreate`) share their creator's TLS: code that uses the C library should use pthreads. |
 | — | `mynos-lib/src/fileio.c` | `/` (memrofs) is read-only and flat, `/tmp` (tmpfs) flat and in memory; `/disk` (fatfs) has directories. `rename` within one service; paths up to 63 characters inside a service. |
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
@@ -543,6 +566,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   and file names, its own history, readline-like keys. Fixed the dates
   fatfs wrote (the seconds since 1970 overflowed OCaml's 31-bit int).
   Closed mynos-rix.
+- **2026-11-17** — Kernel robustness: a new heap allocator (size classes,
+  checked headers, zeroed blocks), and a kernel stress test
+  (`tests/stress`) that found and drove the fix of eleven kernel bugs:
+  uninitialized tss fields, unchecked table indexes, pointers from
+  processes used unchecked (now `__mem_userArea` on every system call that
+  takes one), clobbered registers, two semaphore leaks and a linear space
+  list leak; `KPANIC` now stops the machine. 2400 processes run with no
+  memory lost. Follow-up: mynos-nn7. Closed mynos-0fw.
 - **2026-11-16** — The original website (mynos.sourceforge.net, from the
   Wayback Machine) archived as static files in `doc/website/`, with the
   2002-2004 news posts and the 2002 and 2004 test packages. Closed

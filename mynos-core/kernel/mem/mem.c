@@ -467,6 +467,45 @@ static void __allocateOnUse(uint32_t * pte, uint32_t addr) {
 
 //#define DEBUG
 /* an invalid access from user mode terminates the process (SIGSEGV) */
+int __mem_userArea(const void * start, uint32_t size) {
+  uint32_t a = (uint32_t)start, end, page;
+  if (size == 0) return 1;
+  end = a + size;
+  if (end < a || a < USER_AREA_START || end > USER_AREA_END) return 0;
+  for (page = a >> 12; page <= (end - 1) >> 12; page++) {
+    uint32_t pte;
+    if (!(*(uint32_t*)__GET_PAGE_DIR_ENTRY(page >> 10) & PF_PRESENT))
+      return 0;
+    pte = *(uint32_t*)__GET_PAGE_TABLE_ENTRY(page >> 10, page & 1023);
+    if (!(pte & PF_USER)) return 0;      /* a kernel stack of a thread */
+    if (!(pte & (PF_PRESENT | PF_LOGICAL_PRESENT | PF_COW))) return 0;
+  }
+  return 1;
+}
+
+int __mem_userString(const char * s, uint32_t max) {
+  uint32_t i;
+  for (i = 0; i < max; i++) {
+    /* a page at a time */
+    if ((i == 0 || (((uint32_t)(s + i)) & 0xFFF) == 0) &&
+	!__mem_userArea(s + i, 1))
+      return -1;
+    if (s[i] == 0) return i;
+  }
+  return -1;
+}
+
+int __mem_userVector(char ** v, uint32_t max_entries, uint32_t max_len) {
+  uint32_t i;
+  if (v == NULL) return 0;
+  for (i = 0; i < max_entries; i++) {
+    if (!__mem_userArea(&v[i], sizeof(char *))) return -1;
+    if (v[i] == NULL) return 0;
+    if (__mem_userString(v[i], max_len) < 0) return -1;
+  }
+  return -1;
+}
+
 static void __userSegfault(uint32_t addr) {
   printk("process ");
   print_ulong(currProcess);
@@ -514,6 +553,15 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   if ((*(uint32_t*)__GET_PAGE_DIR_ENTRY(__ADDRESS_PD_INDEX(addr)) &
        PF_PRESENT) == 0) {
     if (errcode & 4) __userSegfault(addr);
+    /* the kernel, in a system call, on a bad pointer of the process: end
+       the process, not the system */
+    if (addr >= USER_AREA_START && addr < USER_AREA_END) __userSegfault(addr);
+    kernel_on_screen = 1;
+    printk("kernel page fault at ");
+    print_ulong_hex(addr);
+    printk(", process ");
+    print_ulong(currProcess);
+    print_char('\n');
     KPANIC("page fault (?)");
   }
 
@@ -529,6 +577,13 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode) {
   if (!((*pte) & PF_LOGICAL_PRESENT) &&
       !((*pte) & PF_COW)) { // not allocated & not cow
     if (errcode & 4) __userSegfault(addr);
+    if (addr >= USER_AREA_START && addr < USER_AREA_END) __userSegfault(addr);
+    kernel_on_screen = 1;
+    printk("kernel page fault at ");
+    print_ulong_hex(addr);
+    printk(", process ");
+    print_ulong(currProcess);
+    print_char('\n');
     KPANIC("page fault");
   }
   if (__number_of_free_physical_pages == 0)

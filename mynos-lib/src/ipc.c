@@ -48,8 +48,12 @@ static int  __mynos_recv(int channel, mynos_msg_t * msg,
 int mynos_recv(int channel, mynos_msg_t **pmsg, 
 		   unsigned int flags, unsigned int timeout) {
   void * shortmsg = malloc(MYNOS_SHORT_MESSAGE_SIZE);
+  int ret;
   (*pmsg) = (mynos_msg_t*)malloc(sizeof(mynos_msg_t));
-  return __mynos_recv(channel, *pmsg, shortmsg, flags, timeout);
+  ret = __mynos_recv(channel, *pmsg, shortmsg, flags, timeout);
+  /* on an error __mynos_recv freed both: no dangling pointer */
+  if (ret < 0) *pmsg = NULL;
+  return ret;
 }
 
 void mynos_signalSync(int channel) {
@@ -70,6 +74,8 @@ int mynos_freeMsg(mynos_msg_t ** pmsg) {
   mynos_msg_t * msg = *pmsg;
   void * start;
   unsigned int len;
+  if (msg == NULL) return 0;
+  *pmsg = NULL;
   if (msg->isShort)
     free(msg->start);
   else {

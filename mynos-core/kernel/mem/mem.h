@@ -237,4 +237,23 @@ uint32_t __mem_copyPageToCOWSpace(uint32_t addr);
 void __mem_cowManager(uint32_t addr);
 void __mem_allocateOnUse(uint32_t addr);
 
+/* Pointers from processes. The user part of a process's linear space runs
+   from USERMINPAGE to the bottom of its kernel stack (process.c: the
+   process info pages and the kernel stack sit above the user stack, under
+   the page table mirrors). */
+#define USER_AREA_START ((uint32_t)USERMINPAGE << 12)
+#define USER_AREA_END   ((uint32_t)(0 - (0x400000 + 0x1000)) - \
+                         PAGE_SIZE * (PROCESS_INFO_NPAGES + KERNEL_STACK_NPAGES))
+
+/* is [start, start + size) memory of the current process the kernel may
+   read or write for it? user pages, allocated or to be allocated on use;
+   no wrap around; never the kernel's */
+int __mem_userArea(const void * start, uint32_t size);
+/* the length of the string at s if all of it (and its final 0) is user
+   memory and it is shorter than max, else -1 */
+int __mem_userString(const char * s, uint32_t max);
+/* a NULL-terminated vector of strings (argv): 0 if all of it is user
+   memory, else -1 */
+int __mem_userVector(char ** v, uint32_t max_entries, uint32_t max_len);
+
 #endif

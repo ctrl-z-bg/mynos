@@ -45,6 +45,7 @@
 #define ENOSYS    38
 #define EAGAIN    11
 #define EINVAL    22
+#define EFAULT    14
 #define ETIMEDOUT 110
 #define ENOMEM    12
 
@@ -147,11 +148,15 @@ static int32_t futex(int32_t * addr, int op, int32_t val, uint32_t arg4,
   int32_t ms = -1;
   int cmd = op & FUTEX_CMD_MASK;
 
-  if ((uint32_t)addr < ((uint32_t)USERMINPAGE << 12)) return -EINVAL;
+  if (!__mem_userArea(addr, sizeof *addr)) return -EFAULT;
+  if (addr2 && (cmd == FUTEX_REQUEUE || cmd == FUTEX_CMP_REQUEUE) &&
+      !__mem_userArea(addr2, sizeof *addr2))
+    return -EFAULT;
   switch (cmd) {
   case FUTEX_WAIT:
   case FUTEX_WAIT_BITSET:
     if (arg4) {
+      if (!__mem_userArea((void *)arg4, ts64 ? 16 : 8)) return -EFAULT;
       /* a struct timespec (time_t of 32 or 64 bits): the low 32 bits of
 	 the seconds are enough for a timeout */
       int32_t sec = ((int32_t *)arg4)[0];
@@ -208,6 +213,11 @@ int32_t _linux_syscall_clone(uint32_t flags, uint32_t stack, int32_t * ptid,
   /* only threads: fork is its own call */
   if ((flags & (CLONE_VM | CLONE_THREAD)) != (CLONE_VM | CLONE_THREAD))
     return -ENOSYS;
+  if (((flags & CLONE_SETTLS) && !__mem_userArea(tls, sizeof *tls)) ||
+      ((flags & CLONE_PARENT_SETTID) && !__mem_userArea(ptid, sizeof *ptid)) ||
+      ((flags & (CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID)) &&
+       !__mem_userArea(ctid, sizeof *ctid)))
+    return -EFAULT;
   if ((tss = threadAlloc()) == NULL) return -ENOMEM;
 
   if (flags & CLONE_SETTLS) {
@@ -253,7 +263,8 @@ void _linux_syscall_exit_thread(int status) {
     _linux_syscall_exit(status);
     return;
   }
-  if (currThread->clearTid) {          /* pthread_join waits on it */
+  if (currThread->clearTid &&          /* pthread_join waits on it */
+      __mem_userArea(currThread->clearTid, sizeof(int32_t))) {
     *currThread->clearTid = 0;
     futexWake(currThread->clearTid, 0x7FFFFFFF);
   }
@@ -265,6 +276,7 @@ int32_t _linux_syscall_gettid(void) {
 }
 
 int32_t _linux_syscall_set_tid_address(int32_t * tidptr) {
+  if (tidptr && !__mem_userArea(tidptr, sizeof *tidptr)) return -EFAULT;
   currThread->clearTid = tidptr;
   return currThread->tid;
 }

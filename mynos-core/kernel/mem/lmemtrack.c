@@ -210,6 +210,9 @@ uint32_t __lmt_forceAllocation(pdListEl **pdListBgn, uint32_t fromPage, uint32_t
 					runner, runner->prev);
     if ( runner->prev )
       runner->prev->next = newEl;
+    else            /* the first area: the list starts with the new one
+		       (it was lost, with its pages, once per process) */
+      *pdListBgn = newEl;
     runner->bgn = fromPage+npages;
     runner->prev = newEl;
   }

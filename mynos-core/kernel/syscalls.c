@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "mem/mem.h"
 #include "global.h"
 #include "video.h"
 #include "syscalls.h"
@@ -36,6 +37,10 @@ void _mynos_syscalls_trap_TRAP();
 __asm__ (".pushsection .text\n" \
 	 ".globl _mynos_syscalls_trap_TRAP         \n"\
 	 "_mynos_syscalls_trap_TRAP:               \n"\
+	 /* the C functions may change ecx and edx: the caller gets them back
+	    (only eax, the result, changes) */
+	 "   pushl %edx\n"\
+	 "   pushl %ecx\n"\
 	 "   cmpl $3, %eax\n"\
 	 "   je .mynos_send\n"\
 	 "   cmpl $4, %eax\n"\
@@ -138,7 +143,7 @@ __asm__ (".pushsection .text\n" \
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_semInit:\n"\
 	 "   pushl %ebx\n"
-	 "   call __OS_sem_allocateSemaphore\n"\
+	 "   call __OS_sem_allocateUserSemaphore\n"\
 	 "   popl %ebx\n"
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_semFree:\n"\
@@ -257,6 +262,8 @@ __asm__ (".pushsection .text\n" \
 	 "   popl  %ebx\n"\
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".exit_mynos_syscall:\n"\
+	 "   popl %ecx\n"\
+	 "   popl %edx\n"\
 	 "   iret                \n"\
 	 ".popsection\n");
 
@@ -278,9 +285,8 @@ int32_t _mynos_syscall_WRONGSYSCALL(uint32_t syscall_id) {
    vectors, either may be NULL). Returns the pid or a MYNOS_ERR_* code. */
 int _mynos_syscall_spawn(uint32_t * elf, uint32_t len, char ** argv,
 			 char ** envp) {
-  if ((uint32_t)elf < ((uint32_t)USERMINPAGE << 12) ||
-      (argv && (uint32_t)argv < ((uint32_t)USERMINPAGE << 12)) ||
-      (envp && (uint32_t)envp < ((uint32_t)USERMINPAGE << 12)))
+  if (!__mem_userArea(elf, len) || __mem_userVector(argv, 1024, 4096) < 0 ||
+      __mem_userVector(envp, 1024, 4096) < 0)
     return MYNOS_ERR_INVALID;
   return createProcess(elf, len, argv, envp, currProcess);
 }
@@ -289,8 +295,8 @@ int _mynos_syscall_spawn(uint32_t * elf, uint32_t len, char ** argv,
    and the screen only while kernel messages are shown there) */
 int _mynos_syscall_log(const char * s, uint32_t len) {
   uint32_t i;
-  if ((uint32_t)s < ((uint32_t)USERMINPAGE << 12)) return MYNOS_ERR_INVALID;
   if (len > 1024) len = 1024;
+  if (!__mem_userArea(s, len)) return MYNOS_ERR_INVALID;
   for (i = 0; i < len; i++)
     print_char(s[i]);
   return 0;
@@ -302,13 +308,13 @@ int32_t _mynos_syscall_setTimer(ulong32_t usec) {
 }
 
 int _mynos_syscall_enableIrq(ushort16_t n) {
-  /* perform check ... */
+  if (n >= 16) return MYNOS_ERR_INVALID;
   enable_irq(n);
   return 0;
 }
 
 int _mynos_syscall_disableIrq(ushort16_t n) {
-  /* perform check ... */
+  if (n >= 16) return MYNOS_ERR_INVALID;
   disable_irq(n);
   return 0;
 }

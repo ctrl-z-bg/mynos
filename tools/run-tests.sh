@@ -14,6 +14,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 log=$tmp/log1 log2=$tmp/log2 log3=$tmp/log3 log4=$tmp/log4 log5=$tmp/log5
 log6=$tmp/log6 log7=$tmp/log7 log8=$tmp/log8 log9=$tmp/log9 logf=$tmp/logf
+logs=$tmp/logs
 
 timeout "${WAIT:-10}" tools/run-qemu.sh \
     "$ocamlrun" \
@@ -109,6 +110,23 @@ if [ -f tests/files/ramdisk.dsk ]; then
         tests/files/ramdisk.dsk \
         -- -display none -serial null -serial "file:$log5" || true
     cat "$log5" >> "$log"
+fi
+
+# the kernel stress test (C, both toolchains): processes, IPC, timers,
+# semaphores, invalid arguments and pointers, memory coming back
+if [ -f tests/stress/ramdisk.dsk ]; then
+    timeout "${WAIT_STRESS:-120}" tools/run-qemu.sh \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        tests/stress/stress tests/stress/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$logs" &
+    qemu=$!
+    i=0
+    while [ $i -lt "${WAIT_STRESS:-120}" ] &&
+          ! grep -aq 'stress: all checks passed\|checks failed\|PANIC' "$logs" 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    kill $qemu 2>/dev/null; wait $qemu 2>/dev/null || true
+    cat "$logs" >> "$log"
 fi
 
 # sixth boot: init.byte starts other programs from the RAM disk (about
@@ -226,6 +244,9 @@ expect "Service keyboard registered"
 expect "Service serial registered"
 expect "Hello from memrofs!"
 expect "abi: all checks passed"
+if [ -f tests/stress/ramdisk.dsk ]; then
+    expect "stress: all checks passed"
+fi
 if [ -f tests/effects/effects.byte ]; then
     expect "effects ok"
 fi
@@ -337,6 +358,7 @@ fi
 reject "PANIC"
 reject "page fault (?)"
 reject "Problems releasing pages"
+reject "kernel heap:"
 reject "FAIL"
 
 if [ $fail -ne 0 ]; then

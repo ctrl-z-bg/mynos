@@ -62,6 +62,7 @@ int32_t __OS_port_allocPort(pid_t pid) {
 int32_t __OS_port_allocPortP(int32_t port, pid_t pid) {
   port_t * p;
 
+  if (port < 0 || port >= MAXPORTS) return MYNOS_ERR_INVALID;
   if (pTable.table[port] != NULL)
     return MYNOS_ERR_BUSY;
 
@@ -103,8 +104,11 @@ int32_t __OS_port_freePort(int32_t p) {
 }
 
 int32_t __OS_port_changeOwner(int32_t port, pid_t newpid) {
-  port_t * p = pTable.table[port];
+  port_t * p = getPort(port);
   if (p == NULL) return MYNOS_ERR_INVALID;
+  if (newpid < 0 || newpid >= MAXPROCESSES || processTable[newpid] == NULL ||
+      !processTable[newpid]->isAlive)
+    return MYNOS_ERR_INVALID;
   if (p->owner != processTable[currProcess]->pid) return MYNOS_ERR_DENY;
 
   listExtractElem(processTable[currProcess]->portList, (void*)port, NULL);

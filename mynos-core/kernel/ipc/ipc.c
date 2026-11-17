@@ -24,6 +24,7 @@
 #include "channel.h"
 #include "mem/dynalloc.h"
 #include "mem/externalmem.h"
+#include "mem/mem.h"
 #include "process.h"
 #include "kutils.h"
 #include "sem.h"
@@ -48,6 +49,9 @@ int32_t __OS_ipc_send(int32_t c, void * start, uint32_t size,
   // check if the channel exists
   if (getChannel(c) == NULL) return MYNOS_ERR_INVALID;
 
+  // the message must be the sender's own memory
+  if (!justSync && !__mem_userArea(start, size)) return MYNOS_ERR_INVALID;
+
   // check if I'm a channel partner
   channel = getMyReadChannel(c);
   if (channel->receiver != processTable[currProcess]->pid)
@@ -64,7 +68,6 @@ int32_t __OS_ipc_send(int32_t c, void * start, uint32_t size,
   spage = uintstart >> 12;
   tpage = size ? (uintstart + size - 1) >> 12 : spage;
   
-  // TODO CHECK AREA: MYNOS_ERR_IPC_INVALID_AREA
 
   // use external page mapping only if the message is big enaugh or shared
   if (!justSync && ((size > MYNOS_SHORT_MESSAGE_SIZE) ||
@@ -118,29 +121,17 @@ int32_t __OS_ipc_send(int32_t c, void * start, uint32_t size,
   return 0;
 }
 
-int32_t kernelChannel(int32_t c, mynos_msg_t * mmsg, 
-		      void * shortmsg, uint32_t flags, uint32_t timeout);
-
-static int32_t isKernelChannel(int32_t c) {
-  return (c < 0);
-}
-
 int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg, 
 		      void * shortmsg, uint32_t flags, uint32_t timeout) {
   unichannel_t * rc;
   msg_t * msg;
   int timeron = (timeout > 0);
 
-  // kernel channel request
-  if (isKernelChannel(c)) {
-    int32_t ret = kernelChannel(c, mmsg, shortmsg, flags, timeout);
-    if ((ret == 0) && (timeron)){
-      timerQueueInsert(currThread, timeout);
-      privP();
-      return 0;
-    }
-    return ret;
-  }
+  /* the kernel writes the message's description there: the receiver's
+     own memory, not the kernel's */
+  if ((mmsg && !__mem_userArea(mmsg, sizeof(mynos_msg_t))) ||
+      (shortmsg && !__mem_userArea(shortmsg, MYNOS_SHORT_MESSAGE_SIZE)))
+    return MYNOS_ERR_INVALID;
 
   // normal request
   rc = getMyReadChannel(c);
@@ -209,9 +200,4 @@ int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg,
   return 0;
 }
 
-int32_t kernelChannel(int32_t c, mynos_msg_t * mmsg, 
-		      void * shortmsg, uint32_t flags, uint32_t timeout) {
-
-  return 0;
-}
 
