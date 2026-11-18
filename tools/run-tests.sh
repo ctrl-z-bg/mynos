@@ -688,6 +688,15 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte\n'; sleep 4
     printf 'sendkey ctrl-c\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null; sleep 2
     tools/type-keys.py "$tmp/mon7" 'echo st-$?\n'; sleep 2
+    # services come back: fatfs killed, restarted by init, found again by
+    # sh (libmynos); a client of greeter (OCaml, Ipc) that finds it again
+    # after it was killed and started anew
+    tools/type-keys.py "$tmp/mon7" 'kill fatfs\n'; sleep 4
+    tools/type-keys.py "$tmp/mon7" 'X=back; echo fatfs-$X > /disk/back.txt; cat /disk/back.txt\n'; sleep 3
+    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte &\n'; sleep 3
+    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte reborn 9 &\n'; sleep 3
+    tools/type-keys.py "$tmp/mon7" 'kill greeter\n'; sleep 1
+    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte &\n'; sleep 10
     # fatfs reads: a file of 100 KB not read yet in this boot (docs/big.bin,
     # 2 KB clusters), read twice, recorded: the disk is asked for runs of
     # sectors (not a request per cluster), then not at all (the cache)
@@ -895,6 +904,9 @@ if [ -f system/ramdisk.dsk ]; then
     expect "kill: 1: not allowed (init, or a driver)"
     expect "no graphical session: start it with gui"  # a window, from text mode
     expect "st-137"                                    # Ctrl-C ended greeter
+    expect "init: restarting fatfs.byte"               # a killed service, back
+    expect "fatfs-back"                                # and found again by sh
+    expect "Hello, reborn again, from MyNOS!"          # by an OCaml client too
     if [ -n "$trace_calls" ]; then
         echo "ok    trace: sh -> fatfs -> ata0, nested calls"
     else

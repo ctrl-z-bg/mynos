@@ -84,8 +84,14 @@ struct svc { int port; long retry_at; };
    means there is no registry at all (the library waits 2 s for it): give
    up. A service not found is looked up again, once, every 2 s: init may
    start it later. */
+static struct svc * caches[8];
+static int ncaches;
+
 static int service_port(const char * name, struct svc * cache)
 {
+  int i;
+  for (i = 0; i < ncaches && caches[i] != cache; i++) ;
+  if (i == ncaches && ncaches < 8) caches[ncaches++] = cache;
   if (cache->port == -2) {
     int tries;
     cache->port = -1;
@@ -124,11 +130,20 @@ static int console_owns_output(void)
 
 /* one request/reply exchange on a new connection; the channel stays open
    (in *channel_out) for a data message */
+/* a service that ended (init restarts it, with a new port): every cache
+   holding its port looks its name up again at the next request */
+static void forget_port(int port)
+{
+  int i;
+  for (i = 0; i < ncaches; i++)
+    if (caches[i]->port == port) caches[i]->port = -2;
+}
+
 static int call(int port, const void * req, int len, mynos_msg_t ** reply,
 		int * channel_out)
 {
   int channel = mynos_connectToPort(port);
-  if (channel < 0) return -1;
+  if (channel < 0) { forget_port(port); return -2; }   /* not delivered */
   if (mynos_send(channel, (void *)req, len, 0) < 0 ||
       mynos_recv(channel, reply, 0, 0) < 0) {
     mynos_freeChannel(channel);
@@ -455,10 +470,18 @@ static int fs_call(int s, struct fs_req * req, struct fs_reply * r,
 		   int * channel_out)
 {
   mynos_msg_t * msg;
-  int port = service(s);
+  int port = service(s), ret;
   if (port < 0) return -1;
   req->client = getpid();
-  if (call(port, req, sizeof(*req), &msg, channel_out) < 0) return -1;
+  ret = call(port, req, sizeof(*req), &msg, channel_out);
+  if (ret == -2) {
+    /* the service ended: looked up again (init restarts it), the request
+       sent to the new one; a request already delivered is never resent */
+    int again = service(s);
+    if (again < 0 || again == port) return -1;
+    ret = call(again, req, sizeof(*req), &msg, channel_out);
+  }
+  if (ret < 0) return -1;
   if (msg->size != sizeof(*r)) {
     mynos_freeMsg(&msg);
     if (channel_out) mynos_freeChannel(*channel_out);
@@ -712,7 +735,7 @@ static ssize_t fs_write(int slot, const char * buf, size_t count)
   req.client = getpid();
   req.fd = files[slot].fd;
   req.arg1 = count > FS_IOMAX ? FS_IOMAX : count;
-  if ((channel = mynos_connectToPort(port)) < 0) { errno = EIO; return -1; }
+  if ((channel = mynos_connectToPort(port)) < 0) { forget_port(port); errno = EIO; return -1; }
   ok = mynos_send(channel, &req, sizeof(req), 0) == 0 &&
        mynos_send(channel, (void *)buf, req.arg1, 0) == 0 &&
        mynos_recv(channel, &msg, 0, 0) == 0;
@@ -792,7 +815,7 @@ int rename(const char * from, const char * to)
   if (!req.name[0] || !newname[0]) { errno = EBUSY; return -1; }
   req.type = FS_RENAME;
   req.client = getpid();
-  if ((channel = mynos_connectToPort(port)) < 0) { errno = EIO; return -1; }
+  if ((channel = mynos_connectToPort(port)) < 0) { forget_port(port); errno = EIO; return -1; }
   ok = mynos_send(channel, &req, sizeof(req), 0) == 0 &&
        mynos_send(channel, newname, strlen(newname) + 1, 0) == 0 &&
        mynos_recv(channel, &msg, 0, 0) == 0;

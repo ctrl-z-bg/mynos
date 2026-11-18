@@ -1,14 +1,16 @@
 (* init: the first program of MyNOS, started by ocamlrun from the RAM disk
    (init.byte). It reads init.rc and starts what it lists:
 
-     start PROGRAM ARGS...     start it and leave it running (services)
+     start PROGRAM ARGS...     start it and leave it running (services):
+                               restarted if it crashes or is killed
      driver PROGRAM ARGS...    the same, with the io privilege (port I/O,
                                IRQs: doc/decisions/identity-and-permissions.md)
      respawn PROGRAM ARGS...   start it, and again whenever it ends (the
                                shell)
 
    A bytecode program (.byte) runs on ocamlrun. Then init waits for its
-   children: it restarts the ones marked respawn, logs the others' end.
+   children: it restarts the ones marked respawn whenever they end, and
+   services that crash or are killed (not more than 5 times a minute).
    Its messages go to the kernel log (Mynos.log). *)
 
 type entry = { respawn : bool; io : bool; argv : string list }
@@ -94,6 +96,7 @@ let power_service () =
 let () =
   ignore (Domain.spawn power_service);
   let running = Hashtbl.create 8 in            (* pid -> entry *)
+  let restarts = Hashtbl.create 8 in           (* a service -> when it was restarted *)
   let launch e =
     match start e with
     | Some pid -> Hashtbl.replace running pid (e, Mynos.uptime ())
@@ -110,6 +113,21 @@ let () =
         (* a program that keeps failing at once must not take the CPU *)
         if Mynos.uptime () -. started < 1.0 then Mynos.sleep 1.0;
         launch e
+      end else if status <> Mynos.Exited 0 then begin
+        (* a service that crashed or was killed comes back (one that
+           ended by itself, exit 0, decided to: httpd without a network),
+           five times a minute at most; its clients find it again by name *)
+        let now = Mynos.uptime () in
+        let recent = List.filter (fun t -> now -. t < 60.)
+            (Option.value (Hashtbl.find_opt restarts (describe e)) ~default:[]) in
+        if List.length recent >= 5 then
+          log "%s: not restarted, it ended 5 times in a minute" (describe e)
+        else begin
+          Hashtbl.replace restarts (describe e) (now :: recent);
+          Mynos.sleep 0.3;
+          log "restarting %s" (describe e);
+          launch e
+        end
       end
   done;
   log "nothing left to run"

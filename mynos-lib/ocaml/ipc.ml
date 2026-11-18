@@ -65,7 +65,7 @@ module type PROTOCOL = sig
 end
 
 module Make (P : PROTOCOL) = struct
-  type client = { name : string; port : int }
+  type client = { name : string; mutable port : int }
 
   let connect name = { name; port = Mynos.lookup name }
   let service c = c.name
@@ -88,9 +88,23 @@ module Make (P : PROTOCOL) = struct
 
   let read_reply msg req = read_reply_of "" msg req
 
+  (* a channel to the service: if its port is gone (the service ended), the
+     service is looked up again by its name (init may be restarting it:
+     up to 3 s) and connected once more. A request is never sent twice. *)
+  let channel c =
+    match Mynos.connect c.port with
+    | ch -> ch
+    | exception (Mynos.Error _ as e) ->
+      let rec again tries =
+        match Mynos.lookup c.name with
+        | p when p <> c.port -> c.port <- p; Mynos.connect p
+        | _ | exception Mynos.Error _ ->
+          if tries = 0 then raise e else (Mynos.sleep 0.1; again (tries - 1)) in
+      again 30
+
   let call c req =
     let msg = request_message req in
-    let ch = Mynos.connect c.port in
+    let ch = channel c in
     let answer =
       Fun.protect ~finally:(fun () -> try Mynos.free_channel ch with Mynos.Error _ -> ())
         (fun () -> Mynos.send ch msg; Mynos.recv ch) in

@@ -1005,4 +1005,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   ending. In the menu and the welcome window. `run-tests.sh`: a section
   that fails no longer stops its lane (the results it found are kept).
   Test: the third lesson replayed, at the birth of hello.
+- **2026-11-18** — Services that come back (mynos-16h,
+  identity-and-permissions.md section 8): init restarts a service that
+  crashes or is killed (5 times a minute at most); libmynos and Ipc
+  clients look a service up again when its port is gone. Two kernel bugs
+  found on the way: `kill` did not free the killed process's ports and
+  channels (they check their owner against the current process), and a
+  port whose owner died listening on it was never freed, so a client that
+  connected waited for ever. Tests: fatfs killed, back, used by sh; an
+  OCaml client of greeter finds it again.
 

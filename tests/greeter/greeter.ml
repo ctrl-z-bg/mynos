@@ -2,8 +2,10 @@
    agent starts it in the background (sh's &): ps, and the System window,
    show it with its name. Also an example of a whole service:
 
-     greeter          serve, forever
-     greeter NAME     ask the service: its greeting for NAME *)
+     greeter                serve, forever
+     greeter NAME           ask the service: its greeting for NAME
+     greeter NAME SECONDS   ask, wait, ask again with the same client (if the
+                            service was restarted meanwhile, it is found again) *)
 
 type _ request = Hello : string -> string request
 
@@ -29,6 +31,11 @@ module I = Ipc.Make (Protocol)
 let () =
   match Sys.argv with
   | [| _; name |] -> print_endline (I.call (I.connect "greeter") (Hello name))
+  | [| _; name; secs |] ->
+    let c = I.connect "greeter" in
+    print_endline (I.call c (Hello name));
+    Mynos.sleep (float_of_string secs);
+    print_endline (I.call c (Hello (name ^ " again")))
   | _ ->
     I.serve "greeter" { I.handle = fun (type a) _ (r : a request) : a ->
         match r with Hello name -> "Hello, " ^ name ^ ", from MyNOS!" }

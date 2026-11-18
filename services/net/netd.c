@@ -1104,7 +1104,7 @@ int main(void) {
 
   if (ne2k_init(NE2K_IOBASE, mac) < 0) {
     mynos_log("netd: no NE2000 card at 0x%x\n", NE2K_IOBASE);
-    return 1;
+    return 0;                     /* nothing to serve: not a failure (init) */
   }
   mynos_log("netd: NE2000 at 0x%x, %02x:%02x:%02x:%02x:%02x:%02x\n",
             NE2K_IOBASE, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);

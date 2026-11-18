@@ -1990,3 +1990,30 @@ the disk image that the boot had not touched.
 have taken longer to find, and showed the cost was in the messages, not
 the device. A microkernel makes many small requests expensive: batch them.
 
+## 2026-11-18 — A killed service left a port that swallowed its clients
+
+**Symptom.** With init restarting services, `kill fatfs` brought a new
+fatfs up on a new port; the next command in sh, even `echo`, never
+returned (sh writes its history to /disk first).
+
+**Diagnosis.** sh's libmynos still had the old port. Connecting to it
+should have failed, and the client then looked the service up again. It
+did not fail: the old port was still there. The kernel's `connect` queues
+the request and waits for the owner to `listen`; nobody would ever listen.
+
+**Two causes.** `kill` ends another process with the code that ends the
+current one (`endProcess`, generalised earlier today); it freed the dead
+process's ports with `freePort`, which checks that the *caller* owns the
+port: the caller was sh, the answer was "denied", and the ports stayed.
+Fixed by having the kernel act as the dying process while it frees its
+ports and channels (system calls run with interrupts off). Then the port
+still stayed: fatfs died *listening*, and a listened port is locked,
+which `freePort` refuses too. A new `__OS_port_freeDead` frees it
+regardless, and wakes whoever is queued to connect with
+`MYNOS_ERR_BROKEN` (the "TODO free the req queue" of 2002).
+
+**Lesson.** Code written for "the current process" carries that
+assumption in every check it calls; generalising it to "a process" means
+following each callee. A test that kills a service and then uses it
+found what a test that only killed it did not.
+

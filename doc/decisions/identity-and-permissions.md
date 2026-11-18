@@ -165,6 +165,28 @@ Running out of pids, semaphores, channels or ports returns
 `MYNOS_ERR_FULL` (most calls do already) and logs it once per kind, so
 that "the system hangs" becomes "the semaphore table is full".
 
+### 8. Services that come back (2026-11-18)
+
+A microkernel's promise: a service that fails is a process that ends, and
+can be started again without the rest stopping.
+
+- **init supervises**: a `start` or `driver` service that crashes or is
+  killed (a signal, or an exit code other than 0) is started again, at
+  most 5 times a minute. One that ends with 0 decided to (httpd without a
+  network; netd without a card now ends with 0 too).
+- **Clients find it again**: a restarted service registers its name
+  again, with a new port. libmynos forgets a port it cannot connect to and
+  looks the name up again; Ipc clients (`Ipc.Make`) do the same, waiting up
+  to 3 s for the service to come back. A request is sent again only if it
+  was never delivered (the connection failed): one already delivered is
+  never repeated. What lived in the old service is gone: its open files'
+  descriptors give an error.
+- **The kernel's part**: a process's ports are freed at its end even if
+  it died listening on one (`__OS_port_freeDead`), and the processes
+  waiting to connect to it get an error (`MYNOS_ERR_BROKEN`) instead of
+  waiting for ever. A process ended by `kill` has its ports and channels
+  freed as their owner (the kernel acts as the dying process meanwhile).
+
 ## Not now
 
 - **Users and files.** MyNOS is single-user; file services do not check

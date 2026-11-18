@@ -567,6 +567,7 @@ static process_descriptor_t * zombies = NULL;
  * at once if nobody can.
  */
 static void endProcess(process_descriptor_t * self, int status, uint32_t pgdir) {
+  uint32_t saved;
   tss_t * tss;
   process_queue_t * q;
   int port, channel;
@@ -586,11 +587,19 @@ static void endProcess(process_descriptor_t * self, int status, uint32_t pgdir) 
     tss = tss->next;
   }
 
+  /* ports and channels check that the caller owns them: for another
+     process (kill), the kernel acts as the one ending while it frees them
+     (system calls run with interrupts off: nothing else runs meanwhile).
+     Without it, a killed service's port stayed open, and a client that
+     connected to it waited for ever. */
+  saved = currProcess;
+  currProcess = PSLOT(self->pid);
+
   // free process ports
   n = listNElem(self->portList);
   for (i = 0; i < n; i++) {
     port = (int)listExtract(self->portList);
-    __OS_port_freePort(port);
+    __OS_port_freeDead(port);
   }
 
   // free process channels
@@ -600,6 +609,8 @@ static void endProcess(process_descriptor_t * self, int status, uint32_t pgdir) 
     __OS_ipc_freeChannel(channel);
   }
 
+
+  currProcess = saved;
 
   /* threads waiting on futexes */
   futexForget(self->pid);

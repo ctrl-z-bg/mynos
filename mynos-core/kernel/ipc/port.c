@@ -130,6 +130,28 @@ int32_t __OS_port_freePort(int32_t p) {
   return 0;
 }
 
+/* a port of a process that ended (endProcess): freed whatever its owner
+   was doing with it (it may have died listening on it: a locked port, which
+   freePort refuses). The processes waiting to connect get MYNOS_ERR_BROKEN
+   instead of waiting for ever: their client looks the service up again. */
+void __OS_port_freeDead(int32_t p) {
+  port_t * port = getPort(p);
+  req_t * req;
+  if (port == NULL) return;
+  while ((req = nextReq(port)) != NULL) {
+    *(req->chan) = MYNOS_ERR_BROKEN;
+    __OS_sem_V(req->sem);
+    kfree(req);
+  }
+  pTable.free++;
+  __OS_sem_freeSemaphore(port->sem);
+  kfree(port);
+  pTable.table[p % MAXPORTS] = NULL;
+  if (p % MAXPORTS >= MYNOS_FIRST_FREE_PORT)
+    portGeneration[p % MAXPORTS] =
+      (portGeneration[p % MAXPORTS] + 1) % PORT_GENERATIONS;
+}
+
 int32_t __OS_port_changeOwner(int32_t port, pid_t newpid) {
   port_t * p = getPort(port);
   if (p == NULL) return MYNOS_ERR_INVALID;

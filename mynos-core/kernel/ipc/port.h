@@ -52,6 +52,7 @@ int32_t __OS_port_allocPort(void);
 void initPort(port_t * p, pid_t pid);
 int32_t __OS_port_allocPortP(int32_t port);
 int32_t __OS_port_freePort(int32_t port);
+void __OS_port_freeDead(int32_t port);
 int32_t __OS_port_changeOwner(int32_t port, pid_t newpid);
 req_t * nextReq(port_t * port);
 int32_t __OS_port_connectToPort(int32_t p);
