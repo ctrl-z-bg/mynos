@@ -169,6 +169,10 @@ let protocols = [
               "Connect_tls", [ S; I ], [ I ]; "Udp_bind", [ I ], [ I ];
               "Send_to", [ I; S; I; S ], [ I ]; "Recv_from", [ I; I ], [ S; I; S ] |];
   "llm/1", [| "Profiles", [], []; "Chat", [ S ], [] |];   (* Chat: its profile *)
+  "fs/1", [| "Open", [ S; I ], [ I ]; "Close", [ I ], []; "Read", [ I; I ], [ S ];
+             "Write", [ I; S ], [ I ]; "Seek", [ I; I; I ], [ I ]; "List", [ S ], [];
+             "Remove", [ S ], []; "Mkdir", [ S ], []; "Rmdir", [ S ], [];
+             "Rename", [ S; S ], [] |];
 ]
 
 let get_args c args =

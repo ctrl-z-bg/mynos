@@ -36,7 +36,7 @@ all: memrofsd
 		make -C $$i;\
 	done
 
-memrofsd: $(OFILES)
+memrofsd: $(OFILES) ../../../mynos-lib/lib/libmynos.a
 	$(CC) $(OFILES) -o memrofsd $(LDFLAGS)
 
 

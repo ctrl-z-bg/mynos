@@ -1,16 +1,16 @@
 title: A file from the RAM disk
 command: cat /init.rc
 show: sh, memrofsd, registry
-note: fs OPEN "ocamlrun" | To start a program, its parent first reads the program's file through the file service, then hands it to the kernel. Here trace reads ocamlrun, the OCaml runtime, to start sh.
+note: fs/1 Open ("ocamlrun" | To start a program, its parent first reads the program's file through the file service, then hands it to the kernel. Here trace reads ocamlrun, the OCaml runtime, to start sh.
 note: spawn of sh | A process is born: the kernel makes it from the file its parent read, with its own memory. It is ocamlrun, and it will run sh.byte.
-note: fs OPEN "sh.byte" | The new process reads its program, sh.byte, from the RAM disk: the same service, the same requests as any other file.
+note: fs/1 Open ("sh.byte" | The new process reads its program, sh.byte, from the RAM disk: the same service, the same requests as any other file.
 note: registry LOOKUP | Before talking to a service, a process asks the registry for its port: the registry is the one service everybody can find, at a fixed port.
-note: fs OPEN "init.rc" | Now cat itself: sh asks memrofs to open init.rc. A message, through the kernel, to another process; the answer is a number, the file descriptor.
-note: fs READ | A read is a request and a reply: up to 16 KB of the file travel back in the reply's message.
-note: fs CLOSE | Done: the descriptor goes back to memrofs.
+note: fs/1 Open ("init.rc" | Now cat itself: sh asks memrofs to open init.rc. A message, through the kernel, to another process; the answer is a number, the file descriptor.
+note: fs/1 Read | A read is a request and a reply: up to 16 KB of the file travel back in the reply's message.
+note: fs/1 Close | Done: the descriptor goes back to memrofs.
 note: exit of sh | sh ends: the kernel frees its memory, its ports and channels, and tells its parent.
 
-In MyNOS a file is not something the kernel knows about. It is what a service gives you over IPC.
+In MyNOS a file is not something the kernel knows about. It is what a service gives you over IPC: fs/1, a typed protocol that every file service speaks and describes.
 
 / is the RAM disk, served by memrofs, a process written in C in 2002. This lesson watches sh start and then ask memrofs for init.rc, the file that tells init what to start at boot.
 
@@ -21,8 +21,8 @@ command: ls /disk
 show: sh, fatfs, ata, registry
 note: LOOKUP "fatfs" | sh needs the file service of the disk: it asks the registry for fatfs's port.
 note: block/1 Read | fatfs does not touch the disk: it asks the driver, ata, for sectors. This call is made while fatfs serves sh's: a call inside a call.
-note: fs LIST | sh asks fatfs for the directory's entries, one request per entry.
-note: fs OPEN | sh asks fatfs to open a file; fatfs finds it in the directory, which it may first have to read from the disk.
+note: fs/1 List | sh asks fatfs for the directory's entries: one typed request, and all of them come back in the reply, names and sizes.
+note: fs/1 Open | sh asks fatfs to open a file; fatfs finds it in the directory, which it may first have to read from the disk.
 
 /disk is a FAT disk, kept across boots. Between sh and the disk stand two processes, both written in OCaml: fatfs, the file system, and ata, the driver that talks to the disk controller.
 
@@ -32,9 +32,9 @@ title: A program is born
 command: hello
 show: sh, hello, memrofsd, tmpfs
 note: spawn of hello | sh asks the kernel for a new process. The kernel loads the program its parent has read, ocamlrun, and starts it with its arguments: hello.byte.
-note: fs OPEN "hello.byte" | Before starting it, sh looks at the file: a native program, or OCaml bytecode? It reads its first bytes. Bytecode is run by ocamlrun, the OCaml runtime.
+note: fs/1 Open ("hello.byte" | Before starting it, sh looks at the file: a native program, or OCaml bytecode? It reads its first bytes. Bytecode is run by ocamlrun, the OCaml runtime.
 note: hello( | The newborn process is ocamlrun: it now reads its program, hello.byte, from the RAM disk, through memrofs, like any file.
-note: fs WRITE | hello greets. Its output goes where sh told it to: here, a file of /tmp, served by tmpfs (the tour keeps the output); in a terminal, the console.
+note: fs/1 Write | hello greets. Its output goes where sh told it to: here, a file of /tmp, served by tmpfs (the tour keeps the output); in a terminal, the console.
 note: exit of hello | hello ends: the kernel frees what it held and wakes sh, which was waiting for it.
 
 Every program in MyNOS is a process, started by another one. A program written in OCaml is a process of ocamlrun, the OCaml runtime, which runs its bytecode.
@@ -56,7 +56,7 @@ title: Asking a language model
 command: llm What is a microkernel? Answer in one sentence.
 show: llm, llmd, netd, fatfs, registry
 note: llm/1 Chat | llm asks llmd, the model service (OCaml), with a typed request: the conversation, as an OCaml value.
-note: fs OPEN "llm.env" | llmd reads its configuration from the disk: which provider, which model, which key.
+note: fs/1 Open ("llm.env" | llmd reads its configuration from the disk: which provider, which model, which key.
 note: net/1 Connect | llmd opens a connection to the provider through netd: TLS runs inside netd.
 note: net/1 Send | The request goes out, as JSON over HTTPS.
 note: net/1 Recv | The answer comes back, a piece at a time.

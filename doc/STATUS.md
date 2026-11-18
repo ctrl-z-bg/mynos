@@ -1014,4 +1014,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   port whose owner died listening on it was never freed, so a client that
   connected waited for ever. Tests: fatfs killed, back, used by sh; an
   OCaml client of greeter finds it again.
+- **2026-11-18** — Files over typed IPC (mynos-7a1, typed-ipc.md): fs/1
+  (`Fs`, `mynos_fs.h`) replaces the file services' C structs. tmpfs and
+  fatfs serve it typed, memrofs (C) through `mynos_wire.h`, libmynos is
+  its client; a directory comes in one List reply; the client is the
+  caller the kernel names. Recordings decode it like any protocol
+  (`fs/1 Open ("init.rc", 0)`); the tour's notes and the tests follow.
+  Tests: memrofs lists, refuses a write, describes fs/1 as `fs.ml` does.
 

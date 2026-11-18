@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include "memrofs.h"
+#include <mynos_wire.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,114 +62,191 @@ static filedescriptor_t * owned(int fd, int client, int * status)
   return &filedesc[fd];
 }
 
-static void reply(int channel, int status, int value)
+/* ---- fs/1 (mynos_fs.h): typed IPC, its replies ---- */
+
+static const char * const error_names[] = FS_ERROR_NAMES;
+
+static void send_reply(int channel, wire_writer * w)
 {
-  struct fs_reply r;
-  r.status = status;
-  r.value = value;
-  mynos_send(channel, &r, sizeof(r), 0);
+  if (!w->error) mynos_send(channel, w->buf, w->len, 0);
+  wire_writer_free(w);
 }
 
-static void memrofs_open(int channel, struct fs_req * req)
+static void reply_error(int channel, int status)
+{
+  wire_writer w;
+  wire_writer_init(&w);
+  wire_reply_error(&w, error_names[status < FS_NERRORS ? status : FS_INVALID]);
+  send_reply(channel, &w);
+}
+
+static void reply_int(int channel, long long v)
+{
+  wire_writer w;
+  wire_writer_init(&w);
+  wire_reply_ok(&w);
+  wire_put_int(&w, v);
+  send_reply(channel, &w);
+}
+
+static void reply_unit(int channel)
+{
+  wire_writer w;
+  wire_writer_init(&w);
+  wire_reply_ok(&w);
+  send_reply(channel, &w);
+}
+
+static const wire_request_doc requests[] = {
+  { 0, "open", "(path:S,flags:I)", "I",
+    "Open a file: its descriptor. flags: 1 write, 2 create, 4 truncate, 8 append "
+    "(0: read)." },
+  { 1, "close", "fd:I", "U", "Close a descriptor." },
+  { 1, "read", "(fd:I,max:I)", "S",
+    "Up to max bytes (16384 at most) from the position: \"\" at the end." },
+  { 0, "write", "(fd:I,data:S)", "I",
+    "Write data (16384 bytes at most) at the position: how many." },
+  { 1, "seek", "(fd:I,offset:I,whence:I)", "I",
+    "Move the position: whence 0 from the start, 1 from here, 2 from the end. "
+    "The new position." },
+  { 1, "list", "path:S", "L<(name:S,size:I)>",
+    "A directory's entries: names and sizes (-1: a directory)." },
+  { 0, "remove", "path:S", "U", "Remove a file." },
+  { 0, "mkdir", "path:S", "U", "Make a directory." },
+  { 0, "rmdir", "path:S", "U", "Remove an empty directory." },
+  { 0, "rename", "(from:S,to:S)", "U", "Rename a file (one of the new name is replaced)." },
+};
+
+static void describe(int channel)
+{
+  wire_writer w;
+  wire_writer_init(&w);
+  wire_reply_description(&w, FS_PROTOCOL,
+    "Files: open, read, write, list and change the files of a file service "
+    "(memrofs: /, read-only; tmpfs: /tmp; fatfs: /disk). This one is memrofs, "
+    "the RAM disk (C, 2002), read-only and flat.",
+    requests, sizeof requests / sizeof requests[0]);
+  send_reply(channel, &w);
+}
+
+static void memrofs_open(int channel, int client, const char * name, int flags)
 {
   int idx, fd;
-  req->name[FS_NAMEMAX - 1] = 0;
-  if (req->arg1 & (FS_O_WRITE | FS_O_CREAT | FS_O_TRUNC | FS_O_APPEND)) {
-    reply(channel, FS_READONLY, -1);
+  if (flags & (FS_O_WRITE | FS_O_CREAT | FS_O_TRUNC | FS_O_APPEND)) {
+    reply_error(channel, FS_READONLY);
     return;
   }
+  if (!name[0]) { reply_error(channel, FS_IS_DIR); return; }
   /* names are flat; accept an optional leading slash */
-  idx = find_file(req->name[0] == '/' ? req->name + 1 : req->name);
-  if (idx < 0) { reply(channel, FS_NOT_FOUND, -1); return; }
+  idx = find_file(name[0] == '/' ? name + 1 : name);
+  if (idx < 0) { reply_error(channel, FS_NOT_FOUND); return; }
   for (fd = 3; fd < MAXOPENFILES && filedesc[fd].pid; fd++)
     ;
-  if (fd >= MAXOPENFILES) { reply(channel, FS_TOO_MANY, -1); return; }
-  filedesc[fd].pid = req->client;
+  if (fd >= MAXOPENFILES) { reply_error(channel, FS_TOO_MANY); return; }
+  filedesc[fd].pid = client;
   filedesc[fd].fileidx = idx;
   filedesc[fd].pos = 0;
-  reply(channel, FS_OK, fd);
+  reply_int(channel, fd);
 }
 
-static void memrofs_close(int channel, struct fs_req * req)
+static void memrofs_read(int channel, filedescriptor_t * f, int max)
 {
-  int status;
-  filedescriptor_t * f = owned(req->fd, req->client, &status);
-  if (f) f->pid = 0;
-  reply(channel, status, 0);
-}
-
-static void memrofs_read(int channel, struct fs_req * req)
-{
-  static char buf[FS_IOMAX];
-  int status, n;
-  fileentry_t * fe;
-  filedescriptor_t * f = owned(req->fd, req->client, &status);
-
-  if (!f) { reply(channel, status, 0); return; }
-  fe = &filesystem[f->fileidx];
-  n = f->pos < fe->size ? fe->size - f->pos : 0;
-  n = MIN(n, MIN(req->arg1, FS_IOMAX));
+  fileentry_t * fe = &filesystem[f->fileidx];
+  int n = f->pos < fe->size ? fe->size - f->pos : 0;
+  wire_writer w;
+  n = MIN(n, MIN(max, FS_IOMAX));
   if (n < 0) n = 0;
-  reply(channel, FS_OK, n);
-  if (n > 0) {
-    /* copy first: sending straight from the RAM disk would map its frames
-       into the client, which may free them when it unmaps the message */
-    memcpy(buf, ramdisk + (uint32_t)fe->start + f->pos, n);
-    mynos_send(channel, buf, n, 0);
-    f->pos += n;
-  }
+  /* the bytes are copied into the reply: sending straight from the RAM disk
+     would map its frames into the client, which may free them */
+  wire_writer_init(&w);
+  wire_reply_ok(&w);
+  wire_put_string(&w, ramdisk + (uint32_t)fe->start + f->pos, n);
+  f->pos += n;
+  send_reply(channel, &w);
 }
 
-static void memrofs_lseek(int channel, struct fs_req * req)
+static void memrofs_seek(int channel, filedescriptor_t * f, long long offset, long long whence)
 {
-  int status;
   long long pos;
-  filedescriptor_t * f = owned(req->fd, req->client, &status);
-
-  if (!f) { reply(channel, status, -1); return; }
-  switch (req->arg2) {
-  case 0: pos = req->arg1; break;
-  case 1: pos = (long long)f->pos + req->arg1; break;
-  case 2: pos = (long long)filesystem[f->fileidx].size + req->arg1; break;
-  default: reply(channel, FS_INVALID, -1); return;
+  switch (whence) {
+  case 0: pos = offset; break;
+  case 1: pos = (long long)f->pos + offset; break;
+  case 2: pos = (long long)filesystem[f->fileidx].size + offset; break;
+  default: reply_error(channel, FS_INVALID); return;
   }
-  if (pos < 0) { reply(channel, FS_INVALID, -1); return; }
+  if (pos < 0) { reply_error(channel, FS_INVALID); return; }
   f->pos = (uint32_t)pos;
-  reply(channel, FS_OK, f->pos);
+  reply_int(channel, f->pos);
 }
 
-static void memrofs_list(int channel, struct fs_req * req)
+static void memrofs_list(int channel, const char * name)
 {
-  fileentry_t * fe;
-  if (req->arg1 < 0 || req->arg1 >= MAXFILES ||
-      !filesystem[req->arg1].filename[0]) {
-    reply(channel, FS_NOT_FOUND, -1);
+  wire_writer w;
+  int i, n = 0;
+  if (name[0]) { reply_error(channel, FS_NOT_FOUND); return; }   /* flat */
+  while (n < MAXFILES && filesystem[n].filename[0]) n++;
+  wire_writer_init(&w);
+  wire_reply_ok(&w);
+  wire_put_int(&w, n);
+  for (i = 0; i < n; i++) {
+    wire_put_cstring(&w, filesystem[i].filename);
+    wire_put_int(&w, filesystem[i].size);
+  }
+  send_reply(channel, &w);
+}
+
+/* a request: the protocol, its case, its arguments */
+static void handle(int channel, int client, const char * msg, unsigned int len)
+{
+  wire_reader r;
+  unsigned int n;
+  const char * id;
+  char name[FS_NAMEMAX];
+  int status;
+  long long kind, fd, a, b;
+  filedescriptor_t * f;
+
+  wire_reader_init(&r, msg, len);
+  id = wire_get_string(&r, &n);
+  if (!r.error && n == strlen(WIRE_DESCRIBE) && !memcmp(id, WIRE_DESCRIBE, n)) {
+    describe(channel);
     return;
   }
-  fe = &filesystem[req->arg1];
-  reply(channel, FS_OK, fe->size);
-  mynos_send(channel, fe->filename, strlen(fe->filename) + 1, 0);
-}
-
-static void process_request(int channel, struct fs_req * req)
-{
-  switch (req->type) {
-  case FS_OPEN:  memrofs_open(channel, req);  break;
-  case FS_CLOSE: memrofs_close(channel, req); break;
-  case FS_READ:  memrofs_read(channel, req);  break;
-  case FS_LSEEK: memrofs_lseek(channel, req); break;
-  case FS_LIST:  memrofs_list(channel, req);  break;
-  case FS_WRITE:
-  case FS_RENAME: {                /* take the data (or the new name), sent
-				      before the client waits for the reply */
-    mynos_msg_t * data;
-    if (mynos_recv(channel, &data, 0, 1000) == 0) mynos_freeMsg(&data);
-    reply(channel, FS_READONLY, -1);
-    break;
+  if (r.error || n != strlen(FS_PROTOCOL) || memcmp(id, FS_PROTOCOL, n)) {
+    wire_writer w;
+    wire_writer_init(&w);
+    wire_reply_error(&w, "invalid: memrofs speaks " FS_PROTOCOL);
+    send_reply(channel, &w);
+    return;
   }
-  case FS_UNLINK: reply(channel, FS_READONLY, -1); break;
-  default:            reply(channel, FS_INVALID, -1);
+  kind = wire_get_int(&r);
+  switch (kind) {
+  case FS_OPEN:
+    wire_get_cstring(&r, name, sizeof name);
+    a = wire_get_int(&r);
+    if (r.error) break;
+    memrofs_open(channel, client, name, (int)a);
+    return;
+  case FS_CLOSE: case FS_READ: case FS_SEEK:
+    fd = wire_get_int(&r);
+    a = kind == FS_CLOSE ? 0 : wire_get_int(&r);
+    b = kind == FS_SEEK ? wire_get_int(&r) : 0;
+    if (r.error) break;
+    if ((f = owned((int)fd, client, &status)) == NULL) { reply_error(channel, status); return; }
+    if (kind == FS_CLOSE) { f->pid = 0; reply_unit(channel); }
+    else if (kind == FS_READ) memrofs_read(channel, f, (int)a);
+    else memrofs_seek(channel, f, a, b);
+    return;
+  case FS_LIST:
+    wire_get_cstring(&r, name, sizeof name);
+    if (r.error) break;
+    memrofs_list(channel, name);
+    return;
+  case FS_WRITE: case FS_REMOVE: case FS_MKDIR: case FS_RMDIR: case FS_RENAME:
+    reply_error(channel, FS_READONLY);   /* read-only */
+    return;
   }
+  reply_error(channel, FS_INVALID);      /* malformed */
 }
 
 /* self test, in a child process: read a file through the file functions of
@@ -206,19 +284,15 @@ int main() {
 
   while (1) {
     mynos_msg_t * msg;
-    struct fs_req req;
     int channel = mynos_listenPort(port);
 
     if (channel < 0) {
       mynos_log("%s", "Error receiving request");
       exit(-1);
     }
-    if (mynos_recv(channel, &msg, 0, 0) == 0) {
-      if (msg->size == sizeof(req)) {
-	memcpy(&req, msg->start, sizeof(req));
-	process_request(channel, &req);
-      } else
-	reply(channel, FS_INVALID, -1);
+    /* the client: the process at the other end, as the kernel says */
+    if (mynos_recv(channel, &msg, 0, 1000) == 0) {
+      handle(channel, mynos_channelPeer(channel), msg->start, msg->size);
       mynos_freeMsg(&msg);
     }
     mynos_freeChannel(channel);

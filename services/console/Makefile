@@ -31,7 +31,7 @@ LDFLAGS = -L../../mynos-lib/lib/ -lmynos $(MYNOS_LDFLAGS)
 
 all: consoled
 
-consoled: $(OFILES)
+consoled: $(OFILES) ../../mynos-lib/lib/libmynos.a
 	$(CC) $(OFILES) -o consoled $(LDFLAGS)
 
 

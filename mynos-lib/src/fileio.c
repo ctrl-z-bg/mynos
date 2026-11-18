@@ -41,6 +41,7 @@
 #include <mynos.h>
 #include <mynos_console.h>
 #include <mynos_fs.h>
+#include <mynos_wire.h>
 
 #define FD_BASE 20
 #define FD_MAX  64
@@ -466,31 +467,7 @@ static int file_slot(int fd)
   return fd - FD_BASE;
 }
 
-static int fs_call(int s, struct fs_req * req, struct fs_reply * r,
-		   int * channel_out)
-{
-  mynos_msg_t * msg;
-  int port = service(s), ret;
-  if (port < 0) return -1;
-  req->client = getpid();
-  ret = call(port, req, sizeof(*req), &msg, channel_out);
-  if (ret == -2) {
-    /* the service ended: looked up again (init restarts it), the request
-       sent to the new one; a request already delivered is never resent */
-    int again = service(s);
-    if (again < 0 || again == port) return -1;
-    ret = call(again, req, sizeof(*req), &msg, channel_out);
-  }
-  if (ret < 0) return -1;
-  if (msg->size != sizeof(*r)) {
-    mynos_freeMsg(&msg);
-    if (channel_out) mynos_freeChannel(*channel_out);
-    return -1;
-  }
-  memcpy(r, msg->start, sizeof(*r));
-  mynos_freeMsg(&msg);
-  return 0;
-}
+/* ---- fs/1 (mynos_fs.h): requests to the file services ---- */
 
 static int status_errno(int status)
 {
@@ -509,21 +486,79 @@ static int status_errno(int status)
   }
 }
 
-/* a request on a name (UNLINK, MKDIR, RMDIR): 0 or -1 with errno */
+/* an Error reply's status, from the name its message starts with */
+static int error_status(const char * m, unsigned int len)
+{
+  static const char * const names[] = FS_ERROR_NAMES;
+  unsigned int n = 0;
+  int i;
+  while (n < len && m[n] != ':') n++;
+  for (i = 0; i < FS_NERRORS; i++)
+    if (strlen(names[i]) == n && !memcmp(names[i], m, n)) return i;
+  return FS_INVALID;
+}
+
+/* start a request: the protocol, the case */
+static void fs_start(wire_writer * w, int kind)
+{
+  wire_writer_init(w);
+  wire_put_cstring(w, FS_PROTOCOL);
+  wire_put_int(w, kind);
+}
+
+/* send a request to service s; on Ok, *msg holds the reply and r reads its
+   value (the caller frees *msg). -1 with errno otherwise. A service that
+   ended is looked up again (init restarts it) and the request sent to the
+   new one, if it was never delivered. */
+static int fs_request(int s, wire_writer * w, wire_reader * r, mynos_msg_t ** msg)
+{
+  int port = service(s), ret;
+  if (w->error) { wire_writer_free(w); errno = ENOMEM; return -1; }
+  if (port < 0) { wire_writer_free(w); errno = ENOENT; return -1; }
+  ret = call(port, w->buf, w->len, msg, NULL);
+  if (ret == -2) {
+    int again = service(s);
+    if (again >= 0 && again != port) ret = call(again, w->buf, w->len, msg, NULL);
+  }
+  wire_writer_free(w);
+  if (ret < 0) { errno = EIO; return -1; }
+  wire_reader_init(r, (*msg)->start, (*msg)->size);
+  if (wire_get_int(r) != 0) {              /* Error: its message */
+    unsigned int len;
+    const char * m = wire_get_string(r, &len);
+    errno = r->error ? EIO : status_errno(error_status(m, len));
+    mynos_freeMsg(msg);
+    return -1;
+  }
+  return 0;
+}
+
+/* a request whose reply is unit or an int: the int (0 for unit), or -1 */
+static long long fs_simple(int s, wire_writer * w, int has_value)
+{
+  wire_reader r;
+  mynos_msg_t * msg;
+  long long v = 0;
+  if (fs_request(s, w, &r, &msg) < 0) return -1;
+  if (has_value) v = wire_get_int(&r);
+  if (r.error) { mynos_freeMsg(&msg); errno = EIO; return -1; }
+  mynos_freeMsg(&msg);
+  return v;
+}
+
+/* a request on a name (REMOVE, MKDIR, RMDIR): 0 or -1 with errno */
 static int name_call(const char * path, int type)
 {
-  struct fs_req req;
-  struct fs_reply r;
+  char name[FS_NAMEMAX];
+  wire_writer w;
   int s;
 
-  memset(&req, 0, sizeof(req));
-  if ((s = resolve(path, req.name)) < 0) return -1;
+  if ((s = resolve(path, name)) < 0) return -1;
   if (service(s) < 0) { errno = ENOENT; return -1; }
-  if (!req.name[0]) { errno = s == MEMROFS ? EROFS : EBUSY; return -1; }
-  req.type = type;
-  if (fs_call(s, &req, &r, NULL) < 0) { errno = EIO; return -1; }
-  if (r.status != FS_OK) { errno = status_errno(r.status); return -1; }
-  return 0;
+  if (!name[0]) { errno = s == MEMROFS ? EROFS : EBUSY; return -1; }
+  fs_start(&w, type);
+  wire_put_cstring(&w, name);
+  return fs_simple(s, &w, 0) < 0 ? -1 : 0;
 }
 
 /* ---- redirections of fds 0-2 ----
@@ -538,6 +573,7 @@ static int redirected[3] = { -1, -1, -1 };
 static int redir_ready = 0;
 
 int open(const char * path, int flags, ...);
+
 int close(int fd);
 
 static void redir_close(void)
@@ -590,9 +626,10 @@ static int std_fd(int fd)
 
 int open(const char * path, int flags, ...)
 {
-  struct fs_req req;
-  struct fs_reply r;
-  int slot, mode = 0, s;
+  char name[FS_NAMEMAX];
+  wire_writer w;
+  long long fd;
+  int slot, mode = 0, s, f = 0;
 
   if (flags & O_CREAT) {
     va_list ap;
@@ -601,50 +638,44 @@ int open(const char * path, int flags, ...)
     va_end(ap);
   }
 
-  memset(&req, 0, sizeof(req));
-  if ((s = resolve(path, req.name)) < 0) return -1;
+  if ((s = resolve(path, name)) < 0) return -1;
   if (service(s) < 0) {
     if (s == MEMROFS)    /* no filesystem: the kernel's own file */
       return result(sys3(5 /* open */, (long)path, flags, mode));
     errno = ENOENT;
     return -1;
   }
-  if (!req.name[0]) { errno = EISDIR; return -1; }
+  if (!name[0]) { errno = EISDIR; return -1; }
 
-  req.type = FS_OPEN;
-  if ((flags & O_ACCMODE) != O_RDONLY) req.arg1 |= FS_O_WRITE;
-  if (flags & O_CREAT)  req.arg1 |= FS_O_CREAT;
-  if (flags & O_TRUNC)  req.arg1 |= FS_O_TRUNC;
-  if (flags & O_APPEND) req.arg1 |= FS_O_APPEND;
-  if (fs_call(s, &req, &r, NULL) < 0) { errno = EIO; return -1; }
-  if (r.status != FS_OK) {
-    if (s == MEMROFS && r.status == FS_NOT_FOUND &&
-	!strcmp(req.name, KERNEL_BYTECODE))
+  if ((flags & O_ACCMODE) != O_RDONLY) f |= FS_O_WRITE;
+  if (flags & O_CREAT)  f |= FS_O_CREAT;
+  if (flags & O_TRUNC)  f |= FS_O_TRUNC;
+  if (flags & O_APPEND) f |= FS_O_APPEND;
+  fs_start(&w, FS_OPEN);
+  wire_put_cstring(&w, name);
+  wire_put_int(&w, f);
+  if ((fd = fs_simple(s, &w, 1)) < 0) {
+    if (s == MEMROFS && errno == ENOENT && !strcmp(name, KERNEL_BYTECODE))
       return result(sys3(5, (long)path, flags, 0));
-    errno = status_errno(r.status);
     return -1;
   }
   for (slot = 0; slot < FD_MAX && files[slot].used; slot++)
     ;
   if (slot == FD_MAX) {
-    int fd = r.value;
-    memset(&req, 0, sizeof(req));
-    req.type = FS_CLOSE;
-    req.fd = fd;
-    fs_call(s, &req, &r, NULL);
+    fs_start(&w, FS_CLOSE);
+    wire_put_int(&w, fd);
+    fs_simple(s, &w, 0);
     errno = EMFILE;
     return -1;
   }
   files[slot].used = 1;
   files[slot].service = s;
-  files[slot].fd = r.value;
+  files[slot].fd = (int)fd;
   return FD_BASE + slot;
 }
 
 int close(int fd)
 {
-  struct fs_req req;
-  struct fs_reply r;
   int slot;
 
   if (fd >= 0 && fd <= 2 && std_fd(fd) != fd) {
@@ -656,47 +687,32 @@ int close(int fd)
 
   if (slot < 0) return result(sys3(6 /* close */, fd, 0, 0));
   files[slot].used = 0;
-  memset(&req, 0, sizeof(req));
-  req.type = FS_CLOSE;
-  req.fd = files[slot].fd;
-  if (fs_call(files[slot].service, &req, &r, NULL) < 0) { errno = EIO; return -1; }
-  if (r.status != FS_OK) { errno = status_errno(r.status); return -1; }
-  return 0;
+  {
+    wire_writer w;
+    fs_start(&w, FS_CLOSE);
+    wire_put_int(&w, files[slot].fd);
+    return fs_simple(files[slot].service, &w, 0) < 0 ? -1 : 0;
+  }
 }
 
-/* one READ request: up to FS_IOMAX bytes */
+/* one Read request: up to FS_IOMAX bytes */
 static ssize_t fs_read(int slot, char * buf, size_t count)
 {
-  struct fs_req req;
-  struct fs_reply r;
+  wire_writer w;
+  wire_reader r;
   mynos_msg_t * msg;
-  int channel, n;
+  const char * data;
+  unsigned int n;
 
-  memset(&req, 0, sizeof(req));
-  req.type = FS_READ;
-  req.fd = files[slot].fd;
-  req.arg1 = count > FS_IOMAX ? FS_IOMAX : count;
-  if (fs_call(files[slot].service, &req, &r, &channel) < 0) {
-    errno = EIO;
-    return -1;
-  }
-  if (r.status != FS_OK) {
-    mynos_freeChannel(channel);
-    errno = status_errno(r.status);
-    return -1;
-  }
-  n = r.value;
-  if (n > 0) {
-    if (mynos_recv(channel, &msg, 0, 0) < 0) {
-      mynos_freeChannel(channel);
-      errno = EIO;
-      return -1;
-    }
-    if ((int)msg->size < n) n = msg->size;
-    memcpy(buf, msg->start, n);
-    mynos_freeMsg(&msg);
-  }
-  mynos_freeChannel(channel);
+  fs_start(&w, FS_READ);
+  wire_put_int(&w, files[slot].fd);
+  wire_put_int(&w, count > FS_IOMAX ? FS_IOMAX : count);
+  if (fs_request(files[slot].service, &w, &r, &msg) < 0) return -1;
+  data = wire_get_string(&r, &n);
+  if (r.error) { mynos_freeMsg(&msg); errno = EIO; return -1; }
+  if (n > count) n = count;
+  memcpy(buf, data, n);
+  mynos_freeMsg(&msg);
   return n;
 }
 
@@ -721,35 +737,14 @@ ssize_t read(int fd, void * buf, size_t count)
   return done;
 }
 
-/* one WRITE request: the request, then the data, then the reply */
+/* one Write request: the data in the request */
 static ssize_t fs_write(int slot, const char * buf, size_t count)
 {
-  struct fs_req req;
-  struct fs_reply r;
-  mynos_msg_t * msg;
-  int port = service(files[slot].service), channel, ok;
-
-  if (port < 0) { errno = EIO; return -1; }
-  memset(&req, 0, sizeof(req));
-  req.type = FS_WRITE;
-  req.client = getpid();
-  req.fd = files[slot].fd;
-  req.arg1 = count > FS_IOMAX ? FS_IOMAX : count;
-  if ((channel = mynos_connectToPort(port)) < 0) { forget_port(port); errno = EIO; return -1; }
-  ok = mynos_send(channel, &req, sizeof(req), 0) == 0 &&
-       mynos_send(channel, (void *)buf, req.arg1, 0) == 0 &&
-       mynos_recv(channel, &msg, 0, 0) == 0;
-  mynos_freeChannel(channel);
-  if (!ok) { errno = EIO; return -1; }
-  if (msg->size != sizeof(r)) {
-    mynos_freeMsg(&msg);
-    errno = EIO;
-    return -1;
-  }
-  memcpy(&r, msg->start, sizeof(r));
-  mynos_freeMsg(&msg);
-  if (r.status != FS_OK) { errno = status_errno(r.status); return -1; }
-  return r.value;
+  wire_writer w;
+  fs_start(&w, FS_WRITE);
+  wire_put_int(&w, files[slot].fd);
+  wire_put_string(&w, buf, count > FS_IOMAX ? FS_IOMAX : count);
+  return fs_simple(files[slot].service, &w, 1);
 }
 
 ssize_t write(int fd, const void * buf, size_t count)
@@ -775,57 +770,41 @@ ssize_t write(int fd, const void * buf, size_t count)
 
 off_t lseek(int fd, off_t offset, int whence)
 {
-  struct fs_req req;
-  struct fs_reply r;
+  wire_writer w;
   int slot;
 
   fd = std_fd(fd);
   slot = file_slot(fd);
 
   if (slot < 0) return result(sys3(19 /* lseek */, fd, (long)offset, whence));
-  memset(&req, 0, sizeof(req));
-  req.type = FS_LSEEK;
-  req.fd = files[slot].fd;
-  req.arg1 = (int)offset;
-  req.arg2 = whence;
-  if (fs_call(files[slot].service, &req, &r, NULL) < 0) { errno = EIO; return -1; }
-  if (r.status != FS_OK) { errno = status_errno(r.status); return -1; }
-  return r.value;
+  fs_start(&w, FS_SEEK);
+  wire_put_int(&w, files[slot].fd);
+  wire_put_int(&w, offset);
+  wire_put_int(&w, whence);
+  return fs_simple(files[slot].service, &w, 1);
 }
 
 int unlink(const char * path)
 {
-  return name_call(path, FS_UNLINK);
+  return name_call(path, FS_REMOVE);
 }
 
-/* rename: within one service; the new name comes in a second message */
+/* rename: within one service */
 int rename(const char * from, const char * to)
 {
-  struct fs_req req;
-  struct fs_reply r;
-  char newname[FS_NAMEMAX];
-  mynos_msg_t * msg;
-  int s, s2, port, channel, ok;
+  char name[FS_NAMEMAX], newname[FS_NAMEMAX];
+  wire_writer w;
+  int s, s2;
 
-  memset(&req, 0, sizeof(req));
-  if ((s = resolve(from, req.name)) < 0 || (s2 = resolve(to, newname)) < 0)
+  if ((s = resolve(from, name)) < 0 || (s2 = resolve(to, newname)) < 0)
     return -1;
   if (s != s2) { errno = EXDEV; return -1; }
-  if ((port = service(s)) < 0) { errno = ENOENT; return -1; }
-  if (!req.name[0] || !newname[0]) { errno = EBUSY; return -1; }
-  req.type = FS_RENAME;
-  req.client = getpid();
-  if ((channel = mynos_connectToPort(port)) < 0) { forget_port(port); errno = EIO; return -1; }
-  ok = mynos_send(channel, &req, sizeof(req), 0) == 0 &&
-       mynos_send(channel, newname, strlen(newname) + 1, 0) == 0 &&
-       mynos_recv(channel, &msg, 0, 0) == 0;
-  mynos_freeChannel(channel);
-  if (!ok) { errno = EIO; return -1; }
-  if (msg->size != sizeof(r)) { mynos_freeMsg(&msg); errno = EIO; return -1; }
-  memcpy(&r, msg->start, sizeof(r));
-  mynos_freeMsg(&msg);
-  if (r.status != FS_OK) { errno = status_errno(r.status); return -1; }
-  return 0;
+  if (service(s) < 0) { errno = ENOENT; return -1; }
+  if (!name[0] || !newname[0]) { errno = EBUSY; return -1; }
+  fs_start(&w, FS_RENAME);
+  wire_put_cstring(&w, name);
+  wire_put_cstring(&w, newname);
+  return fs_simple(s, &w, 0) < 0 ? -1 : 0;
 }
 
 int mkdir(const char * path, mode_t mode)
@@ -932,6 +911,10 @@ struct __dirstream {
   char name[FS_NAMEMAX];   /* the directory inside the service */
   int index;               /* next entry to list */
   int mounts_listed;       /* "/" also lists the mount points, after */
+  int loaded;              /* the entries came (one List request) */
+  int count;
+  char * names;            /* count names, each with its final 0 */
+  char * dirs;             /* count flags: a directory */
   struct dirent entry;
 };
 
@@ -985,50 +968,69 @@ static struct dirent * next_mount(DIR * d)
   return NULL;
 }
 
+/* the directory's entries, with one List request: 0 or -1 */
+static int dir_load(DIR * d)
+{
+  wire_writer w;
+  wire_reader r;
+  mynos_msg_t * msg;
+  long long n, i;
+  size_t used = 0;
+
+  d->loaded = 1;
+  fs_start(&w, FS_LIST);
+  wire_put_cstring(&w, d->name);
+  if (fs_request(d->service, &w, &r, &msg) < 0) return -1;
+  n = wire_get_int(&r);
+  if (r.error || n < 0 || n > (long long)msg->size) { mynos_freeMsg(&msg); errno = EIO; return -1; }
+  d->names = malloc(msg->size + 1);
+  d->dirs = malloc(n + 1);
+  if (!d->names || !d->dirs) { mynos_freeMsg(&msg); errno = ENOMEM; return -1; }
+  for (i = 0; i < n; i++) {
+    unsigned int len;
+    const char * name = wire_get_string(&r, &len);
+    long long size = wire_get_int(&r);
+    if (r.error) break;
+    memcpy(d->names + used, name, len);
+    d->names[used + len] = 0;
+    used += len + 1;
+    d->dirs[i] = size == -1;
+  }
+  d->count = r.error ? (int)i : (int)n;
+  mynos_freeMsg(&msg);
+  return 0;
+}
+
 struct dirent * readdir(DIR * d)
 {
-  struct fs_req req;
-  struct fs_reply r;
-  mynos_msg_t * msg;
-  struct dirent * e;
-  int channel;
+  const char * name;
+  int i;
 
   if (d->mounts_listed) return next_mount(d);
-  memset(&req, 0, sizeof(req));
-  req.type = FS_LIST;
-  req.arg1 = d->index;
-  strcpy(req.name, d->name);
-  if (fs_call(d->service, &req, &r, &channel) < 0) { errno = EIO; return NULL; }
-  if (r.status != FS_OK) {               /* the end: errno unchanged */
-    mynos_freeChannel(channel);
+  if (!d->loaded && dir_load(d) < 0) return NULL;
+  if (d->index >= d->count) {             /* the end: errno unchanged */
     if (d->service == MEMROFS && !d->name[0]) return next_mount(d);
     return NULL;
   }
-  if (mynos_recv(channel, &msg, 0, 0) < 0) {
-    mynos_freeChannel(channel);
-    errno = EIO;
-    return NULL;
-  }
-  {
-    const char * name = msg->start;
-    int len = 0;
-    while (len < (int)msg->size && name[len]) len++;
-    e = dir_entry(d, name, len, r.value == -1);
-  }
-  mynos_freeMsg(&msg);
-  mynos_freeChannel(channel);
+  name = d->names;
+  for (i = 0; i < d->index; i++) name += strlen(name) + 1;
   d->index++;
-  return e;
+  return dir_entry(d, name, strlen(name), d->dirs[d->index - 1]);
 }
 
 void rewinddir(DIR * d)
 {
   d->index = 0;
   d->mounts_listed = 0;
+  d->loaded = 0;                          /* listed again */
+  free(d->names); d->names = NULL;
+  free(d->dirs); d->dirs = NULL;
 }
 
 int closedir(DIR * d)
 {
+  free(d->names);
+  free(d->dirs);
   free(d);
   return 0;
 }

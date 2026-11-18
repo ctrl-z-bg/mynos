@@ -38,7 +38,7 @@ FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo n
 	$(wildcard $(STDLIB)/*.cmi) \
 	$(STDLIB)/stdlib.cma $(STDLIB)/std_exit.cmo $(STDLIB)/runtime-launch-info \
 	ocamlc.byte ../mynos-runtime/primitives \
-	../mynos-lib/ocaml/mynos.cma ../mynos-lib/ocaml/block.cmi \
+	../mynos-lib/ocaml/mynos.cma ../mynos-lib/ocaml/block.cmi ../mynos-lib/ocaml/fs.cmi \
 	../mynos-lib/ocaml/wire.cmi ../mynos-lib/ocaml/ipc.cmi ../mynos-lib/ocaml/net.cmi \
 	../mynos-lib/ocaml/tracer.cmi ../mynos-lib/ocaml/json.cmi ../mynos-lib/ocaml/http.cmi \
 	../mynos-lib/ocaml/llm.cmi ../mynos-lib/ocaml/tools.cmi \

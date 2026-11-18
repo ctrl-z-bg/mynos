@@ -1,43 +1,17 @@
 (* The Mynos OCaml library on MyNOS: processes, semaphores, sleeping, and
-   an OCaml client of the memrofs service (C), over IPC. *)
+   an OCaml client of the memrofs service (C), over typed IPC (fs/1). *)
 
 let check what ok =
   Printf.printf "mynos-ocaml: %-34s %s\n%!" what (if ok then "ok" else "FAIL");
   ok
 
-(* file service protocol (mynos-lib/include/mynos_fs.h): an 84-byte
-   struct fs_req { int type, client, fd, arg1, arg2; char name[64]; }
-   and an 8-byte struct fs_reply { int status, value; } *)
-let request typ fill =
-  let b = Bytes.make 84 '\000' in
-  Bytes.set_int32_le b 0 (Int32.of_int typ);
-  Bytes.set_int32_le b 4 (Int32.of_int (Mynos.getpid ()));
-  fill b; Bytes.to_string b
-let int32_at s i = Int32.to_int (String.get_int32_le s i)
-
-let memrofs_call port req =
-  let ch = Mynos.connect port in
-  Mynos.send ch req;
-  let reply = Mynos.recv ~timeout:2.0 ch in
-  ch, reply
-
+(* memrofs (C) over typed IPC: fs/1, module Fs *)
 let read_file name =
-  let port = Mynos.lookup "memrofs" in
-  (* OPEN *)
-  let ch, r = memrofs_call port (request 0 (fun b ->
-    Bytes.blit_string name 0 b 20 (String.length name))) in
-  Mynos.free_channel ch;
-  let status = int32_at r 0 and fd = int32_at r 4 in
-  if status <> 0 then failwith (Printf.sprintf "open: status %d" status);
-  (* READ: a reply { status; n }, then the data *)
-  let ch, r = memrofs_call port (request 2 (fun b ->
-    Bytes.set_int32_le b 8 (Int32.of_int fd);
-    Bytes.set_int32_le b 12 100l)) in
-  let status = int32_at r 0 and rd = int32_at r 4 in
-  if status <> 0 then failwith (Printf.sprintf "read: status %d" status);
-  let data = Mynos.recv ~timeout:2.0 ch in
-  Mynos.free_channel ch;
-  String.sub data 0 rd
+  let c = Fs.connect "memrofs" in
+  let fd = Fs.call c (Fs.Open (name, 0)) in
+  let s = Fs.call c (Fs.Read (fd, 100)) in
+  Fs.call c (Fs.Close fd);
+  s
 
 let () =
   let ok = ref true in
@@ -74,6 +48,18 @@ let () =
    | exception e ->
        print_endline (Printexc.to_string e);
        ok &&& check "read a file through memrofs" false);
+  (let c = Fs.connect "memrofs" in
+   ok &&& check "memrofs lists its files"
+     (List.mem_assoc "AUTOEXEC.BAT" (Fs.call c (Fs.List "")));
+   ok &&& check "memrofs refuses to write"
+     (match Fs.call c (Fs.Open ("AUTOEXEC.BAT", Fs.o_write)) with
+      | _ -> false
+      | exception Ipc.Remote_error (_, m) -> Fs.error_of m = Fs.read_only);
+   let shape (rs : Ipc.request_doc list) =
+     List.map (fun (r : Ipc.request_doc) -> (r.case, r.name, r.args, r.reply, r.safe)) rs in
+   let d = Ipc.describe "memrofs" in
+   ok &&& check "memrofs (C) describes fs/1 as fs.ml"
+     (d.Ipc.protocol = "fs/1" && shape d.requests = shape Fs.Protocol.requests));
   (* typed IPC: the wire format *)
   let round c x = Wire.of_string c (Wire.to_string c x) = x in
   let malformed c s = match Wire.of_string c s with

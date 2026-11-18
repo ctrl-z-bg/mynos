@@ -7,7 +7,7 @@ LDFLAGS = -L../../mynos-lib/lib/ -lmynos $(MYNOS_LDFLAGS)
 
 all: stress ramdisk.dsk
 
-stress: stress.o
+stress: stress.o ../../mynos-lib/lib/libmynos.a
 	$(CC) stress.o -o stress $(LDFLAGS)
 
 ramdisk.dsk: stress

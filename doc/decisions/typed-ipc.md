@@ -108,4 +108,15 @@ Alternatives:
    is its client (`fatfs` unchanged). Its C header `mynos_block.h` goes
    away: no C program uses it.
 2. Then the network service (mynos-4f6), with the C side of `Wire`.
-3. Later, a typed interface of the file services next to `mynos_fs.h`.
+3. The file services (2026-11-18, mynos-7a1): **fs/1** replaces the C
+   structs of `mynos_fs.h` (an 84-byte request, an 8-byte reply, data in
+   extra messages). `Fs` (`mynos-lib/ocaml/fs.mli`) defines it: open,
+   close, read, write, seek, list (a directory in one reply), remove,
+   mkdir, rmdir, rename; errors are messages starting with a name
+   (`not_found: ...`). tmpfs and fatfs serve it with a typed handler;
+   memrofs (C, 2002) speaks it through `mynos_wire.h` and describes
+   itself the same way (a test compares its description with `fs.ml`'s);
+   libmynos is its client for every program. The client is the caller the
+   kernel names (`channelPeer`), not a pid written in the request. Every
+   service of MyNOS now speaks typed IPC except the console and the
+   registry.

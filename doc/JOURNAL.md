@@ -2017,3 +2017,35 @@ assumption in every check it calls; generalising it to "a process" means
 following each callee. A test that kills a service and then uses it
 found what a test that only killed it did not.
 
+## 2026-11-18 — The file services move to typed IPC
+
+**Why.** The last big C-struct protocol was the files': a fixed 84-byte
+request with the client's pid written in it, an 8-byte reply, data in a
+second message, a directory read one entry per request. Programs could
+not use it typed, the agent could not call it, recordings needed special
+decoding.
+
+**How.** One protocol, fs/1, defined once in OCaml (`Fs`) and mirrored in
+C by `mynos_wire.h`: the three services and libmynos changed together.
+The services kept their logic: tmpfs and fatfs got a typed handler around
+the same functions (fatfs's took the old request as an array, which the
+handler builds), memrofs kept its 2002 structures. The client's identity
+now comes from the kernel (`channelPeer`) instead of the request.
+
+**One surprise**: the first edit of libmynos replaced the *prototype* of
+`open` (declared early for the redirections) instead of its definition,
+leaving the old one in place; a search for the old struct names, before
+building, showed two definitions. An edit by "first occurrence" needs the
+definition's own text as its anchor, and a look afterwards.
+
+**And the build.** The first full run failed two tests that seemed
+unrelated: the shell history was no longer saved on /disk, and the kernel
+stress test failed to start its clients, though it passed when run alone.
+Both programs are C, linked with libmynos, and their Makefiles did not
+depend on `libmynos.a`: consoled and the stress test were not linked
+again, kept the old struct protocol, and were refused by the new
+services. (Run alone, the stress test had been rebuilt by hand.) Every C
+program now depends on the library it links. Lesson: when a protocol
+changes, the build must rebuild every speaker of it; a test that passes
+alone and fails in the suite may be testing a different binary.
+

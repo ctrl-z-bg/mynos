@@ -728,7 +728,7 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
           "$(printf 'from sh\nv4\n')" ] && sh_saved=yes
         tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/calls.txt \
             2>/dev/null > "$tmp/calls.txt" || true
-        grep -q 'sh(.*-> fatfs(.*fs OPEN "Makefile"' "$tmp/calls.txt" &&
+        grep -q 'sh(.*-> fatfs(.*fs/1 Open ("Makefile", 0)' "$tmp/calls.txt" &&
             grep -q '^ .*  fatfs(.*-> ata(.*block/1 Read' "$tmp/calls.txt" && trace_calls=yes
         for r in r1 r2; do
             tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/$r.txt \
@@ -738,7 +738,7 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
 import re, sys
 def counts(path):
     s = open(path, encoding="latin-1").read()
-    reads = len(re.findall(r"-> fatfs\(\d+\)\s+fs READ", s))
+    reads = len(re.findall(r"-> fatfs\(\d+\)\s+fs/1 Read", s))
     disk = len(re.findall(r"fatfs\(\d+\) -> ata\(\d+\)\s+block/1 Read", s))
     return reads, disk
 (r1, d1), (r2, d2) = counts(sys.argv[1]), counts(sys.argv[2])

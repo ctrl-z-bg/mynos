@@ -31,7 +31,7 @@ LDFLAGS = -L../../mynos-lib/lib/ -lmynos $(MYNOS_LDFLAGS)
 
 all: registry
 
-registry: $(OFILES)
+registry: $(OFILES) ../../mynos-lib/lib/libmynos.a
 	$(CC) $(OFILES) -o registry $(LDFLAGS)
 
 

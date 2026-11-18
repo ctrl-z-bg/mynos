@@ -6,7 +6,7 @@ LDFLAGS = -L../../mynos-lib/lib/ -lmynos $(MYNOS_LDFLAGS)
 
 all: abi
 
-abi: abi.o
+abi: abi.o ../../mynos-lib/lib/libmynos.a
 	$(CC) abi.o -o abi $(LDFLAGS)
 
 clean:

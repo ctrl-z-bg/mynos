@@ -1,7 +1,8 @@
 (* fatfs: the FAT filesystem of the disk, written in OCaml. Programs see it
    as /disk (libmynos sends /disk/PATH here as PATH). It reads and writes
    the disk through the block service of the ATA driver (module Block), and
-   speaks the file service protocol (mynos-lib/include/mynos_fs.h).
+   speaks fs/1, the protocol of the file services (module Fs,
+   mynos-lib/include/mynos_fs.h), over typed IPC.
 
    FAT16 and FAT32, as made by mkfs.fat; directories; 8.3 names (with the
    lower-case flags of Windows NT) and VFAT long names, read and written.
@@ -10,11 +11,7 @@
    ones read in runs, and an open file keeps its cluster chain while the
    FAT does not change. File times come from the clock read at boot. *)
 
-(* ---- protocol (mynos_fs.h) ---- *)
-
-let fs_open = 0 and fs_close = 1 and fs_read = 2 and fs_lseek = 3
-and fs_list = 4 and fs_write = 5 and fs_unlink = 6 and fs_mkdir = 7
-and fs_rmdir = 8 and fs_rename = 9
+(* ---- protocol: flags and errors as in Fs ---- *)
 
 let o_write = 1 and o_creat = 2 and o_trunc = 4 and o_append = 8
 
@@ -691,73 +688,41 @@ let do_rename name target =
       end
     end
 
-(* ---- the service ---- *)
+(* ---- the service: fs/1 (module Fs), typed IPC ---- *)
 
-let reply ch status value =
-  let b = Bytes.create 8 in
-  Bytes.set_int32_le b 0 (Int32.of_int status);
-  Bytes.set_int32_le b 4 (Int32.of_int value);
-  Mynos.send ch (Bytes.to_string b)
-
-let serve ch =
-  let msg = Mynos.recv ~timeout:1.0 ch in
-  if String.length msg <> 20 + name_max then reply ch invalid (-1)
-  else begin
-    (* type, client, fd, arg1, arg2; and the name *)
-    let r = Array.init 5 (fun i -> Int32.to_int (String.get_int32_le msg (4 * i))) in
-    let raw = String.sub msg 20 name_max in
-    let name = match String.index_opt raw '\000' with
-      | Some n -> String.sub raw 0 n | None -> raw in
-    let typ = r.(0) in
-    (* WRITE: the data follows the request: take it before replying *)
-    let data =
-      if typ = fs_write || typ = fs_rename then Some (Mynos.recv ~timeout:1.0 ch)
-      else None in
-    match
-      if typ = fs_open then `Value (do_open r name)
-      else if typ = fs_close then (ignore (owned r); Hashtbl.remove descs r.(2); `Value 0)
-      else if typ = fs_read then begin
-        let f = owned r in
-        `Data (read_file f (min r.(3) io_max))
-      end else if typ = fs_write then begin
-        let f = owned r in
+let handle = { Fs.handle = fun (type a) (caller : Ipc.caller) (q : a Fs.request) : a ->
+    let me = caller.Ipc.pid in
+    (* the internal functions take a request as an array: type, client, fd,
+       arg1, arg2 *)
+    let r ?(fd = 0) ?(a1 = 0) ?(a2 = 0) () = [| 0; me; fd; a1; a2 |] in
+    try
+      match q with
+      | Fs.Open (name, flags) -> do_open (r ~a1:flags ()) name
+      | Fs.Close fd -> ignore (owned (r ~fd ())); Hashtbl.remove descs fd
+      | Fs.Read (fd, n) -> read_file (owned (r ~fd ())) (min n io_max)
+      | Fs.Write (fd, data) ->
+        let f = owned (r ~fd ()) in
         if not f.writable then raise (Status denied);
-        `Value (write_file f (Option.get data))
-      end else if typ = fs_lseek then begin
-        let f = owned r in
-        let base = match r.(4) with
+        write_file f data
+      | Fs.Seek (fd, offset, whence) ->
+        let f = owned (r ~fd ()) in
+        let base = match whence with
           | 0 -> 0 | 1 -> f.pos | 2 -> f.dsize | _ -> raise (Status invalid) in
-        if base + r.(3) < 0 then raise (Status invalid);
-        f.pos <- base + r.(3);
-        `Value f.pos
-      end else if typ = fs_list then begin
-        let es = entries (load (directory name)) in
-        match List.nth_opt es r.(3) with
-        | Some e when r.(3) >= 0 ->
-          `Entry ((if e.attr land attr_dir <> 0 then -1 else e.size), e.name)
-        | _ -> raise (Status not_found)
-      end else if typ = fs_unlink then (remove name ~want_dir:false; `Value 0)
-      else if typ = fs_mkdir then (do_mkdir name; `Value 0)
-      else if typ = fs_rmdir then (remove name ~want_dir:true; `Value 0)
-      else if typ = fs_rename then (do_rename name (Option.get data); `Value 0)
-      else raise (Status invalid)
+        if base + offset < 0 then raise (Status invalid);
+        f.pos <- base + offset;
+        f.pos
+      | Fs.List name ->
+        List.map (fun e -> (e.name, if e.attr land attr_dir <> 0 then -1 else e.size))
+          (entries (load (directory name)))
+      | Fs.Remove name -> remove name ~want_dir:false
+      | Fs.Mkdir name -> do_mkdir name
+      | Fs.Rmdir name -> remove name ~want_dir:true
+      | Fs.Rename (name, target) -> do_rename name target
     with
-    | `Value v -> reply ch ok v
-    | `Data s -> reply ch ok (String.length s); if s <> "" then Mynos.send ch s
-    | `Entry (size, n) -> reply ch ok size; Mynos.send ch (n ^ "\000")
-    | exception Status st -> reply ch st (-1)
-    | exception (Failure e | Invalid_argument e) ->
-      Mynos.log ("fatfs: " ^ e); reply ch invalid (-1)
-  end
+    | Status st -> Fs.fail st
+    | Invalid_argument e -> Mynos.log ("fatfs: " ^ e); Fs.fail Fs.invalid }
 
 let () =
-  let port = Mynos.register "fatfs" in
-  Mynos.log (Printf.sprintf "fatfs: FAT%d, %d clusters of %d bytes, service on port %d"
-               (if fat32 then 32 else 16) clusters cluster_bytes port);
-  while true do
-    let ch = Mynos.listen port in
-    (try serve ch
-     with Mynos.Error (fn, code) ->
-       Mynos.log (Printf.sprintf "fatfs: %s: %s" fn (Mynos.error_name code)));
-    (try Mynos.free_channel ch with Mynos.Error _ -> ())
-  done
+  Mynos.log (Printf.sprintf "fatfs: FAT%d, %d clusters of %d bytes, service fs/1 as fatfs"
+               (if fat32 then 32 else 16) clusters cluster_bytes);
+  Fs.serve "fatfs" handle

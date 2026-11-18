@@ -28,6 +28,12 @@ block.cmi: block.mli ipc.cmi
 block.cmo: block.ml block.cmi
 	$(OCAMLC) -c block.ml
 
+fs.cmi: fs.mli ipc.cmi
+	$(OCAMLC) -c fs.mli
+
+fs.cmo: fs.ml fs.cmi
+	$(OCAMLC) -c fs.ml
+
 net.cmi: net.mli ipc.cmi
 	$(OCAMLC) -c net.mli
 
@@ -94,7 +100,7 @@ tracer.cmi: tracer.mli
 tracer.cmo: tracer.ml tracer.cmi
 	$(OCAMLC) -c tracer.ml
 
-MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo tracer.cmo agent.cmo gfx.cmo display.cmo gui.cmo power.cmo
+MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo fs.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo tracer.cmo agent.cmo gfx.cmo display.cmo gui.cmo power.cmo
 
 mynos.cma: $(MODULES)
 	$(OCAMLC) -a -o $@ $(MODULES)

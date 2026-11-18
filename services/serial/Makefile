@@ -31,7 +31,7 @@ LDFLAGS = -L../../mynos-lib/lib/ -lmynos $(MYNOS_LDFLAGS)
 
 all: seriald
 
-seriald: $(OFILES)
+seriald: $(OFILES) ../../mynos-lib/lib/libmynos.a
 	$(CC) $(OFILES) -o seriald $(LDFLAGS)
 
 

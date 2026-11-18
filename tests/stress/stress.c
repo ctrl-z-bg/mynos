@@ -302,7 +302,7 @@ static int ipc_rounds(int port, int rounds) {
       snprintf(ps, sizeof ps, "%d", port);
       snprintf(ss, sizeof ss, "%u", sz[k]);
       pids[k] = spawn_child(argv);
-      if (pids[k] < 0) bad++;
+      if (pids[k] < 0) { printf("stress: spawn of a client: %d\n", pids[k]); bad++; }
     }
     /* clients connect in any order: each served message checks itself */
     for (k = 0; k < BATCH; k++)
