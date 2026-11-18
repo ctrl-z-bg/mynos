@@ -6,7 +6,9 @@
    FAT16 and FAT32, as made by mkfs.fat; directories; 8.3 names (with the
    lower-case flags of Windows NT) and VFAT long names, read and written.
    The whole FAT is kept in memory and written back (to every copy) after
-   each change. File times come from the clock read at boot. *)
+   each change; the sectors read are cached (2 MB, write-through), missing
+   ones read in runs, and an open file keeps its cluster chain while the
+   FAT does not change. File times come from the clock read at boot. *)
 
 (* ---- protocol (mynos_fs.h) ---- *)
 
@@ -67,13 +69,61 @@ let () =
   if bps <> 512 || spc = 0 || clusters < 4085 then
     failwith "fatfs: not a FAT16 or FAT32 volume of 512-byte sectors"
 
-(* sectors of the disk, in bytes *)
-let read_sectors lba n = Bytes.of_string (Block.read dev lba n)
-let write_sectors lba b = Block.write dev lba (Bytes.to_string b)
+(* ---- the sectors, through a cache ----
+
+   Sectors read are kept (4096 of them, 2 MB; the oldest go first), so
+   that a file read twice, a directory looked up at every command (PATH)
+   or two readers of one file read the disk once. Writes go to the disk at
+   once (write-through) and to the cache. Missing sectors are read in runs:
+   one request for consecutive sectors, not one per sector. *)
+
+let cache_max = 4096
+let cache : (int, Bytes.t) Hashtbl.t = Hashtbl.create cache_max
+let cache_order : int Queue.t = Queue.create ()       (* oldest first *)
+let cache_hits = ref 0 and cache_misses = ref 0
+
+let cache_put lba b =
+  if not (Hashtbl.mem cache lba) then begin
+    while Hashtbl.length cache >= cache_max && not (Queue.is_empty cache_order) do
+      Hashtbl.remove cache (Queue.pop cache_order)
+    done;
+    Queue.push lba cache_order
+  end;
+  Hashtbl.replace cache lba b
+
+(* n sectors from lba: a fresh buffer (the cache keeps its own copies) *)
+let read_sectors lba n =
+  let out = Bytes.create (n * bps) in
+  let i = ref 0 in
+  while !i < n do
+    match Hashtbl.find_opt cache (lba + !i) with
+    | Some b -> incr cache_hits; Bytes.blit b 0 out (!i * bps) bps; incr i
+    | None ->
+      (* the run of missing sectors from here: one request *)
+      let j = ref (!i + 1) in
+      while !j < n && !j - !i < 64 && not (Hashtbl.mem cache (lba + !j)) do incr j done;
+      let data = Block.read dev (lba + !i) (!j - !i) in
+      cache_misses := !cache_misses + (!j - !i);
+      for k = !i to !j - 1 do
+        let b = Bytes.of_string (String.sub data ((k - !i) * bps) bps) in
+        cache_put (lba + k) b;
+        Bytes.blit b 0 out (k * bps) bps
+      done;
+      i := !j
+  done;
+  out
+
+let write_sectors lba b =
+  Block.write dev lba (Bytes.to_string b);
+  for k = 0 to Bytes.length b / bps - 1 do
+    cache_put (lba + k) (Bytes.sub b (k * bps) bps)
+  done
 
 (* ---- the FAT ---- *)
 
-let fat = read_sectors reserved fat_size
+(* kept whole in memory: read once, not through the cache *)
+let fat = Bytes.of_string (Block.read dev reserved fat_size)
+let fat_version = ref 0                 (* changes with every change of the FAT *)
 let dirty = Array.make fat_size false
 
 let eoc = if fat32 then 0x0FFFFFFF else 0xFFFF
@@ -90,6 +140,7 @@ let set_fat c v =
     set_u16 fat (4 * c + 2)
       ((u16 fat (4 * c + 2) land 0xF000) lor ((v lsr 16) land 0x0FFF))
   end else set_u16 fat (2 * c) v;
+  incr fat_version;
   dirty.((if fat32 then 4 else 2) * c / bps) <- true
 
 (* write the changed sectors of the FAT to every copy *)
@@ -428,7 +479,19 @@ type desc = {
   mutable pos : int;
   writable : bool;
   append : bool;
+  mutable dchain : int * int * int array;   (* first, FAT version, its clusters *)
 }
+
+(* a file's clusters, kept while the FAT does not change: not walked again
+   at every read *)
+let clusters_of f =
+  let first, version, cl = f.dchain in
+  if first = f.dfirst && version = !fat_version then cl
+  else begin
+    let cl = Array.of_list (chain f.dfirst) in
+    f.dchain <- (f.dfirst, !fat_version, cl);
+    cl
+  end
 
 let descs : (int, desc) Hashtbl.t = Hashtbl.create 16
 let next_fd = ref 3
@@ -458,7 +521,7 @@ let do_open r name =
     | Some e when e.attr land attr_dir <> 0 -> raise (Status is_dir)
     | Some e ->
       let f = { client = r.(1); ddir = d; dslot = e.slot; dfirst = e.first;
-                dsize = e.size; pos = 0; writable;
+                dsize = e.size; pos = 0; dchain = (-1, -1, [||]); writable;
                 append = r.(3) land o_append <> 0 } in
       if writable && r.(3) land o_trunc <> 0 && e.size > 0 then begin
         free_chain f.dfirst;
@@ -470,7 +533,7 @@ let do_open r name =
       f
     | None when r.(3) land o_creat <> 0 ->
       let slot = add_entry d last 0x20 0 in
-      { client = r.(1); ddir = d; dslot = slot; dfirst = 0; dsize = 0; pos = 0;
+      { client = r.(1); ddir = d; dslot = slot; dfirst = 0; dsize = 0; pos = 0; dchain = (-1, -1, [||]);
         writable; append = r.(3) land o_append <> 0 }
     | None -> raise (Status not_found) in
   let fd = !next_fd in
@@ -487,14 +550,19 @@ let owned r =
 (* n bytes of a file from pos *)
 let read_file f n =
   let n = max 0 (min n (f.dsize - f.pos)) in
-  let cl = Array.of_list (chain f.dfirst) in
+  let cl = clusters_of f in
   let buf = Bytes.create n in
   let rec go done_ =
     if done_ < n then begin
       let p = f.pos + done_ in
-      let c = cl.(p / cluster_bytes) and o = p mod cluster_bytes in
-      let k = min (n - done_) (cluster_bytes - o) in
-      Bytes.blit (read_cluster c) o buf done_ k;
+      let idx = p / cluster_bytes and o = p mod cluster_bytes in
+      (* the clusters that follow each other on the disk, from idx: one read *)
+      let last = (f.pos + n - 1) / cluster_bytes in
+      let j = ref idx in
+      while !j < last && cl.(!j + 1) = cl.(!j) + 1 do incr j done;
+      let run = read_sectors (cluster_lba cl.(idx)) ((!j - idx + 1) * spc) in
+      let k = min (n - done_) (Bytes.length run - o) in
+      Bytes.blit run o buf done_ k;
       go (done_ + k)
     end in
   go 0;

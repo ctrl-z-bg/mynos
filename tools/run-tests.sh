@@ -31,7 +31,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh"
+results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -555,6 +555,7 @@ sec_seventh() {
 # seventh boot: the system RAM disk, init starts the services and sh, driven
 # through the keyboard: the OCaml toplevel (ocaml), programs, sh again
 history_saved= kilo_saved= edit_saved= sh_saved= trace_calls= trace_json= agent_marks=
+disk_reads=
 serial_same_sh=
 if [ -f system/ramdisk.dsk ]; then
     # a disk, for /disk and the shell's history: a copy of the FAT16 test image
@@ -600,7 +601,7 @@ if [ -f system/ramdisk.dsk ]; then
                   'run "kilo" ["/disk/k.txt"];;\n' 'typed in kilo' '{ctrl-s}' '{ctrl-q}' \
                   'edit "/disk/e.txt";;\n' '' 'second\n{up}first {ctrl-k}{ctrl-u}{ctrl-u}' '{ctrl-s}' '{ctrl-q}' \
                   'sh ();;\n' 'cd /disk; echo from sh > s.txt; X=4; echo "v$X" >> s.txt; cat s.txt | cat\n' \
-                  'trace -o /disk/t.trc cat s.txt > /tmp/tout.txt\n' '' \
+                  'trace -o /disk/t.trc cat Makefile > /tmp/tout.txt\n' '' \
                   'trace calls /disk/t.trc > calls.txt; trace json /disk/t.trc t.json\n' '' \
                   'exit\n' \
                   '#quit;;\n' 'exit\n'; do
@@ -673,6 +674,12 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte\n'; sleep 4
     printf 'sendkey ctrl-c\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null; sleep 2
     tools/type-keys.py "$tmp/mon7" 'echo st-$?\n'; sleep 2
+    # fatfs reads: a file of 100 KB not read yet in this boot (docs/big.bin,
+    # 2 KB clusters), read twice, recorded: the disk is asked for runs of
+    # sectors (not a request per cluster), then not at all (the cache)
+    tools/type-keys.py "$tmp/mon7" 'trace -o /disk/r1.trc cat /disk/docs/big.bin > /tmp/r1\n'; sleep 10
+    tools/type-keys.py "$tmp/mon7" 'trace -o /disk/r2.trc cat /disk/docs/big.bin > /tmp/r2\n'; sleep 10
+    tools/type-keys.py "$tmp/mon7" 'trace calls /disk/r1.trc > /disk/r1.txt; trace calls /disk/r2.trc > /disk/r2.txt\n'; sleep 15
     # the host's terminal on COM2: a line typed, then two pasted at once
     # (a burst: the shell must not read an end of file), then the keyboard
     banners=$(grep -ac 'MyNOS sh. help' "$log7")
@@ -698,8 +705,25 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
           "$(printf 'from sh\nv4\n')" ] && sh_saved=yes
         tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/calls.txt \
             2>/dev/null > "$tmp/calls.txt" || true
-        grep -q 'sh(.*-> fatfs(.*fs OPEN "s.txt"' "$tmp/calls.txt" &&
+        grep -q 'sh(.*-> fatfs(.*fs OPEN "Makefile"' "$tmp/calls.txt" &&
             grep -q '^ .*  fatfs(.*-> ata(.*block/1 Read' "$tmp/calls.txt" && trace_calls=yes
+        for r in r1 r2; do
+            tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/$r.txt \
+                2>/dev/null > "$tmp/$r.txt" || true
+        done
+        python3 - "$tmp/r1.txt" "$tmp/r2.txt" <<'PY' && disk_reads="$(cat "$tmp/r-counts")"
+import re, sys
+def counts(path):
+    s = open(path, encoding="latin-1").read()
+    reads = len(re.findall(r"-> fatfs\(\d+\)\s+fs READ", s))
+    disk = len(re.findall(r"fatfs\(\d+\) -> ata\(\d+\)\s+block/1 Read", s))
+    return reads, disk
+(r1, d1), (r2, d2) = counts(sys.argv[1]), counts(sys.argv[2])
+open(sys.argv[1].replace("r1.txt", "r-counts"), "w").write("%d %d %d %d" % (r1, d1, r2, d2))
+assert r1 >= 7 and r2 >= 7, (r1, r2)            # the file was read, in 16 KB requests
+assert 0 < d1 <= 2 * r1, (r1, d1)                # runs, not a request per cluster (49)
+assert d2 <= 2, (r2, d2)                         # read again: from the cache
+PY
         tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/agent-calls.txt \
             2>/dev/null > "$tmp/agent-calls.txt" || true
         grep -q '# agent([0-9]*): model call 1' "$tmp/agent-calls.txt" &&
@@ -838,6 +862,11 @@ if [ -f system/ramdisk.dsk ]; then
     expect "- : int = 40000"
     expect "AUTOEXEC.BAT: Read-only file system"
     expect "init: sh.byte (pid"
+    if [ -n "$disk_reads" ]; then
+        echo "ok    fatfs: reads in runs, then from the cache (READs, disk requests: $disk_reads)"
+    else
+        echo "FAIL  fatfs: reads in runs, then from the cache"; fail=1
+    fi
     if [ -n "$agent_marks" ]; then
         echo "ok    trace: the agent's steps marked in its recording"
     else

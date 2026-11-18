@@ -989,4 +989,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   headless, driven through its monitor; `tools/ppm2png.py` converts
   QEMU's screen dumps with the standard library only). The README says
   the project was taken up again in 2026 with the help of AI.
+- **2026-11-18** — fatfs reads faster (the owner saw two `cat` of one
+  file on /disk scale badly). Measured with the recorder: a 16 KB READ
+  was 32 one-sector requests to ata (512-byte clusters on
+  `system/disk.img`), 15-20 ms. Now consecutive sectors are asked in one
+  request, sectors are cached (2 MB, write-through), an open file keeps
+  its cluster chain: 2.85 ms the first time, 0.64 ms from the cache. fatfs
+  and ata still serve one request at a time. Test: a 100 KB file read
+  twice, the disk requests counted in the recordings (8, then 0).
 

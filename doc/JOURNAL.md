@@ -1959,3 +1959,34 @@ program, which is `gui`. displayd now clears ISIG, as an editor does.
 **Lesson.** A key passes through every layer that reads it; each one in
 raw mode must say whether it wants the key itself or its meaning.
 
+## 2026-11-18 — Two readers of /disk: where the time went
+
+**Symptom** (the owner). Two `cat` of the same file on /disk at once did
+not scale.
+
+**Measured** with the event recorder, not guessed: a `cat` of 400 KB on
+`system/disk.img` made 25 READ requests of 16 KB to fatfs, 15-20 ms each;
+each READ was 32 requests to the ata driver, one per 512-byte sector,
+about 0.31 ms each (`mkfs.fat` had chosen one-sector clusters for a
+64 MB FAT32). Most of the time was spent passing messages, not reading
+the disk. Nothing was cached: a second reader read everything again, and
+every command started from sh looked up `/disk/bin` (first in PATH)
+through the same two directory sectors. fatfs walked the file's cluster
+chain from the start at every READ. fatfs and ata serve one request at a
+time, so two readers simply took turns.
+
+**Fix.** In fatfs: missing sectors are read in runs, one request for
+consecutive ones (a contiguous file: one request per READ); a cache of
+4096 sectors, oldest first, written through; the chain kept in the open
+file while the FAT's version does not change. A READ is now 2.85 ms, or
+0.64 ms from the cache. The disk image's format was left alone: with runs,
+the cluster size no longer matters for contiguous files.
+
+**Tests had to change**: two of them read a file they had just written,
+which now comes from the cache and never reaches ata. They read files of
+the disk image that the boot had not touched.
+
+**Lesson.** The recorder answered in one run what reading the code would
+have taken longer to find, and showed the cost was in the messages, not
+the device. A microkernel makes many small requests expensive: batch them.
+
