@@ -331,7 +331,19 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     mon "screendump $tmp/gui10.ppm"
     click 219 177; sleep 3; click 400 233; sleep 3
     mon "screendump $tmp/gui9.ppm"
-    click 20 10; sleep 1; click 30 193; sleep 4    # the MyNOS menu, Exit
+    # the System window (the menu's seventh item, at 20,64): the system
+    # live; the agent's recording replayed on it, three steps; then a new
+    # process (a clock, from the menu) appears outlined
+    click 20 10; sleep 1; click 40 171; sleep 12
+    mon "screendump $tmp/gui11.ppm"
+    click 100 119; sleep 1
+    tools/type-keys.py "$tmp/mon-g" '/tmp/agent.trc'; sleep 1
+    click 364 117; sleep 8
+    for k in 1 2 3; do click 580 117; sleep 1; done; sleep 1
+    mon "screendump $tmp/gui12.ppm"
+    click 20 10; sleep 1; click 40 83; sleep 4
+    mon "screendump $tmp/gui13.ppm"
+    click 20 10; sleep 1; click 30 215; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt\n'; sleep 2
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # turning the machine off: init does it, QEMU ends by itself
@@ -349,7 +361,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     cat "$tmp/logg" >> "$log"
     python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
               "$tmp"/gui6.ppm "$tmp"/gui7.ppm "$tmp"/gui8.ppm "$tmp"/gui9.ppm \
-              "$tmp"/gui10.ppm <<'PY' && gui_ok=yes
+              "$tmp"/gui10.ppm "$tmp"/gui11.ppm "$tmp"/gui12.ppm "$tmp"/gui13.ppm <<'PY' && gui_ok=yes
 import sys
 def load(path):
     d = open(path, "rb").read()
@@ -360,7 +372,7 @@ def px(img, x, y):
     w, h, d = img
     i = 3 * (y * w + x)
     return (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]
-g1, g2, g3, g4, g5, g6, g7, g8, g9, g10 = (load(p) for p in sys.argv[1:11])
+g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13 = (load(p) for p in sys.argv[1:14])
 assert g1[:2] == (1024, 768), "graphics mode"
 assert px(g1, 500, 10) == 0x111820, "the top bar"
 assert px(g1, 300, 86) == 0x2D6CA2, "the welcome window, focused"
@@ -402,6 +414,21 @@ assert len(set(boxes(g8))) >= 2, "servers' boxes in the lanes"
 assert len(boxes(g10)) > 3 * len(boxes(g8)), "a mark clicked: its step, wider"
 assert px(g9, 300, 233) == 0x2D6CA2, "a call selected in the list"
 assert sum(1 for x in range(98, 900) if px(g9, x, 606) == 0x1A2228) > 20, "its details"
+# the System window (content at 20,64): its layers, live
+def count(img, colour, x0, y0, x1, y1, step=2):
+    return sum(1 for x in range(x0, x1, step) for y in range(y0, y1, step) if px(img, x, y) == colour)
+assert px(g11, 500, 54) == 0x2D6CA2, "the System window, focused"
+assert count(g11, 0xDCEAF7, 132, 270, 1010, 322) > 500, "services' boxes"
+assert count(g11, 0xFBE3D0, 132, 332, 1010, 384) > 500, "drivers' boxes"
+assert count(g11, 0x24313C, 132, 412, 1010, 512) > 2000, "the kernel"
+assert count(g11, 0xE9ECEF, 132, 534, 1010, 578) > 1000, "the hardware"
+# replaying: a call's arrow (red), IPC lit in the kernel, an ended
+# process of the recording as a ghost
+assert count(g12, 0xD9534F, 132, 140, 1010, 520, 1) > 60, "a call's arrow"
+assert count(g12, 0xF29B38, 300, 470, 500, 500) > 100, "IPC lit"
+assert count(g12, 0xF1F2F3, 132, 140, 1010, 400) > 300, "a process that ended, as a ghost"
+# a new process: outlined
+assert count(g13, 0xF29B38, 128, 136, 1014, 240, 1) > 100, "a new process, outlined"
 PY
 fi
 
@@ -416,7 +443,7 @@ if [ -f system/ramdisk.dsk ]; then
     # of characters the screen's font lacks (doc/decisions/console.md)
     if [ -f tests/fat/run-shell.img ]; then
         printf '\303\210 cos\303\254: \342\202\2545\n' > tests/fat/run-utf8.txt
-        tools/in-container.sh dev sh -c "mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/llm.env && mcopy -i tests/fat/run-shell.img tests/fat/run-utf8.txt ::/utf8.txt"
+        tools/in-container.sh dev sh -c "mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/llm.env && mcopy -i tests/fat/run-shell.img tests/fat/run-utf8.txt ::/utf8.txt && mcopy -i tests/fat/run-shell.img tests/greeter/greeter.byte ::/greeter.byte"
         rm -f tests/fat/run-utf8.txt
     fi
     tools/net-peer.py llm 47090 & llm7_pid=$!
@@ -502,9 +529,14 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" "agent -y '[run_ocaml] let () = print_endline 42'\n"
     waitfor "It does not compile" 90
     sleep 2
-    # its recording: the steps it marked, among the calls; the processes
+    # its recording: the steps it marked, among the calls
     tools/type-keys.py "$tmp/mon7" 'trace calls /tmp/agent.trc > /disk/agent-calls.txt\n'; sleep 4
+    # a service started by the agent, left running (sh's &): ps shows it
+    # with its name, and a client gets its answer
+    tools/type-keys.py "$tmp/mon7" "agent -y '[run_command] /disk/greeter.byte &'\n"
+    sleep 20
     tools/type-keys.py "$tmp/mon7" 'ps\n'; sleep 2
+    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte agent\n'; sleep 3
     # the host's terminal on COM2: a line typed, then two pasted at once
     # (a burst: the shell must not read an end of file), then the keyboard
     banners=$(grep -ac 'MyNOS sh. help' "$log7")
@@ -649,6 +681,8 @@ if [ -f system/ramdisk.dsk ]; then
         echo "FAIL  trace: the agent's steps marked in its recording"; fail=1
     fi
     expect "io  consoled        console"     # ps: a driver, its service
+    expect "greeter         greeter"         # ps: the service the agent started
+    expect "Hello, agent, from MyNOS!"
     if [ -n "$trace_calls" ]; then
         echo "ok    trace: sh -> fatfs -> ata0, nested calls"
     else

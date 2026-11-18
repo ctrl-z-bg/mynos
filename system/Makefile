@@ -25,7 +25,7 @@ ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2
 
 FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo netd displayd ../httpd/httpd.byte \
 	../gui/gui.byte ../gui/welcome.byte ../gui/clock.byte ../gui/services.byte ../gui/terminal.byte \
-	../gui/agent_window.byte ../gui/recordings.byte \
+	../gui/agent_window.byte ../gui/recordings.byte ../gui/system.byte \
 	../third_party/fonts/terminus16.psf ../third_party/fonts/terminus16-bold.psf \
 	../gui/mynos-logo.pgm ../gui/mynos-logo-2x.pgm \
 	../trace/trace.byte ../fetch/fetch.byte ../llm/llm.byte ../agent/agent.byte \

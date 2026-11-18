@@ -216,7 +216,9 @@ All services are linked statically against `libmynos` and placed at
   `MYNOS_CONSOLE`; and the agent window: the agent's conversation, its
   confirmations as buttons, on the module `Agent` it shares with the
   `agent` command; the recordings window: a recording as a timeline of
-  calls per process, the marks, the calls, a call's details); the MyNOS
+  calls per process, the marks, the calls, a call's details; the System
+  window: the architecture live, from the hardware up, a recording
+  replayed on it as arrows through the kernel); the MyNOS
   menu's Exit returns to the text console,
   intact.
 - **The event recorder** (2026, `doc/decisions/tracer.md`): while a
@@ -507,8 +509,7 @@ Planned work, in order. Details live in the beads issues.
    loop with the recorder on (done).
 7. The GUI (mynos-9lr, `doc/decisions/gui.md`): the display server, windows
    the service explorer, terminal windows, the agent window and the
-   recordings window (done); the System window next (mynos-81t), and
-   background jobs in sh (mynos-rk1). Then distinctive
+   recordings window, the System window (done). Then distinctive
    applications (mynos-3h1), several CPUs (mynos-awn).
 
 The old SourceForge site is archived in `doc/website/` (mynos-db2).
@@ -923,4 +924,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   the menu and from the agent window (Recording). `Tracer.call` keeps the
   messages' first bytes and sizes; `Gui.spawn ~args`. Test: the agent's
   recording opened from its window, a mark's step, a call selected.
+- **2026-11-18** — The System window (mynos-81t, the owner's idea,
+  `doc/decisions/gui.md`): MyNOS's architecture live, from the hardware
+  up (the kernel and its parts, drivers wired to their devices, services,
+  programs), the processes as boxes that appear and fade; a recording
+  replayed on it as arrows from client through the kernel to server,
+  interrupts from devices, marks. Background jobs in sh (mynos-rk1):
+  `PROGRAM &`, `$!`, collected when they end; the agent knows them. Test
+  service `tests/greeter` (greeter/1). Tests: the agent starts greeter
+  with `&`, `ps` shows it with its name, a client gets its greeting; in
+  the graphical session, the System window's layers, a replayed call's
+  arrow, a ghost, a new process outlined.
 

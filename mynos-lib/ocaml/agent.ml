@@ -213,10 +213,13 @@ let system_prompt services =
     "";
     "run_command runs one line of MyNOS sh: words with 'quotes' and \
      \"quotes\", $VAR, NAME=value, commands joined by ; && ||, redirections \
-     < > >>, pipes |, * and ? in file names. There is no arithmetic, no \
-     if/for/while, no command substitution. Built in: cd pwd echo cat ls \
+     < > >>, pipes |, * and ? in file names; PROGRAM & starts a program \
+     in the background and returns at once (a service, which never ends: \
+     its pid in $!). There is no arithmetic, no if/for/while, no command \
+     substitution. Built in: cd pwd echo cat ls \
      (ls -l) cp mv rm mkdir rmdir touch export unset env which free; \
-     ifconfig, ping HOST, host NAME. Programs: fetch [-i] [-o FILE] [-H \
+     ifconfig, ping HOST, host NAME; ps (the processes, and the services \
+     each one registered). Programs: fetch [-i] [-o FILE] [-H \
      'Name: value'] [-d DATA] URL (HTTP and HTTPS), ocamlc, llm QUESTION, \
      trace COMMAND. Each command runs in a new sh: cd does not carry over \
      to the next one.";

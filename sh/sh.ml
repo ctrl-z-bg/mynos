@@ -23,6 +23,8 @@
 let vars : (string, string) Hashtbl.t = Hashtbl.create 16
 let positional = ref [||]                     (* $0 $1 ... *)
 let last_status = ref 0
+let last_background = ref 0                 (* $!: the last program started with & *)
+let jobs : int list ref = ref []            (* programs started with &, running *)
 
 let () =
   Array.iter (fun kv ->
@@ -39,6 +41,7 @@ let () =
 let get_var name =
   match name with
   | "?" -> string_of_int !last_status
+  | "!" -> if !last_background = 0 then "" else string_of_int !last_background
   | "#" -> string_of_int (max 0 (Array.length !positional - 1))
   | "PWD" -> Sys.getcwd ()
   | _ ->
@@ -57,7 +60,7 @@ type part = Lit of string        (* quoted text *)
           | Var of string        (* $NAME *)
 
 type token = Word of part list
-           | Op of string            (* ; && || | < > >> *)
+           | Op of string            (* ; & && || | < > >> *)
 
 exception Syntax of string
 
@@ -91,7 +94,7 @@ let lex line =
       match String.index_from_opt line i '}' with
       | Some j -> var (String.sub line (i + 2) (j - i - 2)); j + 1
       | None -> raise (Syntax "missing }")
-    end else if line.[i + 1] = '?' || line.[i + 1] = '#' then
+    end else if line.[i + 1] = '?' || line.[i + 1] = '#' || line.[i + 1] = '!' then
       (var (String.make 1 line.[i + 1]); i + 2)
     else begin
       let j = ref (i + 1) in
@@ -108,6 +111,7 @@ let lex line =
       | ';' -> finish (); toks := Op ";" :: !toks; go (i + 1)
       | '&' when i + 1 < n && line.[i + 1] = '&' ->
         finish (); toks := Op "&&" :: !toks; go (i + 2)
+      | '&' -> finish (); toks := Op "&" :: !toks; go (i + 1)
       | '|' when i + 1 < n && line.[i + 1] = '|' ->
         finish (); toks := Op "||" :: !toks; go (i + 2)
       | '|' -> finish (); toks := Op "|" :: !toks; go (i + 1)
@@ -199,7 +203,8 @@ type ready = {
 
 type connector = Seq | And | Or
 
-(* commands joined by connectors: [(connector before, pipeline)] *)
+(* commands joined by connectors: [(connector before, pipeline, in the
+   background)]; "&" ends a command like ";", and leaves it running *)
 let parse toks =
   let rec command toks c =
     match toks with
@@ -232,10 +237,12 @@ let parse toks =
     | Op ";" :: rest -> chain rest Seq acc
     | _ ->
       let p, rest = pipeline toks [] in
-      let acc = (conn, p) :: acc in
+      let bg = (match rest with Op "&" :: _ -> true | _ -> false) in
+      if bg && List.length p > 1 then raise (Syntax "& runs one program, not a pipe");
+      let acc = (conn, p, bg) :: acc in
       match rest with
       | [] -> List.rev acc
-      | Op ";" :: rest -> chain rest Seq acc
+      | (Op ";" | Op "&") :: rest -> chain rest Seq acc
       | Op "&&" :: rest -> chain rest And acc
       | Op "||" :: rest -> chain rest Or acc
       | Op o :: _ -> raise (Syntax ("unexpected " ^ o))
@@ -291,12 +298,28 @@ let status_code = function
   | Mynos.Exited n -> n
   | Mynos.Signaled s -> 128 + s
 
-let run_program file args c =
+(* the programs started with & that ended: collected, and said *)
+let reap_jobs () =
+  jobs := List.filter (fun pid ->
+      match Mynos.process_info pid with
+      | Some { alive = true; _ } -> true
+      | _ ->
+        (match Mynos.wait pid with
+         | st -> Printf.printf "[%d] done, status %d\n%!" pid (status_code st)
+         | exception Mynos.Error _ -> ());
+        false) !jobs
+
+let run_program ?(background = false) file args c =
   let env = environment c in
   let prog, argv =
     if is_elf file then (file, file :: args)
     else ("ocamlrun", "ocamlrun" :: file :: args) in
   match Mynos.spawn ~env prog (Array.of_list argv) with
+  | pid when background ->
+    last_background := pid;
+    jobs := pid :: !jobs;
+    Printf.printf "[%d]\n%!" pid;
+    0
   | pid -> flush stdout; status_code (Mynos.wait pid)
   | exception Mynos.Error (_, code) ->
     error "%s: cannot start (%s)" file (Mynos.error_name code); 126
@@ -363,7 +386,8 @@ let copy src dst =
 let help out =
   output_string out
     "MyNOS sh. Built in: cd pwd echo cat ls [-l] cp mv rm mkdir rmdir touch\n\
-     export unset env which source free ps clear help exit;\n\
+     export unset env which source free ps clear help exit; PROGRAM & runs\n\
+     it in the background ($! its pid);\n\
      network: ifconfig, ping HOST [COUNT], host NAME.\n\
      Programs: edit FILE, ocamlc, kilo, hello, ocaml (the OCaml toplevel),\n\
      trace COMMAND (record what the system does meanwhile), llm QUESTION,\n\
@@ -371,7 +395,7 @@ let help out =
      ask REQUEST: a command for it, from a language model; run if you agree.\n\
      keymap [us|it]: the keyboard layout. Shift+PgUp/PgDn: lines scrolled away.\n\
      shutdown (-r: restart) turns the machine off; gui starts the windows.\n\
-     Syntax: 'quotes' \"quotes\" $VAR $? NAME=value ; && || < > >> | *.ml\n\
+     Syntax: 'quotes' \"quotes\" $VAR $? $! NAME=value ; & && || < > >> | *.ml\n\
      Files: / is the RAM disk, /tmp is in memory, /disk is the FAT disk.\n"
 
 exception Exit_shell of int
@@ -619,7 +643,7 @@ and is_builtin = function
 
 (* ---- running ---- *)
 
-and run_command c =
+and run_command ?(background = false) c =
   let one w = match expand w with [ s ] -> s | l -> String.concat " " l in
   let c = {
     args = List.concat_map expand c.argv;
@@ -638,14 +662,14 @@ and run_command c =
         (oc, fun () -> close_out oc)
       | None -> (stdout, fun () -> flush stdout) in
     Fun.protect ~finally:close (fun () -> builtin name args c out)
-  | "ocaml" :: args -> run_program "/shell.byte" args c
+  | "ocaml" :: args -> run_program ~background "/shell.byte" args c
   | name :: args ->
     match which name with
-    | Some file -> run_program file args c
+    | Some file -> run_program ~background file args c
     | None -> error "%s: command not found" name; 127
 
-and run_pipeline = function
-  | [ c ] -> run_command c
+and run_pipeline ?(background = false) = function
+  | [ c ] -> run_command ~background c
   | cmds ->
     (* one after the other, each output in a file the next one reads *)
     let n = List.length cmds in
@@ -660,14 +684,16 @@ and run_pipeline = function
     !status
 
 and run_line line =
+  reap_jobs ();
   match parse (lex line) with
   | chain ->
-    List.iter (fun (conn, p) ->
+    List.iter (fun (conn, p, background) ->
         let go = match conn with
           | Seq -> true
           | And -> !last_status = 0
           | Or -> !last_status <> 0 in
-        if go then last_status := (try run_pipeline p with Sys_error e -> error "%s" e; 1))
+        if go then
+          last_status := (try run_pipeline ~background p with Sys_error e -> error "%s" e; 1))
       chain
   | exception Syntax e -> error "%s" e; last_status := 2
 

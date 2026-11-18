@@ -44,6 +44,8 @@ make -C mynos-lib/ocaml
    ../../services/fs/memrofs/tool/createDisk init.byte AUTOEXEC.BAT >/dev/null)
 make -C tests/spawn
 (cd tests/hello && ocamlc -o hello.byte hello.ml)
+(cd tests/greeter && ocamlc -use-prims ../../mynos-runtime/primitives \
+   -I ../../mynos-lib/ocaml mynos.cma -o greeter.byte greeter.ml)
 (cd tests/effects && ocamlc -o effects.byte effects.ml)
 (cd tests/domains && ocamlc -o domains.byte domains.ml)
 (cd tests/ramdisk && ../../services/fs/memrofs/tool/createDisk AUTOEXEC.BAT)

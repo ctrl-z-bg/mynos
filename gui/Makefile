@@ -6,6 +6,7 @@ MYNOS = ../mynos-lib/ocaml/mynos.cmi ../mynos-lib/ocaml/mynos.cma \
 	../mynos-runtime/primitives
 
 PROGRAMS = gui.byte welcome.byte clock.byte services.byte terminal.byte recordings.byte \
+	system.byte \
 	agent_window.byte
 
 all: $(PROGRAMS)

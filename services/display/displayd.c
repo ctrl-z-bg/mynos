@@ -346,6 +346,7 @@ static const struct menu_item menu[] = {
   { "Services", "/services.byte" },
   { "Agent", "/agent_window.byte" },
   { "Recordings", "/recordings.byte" },
+  { "System", "/system.byte" },
   { NULL, NULL },
   { "Exit", NULL },
   { "Shut down", "/shutdown.byte" },

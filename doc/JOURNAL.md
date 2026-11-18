@@ -1833,3 +1833,33 @@ the field that lands on Allow.
 behind two faces when the asking is a function the face supplies, not a
 read from stdin inside the loop.
 
+## 2026-11-18 — The System window: the architecture as data
+
+**The idea** (the owner's). A window where MyNOS's architecture is seen
+as it is now: the microkernel at the bottom, the services above, the
+boxes coming and going, a recording replayed as arrows of who talked to
+whom; and an agent that adds a service, whose box appears.
+
+**What was missing.** The kernel could tell about one pid (`processInfo`)
+but not list them; the registry could look a name up but not list its
+names; an agent could not leave a program running (its tools wait for the
+end, and a service never ends). Added: native call 33 (the processes,
+with names, parents, privileges, threads), the registry's LIST, `&` in
+`sh`. With those, the picture is a function of the system's state.
+
+**Layers from facts.** No list of "which program is a service" was
+written: a driver is what has the io privilege (and was started by a
+process: the boot modules have it too); a service is what registered a
+name, or what the kernel or init started; a program is the rest. The
+two exceptions (boot modules, sh started by init) are rules, not names.
+
+**Arrows through the kernel.** A call could be drawn from client to
+server directly; it is drawn down into a lane of the kernel and up
+again, because that is what happens in a microkernel, and the point of
+the window is to show it. The drivers' wires to the hardware go beside
+the kernel, for the same reason the other way.
+
+**Lesson.** A system that can describe itself (its processes, its
+names, its protocols, its messages) gets its documentation drawn for
+free, and kept true.
+

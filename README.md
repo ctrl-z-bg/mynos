@@ -133,7 +133,11 @@ before anything that changes things (y, n, or a for yes to all). It
 records what the system did meanwhile: `trace calls /tmp/agent.trc`. In
 the graphical session, the menu's Agent opens the same agent in a window:
 its confirmations are buttons, and a follow-up continues the
-conversation.
+conversation; Recordings shows a recording as a timeline of calls; System
+draws MyNOS's architecture live (the hardware, the kernel, the drivers,
+services and programs that are running) and replays a recording on it,
+as arrows through the kernel. `ps` lists the processes and their
+services; `PROGRAM &` leaves one running.
 
 ## Status
 

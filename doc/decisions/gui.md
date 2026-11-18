@@ -225,6 +225,49 @@ agent window's Recording button) shows a recording of the event recorder
   (every window's frames) is hidden by default: "GUI: shown" brings it
   back.
 
+## The System window (2026-11-18, the owner's idea)
+
+`system [FILE]` (`gui/system.ml`; the menu's System) draws MyNOS's
+architecture as it is now, not as a document says it is:
+
+- from the bottom: **the hardware** (CPU, memory, timer, keyboard,
+  mouse, serial ports, disk, network card, video); **the microkernel**,
+  with its parts (processes, IPC, memory, timer and scheduler, the
+  recorder) and a lane through which messages pass; **the drivers**
+  (processes with the io privilege, wired to their devices, beside the
+  kernel: they reach the hardware themselves); **the services**
+  (processes that registered a name, the boot modules, what init
+  started); **the programs** (the rest);
+- the boxes are the live processes (`Mynos.processes`,
+  `Mynos.registered`), polled every second: a new one appears outlined
+  in orange for six seconds, one that ends fades, then goes. When an
+  agent starts a service (sh's `&`), its box appears, and moves to the
+  services when it registers its name;
+- a **recording** (the field: a file to Open, or a command to Record) is
+  replayed on it, step by step (Prev, Next, Play, Next mark, or a click
+  on the progress bar, where the marks are): a call is a red arrow from
+  its client down into the kernel's lane, along it, and up into its
+  server, with its reply in green; IPC lights up; an interrupt is a
+  purple arrow from its device to its driver; a mark outlines the
+  process that made it, with its label. The processes of the recording
+  that have ended are grey ghosts. The display's traffic (and the
+  mouse's interrupts) are left out;
+- the panel at the bottom explains the step, or what was clicked: a box
+  (its layer, who started it, its threads, its registered names and
+  ports, its children, its calls in the recording), the kernel, a
+  device.
+
+The layers are read from what the kernel and the registry say, with two
+rules of thumb: a driver is a process with the io privilege that a
+process started (the boot modules have it too, being started by the
+kernel: they are services); init's children other than sh are services
+even when they register no name (httpd). The terminal registers a
+console for its sh, and is drawn as the service it is.
+
+Not live: arrows for the traffic as it happens. The window would record
+itself drawing (each frame a message to displayd), so a live view needs
+a filter in the recorder first.
+
 ## The logo (2026-11-18)
 
 The 2003 website's drawing (`doc/website/img/mynos-logo.jpg`, a Minotaur:
