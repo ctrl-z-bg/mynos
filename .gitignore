@@ -23,10 +23,6 @@ NOTE*
 *.elf
 *.bin
 Makefile.depend
-mynos-byterun/src/ocamlrun
-mynos-byterun/src/jumptbl.h
-mynos-byterun/src/primitives
-mynos-byterun/src/prims.c
 services/fs/memrofs/memrofsd
 services/fs/memrofs/tool/createDisk
 services/keyboard/keyboardd

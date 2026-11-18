@@ -1774,3 +1774,34 @@ memory it did not write: QEMU's cold memory is all zeros, and a zero is
 the value that hides most of these bugs. A reset is a cheap way to give
 such reads something else to find.
 
+## 2026-11-18 — Retiring the legacy toolchain
+
+**The question.** The owner asked whether the legacy build (Debian lenny,
+gcc 4.3, dietlibc 0.31, OCaml 3.06 in `mynos-byterun/`) was worth keeping.
+
+**What it had been for.** In the first days of the revival it was the
+reference: the system had to run as in 2008 before anything changed, and
+comparing the two toolchains surfaced real bugs (a stack slot gcc 4.3
+happened to fill correctly, the libc's differences in `off_t` and
+`mmap`). But those bugs showed up in the new toolchain; the old one
+was the baseline, not the detector.
+
+**What it had become.** It built only the C half (kernel, libmynos, the
+2004 services, `abi` and `stress`): everything since (init, sh, storage,
+network, models, GUI) needs OCaml 5. It passed every verification of the
+last weeks, and found nothing dev had not. Its cost: about half an hour
+per kernel or library change (clean, build, test, clean, rebuild dev),
+code kept compilable with gcc 4.3 and dietlibc, and a tree in the legacy
+configuration meanwhile, which once left the owner's demo without a shell.
+
+**Decision.** Retired, history kept: `legacy-2008` is the original code,
+`revival-baseline` the original running again, `legacy-last` the last
+commit the period toolchain builds. The runtime, the container, the
+dietlibc branches and the 2008 demo are gone; the scripts take no
+toolchain argument.
+
+**Lesson.** A second toolchain is worth its cost while it is the
+reference something is measured against; once the system has moved where
+it cannot follow, it checks less and less at the same price. A tag keeps
+what it showed.
+

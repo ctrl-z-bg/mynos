@@ -71,6 +71,5 @@ ENV PATH=/opt/ocaml-${OCAML_VERSION}/bin:$PATH
 # segments as one contiguous image and jumps to the ELF entry point.
 ENV MYNOS_CC=musl-gcc \
     MYNOS_LDFLAGS="-static -Wl,-Ttext-segment=0x40000000 -Wl,-z,noseparate-code -Wl,--build-id=none" \
-    MYNOS_RUNTIME=mynos-runtime \
     OCAML_RUNTIME_LIB=/opt/ocaml-runtime-musl
 WORKDIR /mynos

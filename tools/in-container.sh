@@ -3,12 +3,12 @@
 # repository mounted at /mynos. Rootless podman maps the container's root to
 # your user, so files created by the build stay owned by you.
 #
-# Usage: tools/in-container.sh <legacy|dev> [command...]
-#   tools/in-container.sh legacy make -C mynos-core
-#   tools/in-container.sh legacy            # interactive shell
+# Usage: tools/in-container.sh <image> [command...]   (the image: dev)
+#   tools/in-container.sh dev make -C mynos-core
+#   tools/in-container.sh dev               # interactive shell
 set -eu
 
-name=${1:?usage: $0 <legacy|dev> [command...]}
+name=${1:?usage: $0 dev [command...]}
 shift
 root=$(cd "$(dirname "$0")/.." && pwd)
 

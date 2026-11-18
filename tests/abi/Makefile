@@ -1,4 +1,4 @@
-# ABI checks, built like the services (dietlibc, libmynos, 0x40000000)
+# ABI checks, built like the services (musl, libmynos, 0x40000000)
 include ../../mynos.mk
 CC = $(MYNOS_CC)
 CFLAGS = -Wall -I../../mynos-lib/include

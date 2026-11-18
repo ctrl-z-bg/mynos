@@ -22,7 +22,6 @@ high-level language rather than in C.
 | [`init/`](init/) | `init`, in OCaml: starts the services and the shell listed in `init.rc` |
 | [`shell/`](shell/) | The shell: the OCaml toplevel, with a few commands (`ls`, `cat`, `run`) and the MyNOS API |
 | [`system/`](system/) | The system RAM disk: init, its configuration, services, the shell, programs |
-| [`mynos-byterun/`](mynos-byterun/) | The original OCaml 3.06 bytecode runtime (`ocamlrun`), patched to run on MyNOS (legacy toolchain) |
 | [`doc/STATUS.md`](doc/STATUS.md) | Architecture overview and current state of the project |
 | [`doc/JOURNAL.md`](doc/JOURNAL.md) | Engineering journal: what was found while reviving the code, bug by bug |
 | [`doc/decisions/`](doc/decisions/) | Design decisions, with the evidence behind them |
@@ -74,11 +73,11 @@ tools/build-all.sh                       # build everything in the container
 tools/run-demo.sh                        # boot MyNOS in QEMU, into the shell
 ```
 
-There are two build environments: `dev` (default) with a modern toolchain
-(gcc 14, musl, OCaml 5.5, Debian trixie i386), and `legacy` with the
-toolchain of the original project (gcc 4.3, dietlibc, OCaml 3.06, Debian
-lenny i386), kept to compare behaviour with the original. Pass the name to the scripts, e.g. `tools/build-all.sh legacy`;
-run `tools/clean-all.sh` first when switching between them.
+The build environment is a container with gcc 14, musl and OCaml 5.5
+(Debian trixie i386). The original project's toolchain (gcc 4.3, dietlibc,
+OCaml 3.06 in `mynos-byterun/`, Debian lenny) was kept alongside until
+2026-11-18: the last commit it builds is tagged `legacy-last`, and the
+original code, as of 2008, `legacy-2008`.
 
 `tools/run-tests.sh` boots the system headless and checks its output.
 `tools/in-container.sh dev` opens a shell in the build environment, or runs
@@ -155,12 +154,14 @@ SourceForge (`sourceforge.net/projects/mynos`).
 Some code in `mynos-core/kernel/idt.[hc]` and `pic.[hc]` is derived from
 gazos-0.2 by Gareth Owen (see [`mynos-core/CREDITS`](mynos-core/CREDITS)).
 `mynos-core/kernel/3parts/` contains code taken from other projects, such as
-the delay loop calibration by Ramon van Handel. The OCaml runtime in
-`mynos-byterun/` is by Xavier Leroy and others, © INRIA.
+the delay loop calibration by Ramon van Handel. The OCaml runtime (OCaml
+5.5's, built in the container and linked in `mynos-runtime/`) is by Xavier
+Leroy and others, © INRIA.
 
 ## License
 
 MyNOS code is released under the GNU General Public License, version 2 or
-(at your option) any later version. The OCaml runtime in `mynos-byterun/` keeps
-its own license, the GNU Library General Public License with the OCaml linking
-exception. See the header of each source file.
+(at your option) any later version. The OCaml runtime keeps its own license,
+the GNU Lesser General Public License with the OCaml linking exception; the
+code under `third_party/` keeps its own (see each directory's README). See
+the header of each source file.

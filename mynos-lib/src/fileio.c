@@ -13,7 +13,7 @@
  * File I/O of MyNOS programs, in user space (doc/decisions/terminal.md).
  *
  * These functions replace the C library's ones at static link time: libmynos
- * comes before the libc on the link line, and both musl and dietlibc keep
+ * comes before the libc on the link line, and musl keeps
  * one function per object file. They turn I/O into IPC with the services
  * and pass the rest to the kernel:
  *   - standard input (fd 0) is read from the console service;
@@ -230,11 +230,7 @@ int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
 
 /* ioctl: the terminal requests on fds 0-2 (tcgetattr, tcsetattr, the
    window size), the rest to the kernel */
-#ifdef __dietlibc__
-#define IOCTL_REQ long int        /* as each C library declares ioctl */
-#else
-#define IOCTL_REQ int
-#endif
+#define IOCTL_REQ int             /* as musl declares ioctl */
 
 static int std_fd(int fd);
 

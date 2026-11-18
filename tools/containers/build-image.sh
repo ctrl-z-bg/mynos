@@ -1,9 +1,9 @@
 #!/bin/sh
 # Build a MyNOS build-environment image.
-# Usage: tools/containers/build-image.sh <legacy|dev>
+# Usage: tools/containers/build-image.sh dev
 set -eu
 
-name=${1:?usage: $0 <legacy|dev>}
+name=${1:?usage: $0 dev}
 here=$(cd "$(dirname "$0")" && pwd)
 
 exec podman build --platform linux/386 \

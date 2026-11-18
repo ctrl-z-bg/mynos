@@ -9,7 +9,7 @@
 
 static int failures = 0;
 
-/* raw Linux system call with no arguments (dietlibc has no syscall()) */
+/* raw Linux system call with no arguments */
 static long linux_syscall0(long n) {
   long ret = n;
   __asm__ volatile ("int $0x80" : "+a"(ret) : : "memory");

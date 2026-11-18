@@ -1,9 +1,9 @@
 # Toolchain for MyNOS user-space programs (static Linux i386 binaries loaded
 # by the kernel at 0x40000000). Included by the user-space Makefiles.
 #
-# The defaults are the legacy toolchain: dietlibc and the old linker, where
-# -N puts everything in one segment at 0x40000000. The dev container sets
-# MYNOS_CC=musl-gcc and its own MYNOS_LDFLAGS in the environment.
-MYNOS_CC      ?= diet gcc
-MYNOS_LDFLAGS ?= -static -Xlinker -Ttext -Xlinker 0x40000000 \
-                 -Wl,--build-id=none -Wl,-N
+# musl (the build container, tools/containers/dev, sets the same in the
+# environment). -Ttext-segment moves the whole image: musl's crti has an
+# .init section that -Ttext would leave at the default address.
+MYNOS_CC      ?= musl-gcc
+MYNOS_LDFLAGS ?= -static -Wl,-Ttext-segment=0x40000000 -Wl,-z,noseparate-code \
+                 -Wl,--build-id=none

@@ -35,7 +35,6 @@ talking through IPC.
 | `mynos-lib/` | User-space library wrapping the native MyNOS syscalls (`include/mynos.h`), and the OCaml library `Mynos` (`ocaml/`) |
 | `services/` | User-space servers: `registry`, `console`, `keyboard`, `serial`, `fs/memrofs`; in OCaml: `tmpfs`, `ata` (disk driver), `fatfs` |
 | `mynos-runtime/` | The OCaml 5.5 bytecode runtime for MyNOS: upstream runtime, unchanged, plus a MyNOS `main()` (dev toolchain) |
-| `mynos-byterun/` | The OCaml 3.06 bytecode runtime, patched to run on MyNOS (legacy toolchain) |
 | `init/` | `init`, in OCaml: starts the services and the shell listed in `init.rc` |
 | `shell/` | The shell: the OCaml toplevel (`shell.byte`) and module `Shell` (commands) |
 | `system/` | The system RAM disk: `init`, `init.rc`, services, the shell, interfaces, programs |
@@ -129,8 +128,7 @@ talking through IPC.
 #### services
 
 All services are linked statically against `libmynos` and placed at
-`0x40000000`: with musl in the dev toolchain, with dietlibc in the legacy one
-(`mynos.mk`).
+`0x40000000`, with musl (`mynos.mk`).
 
 - `registry`: maps names to ports, like a name server (`mynos_registry.h`).
   It serves one request at a time (2026; it used to start a thread per
@@ -305,16 +303,6 @@ Effect handlers and domains work (`tests/effects`, `tests/domains`, and
 unix stubs in the runtime (mynos-09i).
 Decision and evidence: `doc/decisions/ocaml-runtime.md`.
 
-#### mynos-byterun (OCaml 3.06, legacy)
-
-This is the standard `ocamlrun` from OCaml 3.06 (imported in October 2002). It is
-built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
-
-- `main()` forces `argv` to `"mynos_bytecode"`;
-- `getenv()` always returns `NULL`;
-- dynamic loading of C primitives is disabled;
-- `frexp()` and `modf()` are stubs (see mynos-pg9).
-
 ### Boot flow
 
 1. GRUB loads `kernel.elf` plus a list of modules.
@@ -336,41 +324,35 @@ built with `diet gcc` and linked statically at `0x40000000`. Under `MYNOS`:
 
 ### Build and run
 
-**The original system builds and runs again**, as it did in 2004–2008
-(tag `revival-baseline`), **with both the 2008 toolchain and a modern one**:
-`tools/build-all.sh [dev|legacy]` then `tools/run-demo.sh`. With the modern
-toolchain **MyNOS boots into `sh`**, a command shell in OCaml, in about a
-second; `ocaml` opens the OCaml toplevel, where phrases typed on the
-keyboard are compiled and run. Programs can be edited, compiled and run
-inside MyNOS, and kept on the disk. With the 2008 toolchain
-(or `DEMO=2008`) the demo is the original one: a test OCaml program
-(`tests/hello`) on `ocamlrun`, the registry, the keyboard and serial
-drivers and memrofs, whose built-in test reads a file from the RAM disk over
-IPC; typed keys are echoed on screen and sent to the serial port.
+`tools/build-all.sh` then `tools/run-demo.sh`: **MyNOS boots into `sh`**,
+a command shell in OCaml, in about a second; `ocaml` opens the OCaml
+toplevel, where phrases typed on the keyboard are compiled and run.
+Programs can be edited, compiled and run inside MyNOS, and kept on the
+disk; `gui` starts the graphical session. The original system, as it ran in
+2004-2008, is tagged `revival-baseline` (with its period toolchain) and the
+last commit that still builds with that toolchain `legacy-last`.
 
-- **Toolchains.** Builds run in containers; the host (gcc 15, no multilib,
-  x86_64-only dietlibc) is not used.
-  - **dev** (`tools/containers/dev`, default): Debian trixie i386, gcc 14.2,
-    binutils 2.44, nasm 2.16, **musl** 1.2.5 for user space, **OCaml 5.5.2**
-    (compiler, and the runtime built with musl).
-  - **legacy** (`tools/containers/legacy`): Debian lenny i386, gcc 4.3.2,
-    binutils 2.18, nasm 2.03, dietlibc 0.31, OCaml 3.06 built from source on
-    sarge: what the November 2008 commits expect (they add
-    `-fno-stack-protector`, gcc ≥ 4.1). Kept to compare behaviour with the
-    original.
-  - Between the two, the dev toolchain went through dietlibc 0.34 with
-    OCaml 3.06 (see the journal); that is where the Linux ABI work began.
+- **Toolchain.** Builds run in a container (`tools/containers/dev`): Debian
+  trixie i386, gcc 14.2, binutils 2.44, nasm 2.16, **musl** 1.2.5 for user
+  space, **OCaml 5.5.2** (compiler, and the runtime built with musl); the
+  host (gcc 15, no multilib) is not used. Until 2026-11-18 a second one,
+  the original project's (Debian lenny, gcc 4.3.2, dietlibc 0.31, OCaml
+  3.06 in `mynos-byterun/`), built the same C code to compare: retired
+  (mynos-g8l), its last commit tagged `legacy-last`. The way from one to
+  the other went through dietlibc 0.34 with OCaml 3.06 (see the journal);
+  that is where the Linux ABI work began.
 - **Tests.** `tools/run-tests.sh` boots the whole system headless and checks
   the console output, which the kernel mirrors to COM2. `tests/abi` checks
-  the system call fixes; `tests/stress` (C, both toolchains) stresses the
+  the system call fixes; `tests/stress` (C) stresses the
   kernel: 120 client processes sending messages from 1 byte to 64 KB, timers
   of 16 threads expiring together, semaphore ping-pong, invalid arguments,
   unknown calls and bad pointers, and checks that the memory comes back
-  (`stress N` repeats it N times: 20 runs 2400 processes). With the dev
-  toolchain, OCaml tests cover effects,
+  (`stress N` repeats it N times: 20 runs 2400 processes). OCaml tests
+  cover effects,
   the `Mynos` library, files, the console, spawning programs
   (`tests/spawn`) and the shell, typing phrases through QEMU's monitor
-  (`tools/type-keys.py`). Both toolchains pass.
+  (`tools/type-keys.py`), the network, the language models, the console
+  and the graphical session.
 - **Terminal.** The kernel's screen driver is a small VT100-like terminal
   for programs' output: cursor moves, erasing, colours, an alternate
   screen. The console service has a raw input mode (keys one by one, the
@@ -456,7 +438,7 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 - **OCaml 5.5 and musl (dev toolchain).** User space is built with musl and
   the runtime is OCaml 5.5.2 (`mynos-runtime/`), as decided in
   `doc/decisions/ocaml-runtime.md`. `tools/run-tests.sh` also runs an effect
-  handlers test. The legacy toolchain keeps dietlibc and OCaml 3.06.
+  handlers test.
   - `memrofs/tool/createDisk` is a host tool but was built like a MyNOS
     program; now built with plain gcc.
 - **Changes for the modern toolchain:**
@@ -470,8 +452,7 @@ IPC; typed keys are echoed on screen and sent to the serial port.
     minimally (mynos-51c).
   - Small C fixes: a K&R parameter, missing `<unistd.h>`, `errno`
     declaration, a `return` without value.
-  - Remaining warnings are expected: RWX segments (from `-N`) and a few in
-    the unchanged OCaml 3.06 runtime sources.
+  - Remaining warnings are expected: RWX segments (from `-N`).
 - `mynos-core/boot/` (floppy bootloader) does not assemble with nasm 2.x
   (mynos-s96); the build uses `mynos-core/kernel` directly.
 
@@ -479,7 +460,6 @@ IPC; typed keys are echoed on screen and sent to the serial port.
 
 | Issue | Where | Problem |
 |---|---|---|
-| mynos-pg9 | `mynos-byterun/src/floats.c` | `frexp()`/`modf()` return 1.0 (legacy 3.06 runtime only; the 5.5 runtime uses musl's libm). |
 | mynos-09i | `mynos-runtime/` | No OCaml `Thread` module yet (needs systhreads and unix stubs); domains work. |
 | mynos-awn | `mynos-core/kernel/` | One CPU: threads and domains run in turn, not in parallel. |
 | mynos-37p | `mynos-core/kernel/` | The io privilege is all or nothing (no per-port I/O bitmap yet); copies to user memory go through `copy_to_user` only where a call blocks first (`recv`, `wait4`): elsewhere the entry check suffices, as the kernel is not preempted. |
@@ -902,4 +882,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   the welcome window's banner, faint in the desktop's corner (displayd).
   Tests: a mask's pixels (mynos-ocaml); the logo and the watermark found on
   the graphical test's screen.
+- **2026-11-18** — The legacy toolchain retired (mynos-g8l): it had found
+  nothing the dev one did not for weeks, cost half an hour per kernel or
+  library change, and left the tree unusable for the demo meanwhile. Its
+  last verified commit is tagged `legacy-last` (`git checkout legacy-last`,
+  `tools/build-all.sh legacy`). Removed: `mynos-byterun/` (OCaml 3.06), the
+  legacy container, the dietlibc branches, the 2008 demo of
+  `tools/run-demo.sh`; the scripts take no toolchain argument. Closed
+  mynos-pg9 (3.06's `frexp`).
 
