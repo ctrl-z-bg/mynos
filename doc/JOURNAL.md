@@ -1805,3 +1805,31 @@ reference something is measured against; once the system has moved where
 it cannot follow, it checks less and less at the same price. A tag keeps
 what it showed.
 
+## 2026-11-18 — The agent window: one loop, two faces
+
+**Design.** The agent's loop lived in `agent/agent_main.ml`, mixed with
+its printing and its y/n/a prompt. A window needs the same loop with a
+different face, so the loop moved into the library (`Agent`): it emits
+events (`Task`, `Said`, `Action`, `Result`, `Note`) and asks a function
+for confirmations (`Yes`, `No`, `All`). The command became forty lines
+of printing and key reading, and its output did not change (the tests
+that check it passed untouched).
+
+**Two domains.** A model call takes seconds and the window must keep
+drawing, so the agent runs in a domain of its own: it appends to the log
+under a mutex, and for a confirmation it publishes the question and
+waits on a condition; the window's domain draws the question, and a
+button sets the answer and signals. Nothing the agent's domain does
+touches the display.
+
+**Where the buttons go.** First drawn inside the conversation, under the
+action: their place then depends on everything said before, which a
+test cannot click without reading the screen, and the field for the
+next task stayed live beside them. They took the field's place instead:
+same spot every time, no task typed while one is waiting, no click on
+the field that lands on Allow.
+
+**Lesson.** An interface that asks the user something is easier to put
+behind two faces when the asking is a function the face supplies, not a
+read from stdin inside the loop.
+

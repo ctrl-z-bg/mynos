@@ -130,7 +130,10 @@ agent Write the IP address of MyNOS in /disk/ip.txt
 `agent` carries out a task with tools (commands, files, OCaml programs
 type-checked before they run, the system's typed services), and asks
 before anything that changes things (y, n, or a for yes to all). It
-records what the system did meanwhile: `trace calls /tmp/agent.trc`.
+records what the system did meanwhile: `trace calls /tmp/agent.trc`. In
+the graphical session, the menu's Agent opens the same agent in a window:
+its confirmations are buttons, and a follow-up continues the
+conversation.
 
 ## Status
 

@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-17
+Last updated: 2026-11-18
 
 ---
 
@@ -213,7 +213,9 @@ All services are linked statically against `libmynos` and placed at
   session (welcome, clock, the service explorer, which makes a form for
   any request of any typed service from its description, and terminal
   windows: `sh` in a VT100 emulator, its console a service of the window,
-  `MYNOS_CONSOLE`); the MyNOS menu's Exit returns to the text console,
+  `MYNOS_CONSOLE`; and the agent window: the agent's conversation, its
+  confirmations as buttons, on the module `Agent` it shares with the
+  `agent` command); the MyNOS menu's Exit returns to the text console,
   intact.
 - **The event recorder** (2026, `doc/decisions/tracer.md`): while a
   recording is on, the kernel (`kernel/trace.c`) writes an event for every
@@ -500,8 +502,8 @@ Planned work, in order. Details live in the beads issues.
    (done), `ask` in `sh` (done), protocols that describe themselves (done), an agent
    loop with the recorder on (done).
 7. The GUI (mynos-9lr, `doc/decisions/gui.md`): the display server, windows
-   the service explorer and terminal windows (done); the agent window and
-   the trace viewer next. Then distinctive
+   the service explorer, terminal windows and the agent window (done);
+   the trace viewer next (mynos-0o5). Then distinctive
    applications (mynos-3h1), several CPUs (mynos-awn).
 
 The old SourceForge site is archived in `doc/website/` (mynos-db2).
@@ -890,4 +892,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   legacy container, the dietlibc branches, the 2008 demo of
   `tools/run-demo.sh`; the scripts take no toolchain argument. Closed
   mynos-pg9 (3.06's `frexp`).
+- **2026-11-18** — The agent window, GUI phase 4 (mynos-dyv,
+  `doc/decisions/gui.md`): the agent's loop moved into the library
+  (`Agent`: events out, confirmations asked through a function, a session
+  that keeps its conversation), used by `agent` (unchanged output) and
+  by `agent_window` (the menu's Agent, the welcome window's button): the
+  task typed at the bottom, the conversation in a scroll box, the agent
+  in a domain of its own, confirmations as Allow / Deny / Allow all in
+  place of the task's field. Test: the graphical boot now has the network
+  and the fake provider; a task typed in the window, its confirmation
+  seen, Allow clicked, the command's file read back in text mode
+  (`SHOTS=DIR` keeps the screens). Trace viewer: mynos-0o5.
 

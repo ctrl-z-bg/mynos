@@ -26,9 +26,11 @@ let () =
         (Printf.sprintf "%d processes, %d threads, %d MB free, up %.0f s"
            st.Mynos.processes st.threads (st.free_pages / 256) (Mynos.uptime ()));
       let y = y + 84 in
-      if Gui.button ui 24 y 110 "Terminal" then Gui.spawn "/terminal.byte";
-      if Gui.button ui 144 y 110 "Clock" then Gui.spawn "/clock.byte";
-      if Gui.button ui 264 y 110 "Services" then Gui.spawn "/services.byte";
-      if Gui.button ui 386 y 110 "Close" then raise Gui.Quit;
+      List.iteri (fun i (label, program) ->
+          if Gui.button ui (24 + i * 96) y 88 label then
+            match program with Some p -> Gui.spawn p | None -> raise Gui.Quit)
+        [ "Terminal", Some "/terminal.byte"; "Clock", Some "/clock.byte";
+          "Services", Some "/services.byte"; "Agent", Some "/agent_window.byte";
+          "Close", None ];
       Gui.label ~colour:Gui.muted ui 24 (y + 44)
         "The MyNOS menu, top left, opens programs and ends the session.")

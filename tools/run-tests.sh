@@ -3,7 +3,8 @@
 # to COM2) and check the expected output. Build first with tools/build-all.sh.
 #
 # Usage: tools/run-tests.sh            exit status 0 if all checks pass
-# Environment: WAIT seconds to let the system run (default 10)
+# Environment: WAIT seconds to let the system run (default 10); SHOTS a
+# directory where the graphical session's screens are kept
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -268,7 +269,15 @@ fi
 gui_ok= powered_off=
 if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     : > "$tmp/logg"
-    MEM=256 tools/run-qemu.sh "$ocamlrun" \
+    # the agent window's model: the fake provider, as in the seventh boot
+    gdisk=
+    if [ -f tests/fat/fat16.img ]; then
+        gdisk=tests/fat/run-gui.img
+        cp tests/fat/fat16.img "$gdisk"
+        tools/in-container.sh dev mcopy -i "$gdisk" tests/net/llm-test.env ::/llm.env
+    fi
+    tools/net-peer.py llm 47090 & llmg_pid=$!
+    NET=1 DISK=$gdisk MEM=256 tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
         -- -machine vmport=off -display none -serial null -serial "file:$tmp/logg" \
@@ -293,7 +302,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     tools/type-keys.py "$tmp/mon-g" 'gui check\n'; sleep 3
     tools/type-keys.py "$tmp/mon-g" 'gui\n'; sleep 8
     mon "screendump $tmp/gui1.ppm"
-    click 271 428; sleep 8               # the welcome window's Clock button
+    click 233 428; sleep 8               # the welcome window's Clock button
     mon "screendump $tmp/gui2.ppm"
     # a terminal window (the menu's first item): sh runs in it, its console
     # is the window (MYNOS_CONSOLE); what it writes is checked from text mode
@@ -306,8 +315,15 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     for k in 1 2 3; do mon "mouse_move 0 0 3"; sleep 0.5; done; sleep 2
     mon "screendump $tmp/gui5.ppm"
     mon "sendkey backspace"; sleep 1                # a key: back to the bottom
-    click 20 10; sleep 1; click 30 149; sleep 4    # the MyNOS menu, Exit
-    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt\n'; sleep 2
+    # the agent window (the menu's fifth item, at 168,182): a task, the
+    # confirmation it waits for, Allow (at the bottom of the window)
+    click 20 10; sleep 1; click 40 127; sleep 10
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo agentwin-$X > /tmp/aw.txt\n'; sleep 8
+    mon "screendump $tmp/gui6.ppm"
+    click 230 695; sleep 8
+    mon "screendump $tmp/gui7.ppm"
+    click 20 10; sleep 1; click 30 171; sleep 4    # the MyNOS menu, Exit
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt\n'; sleep 2
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # turning the machine off: init does it, QEMU ends by itself
     tools/type-keys.py "$tmp/mon-g" 'shutdown\n'
@@ -319,8 +335,11 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
         powered_off=yes
     fi
     wait $qemu || true
+    kill $llmg_pid 2>/dev/null; wait $llmg_pid 2>/dev/null || true
+    [ -n "${SHOTS:-}" ] && cp "$tmp"/gui*.ppm "$SHOTS"/   # SHOTS=DIR keeps the screens
     cat "$tmp/logg" >> "$log"
-    python3 - "$tmp/gui1.ppm" "$tmp/gui2.ppm" "$tmp/gui3.ppm" "$tmp/gui4.ppm" "$tmp/gui5.ppm" <<'PY' && gui_ok=yes
+    python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
+              "$tmp"/gui6.ppm "$tmp"/gui7.ppm <<'PY' && gui_ok=yes
 import sys
 def load(path):
     d = open(path, "rb").read()
@@ -331,7 +350,7 @@ def px(img, x, y):
     w, h, d = img
     i = 3 * (y * w + x)
     return (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]
-g1, g2, g3, g4, g5 = (load(p) for p in sys.argv[1:6])
+g1, g2, g3, g4, g5, g6, g7 = (load(p) for p in sys.argv[1:8])
 assert g1[:2] == (1024, 768), "graphics mode"
 assert px(g1, 500, 10) == 0x111820, "the top bar"
 assert px(g1, 300, 86) == 0x2D6CA2, "the welcome window, focused"
@@ -352,6 +371,14 @@ assert px(g4, 600, 520) == 0x0F1419, "the terminal's background"
 bar = [px(g5, 790, y) for y in range(154, 562)]
 assert 0x5A6670 in bar, "the scrollbar's thumb"
 assert bar[-6] == 0x1A2026, "scrolled back: the thumb is not at the bottom"
+# the agent window (content at 168,182): focused, its header, a
+# confirmation in the conversation; after Allow, no more
+assert px(g6, 500, 172) == 0x2D6CA2, "the agent's window, focused"
+assert px(g6, 400, 190) == 0x1B3A57, "the agent window's header"
+def asking(img): return sum(1 for x in range(176, 920, 4) for y in range(222, 672, 4)
+                            if px(img, x, y) == 0xFFF4E0)
+assert asking(g6) > 100, "the agent asks: the confirmation"
+assert asking(g7) == 0, "allowed: no confirmation left"
 PY
 fi
 
@@ -672,6 +699,7 @@ PY
     expect "gui: the graphical session ended"
     expect "text-ok"
     expect "term-ok"
+    expect "agentwin-ok"        # the agent window: the command allowed by its button ran
     expect "dal-seriale"
     expect "incollata-2"
     expect "still-seriale"

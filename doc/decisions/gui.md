@@ -101,7 +101,8 @@ be.
    first windows (a welcome window, a clock).
 2. The service explorer (forms from descriptions).
 3. Terminal windows (consoles per window).
-4. The agent window (with streamed answers) and the trace viewer.
+4. The agent window (with streamed answers) and the trace viewer. The
+   agent window is built (below); streaming and the trace viewer are not.
 
 ## As built (phases 1 and 2)
 
@@ -171,6 +172,33 @@ sizes, mutable C state); it manages windows of its own, which displayd
 already does; and clipping and the wheel were needed with it too.
 Nuklear is the same, larger. So `Gui` stays OCaml, and borrows microui's
 design: containers that clip and remember their content's size.
+
+## The agent window (phase 4, 2026-11-18)
+
+`agent_window` (`gui/agent_window.ml`; the menu's Agent, the welcome
+window's button) is the agent's conversation in a window, on the same
+loop as the `agent` command (the module `Agent`, `doc/decisions/llm.md`
+section 9):
+
+- the task is typed at the bottom (Enter or Send); above, in a scroll
+  box that follows the end, the task, the model's words, each action
+  and the first lines of its result, the stops and the recording's file.
+  The header shows the model (the first profile) and the tokens so far;
+- the agent runs in a domain of its own, as a model call takes seconds.
+  It adds entries to the log under a mutex; the window draws four times a
+  second, and at every event;
+- a confirmation is a box in the conversation (the action, as the
+  command would print it) and, **where the task's field was**, three
+  buttons: Allow, Deny, Allow all (for the rest of the window's life).
+  The agent's domain waits on a condition for the answer. Replacing the
+  field means no task can be typed meanwhile, the buttons are always in
+  the same place (the test clicks Allow there), and a click meant for the
+  field cannot allow anything;
+- a follow-up continues the conversation (the session keeps the
+  messages of the tasks the model finished).
+
+Not yet: answers streamed as they come (llmd answers whole messages),
+stopping a task midway, the trace viewer (mynos-0o5).
 
 ## The logo (2026-11-18)
 

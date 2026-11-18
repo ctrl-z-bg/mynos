@@ -198,7 +198,9 @@ JSON. `safe` is for the agent: what changes things is confirmed first.
 
 ### 9. The agent
 
-`agent TASK...` (`agent/agent_main.ml`) runs the loop: the model answers,
+`agent TASK...` (`agent/agent_main.ml`) runs the loop, which is the
+library module `Agent` (`mynos-lib/ocaml/agent.ml`, shared with the
+agent window, `doc/decisions/gui.md`): the model answers,
 its tool calls are carried out, their results sent back, until it answers
 with no tool call (or after 20 model calls, `-n`). Its tools:
 
@@ -228,6 +230,12 @@ shows, with `trace calls`, the agent's calls to llmd, llmd's to netd (the
 TLS connection to the provider), and the commands' own calls, nested.
 llmd asks Claude to cache the prompt (`cache_control`, automatic): in a
 loop, each request repeats the previous one and adds to it.
+
+`Agent` tells what happens through events (`Task`, `Said`, `Action`,
+`Result`, `Note`) and asks through a function (`Yes`, `No`, `All`): the
+command prints them and reads a key, the window draws them and waits
+for a button. A session keeps its conversation: the next task is a
+follow-up ("and now...").
 
 ## Not now
 
