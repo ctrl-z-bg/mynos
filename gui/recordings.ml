@@ -383,7 +383,11 @@ let () =
       if Gui.button ui 246 ty 140 (if st.hide_gui then "GUI: hidden" else "GUI: shown") then begin
         st.hide_gui <- not st.hide_gui; select st
       end;
-      st.field <- Gui.text_field ui 3 392 (ty + 2) 380 st.field;
+      st.field <- Gui.text_field ui 3 392 (ty + 2) 314 st.field;
+      if Gui.button ui 712 ty 60 "Files" then
+        Gui.open_file_picker ~title:"Open a recording"
+          ~dir:(if st.field <> "" && st.field.[0] = '/' then String.trim st.field else "/tmp")
+          ~filter:(fun n -> Filename.check_suffix n ".trc" || Filename.check_suffix n ".trace") 9;
       if Gui.button ui 778 ty 66 "Open" && st.field <> "" then load st (String.trim st.field);
       if Gui.button ui 850 ty 82 (if st.recording then "..." else "Record")
       && not st.recording && String.trim st.field <> "" then record st (String.trim st.field);
@@ -398,4 +402,8 @@ let () =
         ignore (Gui.paragraph ui 24 (main_y + 16) (width - 48)
                   "No recording open. A recording is made by trace COMMAND (or by the agent, \
                    /tmp/agent.trc); here, type a command in the field and press Record, \
-                   or a file's path and Open."))
+                   or a file's path and Open (Files: choose one).");
+      (* the file picker, over the rest *)
+      match Gui.file_picker ui 9 with
+      | Some (Gui.Picked f) -> st.field <- f; load st f
+      | Some Gui.Cancelled | None -> ())

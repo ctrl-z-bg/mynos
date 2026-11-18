@@ -38,7 +38,14 @@ let panel ?(colour = panel_colour) ui x y w h =
   Gfx.fill ui.g x y w h colour;
   Gfx.rect ui.g x y w h 0xD5DBE1
 
+(* a file picker open (a modal panel): the window's other widgets get no
+   pointer and no keys until it closes *)
+let modals = ref 0
+let in_modal = ref false
+let blocked () = !modals > 0 && not !in_modal
+
 let hovered ui x y w h =
+  not (blocked ()) &&
   ui.mx >= x && ui.my >= y && ui.mx < x + w && ui.my < y + h
   && (match Gfx.clip () with
       | None -> true
@@ -57,11 +64,12 @@ let button ?(h = 26) ui x y w text =
 
 let text_field ui id x y w value =
   let h = 22 in
-  if ui.clicked && (let px, py = ui.press in px >= x && py >= y && px < x + w && py < y + h)
+  if ui.clicked && not (blocked ())
+     && (let px, py = ui.press in px >= x && py >= y && px < x + w && py < y + h)
   then ui.field <- id;
   let focused = ui.field = id in
   let value =
-    if not focused then value
+    if not focused || blocked () then value
     else List.fold_left (fun v k ->
         match k with
         | "\127" | "\b" ->               (* Backspace: a whole character *)
@@ -182,3 +190,149 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
 let spawn ?(args = []) program =
   try ignore (Mynos.spawn "ocamlrun" (Array.of_list ("ocamlrun" :: program :: args)))
   with Mynos.Error _ -> ()
+
+(* ---- files ---- *)
+
+type entry = { name : string; is_dir : bool; size : int }
+
+let entries dir =
+  match Sys.readdir dir with
+  | names ->
+    let full n = if dir = "/" then "/" ^ n else Filename.concat dir n in
+    let es = Array.to_list (Array.map (fun n ->
+        let is_dir = try Sys.is_directory (full n) with Sys_error _ -> false in
+        let size = if is_dir then 0 else
+            try Int64.to_int (In_channel.with_open_bin (full n) In_channel.length)
+            with _ -> 0 in
+        { name = n; is_dir; size }) names) in
+    List.sort (fun a b ->
+        if a.is_dir <> b.is_dir then compare b.is_dir a.is_dir
+        else compare (String.lowercase_ascii a.name) (String.lowercase_ascii b.name)) es
+  | exception Sys_error _ -> []
+
+let size_text n =
+  if n < 1024 then Printf.sprintf "%d B" n
+  else if n < 1024 * 1024 then Printf.sprintf "%d KB" ((n + 512) / 1024)
+  else Printf.sprintf "%.1f MB" (float n /. 1048576.)
+
+let parent dir =
+  if dir = "/" then "/" else
+    let p = Filename.dirname dir in if p = "." then "/" else p
+
+let join dir n = if dir = "/" then "/" ^ n else dir ^ "/" ^ n
+
+(* ---- the file picker ---- *)
+
+type picked = Picked of string | Cancelled
+
+type picker = {
+  title : string;
+  filter : string -> bool;
+  mutable dir : string;
+  mutable listing : entry list;
+  mutable chosen : string option;
+  mutable all : bool;               (* the files the filter hides, too *)
+}
+
+let pickers : (int, picker) Hashtbl.t = Hashtbl.create 2
+
+let go p dir = p.dir <- dir; p.listing <- entries dir; p.chosen <- None
+
+let open_file_picker ?(title = "Open a file") ?(dir = "/") ?(filter = fun _ -> true) id =
+  let dir, chosen =
+    if (try Sys.is_directory dir with Sys_error _ -> false) then dir, None
+    else if Sys.file_exists dir then parent dir, Some (Filename.basename dir)
+    else "/", None in
+  let p = { title; filter; dir; listing = []; chosen = None; all = false } in
+  go p dir;
+  p.chosen <- chosen;
+  if not (Hashtbl.mem pickers id) then incr modals;
+  Hashtbl.replace pickers id p
+
+let close id =
+  if Hashtbl.mem pickers id then (Hashtbl.remove pickers id; decr modals)
+
+let file_picker ui id =
+  match Hashtbl.find_opt pickers id with
+  | None -> None
+  | Some p ->
+    in_modal := true;
+    Fun.protect ~finally:(fun () -> in_modal := false) (fun () ->
+        let ww = ui.g.Gfx.width and wh = ui.g.Gfx.height in
+        let w = min (ww - 24) 600 and h = min (wh - 24) 440 in
+        let x = (ww - w) / 2 and y = (wh - h) / 2 in
+        let result = ref None in
+        let pick n = result := Some (Picked (join p.dir n)) in
+        (* the panel, its shadow, its title *)
+        Gfx.fill ui.g (x + 5) (y + 5) w h 0x55606A;
+        Gfx.fill ui.g x y w h 0xFFFFFF;
+        Gfx.rect ui.g x y w h 0x1B3A57;
+        Gfx.fill ui.g x y w 28 0x1B3A57;
+        ignore (Gfx.text ~bold:true ui.g (x + 10) (y + 6) p.title 0xFFFFFF);
+        (* the places, and up *)
+        let by = y + 36 in
+        List.iteri (fun i (label, dir) ->
+            if button ui (x + 10 + i * 78) by 72 label then go p dir)
+          [ "/", "/"; "/tmp", "/tmp"; "/disk", "/disk" ];
+        if button ui (x + 244) by 56 "Up" then go p (parent p.dir);
+        if button ui (x + w - 130) by 120 (if p.all then "All files" else "Filtered") then
+          p.all <- not p.all;
+        (* where: each part of the path goes there *)
+        let cy = by + 34 in
+        let parts = List.filter (( <> ) "") (String.split_on_char '/' p.dir) in
+        let cx = ref (x + 10) in
+        let crumb label dir =
+          let wd = 8 * Gfx.cells label + 8 in
+          let over = hovered ui !cx cy wd 20 in
+          if over then Gfx.fill ui.g !cx cy wd 20 0xDCE6EF;
+          ignore (Gfx.text ~bold:true ui.g (!cx + 4) (cy + 2) label accent);
+          let px, py = ui.press in
+          if ui.clicked && over && px >= !cx && px < !cx + wd && py >= cy && py < cy + 20
+          then go p dir;
+          cx := !cx + wd in
+        crumb "/" "/";
+        ignore (List.fold_left (fun acc part ->
+            let d = join acc part in
+            ignore (Gfx.text ui.g !cx (cy + 2) "\xe2\x80\xba" muted);
+            cx := !cx + 10;
+            crumb part d; d) "/" parts);
+        (* the entries *)
+        let ly = cy + 28 and lh = h - (cy + 28 - y) - 48 in
+        let shown = List.filter (fun e -> e.is_dir || p.all || p.filter e.name) p.listing in
+        scroll ui (-1000 - id) (x + 10) ly (w - 20) lh (fun top ->
+            List.iteri (fun i e ->
+                let ry = top + i * 22 in
+                let selected = p.chosen = Some e.name in
+                let label = if e.is_dir then e.name ^ "/" else e.name in
+                if list_item ui (x + 11) ry (w - 34) ~selected label then begin
+                  if e.is_dir then go p (join p.dir e.name)
+                  else if selected then pick e.name           (* a second click *)
+                  else p.chosen <- Some e.name
+                end;
+                if not e.is_dir then begin
+                  let s = size_text e.size in
+                  ignore (Gfx.text ui.g (x + w - 34 - 8 * String.length s) (ry + 3) s
+                            (if selected then 0xFFFFFF else muted))
+                end) shown;
+            if shown = [] then
+              ignore (Gfx.text ui.g (x + 18) (top + 4)
+                        (if p.listing = [] then "(empty, or not readable)"
+                         else "(nothing here matches: All files shows the rest)") muted);
+            22 * List.length shown + 4);
+        (* the choice, and the answer *)
+        let fy = y + h - 38 in
+        ignore (Gfx.text ~max:((w - 260) / 8) ui.g (x + 12) (fy + 5)
+                  (match p.chosen with Some n -> join p.dir n | None -> p.dir)
+                  (if p.chosen = None then muted else foreground));
+        if button ui (x + w - 236) fy 110 "Cancel" then result := Some Cancelled;
+        if button ui (x + w - 120) fy 110 "Open" then
+          (match p.chosen with Some n -> pick n | None -> ());
+        (* keys: Enter opens, Escape cancels, Backspace goes up *)
+        List.iter (function
+            | "\r" | "\n" -> (match p.chosen with Some n -> pick n | None -> ())
+            | "\027" -> result := Some Cancelled
+            | "\127" | "\b" -> go p (parent p.dir)
+            | _ -> ()) ui.keys;
+        (match !result with Some _ -> close id | None -> ());
+        !result)
+

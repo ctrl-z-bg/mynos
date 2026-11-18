@@ -292,6 +292,27 @@ a filter in the recorder first.
 - The close box acts on release, not on press: pressed, it darkens; it
   closes only if the button is released on it. A slip is not a close.
 
+## Choosing files; Files (2026-11-18)
+
+- **`Gui.file_picker`**: a panel over the window, opened by
+  `Gui.open_file_picker id ~filter ~dir`, drawn last in the frame,
+  answering `Picked path` or `Cancelled`. Places (`/`, `/tmp`, `/disk`),
+  the path in parts (each a link), Up, the entries (directories first,
+  sizes; the filter hides other files unless "All files"). A click
+  enters a directory or chooses a file, a second click (or Open, or
+  Enter) picks it, Escape cancels, Backspace goes up. While it is open
+  the window's other widgets get no pointer and no keys (`Gui.hovered`
+  and `text_field` know), so an immediate-mode panel behaves as a modal
+  one. Recordings and System have a Files button for their recordings.
+- **Files** (`gui/files.ml`, the menu's Files): the places on the left,
+  with **the service that serves the one shown** (memrofs, tmpfs, fatfs
+  and the ata driver under it: pid, OCaml or C), the entries in the
+  middle, and New folder, Rename, Delete (asked first), Copy or Cut then
+  Paste (between services a copy and a removal, as `mv` does), Open: a
+  directory is entered, a `.byte` started, a recording shown in
+  Recordings, a text or a PGM image viewed in the window. Folders are not
+  copied yet.
+
 ## The logo (2026-11-18)
 
 The 2003 website's drawing (`doc/website/img/mynos-logo.jpg`, a Minotaur:

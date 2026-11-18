@@ -70,6 +70,49 @@ val list_item : ui -> int -> int -> int -> selected:bool -> string -> bool
 (** [list_item ui x y width ~selected label]: a row of a list; [true] when
     clicked. *)
 
+(** {1 Files} *)
+
+type entry = { name : string; is_dir : bool; size : int }
+
+val entries : string -> entry list
+(** A directory's entries: directories first, then files, by name ([] if
+    it cannot be read). *)
+
+val size_text : int -> string
+(** ["512 B"], ["12 KB"], ["1.4 MB"]. *)
+
+val parent : string -> string
+val join : string -> string -> string
+
+(** {1 The file picker}
+
+    A panel over the window: the places ([/], [/tmp], [/disk]), the path
+    (each part goes there), the entries (directories, and the files the
+    filter keeps, or all of them). A click enters a directory or chooses a
+    file; a second click, Open or Enter, picks it; Cancel or Escape gives
+    up. While it is open, the window's other widgets get no pointer and no
+    keys.
+
+    {[
+      if Gui.button ui 8 8 80 "Open..." then
+        Gui.open_file_picker ~filter:(fun n -> Filename.check_suffix n ".trc") 1;
+      match Gui.file_picker ui 1 with
+      | Some (Gui.Picked path) -> load path
+      | Some Gui.Cancelled | None -> ()
+    ]}
+    Draw it last, so that it is over the rest. *)
+
+type picked = Picked of string | Cancelled
+
+val open_file_picker :
+  ?title:string -> ?dir:string -> ?filter:(string -> bool) -> int -> unit
+(** Open the picker [id] at [dir] (a directory, or a file: chosen in its
+    directory). *)
+
+val file_picker : ui -> int -> picked option
+(** Draw the picker [id] if it is open: [Some] once it is answered (it is
+    closed then). *)
+
 exception Quit
 
 val run : ?title:string -> ?tick:float -> int -> int -> 'a -> (ui -> 'a -> 'a) -> unit

@@ -31,7 +31,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh"
+results="files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -283,7 +283,7 @@ sec_gui() {
 # the graphical session (doc/decisions/gui.md): displayd, windows of
 # programs, the mouse, back to text mode. QEMU's monitor moves the mouse
 # relatively: vmmouse (absolute) is off, the PS/2 mouse is used
-gui_ok= powered_off= gui_hangup=
+gui_ok= powered_off= gui_hangup= files_ok=
 if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     : > "$tmp/logg"
     # the agent window's model: the fake provider, as in the seventh boot,
@@ -379,8 +379,18 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     tools/type-keys.py "$tmp/mon-g" '{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}/disk/old-boot.trc'
     click 364 117; sleep 5
     mon "screendump $tmp/gui17.ppm"
-    click 20 10; sleep 1; click 30 215; sleep 4    # the MyNOS menu, Exit
-    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt\n'; sleep 2
+    # Files (the menu's eighth item, at 40,70): /tmp, aw.txt (the agent's),
+    # Copy; /disk, Paste, Open (viewed); Back, New folder "newdir". The
+    # copy and the folder are checked from text mode
+    click 20 10; sleep 1; click 40 193; sleep 8
+    mon "screendump $tmp/gui18.ppm"
+    click 100 175; sleep 2; click 324 180; sleep 1; click 642 125; sleep 1
+    click 100 199; sleep 2; click 762 125; sleep 2; click 310 125; sleep 2
+    mon "screendump $tmp/gui19.ppm"
+    click 848 161; sleep 1; click 400 125; sleep 1
+    tools/type-keys.py "$tmp/mon-g" 'newdir\n'; sleep 2
+    click 20 10; sleep 1; click 30 237; sleep 4    # the MyNOS menu, Exit
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt; ls /disk\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too
     tools/type-keys.py "$tmp/mon-g" 'ps\n'; sleep 3
@@ -404,11 +414,18 @@ rows = [l.split() for l in table if re.match(r"\s+\d+\s+\d+\s+\d+\s", l)]
 names = [r[4] if r[3] == "io" else r[3] for r in rows]
 assert names.count("sh") == 1 and "terminal" not in names, names
 PY
+    python3 - "$tmp/logg" <<'PY' && files_ok=yes
+import sys
+s = open(sys.argv[1], "rb").read().decode("latin-1")
+assert s.count("agentwin-ok") >= 2, "aw.txt copied to /disk by Files"
+assert "newdir" in s, "a folder made by Files"
+PY
     cat "$tmp/logg" >> "$part"
     python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
               "$tmp"/gui6.ppm "$tmp"/gui7.ppm "$tmp"/gui8.ppm "$tmp"/gui9.ppm \
               "$tmp"/gui10.ppm "$tmp"/gui11.ppm "$tmp"/gui12.ppm "$tmp"/gui13.ppm \
-              "$tmp"/gui14.ppm "$tmp"/gui15.ppm "$tmp"/gui16.ppm "$tmp"/gui17.ppm <<'PY' && gui_ok=yes
+              "$tmp"/gui14.ppm "$tmp"/gui15.ppm "$tmp"/gui16.ppm "$tmp"/gui17.ppm \
+              "$tmp"/gui18.ppm "$tmp"/gui19.ppm <<'PY' && gui_ok=yes
 import sys
 def load(path):
     d = open(path, "rb").read()
@@ -419,8 +436,8 @@ def px(img, x, y):
     w, h, d = img
     i = 3 * (y * w + x)
     return (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]
-g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17 = \
-    (load(p) for p in sys.argv[1:18])
+g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17, g18, g19 = \
+    (load(p) for p in sys.argv[1:20])
 assert g1[:2] == (1024, 768), "graphics mode"
 assert px(g1, 500, 10) == 0x111820, "the top bar"
 assert px(g1, 300, 86) == 0x2D6CA2, "the welcome window, focused"
@@ -487,6 +504,12 @@ assert px(g16, 518, 19) == 0x2D6CA2, "the agent window's tab, focused"
 assert px(g16, 500, 172) == 0x2D6CA2, "the agent window, in front again"
 # another boot's recording: its server, a ghost among the services
 assert count(g17, 0xF1F2F3, 132, 270, 1010, 322) > 300, "another boot's service, a ghost"
+# Files (content at 40,70): focused, its places and listing; then a text
+# viewed (its words, and the Back button)
+assert px(g18, 500, 59) == 0x2D6CA2, "the Files window, focused"
+assert px(g18, 340, 80) == 0x1B3A57, "the Files window's header"
+assert count(g19, 0x1A2228, 230, 180, 900, 220, 1) > 40, "a text viewed"
+assert px(g19, 820, 161) == 0x2D6CA2, "the viewer's Back button"
 PY
 fi
 }
@@ -682,6 +705,7 @@ assert any(e["ph"] == "f" for e in d)' "$tmp/t.json" 2>/dev/null && trace_json=y
 fi
 }
 
+for v in $results; do eval "$v="; done   # a lane not run finds nothing
 pids=
 for lane in ${LANES:-a b c d e}; do
     (
@@ -883,6 +907,11 @@ PY
         echo "FAIL  gui: a session, windows of programs, a click, back to text"; fail=1
     fi
     expect "gui: displayd describes display/1 as display.ml does"
+    if [ -n "$files_ok" ]; then
+        echo "ok    files: a file copied between services, a folder made"
+    else
+        echo "FAIL  files: a file copied between services, a folder made"; fail=1
+    fi
     if [ -n "$gui_hangup" ]; then
         echo "ok    gui: a terminal closed ends its sh (a hang-up)"
     else

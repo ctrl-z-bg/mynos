@@ -340,7 +340,11 @@ let () =
       ignore (Gfx.text g (width - 12 - 8 * Gfx.cells info) 9 info 0xB8C7D3);
       (* the toolbar *)
       let ty = 42 in
-      st.field <- Gui.text_field ui 3 8 (ty + 2) 300 st.field;
+      st.field <- Gui.text_field ui 3 8 (ty + 2) 240 st.field;
+      if Gui.button ui 252 ty 58 "Files" then
+        Gui.open_file_picker ~title:"Replay a recording"
+          ~dir:(if st.field <> "" && st.field.[0] = '/' then String.trim st.field else "/tmp")
+          ~filter:(fun n -> Filename.check_suffix n ".trc" || Filename.check_suffix n ".trace") 9;
       if Gui.button ui 314 ty 60 "Open" && String.trim st.field <> "" then
         load st (String.trim st.field);
       if Gui.button ui 380 ty 76 (if st.recording then "..." else "Record")
@@ -607,4 +611,8 @@ let () =
          line 4 ~colour:Gui.muted "Each box says what it is written in: OCaml (bytecode, on \
                                    ocamlrun) or C (native).";
          line 3 ~colour:Gui.muted "A recording (the field: a file to Open, or a command to \
-                                   Record) is replayed here step by step."))
+                                   Record; Files: choose one) is replayed here step by step.");
+      (* the file picker, over the rest *)
+      match Gui.file_picker ui 9 with
+      | Some (Gui.Picked f) -> st.field <- f; load st f
+      | Some Gui.Cancelled | None -> ())

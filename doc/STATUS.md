@@ -969,4 +969,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   the graphical session's fake model has its own port (47091). `LANES=d`
   runs a lane alone while working on it, `KEEP=1` keeps the logs and
   screens. The full run stays the check before a commit.
+- **2026-11-18** — Choosing files (mynos-kcl): `Gui.file_picker`, a
+  modal panel in immediate mode (places, the path in parts, entries, a
+  filter), used by Recordings and System for their recordings; and Files
+  (mynos-4ss), a file manager: places with the service that serves each,
+  open by type (programs started, recordings in Recordings, texts and
+  images viewed), new folder, rename, delete, copy, cut and paste
+  between services. Test: in the graphical session, a file copied from
+  /tmp to /disk, viewed, a folder made; checked from text mode.
 
