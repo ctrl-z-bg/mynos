@@ -264,6 +264,7 @@ let create ?(profile = "") ?(services = [ "net" ]) ?(max_turns = 20)
     messages = []; tokens_in = 0; tokens_out = 0 }
 
 let tokens a = (a.tokens_in, a.tokens_out)
+let trace_file a = a.trace_file
 let set_yes_to_all a b = a.yes_to_all <- b
 let forget a = a.messages <- []
 

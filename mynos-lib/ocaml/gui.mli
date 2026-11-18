@@ -77,5 +77,6 @@ val run : ?title:string -> ?tick:float -> int -> int -> 'a -> (ui -> 'a -> 'a) -
     event (and every [tick] seconds, if given), until it is closed (its
     close box, or [frame] raising {!Quit}). *)
 
-val spawn : string -> unit
-(** Start a program of the RAM disk (a .byte, on ocamlrun). *)
+val spawn : ?args:string list -> string -> unit
+(** Start a program of the RAM disk (a .byte, on ocamlrun), with these
+    arguments. *)

@@ -179,6 +179,6 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
        | exception Ipc.Remote_error _ -> ()) in
   loop state
 
-let spawn program =
-  try ignore (Mynos.spawn "ocamlrun" [| "ocamlrun"; program |])
+let spawn ?(args = []) program =
+  try ignore (Mynos.spawn "ocamlrun" (Array.of_list ("ocamlrun" :: program :: args)))
   with Mynos.Error _ -> ()

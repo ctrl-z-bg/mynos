@@ -40,6 +40,9 @@ val run : t -> emit:(event -> unit) -> confirm:(string -> answer) -> string -> i
 val tokens : t -> int * int
 (** In and out, since the session started. *)
 
+val trace_file : t -> string
+(** Where each task's recording is saved. *)
+
 val set_yes_to_all : t -> bool -> unit
 val forget : t -> unit
 (** A new conversation. *)

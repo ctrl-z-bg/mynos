@@ -102,7 +102,8 @@ be.
 2. The service explorer (forms from descriptions).
 3. Terminal windows (consoles per window).
 4. The agent window (with streamed answers) and the trace viewer. The
-   agent window is built (below); streaming and the trace viewer are not.
+   agent window and the recordings window are built (below); streaming
+   is not.
 
 ## As built (phases 1 and 2)
 
@@ -198,7 +199,31 @@ section 9):
   messages of the tasks the model finished).
 
 Not yet: answers streamed as they come (llmd answers whole messages),
-stopping a task midway, the trace viewer (mynos-0o5).
+stopping a task midway.
+
+## The recordings window (phase 4, 2026-11-18)
+
+`recordings [FILE]` (`gui/recordings.ml`; the menu's Recordings, the
+agent window's Recording button) shows a recording of the event recorder
+(`doc/decisions/tracer.md`), from `Tracer.calls`:
+
+- **Timeline**: a lane per process; each call is a light box on its
+  client's lane (waiting) and a dark one, coloured by program, on its
+  server's (serving); the selected call is outlined, with a line from
+  client to server. The marks are a band of labels above and lines
+  across; clicking a label shows that step, to the next mark (an agent's
+  task is mostly waiting: for the model, for the user's Allow). The wheel
+  zooms where the pointer is, a drag moves along, Whole shows it all.
+- **Calls**: the list of `trace calls`, nested, the marks between;
+  choosing one centres the timeline on it.
+- **The detail**, under either: client and server, the request and the
+  reply in words, when, how long, how long it waited for the server and
+  how long the server worked (and on which thread), the first bytes of
+  both messages in hex.
+- The field opens a file (Open), or runs a command under `trace -o`, in
+  a domain, and opens its recording (Record). The display's own traffic
+  (every window's frames) is hidden by default: "GUI: shown" brings it
+  back.
 
 ## The logo (2026-11-18)
 

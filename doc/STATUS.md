@@ -215,7 +215,9 @@ All services are linked statically against `libmynos` and placed at
   windows: `sh` in a VT100 emulator, its console a service of the window,
   `MYNOS_CONSOLE`; and the agent window: the agent's conversation, its
   confirmations as buttons, on the module `Agent` it shares with the
-  `agent` command); the MyNOS menu's Exit returns to the text console,
+  `agent` command; the recordings window: a recording as a timeline of
+  calls per process, the marks, the calls, a call's details); the MyNOS
+  menu's Exit returns to the text console,
   intact.
 - **The event recorder** (2026, `doc/decisions/tracer.md`): while a
   recording is on, the kernel (`kernel/trace.c`) writes an event for every
@@ -504,8 +506,9 @@ Planned work, in order. Details live in the beads issues.
    (done), `ask` in `sh` (done), protocols that describe themselves (done), an agent
    loop with the recorder on (done).
 7. The GUI (mynos-9lr, `doc/decisions/gui.md`): the display server, windows
-   the service explorer, terminal windows and the agent window (done);
-   the trace viewer next (mynos-0o5). Then distinctive
+   the service explorer, terminal windows, the agent window and the
+   recordings window (done); the System window next (mynos-81t), and
+   background jobs in sh (mynos-rk1). Then distinctive
    applications (mynos-3h1), several CPUs (mynos-awn).
 
 The old SourceForge site is archived in `doc/website/` (mynos-db2).
@@ -912,4 +915,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   privileges, threads, name), the registry's names (request 4, with
   their owners), `ps` in `sh`. Tests: the agent's marks in `trace calls`,
   `ps` naming consoled's service.
+- **2026-11-18** — The recordings window (mynos-0o5,
+  `doc/decisions/gui.md`): a recording as a timeline (a lane per process,
+  calls as boxes, marks as lines; wheel zoom, drag, a mark's step on a
+  click), as the list of calls, and a call's details (times, the first
+  bytes of both messages); Open a file or Record a command. Opened from
+  the menu and from the agent window (Recording). `Tracer.call` keeps the
+  messages' first bytes and sizes; `Gui.spawn ~args`. Test: the agent's
+  recording opened from its window, a mark's step, a call selected.
 

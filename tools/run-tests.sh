@@ -322,7 +322,16 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     mon "screendump $tmp/gui6.ppm"
     click 230 695; sleep 8
     mon "screendump $tmp/gui7.ppm"
-    click 20 10; sleep 1; click 30 171; sleep 4    # the MyNOS menu, Exit
+    # the task's recording (the agent window's Recording button), in the
+    # recordings window (at 80,124): its timeline, then its calls, one
+    # selected
+    click 736 693; sleep 15
+    mon "screendump $tmp/gui8.ppm"
+    click 262 230; sleep 3                         # the first mark: its step
+    mon "screendump $tmp/gui10.ppm"
+    click 219 177; sleep 3; click 400 233; sleep 3
+    mon "screendump $tmp/gui9.ppm"
+    click 20 10; sleep 1; click 30 193; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt\n'; sleep 2
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # turning the machine off: init does it, QEMU ends by itself
@@ -339,7 +348,8 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     [ -n "${SHOTS:-}" ] && cp "$tmp"/gui*.ppm "$SHOTS"/   # SHOTS=DIR keeps the screens
     cat "$tmp/logg" >> "$log"
     python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
-              "$tmp"/gui6.ppm "$tmp"/gui7.ppm <<'PY' && gui_ok=yes
+              "$tmp"/gui6.ppm "$tmp"/gui7.ppm "$tmp"/gui8.ppm "$tmp"/gui9.ppm \
+              "$tmp"/gui10.ppm <<'PY' && gui_ok=yes
 import sys
 def load(path):
     d = open(path, "rb").read()
@@ -350,7 +360,7 @@ def px(img, x, y):
     w, h, d = img
     i = 3 * (y * w + x)
     return (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]
-g1, g2, g3, g4, g5, g6, g7 = (load(p) for p in sys.argv[1:8])
+g1, g2, g3, g4, g5, g6, g7, g8, g9, g10 = (load(p) for p in sys.argv[1:11])
 assert g1[:2] == (1024, 768), "graphics mode"
 assert px(g1, 500, 10) == 0x111820, "the top bar"
 assert px(g1, 300, 86) == 0x2D6CA2, "the welcome window, focused"
@@ -379,6 +389,19 @@ def asking(img): return sum(1 for x in range(176, 920, 4) for y in range(222, 67
                             if px(img, x, y) == 0xFFF4E0)
 assert asking(g6) > 100, "the agent asks: the confirmation"
 assert asking(g7) == 0, "allowed: no confirmation left"
+# the recordings window (content at 80,124): focused, a timeline with the
+# agent's marks (orange) and calls in its lanes; then a call selected in
+# the list of calls, and its details
+assert px(g8, 500, 114) == 0x2D6CA2, "the recordings window, focused"
+assert px(g8, 400, 134) == 0x1B3A57, "the recordings window's header"
+assert sum(1 for x in range(220, 1004) if px(g8, x, 230) == 0xF29B38) >= 2, "the marks"
+servers = {0x2D6CA2, 0x3E8E5E, 0xB5651D, 0x7B4FA0, 0xA23B5A, 0x2A8A8A, 0x8A7A2A, 0x5A6670}
+def boxes(img): return [px(img, x, y) for x in range(250, 1004, 2) for y in range(244, 584, 4)
+                        if px(img, x, y) in servers]
+assert len(set(boxes(g8))) >= 2, "servers' boxes in the lanes"
+assert len(boxes(g10)) > 3 * len(boxes(g8)), "a mark clicked: its step, wider"
+assert px(g9, 300, 233) == 0x2D6CA2, "a call selected in the list"
+assert sum(1 for x in range(98, 900) if px(g9, x, 606) == 0x1A2228) > 20, "its details"
 PY
 fi
 

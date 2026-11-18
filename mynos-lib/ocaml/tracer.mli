@@ -80,6 +80,9 @@ val name : recording -> ?seq:int -> int -> string
 (** ["fatfs(7)"]: the program [pid] was running at event [seq] (the
     last one by default) *)
 
+val program : recording -> ?seq:int -> int -> string
+(** The same, without the pid: ["fatfs"]. *)
+
 val describe : recording -> event -> string
 (** A message in words: ["block/1 Read (2061, 1)"], ["fs OPEN \"a.txt\""],
     ["Ok (512 bytes)"]... *)
@@ -98,6 +101,10 @@ type call = {
   server_tid : int;
   server_start : float;    (** when the server received the request *)
   server_finish : float;   (** when it sent the reply *)
+  request_bytes : string;  (** the first bytes of the request, and of the reply *)
+  reply_bytes : string;
+  request_size : int;      (** their sizes *)
+  reply_size : int;
 }
 
 val calls : recording -> call list

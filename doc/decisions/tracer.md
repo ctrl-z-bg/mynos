@@ -114,5 +114,6 @@ which can be an option later.
 ## Later
 
 Filters (a program and what it talks to), more event classes, a graphical
-player in MyNOS when there is a GUI (mynos-9lr), deterministic replay of a
+player in MyNOS (done: the recordings window, `doc/decisions/gui.md`),
+deterministic replay of a
 service from its recorded inputs.

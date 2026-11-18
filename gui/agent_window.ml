@@ -185,7 +185,13 @@ let () =
                "Allow all: no more questions for this window."
            | None ->
              (* the task *)
-             let v = Gui.text_field ui 2 conv_x fy (conv_w - 128) st.input in
+             let v = Gui.text_field ui 2 conv_x fy (conv_w - 256) st.input in
+             (* the last task's recording, in the recordings window *)
+             (match session with
+              | Some a when not st.running && Sys.file_exists (Agent.trace_file a) ->
+                if Gui.button ui (conv_x + conv_w - 244) (fy - 2) 120 "Recording" then
+                  Gui.spawn ~args:[ Agent.trace_file a ] "/recordings.byte"
+              | _ -> ());
              let enter = List.exists (fun k -> k = "\r" || k = "\n") ui.keys in
              st.input <- v;
              let send = Gui.button ui (conv_x + conv_w - 116) (fy - 2) 116

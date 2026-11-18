@@ -354,12 +354,15 @@ type call = {
   client : int; server : int; start : float; finish : float;
   request : string; reply : string; depth : int; client_tid : int;
   server_tid : int; server_start : float; server_finish : float;
+  request_bytes : string; reply_bytes : string; request_size : int; reply_size : int;
 }
 
 type building = {
   b_client : int; b_server : int; b_start : float; b_request : string;
   b_tid : int; mutable b_finish : float; mutable b_reply : string;
   mutable b_server_tid : int; mutable b_server_start : float;
+  b_request_bytes : string; b_request_size : int;
+  mutable b_reply_bytes : string; mutable b_reply_size : int;
   mutable b_server_finish : float;
 }
 
@@ -390,13 +393,18 @@ let calls r =
             let b = { b_client = client; b_server = server; b_start = e.time;
                       b_request = describe r e; b_tid = e.tid; b_finish = nan;
                       b_reply = ""; b_server_tid = 0; b_server_start = nan;
-                      b_server_finish = nan } in
+                      b_server_finish = nan; b_request_bytes = e.data;
+                      b_request_size = e.size; b_reply_bytes = ""; b_reply_size = 0 } in
             Hashtbl.replace current e.channel b;
             all := b :: !all
         end else (match cur with
             | Some b ->
               b.b_server_finish <- e.time;
-              if b.b_reply = "" then b.b_reply <- describe r e
+              if b.b_reply = "" then begin
+                b.b_reply <- describe r e;
+                b.b_reply_bytes <- e.data;
+                b.b_reply_size <- e.size
+              end
             | None -> ())
       | Recv ->
         let client, server = ends () in
@@ -425,7 +433,9 @@ let calls r =
                 finish = b.b_finish; request = b.b_request; reply = b.b_reply;
                 depth = (match parent with Some p -> p.depth + 1 | None -> 0);
                 client_tid = b.b_tid; server_tid = b.b_server_tid;
-                server_start = b.b_server_start; server_finish = b.b_server_finish } in
+                server_start = b.b_server_start; server_finish = b.b_server_finish;
+                request_bytes = b.b_request_bytes; reply_bytes = b.b_reply_bytes;
+                request_size = b.b_request_size; reply_size = b.b_reply_size } in
       serving := c :: !serving;
       c) built
 
