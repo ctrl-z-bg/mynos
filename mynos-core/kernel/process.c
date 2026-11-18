@@ -551,26 +551,29 @@ int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
 static process_descriptor_t * zombies = NULL;
 
 /*
- * Ends the current process. It runs on the process's own kernel stack and
- * page directory, so it only releases what other processes can see (IPC,
- * semaphores) and queues the process: its memory is freed by reapZombies,
- * from another process, after the switch. The descriptor stays until the
- * parent collects the status (wait4), or goes at once if nobody can.
+ * Ends a process: the current one (killProcess), or another (kill, native
+ * call 34). It releases only what other processes can see (IPC,
+ * semaphores), takes its threads out of every queue (ready, timers,
+ * semaphores: on one processor, a process that is not the current one has
+ * all its threads in some queue, as the other threads of a process that
+ * calls exit do) and queues the process: its memory is freed by
+ * reapZombies, from another process, after the next switch. The
+ * descriptor stays until the parent collects the status (wait4), or goes
+ * at once if nobody can.
  */
-void killProcess(int status) {
+static void endProcess(process_descriptor_t * self, int status, uint32_t pgdir) {
   tss_t * tss;
   process_queue_t * q;
   int port, channel;
   int i, n;
   process_descriptor_t * parent;
-  process_descriptor_t * self = processTable[currProcess];
 
   TRACE(TRACE_EXIT, self->pid, -1, -1, 0, status, NULL, 0);
   self->isAlive = 0;
-  numThreads -= processTable[currProcess]->numThreads;
+  numThreads -= self->numThreads;
   numProcesses--;
   
-  tss = processTable[currProcess]->tss;
+  tss = self->tss;
   while (tss) {
     timerQueueExtractThread(tss);
     q = tss->queue;
@@ -579,16 +582,16 @@ void killProcess(int status) {
   }
 
   // free process ports
-  n = listNElem(processTable[currProcess]->portList);
+  n = listNElem(self->portList);
   for (i = 0; i < n; i++) {
-    port = (int)listExtract(processTable[currProcess]->portList);
+    port = (int)listExtract(self->portList);
     __OS_port_freePort(port);
   }
 
   // free process channels
-  n = listNElem(processTable[currProcess]->channelList);
+  n = listNElem(self->channelList);
   for (i = 0; i < n; i++) {
-    channel = (int)listExtract(processTable[currProcess]->channelList);
+    channel = (int)listExtract(self->channelList);
     __OS_ipc_freeChannel(channel);
   }
 
@@ -619,10 +622,39 @@ void killProcess(int status) {
     __OS_sem_V(parent->childSem);
 
   /* the memory: later, from elsewhere */
-  self->pgdirPhys = (uint32_t)currThread->pgdir;
+  self->pgdirPhys = pgdir;
   self->memFreed = 0;
   self->nextZombie = zombies;
   zombies = self;
+}
+
+void killProcess(int status) {
+  endProcess(processTable[currProcess], status, (uint32_t)currThread->pgdir);
+}
+
+/* kill (34): end another process, as if it had been killed (SIGKILL).
+   Not init, not the idle process, and not a process with privileges the
+   caller lacks (drivers: only a driver ends a driver). A process may end
+   itself. */
+int _mynos_syscall_kill(pid_t pid) {
+  process_descriptor_t * p = proc(pid);
+  process_descriptor_t * self = processTable[currProcess];
+  if (p == NULL || !p->isAlive) return MYNOS_ERR_INVALID;
+  if (PSLOT(pid) == 0 || pid == 1) return MYNOS_ERR_DENY;
+  if (p->privileges & ~self->privileges) return MYNOS_ERR_DENY;
+  printk("process ");
+  print_int(pid);
+  printk(" (");
+  printk(p->name);
+  printk(") killed by ");
+  print_int(self->pid);
+  print_char('\n');
+  if (p == self) {
+    killProcess(SIGNAL_STATUS(SIGKILL));
+    sched();                      /* never returns */
+  }
+  endProcess(p, SIGNAL_STATUS(SIGKILL), (uint32_t)p->tss->pgdir);
+  return 0;
 }
 
 void freeProcessDescriptor(pid_t pid) {

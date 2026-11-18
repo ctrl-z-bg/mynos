@@ -274,7 +274,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     if [ -f tests/fat/fat16.img ]; then
         gdisk=tests/fat/run-gui.img
         cp tests/fat/fat16.img "$gdisk"
-        tools/in-container.sh dev mcopy -i "$gdisk" tests/net/llm-test.env ::/llm.env
+        tools/in-container.sh dev sh -c "mcopy -i $gdisk tests/net/llm-test.env ::/llm.env && mcopy -i $gdisk tests/greeter/old-boot.trc ::/old-boot.trc"
     fi
     tools/net-peer.py llm 47090 & llmg_pid=$!
     NET=1 DISK=$gdisk MEM=256 tools/run-qemu.sh "$ocamlrun" \
@@ -343,6 +343,22 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     mon "screendump $tmp/gui12.ppm"
     click 20 10; sleep 1; click 40 83; sleep 4
     mon "screendump $tmp/gui13.ppm"
+    # the clock's close box (at 474,255): pressed, slipped off, released:
+    # not closed; then a click: closed. The agent window's tab (the fourth
+    # of six, at 516-652 in the top bar) brings it back from under the others
+    to 474 255; mon "mouse_button 1"; to 474 330; mon "mouse_button 0"; sleep 2
+    mon "screendump $tmp/gui14.ppm"
+    click 474 255; sleep 3
+    mon "screendump $tmp/gui15.ppm"
+    click 580 12; sleep 3
+    mon "screendump $tmp/gui16.ppm"
+    # a recording of another boot (tests/greeter/old-boot.trc: greeter was
+    # pid 14, which is gui here) in the System window (its tab, the sixth):
+    # greeter, which served a call, a ghost among the services
+    click 850 12; sleep 2; click 100 119; sleep 1
+    tools/type-keys.py "$tmp/mon-g" '{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}/disk/old-boot.trc'
+    click 364 117; sleep 5
+    mon "screendump $tmp/gui17.ppm"
     click 20 10; sleep 1; click 30 215; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt\n'; sleep 2
     mon "screendump $tmp/gui3.ppm"; sleep 1
@@ -361,7 +377,8 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     cat "$tmp/logg" >> "$log"
     python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
               "$tmp"/gui6.ppm "$tmp"/gui7.ppm "$tmp"/gui8.ppm "$tmp"/gui9.ppm \
-              "$tmp"/gui10.ppm "$tmp"/gui11.ppm "$tmp"/gui12.ppm "$tmp"/gui13.ppm <<'PY' && gui_ok=yes
+              "$tmp"/gui10.ppm "$tmp"/gui11.ppm "$tmp"/gui12.ppm "$tmp"/gui13.ppm \
+              "$tmp"/gui14.ppm "$tmp"/gui15.ppm "$tmp"/gui16.ppm "$tmp"/gui17.ppm <<'PY' && gui_ok=yes
 import sys
 def load(path):
     d = open(path, "rb").read()
@@ -372,7 +389,8 @@ def px(img, x, y):
     w, h, d = img
     i = 3 * (y * w + x)
     return (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]
-g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13 = (load(p) for p in sys.argv[1:14])
+g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17 = \
+    (load(p) for p in sys.argv[1:18])
 assert g1[:2] == (1024, 768), "graphics mode"
 assert px(g1, 500, 10) == 0x111820, "the top bar"
 assert px(g1, 300, 86) == 0x2D6CA2, "the welcome window, focused"
@@ -429,6 +447,14 @@ assert count(g12, 0xF29B38, 300, 470, 500, 500) > 100, "IPC lit"
 assert count(g12, 0xF1F2F3, 132, 140, 1010, 400) > 300, "a process that ended, as a ghost"
 # a new process: outlined
 assert count(g13, 0xF29B38, 128, 136, 1014, 240, 1) > 100, "a new process, outlined"
+# the close box acts on release, on it
+assert count(g14, 0xFFFFFF, 274, 276, 474, 506) > 4000, "a slip off the close box: still open"
+assert count(g15, 0xFFFFFF, 274, 276, 474, 506) < 1000, "a click on it: closed"
+# the top bar's tabs: the agent window's, focused, and its window in front
+assert px(g16, 518, 19) == 0x2D6CA2, "the agent window's tab, focused"
+assert px(g16, 500, 172) == 0x2D6CA2, "the agent window, in front again"
+# another boot's recording: its server, a ghost among the services
+assert count(g17, 0xF1F2F3, 132, 270, 1010, 322) > 300, "another boot's service, a ghost"
 PY
 fi
 
@@ -537,6 +563,11 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     sleep 20
     tools/type-keys.py "$tmp/mon7" 'ps\n'; sleep 2
     tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte agent\n'; sleep 3
+    # kill: the agent's service, by its name; one of ours, by $!; not init
+    tools/type-keys.py "$tmp/mon7" 'kill greeter\n'; sleep 2
+    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte again\n'; sleep 3
+    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte & kill $!\n'; sleep 3
+    tools/type-keys.py "$tmp/mon7" 'kill 1\n'; sleep 2
     # the host's terminal on COM2: a line typed, then two pasted at once
     # (a burst: the shell must not read an end of file), then the keyboard
     banners=$(grep -ac 'MyNOS sh. help' "$log7")
@@ -683,6 +714,9 @@ if [ -f system/ramdisk.dsk ]; then
     expect "io  consoled        console"     # ps: a driver, its service
     expect "greeter         greeter"         # ps: the service the agent started
     expect "Hello, agent, from MyNOS!"
+    expect "(greeter) killed by"                     # kill greeter
+    expect "done, status 137"                        # & then kill $!
+    expect "kill: 1: not allowed (init, or a driver)"
     if [ -n "$trace_calls" ]; then
         echo "ok    trace: sh -> fatfs -> ata0, nested calls"
     else

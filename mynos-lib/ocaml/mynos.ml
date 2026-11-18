@@ -84,6 +84,8 @@ let processes () =
   Array.to_list (Array.map (fun (p_pid, parent, priv, threads, name) ->
       { p_pid; parent; p_io = priv land 1 <> 0; threads; name }) (processes_raw ()))
 
+external kill : int -> unit = "caml_mynos_kill"
+
 external wait_raw : int -> int * int = "caml_mynos_wait"
 let decode s = if s land 0x7f = 0 then Exited ((s lsr 8) land 0xff)
                else Signaled (s land 0x7f)

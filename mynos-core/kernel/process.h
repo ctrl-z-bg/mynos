@@ -127,6 +127,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
 		  pid_t ppid, uint32_t privileges);
 void killProcess(int status);
+int _mynos_syscall_kill(pid_t pid);
 int allocPid(void);
 void reapZombies(void);
 void freeProcessDescriptor(pid_t pid);
@@ -136,6 +137,7 @@ void freeProcessDescriptor(pid_t pid);
 #define SIGNAL_STATUS(sig) ((sig) & 0x7F)
 #define SIGILL  4
 #define SIGFPE  8
+#define SIGKILL 9
 #define SIGSEGV 11
 
 #endif

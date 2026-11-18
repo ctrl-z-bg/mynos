@@ -18,6 +18,7 @@
 type layer = Programs | Services | Drivers
 
 type node = {
+  key : int;                  (* its box: the pid; a ghost's, -pid-1 *)
   pid : int;
   name : string;
   layer : layer;
@@ -121,7 +122,7 @@ let poll st =
             if o = p.p_pid then Some n else None) st.registered) in
         let old = Hashtbl.find_opt st.nodes p.p_pid in
         Hashtbl.replace st.nodes p.p_pid
-          { pid = p.p_pid; name = display_name p.p_pid p.name;
+          { key = p.p_pid; pid = p.p_pid; name = display_name p.p_pid p.name;
             layer = classify ~io:p.p_io ~parent:p.parent ~names ~name:p.name; names;
             threads = p.threads; parent = p.parent; alive = true;
             born = (match old with Some o -> o.born | None -> if first then 0. else now);
@@ -190,22 +191,39 @@ let record st command =
       finished := Some result;
       Mutex.unlock lock))
 
-(* the processes of the recording that are not live: ghosts *)
+(* a process of the recording is a live one if it has the same pid and
+   the same program (a recording of an earlier boot has the same pids for
+   other processes): its box's key; otherwise a ghost's *)
+let live_match st r pid =
+  match Hashtbl.find_opt st.nodes pid with
+  | Some n -> n.alive && n.name = display_name pid (Tracer.program r pid)
+  | None -> false
+
+let key_of st pid =
+  match st.r with
+  | Some r when pid > 0 && not (live_match st r pid) -> - pid - 1
+  | _ -> pid
+
+(* the processes of the recording that are not live: ghosts, in the layer
+   the recording shows (a known driver; a service, if it served calls) *)
 let ghosts st =
   match st.r with
   | None -> []
   | Some r ->
-    let pids = Hashtbl.create 16 in
+    let pids = Hashtbl.create 16 and served = Hashtbl.create 16 in
     Array.iter (function
-        | Call c -> Hashtbl.replace pids c.client (); Hashtbl.replace pids c.server ()
+        | Call c ->
+          Hashtbl.replace pids c.client (); Hashtbl.replace pids c.server ();
+          Hashtbl.replace served c.server ()
         | Mark e | Irq e -> Hashtbl.replace pids e.pid ()) st.steps;
     Hashtbl.fold (fun pid () acc ->
-        if pid <= 0 || Hashtbl.mem st.nodes pid then acc
+        if pid <= 0 || live_match st r pid then acc
         else
           let name = display_name pid (Tracer.program r pid) in
-          { pid; name; layer = (if List.mem name known_driver then Drivers else Programs);
-            names = []; threads = 0; parent = -1; alive = false; born = 0.;
-            died = neg_infinity } :: acc) pids []
+          let layer = if List.mem name known_driver then Drivers
+            else if Hashtbl.mem served pid then Services else Programs in
+          { key = - pid - 1; pid; name; layer; names = []; threads = 0; parent = -1;
+            alive = false; born = 0.; died = neg_infinity } :: acc) pids []
 
 (* ---- layout ---- *)
 
@@ -237,7 +255,7 @@ let layout nodes =
         let h = box_h in
         List.iteri (fun i node ->
             let line = i / per_line and col = i mod per_line in
-            Hashtbl.replace pos node.pid
+            Hashtbl.replace pos node.key
               (left + col * (w + 8), row_y layer + line * (h + 8), w, h)) ns
       end) [ Programs; Services; Drivers ];
   pos
@@ -310,7 +328,7 @@ let () =
       let live = Hashtbl.fold (fun _ n acc -> n :: acc) st.nodes [] in
       let nodes = live @ ghosts st in
       let pos = layout nodes in
-      let node_of pid = List.find_opt (fun n -> n.pid = pid) nodes in
+      let node_of key = List.find_opt (fun n -> n.key = key) nodes in
       (* the header *)
       Gfx.fill g 0 0 width 34 0x1B3A57;
       Gui.label ~colour:0xFFFFFF ~bold:true ui 12 9 "MyNOS, now";
@@ -367,7 +385,7 @@ let () =
           let x, y, w, _ = device_box i in
           List.iter (fun n ->
               if n.layer = Drivers && List.mem n.name d.drivers && n.alive then
-                match Hashtbl.find_opt pos n.pid with
+                match Hashtbl.find_opt pos n.key with
                 | Some (bx, by, bw, bh) ->
                   incr k;
                   let x0 = bx + 14 + (!k mod 4) * 8 - (if bw < 40 then 10 else 0)
@@ -407,7 +425,7 @@ let () =
         devices;
       (* the boxes *)
       List.iter (fun n ->
-          match Hashtbl.find_opt pos n.pid with
+          match Hashtbl.find_opt pos n.key with
           | None -> ()
           | Some (x, y, w, h) ->
             let fill, border = colours n.layer in
@@ -421,7 +439,7 @@ let () =
               Gfx.rect g (x - 2) (y - 2) (w + 4) (h + 4) 0xF29B38;
               Gfx.rect g (x - 3) (y - 3) (w + 6) (h + 6) 0xF29B38
             end;
-            if st.sel = Box n.pid then Gfx.rect g (x + 1) (y + 1) (w - 2) (h - 2) 0x1A2228;
+            if st.sel = Box n.key then Gfx.rect g (x + 1) (y + 1) (w - 2) (h - 2) 0x1A2228;
             let text_c = if ghost || fading then Gui.muted else Gui.foreground in
             let cols = (w - 10) / 8 in
             ignore (Gfx.text ~bold:true ~max:cols g (x + 6) (y + 4) n.name text_c);
@@ -430,10 +448,10 @@ let () =
                        else Printf.sprintf "pid %d \xc2\xb7 %d thr" n.pid n.threads) Gui.muted);
             if n.names <> [] then
               ignore (Gfx.text ~max:cols g (x + 6) (y + 35) (String.concat " " n.names) border);
-            if ui.clicked && Gui.hovered ui x y w h then st.sel <- Box n.pid)
+            if ui.clicked && Gui.hovered ui x y w h then st.sel <- Box n.key)
         nodes;
       (* the step: its arrows *)
-      let centre pid = match Hashtbl.find_opt pos pid with
+      let centre pid = match Hashtbl.find_opt pos (key_of st pid) with
         | Some (x, y, w, h) -> Some (x + w / 2, y + h)
         | None -> None in
       (match current with
@@ -458,7 +476,7 @@ let () =
             arrow g [ (x + w / 2, y); (x + w / 2, by + 20); (bx, by + 20); (bx, by + 1) ] 0x7B4FA0
           | _ -> ())
        | Some (Mark e) ->
-         (match Hashtbl.find_opt pos e.pid with
+         (match Hashtbl.find_opt pos (key_of st e.pid) with
           | Some (x, y, w, h) ->
             Gfx.rect g (x - 2) (y - 2) (w + 4) (h + 4) 0xF29B38;
             let label = "# " ^ e.data in
@@ -484,13 +502,14 @@ let () =
       Gui.panel ui 8 detail_y (width - 16) (height - detail_y - 8);
       let line k ?(bold = false) ?(colour = Gui.foreground) s =
         ignore (Gfx.text ~bold ~max:120 g 18 (detail_y + 8 + k * 19) s colour) in
-      let name_of pid = match node_of pid with
+      let name_of pid = match node_of (key_of st pid) with
         | Some n -> Printf.sprintf "%s(%d)" n.name pid
         | None -> (match st.r with Some r -> Tracer.name r pid | None -> string_of_int pid) in
       (match st.sel, current with
-       | Box pid, _ ->
-         (match node_of pid with
+       | Box key, _ ->
+         (match node_of key with
           | Some n ->
+            let pid = n.pid in
             line 0 ~bold:true (Printf.sprintf "%s, pid %d%s" n.name n.pid
                                  (if n.alive then "" else " (ended)"));
             line 1 (match n.layer with

@@ -146,6 +146,10 @@ typedef struct {
   char name[16];              /* the program's base name */
 } mynos_process_t;
 int mynos_processes(mynos_process_t * buf, int max);
+
+/* end a process (native 34), as killed (SIGKILL): not init, not one with
+   privileges the caller lacks; 0 or an error */
+int mynos_kill(int pid);
 int mynos_trace(int op, void * arg1, unsigned int arg2);
 
 /* PROCESSES */

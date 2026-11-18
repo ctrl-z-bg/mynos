@@ -935,4 +935,16 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   with `&`, `ps` shows it with its name, a client gets its greeting; in
   the graphical session, the System window's layers, a replayed call's
   arrow, a ghost, a new process outlined.
+- **2026-11-18** — `kill` (mynos-6hb): native call 34 ends another
+  process as killed (signal 9), its IPC, semaphores and memory freed as at
+  its exit (`endProcess`, generalised from `killProcess`: on one
+  processor, every thread of another process is in some queue); not
+  init, nor a process with a privilege the caller lacks. `kill PID` or
+  `kill SERVICE` in `sh`, `Mynos.kill`. The GUI: the top bar has a tab for
+  each window (a click brings it to the front); the close box closes on
+  release, on it. The System window matches a recording's processes by
+  pid and program (another boot's recording: ghosts), and puts the
+  ghosts that served calls among the services. Tests: kill by name and by
+  `$!`, init refused; a slip off the close box, a close, a tab; another
+  boot's recording (`tests/greeter/old-boot.trc`).
 

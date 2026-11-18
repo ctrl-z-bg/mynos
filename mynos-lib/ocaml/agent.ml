@@ -219,7 +219,7 @@ let system_prompt services =
      substitution. Built in: cd pwd echo cat ls \
      (ls -l) cp mv rm mkdir rmdir touch export unset env which free; \
      ifconfig, ping HOST, host NAME; ps (the processes, and the services \
-     each one registered). Programs: fetch [-i] [-o FILE] [-H \
+     each one registered); kill PID or kill SERVICE ends a process. Programs: fetch [-i] [-o FILE] [-H \
      'Name: value'] [-d DATA] URL (HTTP and HTTPS), ocamlc, llm QUESTION, \
      trace COMMAND. Each command runs in a new sh: cd does not carry over \
      to the next one.";

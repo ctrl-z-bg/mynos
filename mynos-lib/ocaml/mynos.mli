@@ -118,6 +118,12 @@ type process = {
 val processes : unit -> process list
 (** The live processes, by slot. *)
 
+val kill : int -> unit
+(** End a process, as killed (its parent's [wait] sees [Signaled 9]).
+    Not init, and not a process with privileges the caller lacks (only a
+    driver ends a driver); raises {!Error} otherwise, or if there is no
+    such process. *)
+
 val environment : unit -> string array
 (** Our environment, as ["NAME=value"] strings. A child gets it unless
     {!spawn} is given another one; [PWD] is set to the current directory,

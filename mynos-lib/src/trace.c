@@ -23,3 +23,8 @@ int mynos_processes(mynos_process_t * buf, int max) {
   return __mynos_syscall(33, (int)buf, max, 0, 0, 0);
 }
 
+/* kill (native 34) */
+int mynos_kill(int pid) {
+  return __mynos_syscall(34, pid, 0, 0, 0, 0);
+}
+

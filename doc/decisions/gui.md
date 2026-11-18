@@ -257,6 +257,12 @@ architecture as it is now, not as a document says it is:
   ports, its children, its calls in the recording), the kernel, a
   device.
 
+A process of a recording is drawn as the live box only if the pid **and**
+the program are the same: a recording of an earlier boot has the same
+pids for other processes (pids start again at each boot), and its
+processes are ghosts then, in the layer the recording shows (a known
+driver; a service, if it served calls; else a program).
+
 The layers are read from what the kernel and the registry say, with two
 rules of thumb: a driver is a process with the io privilege that a
 process started (the boot modules have it too, being started by the
@@ -267,6 +273,16 @@ console for its sh, and is drawn as the service it is.
 Not live: arrows for the traffic as it happens. The window would record
 itself drawing (each frame a message to displayd), so a live view needs
 a filter in the recorder first.
+
+## The top bar's tabs; closing (2026-11-18)
+
+- Every window has a tab in the top bar, between the MyNOS menu and the
+  clock, in the order the windows were made (a tab does not move when its
+  window is raised); the focused one is lit. A click on a tab brings its
+  window to the front and focuses it: a window under the others is found
+  without moving them.
+- The close box acts on release, not on press: pressed, it darkens; it
+  closes only if the button is released on it. A slip is not a close.
 
 ## The logo (2026-11-18)
 

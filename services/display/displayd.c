@@ -307,6 +307,7 @@ static int focus = -1;                 /* a window's slot */
 static int active = 0;                 /* the graphical session */
 static int px = W / 2, py = H / 2, pbuttons = 0;
 static int dragging = -1, drag_dx, drag_dy;
+static int closing = -1;               /* the window whose close box is held */
 static int menu_open = 0;
 static int waiters[16], nwaiters = 0;  /* wait_session's channels */
 
@@ -366,6 +367,31 @@ static const char * pointer_shape[] = {
 #define PW 12
 #define PH 18
 
+/* the top bar's tabs: the shown windows, in the order they were made */
+#define TABS_X 96
+#define TABS_END (W - 8 * 8 - 24)
+static int tabs(int * slots)
+{
+  int n = 0, i, j;
+  for (i = 0; i < MAXWIN; i++)
+    if (win[i].used && win[i].shown) {
+      for (j = n; j > 0 && win[slots[j - 1]].id > win[i].id; j--) slots[j] = slots[j - 1];
+      slots[j] = i;
+      n++;
+    }
+  return n;
+}
+
+static void tab_rect(int k, int n, int * x0, int * x1)
+{
+  int w = (TABS_END - TABS_X) / (n > 0 ? n : 1);
+  if (w > 170) w = 170;
+  *x0 = TABS_X + k * w;
+  *x1 = *x0 + w;
+}
+
+#define BAR_CHANGED() compose(0, 0, W, TOP)
+
 static void draw_desktop(void)
 {
   int y;
@@ -399,6 +425,17 @@ static void draw_desktop(void)
   fill(0, TOP - 1, W, TOP, 0x000000);
   fill(8, 6, 12, 18, C_ACCENT);
   text(18, 4, "MyNOS", 10, C_BAR_TEXT, 1);
+  {                                    /* a tab for each window */
+    int slots[MAXWIN], n = tabs(slots), k;
+    for (k = 0; k < n; k++) {
+      struct window * t = &win[slots[k]];
+      int x0, x1;
+      tab_rect(k, n, &x0, &x1);
+      fill(x0, 3, x1 - 4, TOP - 4, slots[k] == focus ? C_TITLE_ON : 0x26313B);
+      text(x0 + 6, 4, t->title, (x1 - x0 - 14) / 8, slots[k] == focus ? 0xFFFFFF : 0xB8C2CC,
+	   slots[k] == focus);
+    }
+  }
   {
     char clock[16];
     time_t t = time(NULL);
@@ -421,7 +458,7 @@ static void draw_window(struct window * w, int focused)
   fill(w->x, w->y - TITLE, w->x + w->w, w->y, focused ? C_TITLE_ON : C_TITLE_OFF);
   text(w->x + 8, w->y - TITLE + 3, w->title, (w->w - 40) / 8, 0xFFFFFF, focused);
   fill(w->x + w->w - 20, w->y - TITLE + 4, w->x + w->w - 6, w->y - 4,
-       focused ? 0xD9534F : 0x7A8590);
+       closing >= 0 && w == &win[closing] ? 0x9A2A26 : focused ? 0xD9534F : 0x7A8590);
   {                                    /* × */
     int i, bx = w->x + w->w - 17, by = w->y - TITLE + 7;
     for (i = 0; i < 8; i++) {
@@ -613,6 +650,7 @@ static void set_focus(int slot)
     post_kind(&win[slot], EV_FOCUS, 1);
     compose_window(&win[slot]);
   }
+  BAR_CHANGED();
 }
 
 static void remove_window(int slot)
@@ -637,7 +675,9 @@ static void remove_window(int slot)
     if (norder > 0) set_focus(order[norder - 1]);
   }
   if (dragging == slot) dragging = -1;
+  if (closing == slot) closing = -1;
   compose(w->x - 1, w->y - TITLE - 1, w->x + w->w + 5, w->y + w->h + 5);
+  BAR_CHANGED();
 }
 
 /* the topmost window under a point: its slot, or -1 */
@@ -726,16 +766,33 @@ static void pointer_to(int x, int y, int buttons)
     } else if (y < TOP && x < 80) {
       menu_open = 1;
       compose(MENU_X, TOP, MENU_X + MENU_W, TOP + NMENU * MENU_ITEM + 10);
+    } else if (y < TOP) {                          /* a window's tab */
+      int slots[MAXWIN], n = tabs(slots), k;
+      for (k = 0; k < n; k++) {
+	int x0, x1;
+	tab_rect(k, n, &x0, &x1);
+	if (x >= x0 && x < x1 - 4) set_focus(slots[k]);
+      }
     }
     slot = window_at(x, y);
     if (slot >= 0) {
       struct window * w = &win[slot];
       set_focus(slot);
       if (y < w->y) {                              /* the title bar */
-	if (x >= w->x + w->w - 20) post_kind(w, EV_CLOSE, 0);
-	else { dragging = slot; drag_dx = x - w->x; drag_dy = y - w->y; }
+	if (x >= w->x + w->w - 20) {               /* the close box: held */
+	  closing = slot;
+	  compose(w->x + w->w - 20, w->y - TITLE, w->x + w->w, w->y);
+	} else { dragging = slot; drag_dx = x - w->x; drag_dy = y - w->y; }
       }
     }
+  }
+  if ((changed & 1) && !(buttons & 1) && closing >= 0) {   /* released */
+    struct window * w = &win[closing];
+    closing = -1;
+    compose(w->x + w->w - 20, w->y - TITLE, w->x + w->w, w->y);
+    /* closed only if released on the close box: a slip is not a close */
+    if (w->used && x >= w->x + w->w - 20 && x < w->x + w->w && y >= w->y - TITLE && y < w->y)
+      post_kind(w, EV_CLOSE, 0);
   }
   /* the focused window's: clicks in it, and moves over it (and the one
      that leaves it, so that it stops showing what is under the pointer) */
@@ -1063,6 +1120,7 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     w->msg = m;
     w->pix = (unsigned int *)m->start;
     w->shown = 1;
+    BAR_CHANGED();
     reply_unit(ch);
     set_focus(w - win);
     compose_window(w);
@@ -1109,6 +1167,7 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     strcpy(w->title, title);
     reply_unit(ch);
     compose(w->x, w->y - TITLE, w->x + w->w, w->y);
+    BAR_CHANGED();
     break;
   }
   case 7: END(); start_session(); reply_unit(ch); break;   /* start */

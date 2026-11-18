@@ -1863,3 +1863,30 @@ the kernel, for the same reason the other way.
 names, its protocols, its messages) gets its documentation drawn for
 free, and kept true.
 
+## 2026-11-18 — kill: ending a process from outside it
+
+**The problem.** `killProcess` ended the *current* process: it runs on
+that process's kernel stack and page directory, and takes the page
+directory to free from `currThread`. Ending another process looked like
+it needed the target to run first (a pending flag, checked on the way
+back to user mode, and every blocked call taught to wake up for it).
+
+**What made it simple.** On one processor, a process that is not the
+current one is not running: each of its threads is in some queue, the
+ready queue, a semaphore's, the timers'. That is exactly the state of the
+*other* threads of a process whose thread calls `exit`, and
+`killProcess` already handles them: it takes each thread out of its
+queue, frees ports, channels, semaphores, futexes, IRQ lines, and leaves
+the memory to `reapZombies`, which runs from another process anyway. So
+the body became `endProcess(p, status, pgdir)`, with the page directory
+passed in (the target's first thread's); `killProcess` and `kill` call it.
+
+**The rule.** Not init (its end is the machine's), not the idle process,
+and not a process with a privilege the caller lacks: a program cannot end
+a driver. One user, so otherwise anything goes, as Unix lets a user kill
+their own processes.
+
+**Lesson.** Before adding a mechanism (pending kills, interrupted
+waits), look for the state the system already handles that the new case
+reduces to.
+

@@ -137,7 +137,8 @@ conversation; Recordings shows a recording as a timeline of calls; System
 draws MyNOS's architecture live (the hardware, the kernel, the drivers,
 services and programs that are running) and replays a recording on it,
 as arrows through the kernel. `ps` lists the processes and their
-services; `PROGRAM &` leaves one running.
+services; `PROGRAM &` leaves one running, `kill PID` (or the name of
+its service) ends it. The top bar has a tab for each window.
 
 ## Status
 

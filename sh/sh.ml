@@ -328,7 +328,7 @@ let run_program ?(background = false) file args c =
 
 let builtins = [ "cd"; "pwd"; "echo"; "cat"; "ls"; "cp"; "mv"; "rm"; "mkdir";
                  "rmdir"; "touch"; "export"; "unset"; "env"; "which"; "source";
-                 "free"; "ps"; "clear"; "help"; "exit"; "true"; "false"; "ocaml";
+                 "free"; "ps"; "kill"; "clear"; "help"; "exit"; "true"; "false"; "ocaml";
                  "ifconfig"; "ping"; "host"; "ask"; "keymap" ]
 
 (* every command: built-ins, and the programs of PATH (NAME.byte as NAME,
@@ -386,8 +386,8 @@ let copy src dst =
 let help out =
   output_string out
     "MyNOS sh. Built in: cd pwd echo cat ls [-l] cp mv rm mkdir rmdir touch\n\
-     export unset env which source free ps clear help exit; PROGRAM & runs\n\
-     it in the background ($! its pid);\n\
+     export unset env which source free ps kill clear help exit;\n\
+     PROGRAM & runs it in the background ($! its pid); kill PID|SERVICE;\n\
      network: ifconfig, ping HOST [COUNT], host NAME.\n\
      Programs: edit FILE, ocamlc, kilo, hello, ocaml (the OCaml toplevel),\n\
      trace COMMAND (record what the system does meanwhile), llm QUESTION,\n\
@@ -572,6 +572,23 @@ let rec builtin name args c out =
    | "free", _ ->
      let p = (Mynos.stats ()).Mynos.free_pages in
      Printf.fprintf out "%d KB free\n" (p * 4)
+   | "kill", (_ :: _ as pids) ->
+     List.iter (fun a ->
+         (* a pid, or the name of a service: its process *)
+         let pid = match int_of_string_opt a with
+           | Some p -> Some p
+           | None -> (try Mynos.registered () with Mynos.Error _ -> [])
+                     |> List.find_map (fun (n, _, o) -> if n = a then Some o else None) in
+         match pid with
+         | None -> error "kill: %s: not a pid, nor a service's name" a; ok := 1
+         | Some pid ->
+           match Mynos.kill pid with
+           | () -> ()
+           | exception Mynos.Error (_, code) ->
+             error "kill: %d: %s" pid
+               (if code = -4 then "not allowed (init, or a driver)"
+                else if code = -3 then "no such process" else Mynos.error_name code);
+             ok := 1) pids
    | "ps", [] ->
      (* the processes, with the names they registered (their services) *)
      let names = try Mynos.registered () with Mynos.Error _ -> [] in
@@ -636,7 +653,7 @@ let rec builtin name args c out =
 
 and is_builtin = function
   | "cd" | "pwd" | "echo" | "cat" | "ls" | "cp" | "mv" | "rm" | "mkdir" | "rmdir"
-  | "touch" | "export" | "unset" | "env" | "which" | "source" | "." | "free" | "ps"
+  | "touch" | "export" | "unset" | "env" | "which" | "source" | "." | "free" | "ps" | "kill"
   | "clear" | "help" | "exit" | "true" | "false" | "ifconfig" | "ping" | "host"
   | "ask" | "keymap" -> true
   | _ -> false

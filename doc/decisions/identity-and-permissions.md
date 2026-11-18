@@ -99,6 +99,15 @@ Who has it:
 Finer grants (the I/O bitmap of the TSS: `ata` gets ports 0x1F0-0x1F7 and
 0x3F6, nothing else) are the natural next step, and fit the same flag.
 
+**Ending another process** (2026-11-18, `kill`, native call 34): allowed
+on any process except the idle process and init, and except one that has
+a privilege the caller lacks: only a driver ends a driver, so `sh` can
+end a service it (or an agent) started, or `llmd`, but not `consoled` or
+`netd`. MyNOS has one user, as with Unix's same-user rule; the privilege
+is the line that matters. The process ends as if killed (`SIGKILL`: its
+parent's `wait` sees signal 9), its IPC, semaphores and memory freed as
+when it exits.
+
 ### 3. Kernel objects belong to their process
 
 - **Semaphores** made by `initSem` can be used and freed by their process

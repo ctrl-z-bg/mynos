@@ -459,6 +459,13 @@ CAMLprim value caml_mynos_trace_mark(value label)
                                     caml_string_length(label)));
 }
 
+/* end a process */
+CAMLprim value caml_mynos_kill(value pid)
+{
+  check("kill", mynos_kill(Int_val(pid)));
+  return Val_unit;
+}
+
 /* the live processes: (pid, parent, privileges, threads, name) array */
 CAMLprim value caml_mynos_processes(value unit)
 {
