@@ -419,8 +419,6 @@ descriptor and the pid remain until the parent collects the status.
 - Directory entry 255, the last of the kernel's gigabyte, is a
   placeholder that points to physical page 0 (`init_memory`). Its
   "entries" are whatever low memory holds (mynos-vm8).
-- A message too large for the receiver's free linear space is mapped at
-  page 1, inside the kernel's page table, instead of failing (mynos-py9).
 - One processor (mynos-awn): the single kernel window of B.11 and the
   page fault handler, which saves EAX at address 0, assume nothing else
   runs in the kernel.

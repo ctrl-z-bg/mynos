@@ -1076,4 +1076,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   (mynos-3po; the other Linux calls with pointers were audited). Tests:
   `tests/abi` (pointers into the kernel refused; a kernel write keeps a
   sent message intact).
+- **2026-11-18** — A message too large for the receiver's free linear
+  space is refused (`MYNOS_ERR_FULL`, mynos-py9): `__OS_mapPagesTo`
+  ignored `__lmt_allocArea`'s failure value and mapped the pages at page
+  1, over the kernel's page table; the machine reset. Test in
+  `tests/abi` (the linear space filled with `mmap`, a 128 MB send);
+  without the fix the machine reboots in a loop.
 

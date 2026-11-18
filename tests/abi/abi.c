@@ -7,6 +7,7 @@
 #include <time.h>
 #include <mynos.h>
 #include <pthread.h>
+#include <sys/mman.h>
 
 static int failures = 0;
 
@@ -27,6 +28,17 @@ static void check(const char * what, int ok) {
    that returns a value there) must not reach the message (mynos-bvz) */
 static char cow_buf[8192] __attribute__((aligned(4096)));
 static int cow_port, cow_sem, cow_ok = -1;
+
+/* a message larger than the receiver's free linear space is refused, not
+   mapped into the kernel's memory (mynos-py9) */
+static int big_port, big_sem;
+
+static void * big_listener(void * unused) {
+  int ch = mynos_listenPort(big_port);
+  mynos_P(big_sem);
+  if (ch >= 0) mynos_freeChannel(ch);
+  return NULL;
+}
 
 static void * cow_receiver(void * unused) {
   mynos_msg_t * msg;
@@ -115,6 +127,33 @@ int main(int argc, char ** argv) {
     check("a kernel write keeps a sent message intact", cow_ok == 1);
     check("and reaches the sender's own copy", cow_buf[0] != 'x' || cow_buf[1] != 'x');
     mynos_freeChannel(ch);
+  }
+
+  {
+    enum { CHUNK = 64 << 20, MAXCHUNKS = 64 };
+    void * chunk[MAXCHUNKS];
+    int n = 0, ch, r, i;
+    pthread_t t;
+    big_port = mynos_allocPort();
+    big_sem = mynos_initSem(0);
+    pthread_create(&t, NULL, big_listener, NULL);
+    ch = mynos_connectToPort(big_port);
+    /* reserve the whole linear space (pages are taken on use: this costs
+       only page tables), then give 64 MB back */
+    while (n < MAXCHUNKS) {
+      void * p = mmap(NULL, CHUNK, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+      if (p == MAP_FAILED) break;
+      chunk[n++] = p;
+    }
+    munmap(chunk[--n], CHUNK);
+    r = mynos_send(ch, chunk[0], 2 * CHUNK, MYNOS_IPC_NONBLOCK);
+    check("a message larger than the free space is refused", n > 2 && r < 0);
+    mynos_V(big_sem);
+    pthread_join(t, NULL);
+    for (i = 0; i < n; i++) munmap(chunk[i], CHUNK);
+    mynos_freeChannel(ch);
+    check("and the system goes on", getpid() > 0);
   }
 
   printf("abi: %s\n", failures ? "SOME CHECKS FAILED" : "all checks passed");

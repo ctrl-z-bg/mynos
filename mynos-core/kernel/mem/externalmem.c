@@ -230,6 +230,10 @@ int32_t __OS_mapPagesTo(pid_t pid, uint32_t lpage,
   // alloc a new area in the receiver linear space
   newLPage = __lmt_allocArea(&(proc(pid)->lmemmap),
 			     npages);
+  /* no room in the receiver's linear space: __lmt_allocArea's failure
+     values are small page numbers, below the user area (mynos-py9: page 1
+     is inside the kernel's page table, shared by every process) */
+  if (newLPage < USERMINPAGE) return MYNOS_ERR_FULL;
 
   for (i = 0; i < npages; i++)
     __mapPageTo(pid, lpage + i, newLPage + i, mode);

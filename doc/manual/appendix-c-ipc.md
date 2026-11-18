@@ -146,8 +146,11 @@ else the sender kept in the first and last of them.
 > other by editing page tables. The pixels are then one buffer in two
 > address spaces: the program draws, and the display server sees it.
 
-Then the message is queued on the receiver's end (`MYNOS_ERR_FULL` if 10
-are waiting). If a thread of the receiver is waiting in `recv`, the kernel
+If the receiver has no free linear area large enough for the pages, the
+send fails with `MYNOS_ERR_FULL` (until November 2026 the pages were
+mapped at page 1, over the kernel's own page table, and the machine
+reset: mynos-py9). Then the message is queued on the receiver's end
+(`MYNOS_ERR_FULL` if 10 are waiting). If a thread of the receiver is waiting in `recv`, the kernel
 wakes it and `send` returns. If not, the sender sleeps until the message
 is taken, unless it passed `MYNOS_IPC_NONBLOCK`. So a `send` returns when
 the message is in the receiver's hands, or in its queue for a non-blocking

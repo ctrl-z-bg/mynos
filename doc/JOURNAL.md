@@ -2182,3 +2182,23 @@ at who faulted.
 and conventions drift: twenty-four years of code had "read-only" kernel
 pages that were written all the time.
 
+## 2026-11-18 — A failure value that was a valid page number
+
+**Symptom.** None in use; found by the appendices' review, then shown by
+a test: a process fills its linear space with `mmap` (cheap: pages are
+taken on first use), frees 64 MB, and sends a 128 MB message to itself.
+The machine resets, again and again (79 boots in 40 seconds).
+
+**Cause.** `__lmt_allocArea` returns 1 when there is no room ("1 cannot
+be a user page"); `__OS_mapPagesTo` used it as the first page of the
+mapping, and `__OS_ipc_send` checked only for negative values. The
+message's pages were mapped from linear page 1: into page table 0, the
+kernel's identity map, shared by every process, and past it.
+
+**Fix.** One line: a page below `USERMINPAGE` is a failure, and the send
+returns `MYNOS_ERR_FULL`.
+
+**Lesson.** An error value inside the range of valid results is a trap
+for every caller; here the caller checked for the convention of the rest
+of the kernel (negative errors) and not for this function's own.
+
