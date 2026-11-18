@@ -293,7 +293,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
         cp tests/fat/fat16.img "$gdisk"
         # its own port (the seventh boot, at the same time, has 47090)
         sed 's/:47090/:47091/' tests/net/llm-test.env > tests/fat/run-gui.env
-        tools/in-container.sh dev sh -c "mcopy -i $gdisk tests/fat/run-gui.env ::/llm.env && mcopy -i $gdisk tests/greeter/old-boot.trc ::/old-boot.trc"
+        tools/in-container.sh dev sh -c "mcopy -i $gdisk tests/fat/run-gui.env ::/llm.env && mcopy -i $gdisk tests/greeter/old-boot.trc ::/old-boot.trc && mcopy -i $gdisk tests/greeter/greeter.byte ::/greeter.byte"
         rm -f tests/fat/run-gui.env
     fi
     tools/net-peer.py llm 47091 & llmg_pid=$!
@@ -335,6 +335,10 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     for k in 1 2 3; do mon "mouse_move 0 0 3"; sleep 0.5; done; sleep 2
     mon "screendump $tmp/gui5.ppm"
     mon "sendkey backspace"; sleep 1                # a key: back to the bottom
+    # Ctrl-C in the terminal window ends the program its sh waits for
+    tools/type-keys.py "$tmp/mon-g" '/disk/greeter.byte\n'; sleep 5
+    mon "sendkey ctrl-c"; sleep 2
+    tools/type-keys.py "$tmp/mon-g" 'echo ctrlc-$? > /tmp/ctrlc.txt\n'; sleep 3
     # the agent window (the menu's fifth item, at 168,182): a task, the
     # confirmation it waits for, Allow (at the bottom of the window)
     click 20 10; sleep 1; click 40 127; sleep 10
@@ -390,7 +394,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     click 848 161; sleep 1; click 400 125; sleep 1
     tools/type-keys.py "$tmp/mon-g" 'newdir\n'; sleep 2
     click 20 10; sleep 1; click 30 237; sleep 4    # the MyNOS menu, Exit
-    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt; ls /disk\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt; ls /disk\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too
     tools/type-keys.py "$tmp/mon-g" 'ps\n'; sleep 3
@@ -419,6 +423,7 @@ import sys
 s = open(sys.argv[1], "rb").read().decode("latin-1")
 assert s.count("agentwin-ok") >= 2, "aw.txt copied to /disk by Files"
 assert "newdir" in s, "a folder made by Files"
+assert "ctrlc-137" in s, "Ctrl-C in the terminal window"
 PY
     cat "$tmp/logg" >> "$part"
     python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
@@ -662,6 +667,12 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte again\n'; sleep 3
     tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte & kill $!\n'; sleep 3
     tools/type-keys.py "$tmp/mon7" 'kill 1\n'; sleep 2
+    # a window outside the graphical session: said, and ended; Ctrl-C ends
+    # the program sh waits for
+    tools/type-keys.py "$tmp/mon7" '/clock.byte\n'; sleep 6
+    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte\n'; sleep 4
+    printf 'sendkey ctrl-c\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null; sleep 2
+    tools/type-keys.py "$tmp/mon7" 'echo st-$?\n'; sleep 2
     # the host's terminal on COM2: a line typed, then two pasted at once
     # (a burst: the shell must not read an end of file), then the keyboard
     banners=$(grep -ac 'MyNOS sh. help' "$log7")
@@ -839,6 +850,8 @@ if [ -f system/ramdisk.dsk ]; then
     expect "(greeter) killed by"                     # kill greeter
     expect "done, status 137"                        # & then kill $!
     expect "kill: 1: not allowed (init, or a driver)"
+    expect "no graphical session: start it with gui"  # a window, from text mode
+    expect "st-137"                                    # Ctrl-C ended greeter
     if [ -n "$trace_calls" ]; then
         echo "ok    trace: sh -> fatfs -> ata0, nested calls"
     else
@@ -908,9 +921,9 @@ PY
     fi
     expect "gui: displayd describes display/1 as display.ml does"
     if [ -n "$files_ok" ]; then
-        echo "ok    files: a file copied between services, a folder made"
+        echo "ok    files: a file copied between services, a folder made; Ctrl-C in a terminal"
     else
-        echo "FAIL  files: a file copied between services, a folder made"; fail=1
+        echo "FAIL  files: a file copied between services, a folder made; Ctrl-C in a terminal"; fail=1
     fi
     if [ -n "$gui_hangup" ]; then
         echo "ok    gui: a terminal closed ends its sh (a hang-up)"

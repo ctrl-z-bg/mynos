@@ -118,7 +118,8 @@ exception Quit
 val run : ?title:string -> ?tick:float -> int -> int -> 'a -> (ui -> 'a -> 'a) -> unit
 (** [run width height state frame]: a window, drawn by [frame] at every
     event (and every [tick] seconds, if given), until it is closed (its
-    close box, or [frame] raising {!Quit}). *)
+    close box, or [frame] raising {!Quit}). Outside the graphical session
+    it says so, and ends the program (exit status 2). *)
 
 val spawn : ?args:string list -> string -> unit
 (** Start a program of the RAM disk (a .byte, on ocamlrun), with these

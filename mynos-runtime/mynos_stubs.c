@@ -411,6 +411,12 @@ CAMLprim value caml_mynos_console_mode(value canon, value echo, value vmin,
   return Val_unit;
 }
 
+CAMLprim value caml_mynos_console_foreground(value pid)
+{
+  mynos_consoleForeground(Int_val(pid));
+  return Val_unit;
+}
+
 /* ---- environment ---- */
 
 extern char ** environ;

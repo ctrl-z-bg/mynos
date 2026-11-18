@@ -314,6 +314,8 @@ let render () =
 
 let lock = Mutex.create ()
 let canon = ref true and echo = ref true and vmin = ref 1 and vtime = ref 0
+let isig = ref true                    (* Ctrl-C ends the foreground program *)
+let foreground = ref 0                 (* the program sh waits for *)
 let line = Buffer.create 80                      (* being typed, line mode *)
 let input = Buffer.create 256                    (* ready for readers *)
 let eof = ref false
@@ -355,10 +357,19 @@ let handle chn msg =
         | 2 ->                                    (* CONSOLE_MODE *)
           let mode = i32 msg 12 in
           canon := mode land 1 <> 0; echo := mode land 2 <> 0;
+          isig := mode land 4 = 0;
           vmin := i32 msg 16; vtime := i32 msg 20;
           if !canon then Buffer.clear line;
           reply chn ""
         | 3 -> reply chn "\000"                   (* CONSOLE_KEYMAP *)
+        | 5 ->                                    (* CONSOLE_FOREGROUND *)
+          let pid = i32 msg 12 in
+          let caller = try Mynos.channel_peer chn with Mynos.Error _ -> -1 in
+          let child = List.exists (fun (p : Mynos.process) ->
+              p.p_pid = pid && p.parent = caller)
+              (try Mynos.processes () with Mynos.Error _ -> []) in
+          if pid = 0 || child then foreground := pid;
+          reply chn ""
         | 4 ->                                    (* CONSOLE_WRITE *)
           output (String.sub msg 24 (min len (String.length msg - 24)));
           reply chn "";
@@ -378,6 +389,14 @@ let serve port =
 (* ---- keys ---- *)
 
 let key k =
+  if k = "\003" && !isig && !foreground > 0 then begin
+    (* Ctrl-C: the program sh waits for ends (no signals: killed) *)
+    let pid = !foreground in
+    foreground := 0;
+    output "^C\r\n";
+    Buffer.clear line; Buffer.clear input;
+    (try Mynos.kill pid with Mynos.Error _ -> ())
+  end else
   if not !canon then begin
     Buffer.add_string input k;
     if !echo && k <> "" && k.[0] >= ' ' then output k

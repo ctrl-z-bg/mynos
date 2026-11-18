@@ -977,4 +977,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   images viewed), new folder, rename, delete, copy, cut and paste
   between services. Test: in the graphical session, a file copied from
   /tmp to /disk, viewed, a folder made; checked from text mode.
+- **2026-11-18** — Ctrl-C (console.md, section 4): sh tells its console
+  the program it waits for, and Ctrl-C ends it (kill; `$?` 137, the screen
+  restored), unless the program turned interrupts off (termios ISIG:
+  editors, displayd). In consoled and in Terminal windows. A graphical
+  program started outside the session says so and ends (displayd refuses
+  the window). Tests: Ctrl-C on the text console and in a Terminal
+  window; a window from text mode.
 

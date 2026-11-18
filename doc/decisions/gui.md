@@ -313,6 +313,14 @@ a filter in the recorder first.
   Recordings, a text or a PGM image viewed in the window. Folders are not
   copied yet.
 
+## A window outside the session (2026-11-18)
+
+displayd refuses to make a window when the graphical session is not on
+("no graphical session: start it with gui"), and `Gui.run` says where a
+graphical program runs (a Terminal window, Files, or `&` in the session)
+and ends with status 2. Before, a window made from the text console was
+never shown, and its program waited for events forever.
+
 ## The logo (2026-11-18)
 
 The 2003 website's drawing (`doc/website/img/mynos-logo.jpg`, a Minotaur:

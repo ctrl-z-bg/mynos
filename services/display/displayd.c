@@ -938,7 +938,9 @@ static void * keys_thread(void * arg)
   (void)arg;
   tcgetattr(0, &saved);
   t = saved;
-  t.c_lflag &= ~(ICANON | ECHO);
+  /* every key goes to the focused window, Ctrl-C too: not an interrupt
+     for the program the text console's sh waits for (gui) */
+  t.c_lflag &= ~(ICANON | ECHO | ISIG);
   t.c_cc[VMIN] = 0;
   t.c_cc[VTIME] = 1;                               /* 0.1 s: then look again */
   tcsetattr(0, TCSANOW, &t);
@@ -1078,6 +1080,9 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     ww = wire_get_int(&r);
     hh = wire_get_int(&r);
     END();
+    if (!active) {
+      reply_error(ch, "no graphical session: start it with gui"); return;
+    }
     if (ww < 16 || hh < 16 || ww > W - 2 || hh > H - TOP - TITLE - 2) {
       reply_error(ch, "bad size"); return;
     }

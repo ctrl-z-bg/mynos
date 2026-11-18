@@ -1934,3 +1934,28 @@ earlier lane.
 **Lesson.** When separate workers report into one place, each must
 report only what it knows: "I did not see it" is not "it is not so".
 
+## 2026-11-18 — Ctrl-C without signals, and the Ctrl-C that ended the GUI
+
+**Asked** (the owner). A graphical program started from the text console
+did nothing and could not be stopped.
+
+**Two causes.** displayd made the window although the graphical session
+was off: never shown, its program waited for events forever. And MyNOS
+had no Ctrl-C at all: no signals, and the console did not know which
+program was "in front".
+
+**Design.** As Unix's terminal driver: sh names its foreground program
+to the console (only a child of the caller is accepted), and the console
+kills it on Ctrl-C when interrupts are on (termios ISIG). displayd now
+refuses windows outside the session, and `Gui.run` explains.
+
+**Bug found by the test.** The first full run lost the whole graphical
+session at the Ctrl-C typed in a Terminal window: consoled killed `gui`.
+In the graphical session every key goes through consoled first (displayd
+reads it in raw mode), and displayd had left ISIG on, so the Ctrl-C meant
+for the window was an interrupt for the text console's foreground
+program, which is `gui`. displayd now clears ISIG, as an editor does.
+
+**Lesson.** A key passes through every layer that reads it; each one in
+raw mode must say whether it wants the key itself or its meaning.
+

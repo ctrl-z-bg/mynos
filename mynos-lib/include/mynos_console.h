@@ -23,12 +23,18 @@
                             byte, the layout in use */
 #define CONSOLE_WRITE 4  /* len bytes after the request -> 0 bytes: output, to
                             a terminal's console service (MYNOS_CONSOLE) */
+#define CONSOLE_FOREGROUND 5  /* mode: the pid of a program the caller started
+                                 and waits for (0: none) -> 0 bytes. Ctrl-C
+                                 ends it (an interrupt), unless the mode has
+                                 CONSOLE_NOSIG */
 #define CONSOLE_LAYOUT_US 0
 #define CONSOLE_LAYOUT_IT 1
 
 /* mode bits (as termios ICANON and ECHO, which libmynos translates) */
 #define CONSOLE_CANON 1  /* line editing: input comes by whole lines */
 #define CONSOLE_ECHO  2  /* typed characters are shown */
+#define CONSOLE_NOSIG 4  /* Ctrl-C is a character, not an interrupt (termios
+                            without ISIG: editors) */
 
 /* the screen (the kernel's terminal, VT100-like) */
 #define CONSOLE_ROWS 25

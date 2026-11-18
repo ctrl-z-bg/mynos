@@ -320,7 +320,22 @@ let run_program ?(background = false) file args c =
     jobs := pid :: !jobs;
     Printf.printf "[%d]\n%!" pid;
     0
-  | pid -> flush stdout; status_code (Mynos.wait pid)
+  | pid ->
+    flush stdout;
+    (* on the console: Ctrl-C ends it (the console kills it) *)
+    let console = Sys.getenv_opt "MYNOS_STDIN" = None in
+    if console then Mynos.console_foreground pid;
+    let st = Mynos.wait pid in
+    if console then begin
+      Mynos.console_foreground 0;
+      (* ended from outside: what it left on the screen undone (colours,
+         a hidden cursor, the alternate screen) *)
+      (match st with
+       | Mynos.Signaled _ when Sys.getenv_opt "MYNOS_STDOUT" = None ->
+         print_string "\027[0m\027[?25h\027[?1049l"; flush stdout
+       | _ -> ())
+    end;
+    status_code st
   | exception Mynos.Error (_, code) ->
     error "%s: cannot start (%s)" file (Mynos.error_name code); 126
 

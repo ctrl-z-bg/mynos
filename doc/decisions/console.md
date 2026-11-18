@@ -66,6 +66,27 @@ so a VT100 terminal shows it as the screen does.
 is 80 x 25: full-screen ones (`edit`, `kilo`) want a terminal of that
 size.
 
+### 4. Ctrl-C (2026-11-18)
+
+MyNOS has no signals; Ctrl-C ends a program by `kill`, as Unix's terminal
+driver sends SIGINT to the foreground program:
+
+- `sh` tells its console which program it waits for
+  (`CONSOLE_FOREGROUND`, `Mynos.console_foreground`), and that it waits
+  for none when the program ends. The console accepts only a child of
+  the caller.
+- On Ctrl-C, if interrupts are on, the console (consoled, or a Terminal
+  window) kills that program, shows `^C` and drops what was typed for
+  it. `sh` sees signal 9 (`$?` is 137) and undoes what the program may
+  have left on the screen (colours, a hidden cursor, the alternate
+  screen).
+- A program that wants Ctrl-C as a key turns interrupts off, as with
+  termios: `ISIG` cleared (`CONSOLE_NOSIG`). Editors do; displayd does,
+  since it takes every key for the windows (without it, the first Ctrl-C
+  in a Terminal window ended `gui`, the program the text console's sh
+  waited for).
+- At sh's own prompt, Ctrl-C clears the line.
+
 ## Not now
 
 - A graphical console (bitmap fonts, any Unicode character): with the GUI

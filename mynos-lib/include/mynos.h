@@ -124,6 +124,9 @@ void mynos_stats(mynos_stats_t * st);
 /* the console's input mode: canon (line editing) and echo, and for raw
    input VMIN and VTIME as termios (tcsetattr does the same) */
 int mynos_consoleMode(int canon, int echo, int vmin, int vtime);
+/* the program the caller started and waits for: Ctrl-C on the console
+   ends it (0: none); -1 without a console */
+int mynos_consoleForeground(int pid);
 
 /* LOG */
 /* write a line (printf format) to the kernel log: the serial log port, not

@@ -162,7 +162,16 @@ let scroll ?(colour = panel_colour) ui id x y w h content =
 exception Quit
 
 let run ?(title = "") ?(tick = 0.) w h state frame =
-  let window = Display.window ~title w h in
+  let window =
+    try Display.window ~title w h with
+    | Ipc.Remote_error (_, m) | Failure m ->
+      (* outside the graphical session: say where it runs, and end *)
+      Printf.eprintf "%s: %s.\nA graphical program: start the graphical session (gui), then \
+                      run it from a Terminal window, from Files, or with &.\n%!"
+        (Filename.basename Sys.argv.(0)) m;
+      exit 2
+    | Mynos.Error _ ->
+      prerr_endline "no display service (displayd)"; exit 2 in
   let ui = { window; g = window.Display.pixels; mx = -1; my = -1; buttons = 0;
              clicked = false; press = (-1, -1); keys = []; focused = true; tick = false;
              field = -1; wheel = 0 } in

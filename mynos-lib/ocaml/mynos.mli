@@ -172,3 +172,8 @@ val console_mode : canon:bool -> echo:bool -> ?vmin:int -> ?vtime:int -> unit ->
     [echo] to show typed characters; for raw input, [vmin] and [vtime] as
     termios VMIN and VTIME. The raw mode ends when another process reads
     the console. The screen is 80x25 and understands VT100 sequences. *)
+
+val console_foreground : int -> unit
+(** The program this process started and now waits for (0: none): Ctrl-C
+    on the console ends it, unless its console mode turned interrupts off
+    (termios without ISIG: editors). sh says it for each command. *)

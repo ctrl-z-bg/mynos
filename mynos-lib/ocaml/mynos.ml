@@ -108,5 +108,6 @@ external console_mode_raw : bool -> bool -> int -> int -> unit
   = "caml_mynos_console_mode"
 let console_mode ~canon ~echo ?(vmin = 1) ?(vtime = 0) () =
   console_mode_raw canon echo vmin vtime
+external console_foreground : int -> unit = "caml_mynos_console_foreground"
 
 external environment : unit -> string array = "caml_mynos_environment"

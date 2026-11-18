@@ -207,9 +207,9 @@ static void tio_init(void)
   tio.c_cc[VINTR] = 3;
 }
 
-/* set the console's mode: line editing and echo, and for raw reads VMIN
-   and VTIME; -1 without a console */
-int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
+/* set the console's mode: line editing and echo, Ctrl-C an interrupt or a
+   character, and for raw reads VMIN and VTIME; -1 without a console */
+static int console_mode(int canon, int echo, int isig, int vmin, int vtime)
 {
   struct console_req req;
   mynos_msg_t * msg;
@@ -217,7 +217,8 @@ int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
   memset(&req, 0, sizeof(req));
   req.op = CONSOLE_MODE;
   req.pid = getpid();
-  req.mode = (canon ? CONSOLE_CANON : 0) | (echo ? CONSOLE_ECHO : 0);
+  req.mode = (canon ? CONSOLE_CANON : 0) | (echo ? CONSOLE_ECHO : 0)
+    | (isig ? 0 : CONSOLE_NOSIG);
   req.vmin = vmin;
   req.vtime = vtime;
   if (call(console_cache.port, &req, sizeof(req), &msg, NULL) < 0) return -1;
@@ -225,8 +226,30 @@ int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
   tio_init();
   if (canon) tio.c_lflag |= ICANON; else tio.c_lflag &= ~ICANON;
   if (echo) tio.c_lflag |= ECHO; else tio.c_lflag &= ~ECHO;
+  if (isig) tio.c_lflag |= ISIG; else tio.c_lflag &= ~ISIG;
   tio.c_cc[VMIN] = vmin;
   tio.c_cc[VTIME] = vtime;
+  return 0;
+}
+
+int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
+{
+  tio_init();
+  return console_mode(canon, echo, (tio.c_lflag & ISIG) != 0, vmin, vtime);
+}
+
+/* the program the caller waits for: Ctrl-C ends it (0: none) */
+int mynos_consoleForeground(int pid)
+{
+  struct console_req req;
+  mynos_msg_t * msg;
+  if (service_port(console_name(), &console_cache) < 0) return -1;
+  memset(&req, 0, sizeof(req));
+  req.op = CONSOLE_FOREGROUND;
+  req.pid = getpid();
+  req.mode = pid;
+  if (call(console_cache.port, &req, sizeof(req), &msg, NULL) < 0) return -1;
+  mynos_freeMsg(&msg);
   return 0;
 }
 
@@ -255,8 +278,8 @@ int ioctl(int fd, IOCTL_REQ req, ...)
       return 0;
     case TCSETS: case TCSETSW: case TCSETSF: {
       const struct termios * t = arg;
-      if (mynos_consoleMode((t->c_lflag & ICANON) != 0, (t->c_lflag & ECHO) != 0,
-			    t->c_cc[VMIN], t->c_cc[VTIME]) < 0) {
+      if (console_mode((t->c_lflag & ICANON) != 0, (t->c_lflag & ECHO) != 0,
+		       (t->c_lflag & ISIG) != 0, t->c_cc[VMIN], t->c_cc[VTIME]) < 0) {
 	errno = EIO;
 	return -1;
       }

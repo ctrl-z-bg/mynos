@@ -90,6 +90,8 @@ static int pending_len = 0;
 
 /* the input mode (CONSOLE_MODE) */
 static int canon = 1, echo = 1, vmin = 1, vtime = 0, mode_owner = 0;
+static int isig = 1;          /* Ctrl-C ends the foreground program */
+static int foreground = 0;    /* the program a shell waits for (CONSOLE_FOREGROUND) */
 
 /* keys beyond ASCII (keymap_translate: scan code << 8) */
 #define KEY_UP     0x4800
@@ -455,8 +457,30 @@ static void input(unsigned int c)
     raw_write("\033[?0v", 5);
     looking_back = 0;
   }
-  key_typed(c);
+  if (c == 0x03 && isig && foreground > 0) {
+    /* Ctrl-C: an interrupt. The program the shell waits for ends (MyNOS
+       has no signals: it is killed); what was typed for it is dropped */
+    int pid = foreground;
+    foreground = 0;
+    raw_write("^C\n", 3);
+    line_len = 0;
+    mynos_P(lock);
+    queue_len = 0;
+    mynos_V(lock);
+    mynos_kill(pid);
+  } else
+    key_typed(c);
   mynos_V(input_lock);
+}
+
+/* a pid a caller may name as its foreground program: its child */
+static int child_of(int pid, int parent)
+{
+  mynos_process_t ps[128];
+  int n = mynos_processes(ps, 128), i;
+  for (i = 0; i < n; i++)
+    if (ps[i].pid == pid) return ps[i].ppid == parent;
+  return 0;
 }
 
 static void * keyboard_thread(void * arg)
@@ -675,6 +699,7 @@ int main()
 	  canon = echo = 1;      /* its program is gone (or did not restore) */
 	  vmin = 1;
 	  vtime = 0;
+	  isig = 1;
 	}
 	history_sync();          /* a program is about to read: a good time */
 	keymap_sync();
@@ -690,9 +715,14 @@ int main()
 	l = (char)layout;
 	mynos_send(channel, &l, 1, 0);
 	keymap_sync();
+      } else if (req.op == CONSOLE_FOREGROUND) {
+	int caller = mynos_channelPeer(channel);
+	if (req.mode == 0 || child_of(req.mode, caller)) foreground = req.mode;
+	mynos_send(channel, buf, 0, 0);
       } else if (req.op == CONSOLE_MODE) {
 	canon = (req.mode & CONSOLE_CANON) != 0;
 	echo = (req.mode & CONSOLE_ECHO) != 0;
+	isig = !(req.mode & CONSOLE_NOSIG);
 	vmin = req.vmin;
 	vtime = req.vtime;
 	mode_owner = req.pid;
