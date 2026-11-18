@@ -2121,3 +2121,34 @@ with a different question: not "does it work?" but "what exactly does it
 do?". Documentation written from the code, and not from memory, is worth
 doing for that alone.
 
+## 2026-11-18 — One FPU for every thread
+
+**Symptom.** None seen: found while documenting the context switch
+(appendix A). `switchTo` saved the integer registers only.
+
+**Diagnosis.** Nothing in the kernel saved the floating-point state: no
+`fsave` or `fxsave` anywhere, CR0.TS never set (so the lazy-switching
+trap, `int 7`, which only did `clts`, never ran). Every thread of every
+process shared the x87 stack, its control word, and the SSE registers.
+A test (`tests/fpu`) shows it: two threads that keep values on the x87
+stack and their own rounding mode while they spin find both changed by
+the other, on the old kernel, every time.
+
+**A second finding on the way.** On the old kernel the same test died at
+its first SSE instruction: "invalid opcode". CR4.OSFXSR had never been
+set, so SSE was off; programs ran only because nothing compiled for
+MyNOS (gcc's i386 code, musl, OCaml's runtime) uses SSE.
+
+**Fix.** Eager save and restore in `switchTo`, `FXSAVE`/`FXRSTOR` when
+the processor has them (`FNSAVE`/`FRSTOR` otherwise; all three cases
+tested with QEMU's CPU options), an area in each `tss_t`, a clean state
+recorded at boot for new threads, the parent's state for a forked child,
+SSE turned on, and the kernel compiled with `-mgeneral-regs-only` so that
+it can never touch the registers it saves. Eager rather than lazy: a few
+hundred cycles per switch, and no trap to get right.
+
+**Lesson.** A bug that corrupts data only when two threads compute with
+floats in the same 10 ms is invisible to a test suite of programs that
+behave. Writing down how a mechanism works, from the code, is what made
+the missing half visible.
+

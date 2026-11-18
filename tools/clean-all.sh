@@ -14,6 +14,7 @@ make -C services clean
 make -C services/fs/memrofs/tool clean
 make -C mynos-runtime clean
 make -C tests/abi clean
+make -C tests/fpu clean
 make -C tests/stress clean
 make -C mynos-lib/ocaml clean
 rm -f tests/*/*.byte tests/*/*.cm[io] tests/*/ramdisk.dsk tests/files/AUTOEXEC.BAT \

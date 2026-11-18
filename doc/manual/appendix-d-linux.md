@@ -470,6 +470,4 @@ service learns that a client went away when its channel breaks
 - Futexes: 256 waiters in all; no priority inheritance or robust lists.
 - The clocks tick at 100 Hz: no time is finer than 10 ms, and a sleep
   lasts at least one tick.
-- Threads share one processor (mynos-awn), and the floating-point state
-  is not saved at a context switch (mynos-t6p): two threads computing
-  with floats at the same time can disturb each other.
+- Threads share one processor (mynos-awn).

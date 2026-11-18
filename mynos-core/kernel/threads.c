@@ -64,6 +64,7 @@ tss_t * threadAlloc(void) {
   }
 
   kmemcpy(tss, currThread, sizeof(tss_t));
+  tss->fpu_valid = 0;            /* a new thread: a clean FPU */
   tss->pid = CURRPID;
   tss->kstack = kstack;
   tss->tid = nextTid++;

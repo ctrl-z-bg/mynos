@@ -21,6 +21,7 @@
 #   system/ramdisk.dsk               the system RAM disk: init, consoled, the shell
 #                                    (the OCaml toplevel), programs
 #   tests/abi/abi                    system call checks
+#   tests/fpu/fpu                    the FPU state of each thread
 #   tests/stress/stress, ramdisk.dsk kernel stress test
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 #   fetch/fetch.byte                 HTTP and HTTPS from the command line
@@ -35,6 +36,7 @@ make -C mynos-lib
 make -C services
 make -C mynos-runtime
 make -C tests/abi
+make -C tests/fpu
 make -C tests/stress
 make -C mynos-lib/ocaml
 (cd tests/mynos-ocaml && ocamlc -use-prims ../../mynos-runtime/primitives \

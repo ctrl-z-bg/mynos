@@ -116,6 +116,16 @@ if [ -f tests/fat/ramdisk.dsk ]; then
 fi
 }
 
+sec_fpu() {
+# each thread its own floating-point state (mynos-t6p): x87 and SSE
+# registers, the control word, kept across preemptions
+if [ -f tests/fpu/fpu ]; then
+    timeout "${WAIT:-20}" tools/run-qemu.sh tests/fpu/fpu \
+        -- -display none -serial null -serial "file:$tmp/logf" || true
+    cat "$tmp/logf" >> "$part"
+fi
+}
+
 sec_threads() {
 # OCaml's threads (systhreads): Mutex, Condition, Event, and MyNOS calls
 # that wait without stopping the other threads
@@ -788,7 +798,7 @@ for lane in ${LANES:-a b c d e}; do
         part=$tmp/part-$lane
         : > "$part"
         case $lane in
-            a) sec_first || true; sec_effects || true; sec_storage || true; sec_fat || true; sec_domains || true; sec_threads || true ;;
+            a) sec_first || true; sec_effects || true; sec_storage || true; sec_fat || true; sec_domains || true; sec_threads || true; sec_fpu || true ;;
             b) sec_mlib || true; sec_files || true; sec_stress || true; sec_spawn || true; sec_console || true ;;
             c) sec_nocom2 || true; sec_reboots || true ;;
             d) sec_gui || true ;;
@@ -825,6 +835,7 @@ expect "5 * 5 = 25"
 expect "Service keyboard registered"
 expect "Service serial registered"
 expect "Hello from memrofs!"
+expect "fpu: all checks passed"
 expect "threads: all checks passed"
 expect "abi: all checks passed"
 if [ -f tests/stress/ramdisk.dsk ]; then

@@ -25,4 +25,8 @@
 
 void switchTo(tss_t * old, tss_t * new);
 
+/* the floating-point state of threads (mynos-t6p) */
+void fpu_init(void);
+void fpu_save(tss_t * t);
+
 #endif

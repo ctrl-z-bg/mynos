@@ -32,6 +32,7 @@
 #include "sem.h"
 #include "time.h"
 #include "random.h"
+#include "softtaskswitch.h"
 
 extern uint32_t currProcess;
 
@@ -961,6 +962,9 @@ static tss_t * copyThreads(process_descriptor_t * ddest,
   tss_t * prevDest = NULL;
   tss_t * mirror;
   
+  /* the child goes on with the parent's floating-point state */
+  fpu_save(currThread);
+
   /* the first one */
   dest = ddest->tss = (tss_t*)kmalloc(sizeof(tss_t));
   

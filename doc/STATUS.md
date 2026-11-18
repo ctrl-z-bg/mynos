@@ -1056,4 +1056,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   write the disk and power off (mynos-dow), C stdio input (mynos-d6k),
   and minor findings (mynos-6qs, mynos-1ev, mynos-f2d, mynos-uoq).
   Stale lines here and in the decision docs corrected.
+- **2026-11-18** — Each thread its own floating-point state (mynos-t6p):
+  `switchTo` saves and restores the x87/MMX/SSE registers
+  (`FXSAVE`/`FXRSTOR`, `FNSAVE`/`FRSTOR` without FXSR) in a 512-byte
+  area of the `tss_t`; new threads start from a clean state recorded at
+  boot, a forked child from its parent's; SSE is turned on (CR4 OSFXSR,
+  OSXMMEXCPT: it was off, an SSE instruction ended the program); the
+  kernel is compiled with `-mgeneral-regs-only`. Test `tests/fpu`: two
+  threads keep x87 and SSE values and their rounding mode across
+  preemptions (it fails on the old kernel).
 

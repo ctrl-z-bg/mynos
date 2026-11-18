@@ -89,6 +89,13 @@ typedef struct {
   int32_t tid;
   int32_t * clearTid;
 
+  // the floating-point state (x87, MMX, SSE), saved when the thread is
+  // switched out and restored when it comes back (softtaskswitch.c,
+  // mynos-t6p): FXSAVE's 512 bytes, 16-byte aligned inside the array.
+  // fpu_valid 0: none saved yet, the thread starts from a clean state
+  uint32_t fpu_valid;
+  ubyte_t fpu_area[512 + 16];
+
 } tss_t;
 
 #endif

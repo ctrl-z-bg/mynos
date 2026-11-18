@@ -369,9 +369,6 @@ the last commit it builds is tagged `legacy-last`.
 ## F.11 Known limits
 
 - One processor (mynos-awn): domains and threads take turns.
-- The floating-point state is not saved at a context switch (mynos-t6p):
-  OCaml floats computed in two threads or domains at once can be
-  corrupted.
 - Signals are never delivered (appendix D.8): handlers installed with
   `Sys.signal` do not run.
 - Much of `Unix` fails with `ENOSYS` (F.6); there are no sockets for C

@@ -21,7 +21,9 @@ CWD        = $(shell pwd)
 MYNOS_CORE_ROOT    = $(CWD:%/$(RELPATH)=%)
 
 CC = gcc
-CFLAGS = -DMYNOS -nostdinc -Wall -I. -fno-stack-protector -fno-pie -g
+# -mgeneral-regs-only: the kernel never touches the FPU, whose registers
+# hold the running thread's state (softtaskswitch.c, mynos-t6p)
+CFLAGS = -DMYNOS -nostdinc -Wall -I. -fno-stack-protector -fno-pie -g -mgeneral-regs-only
 LD = ld
 MAKE	= make
 AS = nasm

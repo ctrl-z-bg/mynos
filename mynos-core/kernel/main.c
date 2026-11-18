@@ -51,6 +51,7 @@
 #endif
 
 #include "ipc/ipc.h"
+#include "softtaskswitch.h"
 
 void __print_free_phy_pages() {
   printk("(adesso ci sono ");
@@ -181,8 +182,9 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   __asm__("cli");
 
-  /* initialize the FPU */
+  /* initialize the FPU, and record its clean state for new threads */
   __asm__("finit");
+  fpu_init();
 
   /* prepare the modules informations */
   /* NB: I do that right now because the memory bitmap allocation can

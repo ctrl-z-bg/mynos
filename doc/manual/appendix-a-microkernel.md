@@ -137,6 +137,7 @@ is done in software (`kernel/softtaskswitch.c`):
 
 ```
   switchTo(old, new):
+      save old's floating-point state; load new's (or a clean one)
       THEtss.esp0 ← new's kernel stack       (where the next interrupt lands)
       load new's TLS segment into GDT entry 5
       push old's callee-saved registers and segment registers
@@ -147,6 +148,20 @@ is done in software (`kernel/softtaskswitch.c`):
 
 A thread that has never run starts at `startThread`, which pops its
 segment registers and returns to user mode with `iret`.
+
+**The floating-point state** (the x87 registers and control word, MMX,
+SSE) is part of a thread too: each `tss_t` has a 512-byte area for it.
+`switchTo` saves the outgoing thread's state there and loads the
+incoming one's, with `FXSAVE`/`FXRSTOR`, or `FNSAVE`/`FRSTOR` on a
+processor without them. A new thread starts from the state of a freshly
+initialized FPU, recorded at boot; a child made by `fork` goes on with its
+parent's. At boot `fpu_init` also turns SSE on (CR4's `OSFXSR` and
+`OSXMMEXCPT` bits) when the processor has it. The kernel never uses the
+FPU itself: it is compiled with `-mgeneral-regs-only`, so the registers
+always hold the running thread's state. (Until November 2026 nothing was
+saved: every thread shared one FPU, and a thread preempted in the middle
+of a computation could find it changed. The manual's first draft found
+it; `tests/fpu` shows it on the old kernel.)
 
 There are two kinds of threads, with the same `tss_t`:
 
@@ -311,10 +326,6 @@ generation.
 
 ## A.11 Known limits
 
-- The floating-point unit's state (x87 and SSE registers) is not saved
-  at a context switch: every thread shares one. A thread preempted in the
-  middle of a floating-point computation can find it changed by another
-  (mynos-t6p).
 - One processor (mynos-awn); I/O permission is all or nothing
   (mynos-37p).
 - Calls 11 and 12 are a leftover of 2002: nothing calls them.
