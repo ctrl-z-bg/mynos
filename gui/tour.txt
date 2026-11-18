@@ -4,7 +4,7 @@ show: sh, memrofsd, registry
 note: fs/1 Open ("ocamlrun" | To start a program, its parent first reads the program's file through the file service, then hands it to the kernel. Here trace reads ocamlrun, the OCaml runtime, to start sh.
 note: spawn of sh | A process is born: the kernel makes it from the file its parent read, with its own memory. It is ocamlrun, and it will run sh.byte.
 note: fs/1 Open ("sh.byte" | The new process reads its program, sh.byte, from the RAM disk: the same service, the same requests as any other file.
-note: registry LOOKUP | Before talking to a service, a process asks the registry for its port: the registry is the one service everybody can find, at a fixed port.
+note: registry/1 Lookup | Before talking to a service, a process asks the registry for its port: the registry is the one service everybody can find, at a fixed port.
 note: fs/1 Open ("init.rc" | Now cat itself: sh asks memrofs to open init.rc. A message, through the kernel, to another process; the answer is a number, the file descriptor.
 note: fs/1 Read | A read is a request and a reply: up to 16 KB of the file travel back in the reply's message.
 note: fs/1 Close | Done: the descriptor goes back to memrofs.
@@ -19,7 +19,7 @@ Look at the arrows: every one goes down into the kernel and up again. The kernel
 title: A directory from the disk
 command: ls /disk
 show: sh, fatfs, ata, registry
-note: LOOKUP "fatfs" | sh needs the file service of the disk: it asks the registry for fatfs's port.
+note: Lookup "fatfs" | sh needs the file service of the disk: it asks the registry for fatfs's port.
 note: block/1 Read | fatfs does not touch the disk: it asks the driver, ata, for sectors. This call is made while fatfs serves sh's: a call inside a call.
 note: fs/1 List | sh asks fatfs for the directory's entries: one typed request, and all of them come back in the reply, names and sizes.
 note: fs/1 Open | sh asks fatfs to open a file; fatfs finds it in the directory, which it may first have to read from the disk.
@@ -44,7 +44,7 @@ This lesson watches sh start hello, the smallest program there is: born, it read
 title: Over the network
 command: ping 10.0.2.2 2
 show: sh, netd, registry
-note: LOOKUP "net" | sh looks up the network service in the registry.
+note: Lookup "net" | sh looks up the network service in the registry.
 note: IRQ 9 | The network card interrupts. The kernel does not handle the packet: it wakes netd's thread, and netd reads the card itself. This arrow comes from the hardware.
 note: net/1 | sh speaks to netd with typed requests: net/1, a protocol that describes itself. Each request is an OCaml value, carried in a message.
 

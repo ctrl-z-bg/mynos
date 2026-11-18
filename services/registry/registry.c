@@ -22,6 +22,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <mynos.h>
+#include <mynos_wire.h>
+#include <unistd.h>
 
 #if 0
   {
@@ -90,12 +92,56 @@ int registryLookUp(char * name) {
   return ret;
 }
 
-/* the reply to LIST: the count, then the live entries (the others are
-   dropped on the way, as in a lookup) */
+/* ---- registry/1 (mynos_registry.h): typed IPC ---- */
+
+static void send_reply(int channel, wire_writer * w)
+{
+  if (!w->error) mynos_send(channel, w->buf, w->len, 0);
+  wire_writer_free(w);
+}
+
+static void reply_error(int channel, const char * m)
+{
+  wire_writer w;
+  wire_writer_init(&w);
+  wire_reply_error(&w, m);
+  send_reply(channel, &w);
+}
+
+static void reply_int(int channel, int v)
+{
+  wire_writer w;
+  wire_writer_init(&w);
+  wire_reply_ok(&w);
+  wire_put_int(&w, v);
+  send_reply(channel, &w);
+}
+
+static const wire_request_doc requests[] = {
+  { 0, "register", "name:S", "I",
+    "Register a name: a new port, the caller's; the name is the caller's while it "
+    "runs." },
+  { 1, "lookup", "name:S", "I", "The port of a name." },
+  { 1, "list", "U", "L<(name:S,port:I,owner:I)>",
+    "Every name, with its port and the process that registered it." },
+};
+
+static void describe(int channel)
+{
+  wire_writer w;
+  wire_writer_init(&w);
+  wire_reply_description(&w, REGISTRY_PROTOCOL,
+    "The names of the services (the registry, in C since 2002): a name gives a port "
+    "to connect to. The registry itself answers at a well-known port.",
+    requests, sizeof requests / sizeof requests[0]);
+  send_reply(channel, &w);
+}
+
+/* the live entries (the others dropped on the way, as in a lookup) */
 static void registryList(int channel) {
   struct table_entry_s ** pp, * e;
-  int n = 0, size;
-  char * buf;
+  wire_writer w;
+  int n = 0;
   mynos_P(registry.sem);
   pp = &registry.head;
   while ((e = *pp) != NULL) {
@@ -104,21 +150,16 @@ static void registryList(int channel) {
     n++;
     pp = &e->next;
   }
-  size = sizeof(int) + n * sizeof(mynos_reg_entry_t);
-  buf = calloc(1, size);
-  if (buf != NULL) {
-    mynos_reg_entry_t * out = (mynos_reg_entry_t *)(buf + sizeof(int));
-    *(int *)buf = n;
-    for (e = registry.head; e != NULL; e = e->next, out++) {
-      strncpy(out->name, e->name, sizeof out->name - 1);
-      out->port = e->port;
-      out->owner = e->owner;
-    }
+  wire_writer_init(&w);
+  wire_reply_ok(&w);
+  wire_put_int(&w, n);
+  for (e = registry.head; e != NULL; e = e->next) {
+    wire_put_cstring(&w, e->name);
+    wire_put_int(&w, e->port);
+    wire_put_int(&w, e->owner);
   }
   mynos_V(registry.sem);
-  if (buf == NULL) { n = MYNOS_ERR_FULL; mynos_send(channel, &n, sizeof n, 0); return; }
-  mynos_send(channel, buf, size, 0);
-  free(buf);
+  send_reply(channel, &w);
 }
 
 /* serve one request on a new channel. Requests are served one at a time
@@ -127,68 +168,54 @@ static void registryList(int channel) {
    share their creator's TLS, mynos-l9h) */
 static void serve(int channel) {
   mynos_msg_t * msg;
-  mynos_reg_cmd_t * cmd;
-  int ret;
-  int port;
+  wire_reader r;
+  const char * id;
+  unsigned int n;
+  char name[MAXNAMELEN + 1];
+  long long kind;
 
   /* a client that connects and sends nothing must not stop the registry */
-  ret = mynos_recv(channel, &msg, 0, 1000);
-  if (ret < 0) {
-    mynos_log("Warning registry: invalid recv (%d)\n", ret);
+  if (mynos_recv(channel, &msg, 0, 1000) < 0) {
     mynos_freeChannel(channel);
     return;
   }
-  
-  if (msg->size != sizeof(mynos_reg_cmd_t)) {
-    mynos_log("Warning registry: invalid message size\n");
-    ret = MYNOS_ERR_INVALID;
-    mynos_send(channel, &ret, sizeof(int), 0);
-    mynos_freeMsg(&msg);
-    mynos_freeChannel(channel);
-    return;
-  }
-
-  cmd = (mynos_reg_cmd_t*)(msg->start);
-  
-  // put a secure limit to the name length
-  cmd->name[MAXNAMELEN] = 0;
-
-  //printf("Service %s by process %d command %d\n", cmd->name, cmd->arg1, cmd->cmd);
-
-  switch (cmd->cmd)
-    {
-    case MYNOS_REGISTRY_REGISTER:
-      if (registryLookUp(cmd->name) < 0) { // is not already present
-	/* the caller is the one at the other end of the channel (the pid
-	   in the request, arg1, is not to be trusted) */
-	int owner = mynos_channelPeer(channel);
-	port = mynos_allocPort();
-	ret = port;
-	if (port < 0 || owner < 0) {
-	  mynos_log("Warning registry: allocPort %d, caller %d\n", port, owner);
-	  if (port >= 0) mynos_freePort(port);
-	  ret = port < 0 ? port : owner;
-	  break;
-	}
-	mynos_changePortOwner(port, owner);
-	insertIntoRegistry(cmd->name, port, owner);
-      } else {
-	mynos_log("Warning registry: name %s is already present\n", cmd->name);
-	ret = MYNOS_ERR_INVALID;
-      }
-      break;
-    case MYNOS_REGISTRY_LOOKUP:
-      ret = registryLookUp(cmd->name);
-      break;
-    case MYNOS_REGISTRY_LIST:
+  wire_reader_init(&r, msg->start, msg->size);
+  id = wire_get_string(&r, &n);
+  if (!r.error && n == strlen(WIRE_DESCRIBE) && !memcmp(id, WIRE_DESCRIBE, n)) {
+    describe(channel);
+  } else if (r.error || n != strlen(REGISTRY_PROTOCOL) || memcmp(id, REGISTRY_PROTOCOL, n)) {
+    reply_error(channel, "invalid: the registry speaks " REGISTRY_PROTOCOL);
+  } else {
+    kind = wire_get_int(&r);
+    if (kind == REGISTRY_LIST) {
       registryList(channel);
-      mynos_freeMsg(&msg);
-      mynos_freeChannel(channel);
-      return;
+    } else {
+      wire_get_cstring(&r, name, sizeof name);   /* a name too long: an error */
+      if (r.error || (kind != REGISTRY_REGISTER && kind != REGISTRY_LOOKUP))
+        reply_error(channel, "invalid: a request of registry/1, a name of 20 bytes at most");
+      else if (kind == REGISTRY_LOOKUP) {
+        int port = registryLookUp(name);
+        if (port < 0) reply_error(channel, "not_found: no such name");
+        else reply_int(channel, port);
+      } else if (registryLookUp(name) >= 0) {
+        mynos_log("Warning registry: name %s is already present\n", name);
+        reply_error(channel, "exists: the name is taken");
+      } else {
+        /* the caller is the one at the other end of the channel */
+        int owner = mynos_channelPeer(channel);
+        int port = mynos_allocPort();
+        if (port < 0 || owner < 0) {
+          mynos_log("Warning registry: allocPort %d, caller %d\n", port, owner);
+          if (port >= 0) mynos_freePort(port);
+          reply_error(channel, "invalid: no port");
+        } else {
+          mynos_changePortOwner(port, owner);
+          insertIntoRegistry(name, port, owner);
+          reply_int(channel, port);
+        }
+      }
     }
-  
-  // BE AWARE SENDING STUFF ON THE STACK!!!
-  mynos_send(channel, &ret, sizeof(int), 0);
+  }
   mynos_freeMsg(&msg);
   mynos_freeChannel(channel);
 }
@@ -206,6 +233,9 @@ int main() {
     mynos_log("Error registry allocating port: %d\n", port);
     exit(-1);
   }
+
+  /* itself, by name: so that it can be described like any service */
+  insertIntoRegistry("registry", port, getpid());
 
   mynos_log("Registry: waiting requests\n");
   while (1) {

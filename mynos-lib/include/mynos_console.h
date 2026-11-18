@@ -9,24 +9,34 @@
   (at your option) any later version.
 */
 
-/* Protocol of the console service (services/console/consoled.c). */
+/* console/1, the protocol of the consoles: consoled (services/console,
+   the text console) and each terminal window's console service
+   (gui/terminal.ml, named by MYNOS_CONSOLE). Programs use them through
+   libmynos (fds 0-2, termios, Ctrl-C); OCaml programs can speak it typed
+   (module Console, mynos-lib/ocaml/console.mli, which defines it).
+
+   Typed IPC (mynos_wire.h): a request is "console/1", its case and its
+   arguments; the reply Ok and the value, or Error and a message. The
+   client is the process at the other end of the channel (channelPeer): a
+   raw mode belongs to it. */
 
 #ifndef __MYNOS_CONSOLE_H__
 #define __MYNOS_CONSOLE_H__
 
 #define CONSOLE_SERVICE "console"
+#define CONSOLE_PROTOCOL "console/1"
 
-#define CONSOLE_READ 1   /* len: max bytes -> up to len bytes of input
-                            (0 bytes: end of file, or a VTIME timeout) */
-#define CONSOLE_MODE 2   /* mode, vmin, vtime -> 0 bytes */
-#define CONSOLE_KEYMAP 3 /* mode: a layout (CONSOLE_LAYOUT_*), or -1 -> one
-                            byte, the layout in use */
-#define CONSOLE_WRITE 4  /* len bytes after the request -> 0 bytes: output, to
-                            a terminal's console service (MYNOS_CONSOLE) */
-#define CONSOLE_FOREGROUND 5  /* mode: the pid of a program the caller started
-                                 and waits for (0: none) -> 0 bytes. Ctrl-C
-                                 ends it (an interrupt), unless the mode has
-                                 CONSOLE_NOSIG */
+#define CONSOLE_READ       0 /* (max:I) -> S: up to max bytes of input ("":
+                                end of file, or a VTIME timeout)           */
+#define CONSOLE_MODE       1 /* (mode:I,vmin:I,vtime:I) -> U               */
+#define CONSOLE_KEYMAP     2 /* (layout:I): a CONSOLE_LAYOUT_*, or -1 -> I:
+                                the layout in use                          */
+#define CONSOLE_WRITE      3 /* (data:S) -> U: output, to a terminal's
+                                console service (MYNOS_CONSOLE)            */
+#define CONSOLE_FOREGROUND 4 /* (pid:I): a program the caller started and
+                                waits for (0: none) -> U. Ctrl-C ends it
+                                (an interrupt), unless the mode has
+                                CONSOLE_NOSIG                              */
 #define CONSOLE_LAYOUT_US 0
 #define CONSOLE_LAYOUT_IT 1
 
@@ -39,14 +49,5 @@
 /* the screen (the kernel's terminal, VT100-like) */
 #define CONSOLE_ROWS 25
 #define CONSOLE_COLS 80
-
-struct console_req {
-  int op;
-  int len;
-  int pid;               /* the client: a raw mode belongs to its process */
-  int mode;
-  int vmin;              /* raw mode: as termios VMIN and VTIME (tenths of */
-  int vtime;             /* a second); VMIN 0 with VTIME > 0 may return 0 */
-};
 
 #endif

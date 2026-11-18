@@ -173,6 +173,9 @@ let protocols = [
              "Write", [ I; S ], [ I ]; "Seek", [ I; I; I ], [ I ]; "List", [ S ], [];
              "Remove", [ S ], []; "Mkdir", [ S ], []; "Rmdir", [ S ], [];
              "Rename", [ S; S ], [] |];
+  "registry/1", [| "Register", [ S ], [ I ]; "Lookup", [ S ], [ I ]; "List", [], [] |];
+  "console/1", [| "Read", [ I ], [ S ]; "Mode", [ I; I; I ], []; "Keymap", [ I ], [ I ];
+                  "Write", [ S ], []; "Foreground", [ I ], [] |];
 ]
 
 let get_args c args =
@@ -224,7 +227,8 @@ let typed_reply d reply_args =
   | Some 1 -> "Error " ^ Option.value (get_string c) ~default:"…"
   | _ -> show_bytes d (String.length d)
 
-(* the C protocols (mynos_fs.h, mynos_registry.h, mynos_console.h) *)
+(* the C protocols before typed IPC (fs/1, registry/1, console/1), in
+   older recordings *)
 let cstring s off =
   if off >= String.length s then ""
   else match String.index_from_opt s off '\000' with

@@ -115,6 +115,21 @@ module Make (P : PROTOCOL) : sig
 
   val serve_port : int -> handler -> 'b
 
+  (** {2 Answering later}
+
+      A service that keeps a request waiting (a read until a key comes)
+      decodes it, keeps the channel, and sends the reply when it can. *)
+
+  val decode : string -> (P.packed, string) result
+  (** A request message: [Ok] the request; [Error] the reply to send at
+      once (the protocol's description, or an error). *)
+
+  val reply : 'a P.request -> 'a -> string
+  (** The reply message: Ok and the value. *)
+
+  val error_reply : string -> string
+  (** The reply message: Error and this message. *)
+
   (** {2 Messages (for tests)} *)
 
   val request_message : 'a P.request -> string

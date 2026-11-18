@@ -485,20 +485,12 @@ let ask_context () =
     "The current directory: " ^ here;
     "Its files: " ^ files ]
 
-(* the keyboard layout (consoled's CONSOLE_KEYMAP, mynos_console.h: a
-   struct of six ints; the reply, one byte) *)
+(* the keyboard layout (consoled: console/1's Keymap; -1 asks) *)
 let layouts = [ "us"; "it" ]
 let console_keymap mode =
-  let ch = Mynos.connect (Mynos.lookup "console") in
-  Fun.protect ~finally:(fun () -> try Mynos.free_channel ch with Mynos.Error _ -> ())
-    (fun () ->
-       let b = Bytes.make 24 '\000' in
-       List.iteri (fun i v -> Bytes.set_int32_le b (4 * i) (Int32.of_int v))
-         [ 3; 0; Mynos.getpid (); mode; 0; 0 ];
-       Mynos.send ch (Bytes.to_string b);
-       let r = Mynos.recv ~timeout:2.0 ch in
-       List.nth_opt layouts (if r = "" then 0 else Char.code r.[0])
-       |> Option.value ~default:"?")
+  match Console.call (Console.connect ()) (Console.Keymap mode) with
+  | l -> List.nth_opt layouts l |> Option.value ~default:"?"
+  | exception (Mynos.Error _ | Ipc.Remote_error _ | Ipc.Protocol_error _) -> "?"
 
 let llm_service = ref None
 

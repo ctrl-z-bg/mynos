@@ -704,8 +704,10 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     # after it was killed and started anew
     # a program with a thread, compiled inside MyNOS (unix.cma, threads.cma
     # on the RAM disk; -noautolink: the runtime has their primitives)
+    # ... which also asks consoled (C) to describe console/1, as console.ml does
     tools/type-keys.py "$tmp/mon7" "echo 'let () = let t = Thread.create (fun () -> print_endline (\"from-a-\" ^ \"thread\")) () in Thread.join t' > /disk/th.ml\n"; sleep 2
-    tools/type-keys.py "$tmp/mon7" 'ocamlc -use-prims /primitives unix.cma threads.cma -noautolink -o /disk/th.byte /disk/th.ml && /disk/th.byte\n'; sleep 25
+    tools/type-keys.py "$tmp/mon7" "echo 'let () = let d = Ipc.describe \"console\" in if d.Ipc.summary = Console.Protocol.summary && d.requests = Console.Protocol.requests then print_endline (\"console-\" ^ \"described\")' >> /disk/th.ml\n"; sleep 2
+    tools/type-keys.py "$tmp/mon7" 'ocamlc -use-prims /primitives mynos.cma unix.cma threads.cma -noautolink -o /disk/th.byte /disk/th.ml && /disk/th.byte\n'; sleep 25
     tools/type-keys.py "$tmp/mon7" 'kill fatfs\n'; sleep 4
     tools/type-keys.py "$tmp/mon7" 'X=back; echo fatfs-$X > /disk/back.txt; cat /disk/back.txt\n'; sleep 3
     tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte &\n'; sleep 3
@@ -923,6 +925,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "init: restarting fatfs.byte"               # a killed service, back
     expect "fatfs-back"                                # and found again by sh
     expect "from-a-thread"                             # threads, compiled in MyNOS
+    expect "console-described"                         # consoled speaks console/1
     expect "Hello, reborn again, from MyNOS!"          # by an OCaml client too
     if [ -n "$trace_calls" ]; then
         echo "ok    trace: sh -> fatfs -> ata0, nested calls"

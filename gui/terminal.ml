@@ -1,6 +1,6 @@
 (* terminal: a terminal window (doc/decisions/gui.md, phase 3).
 
-   It is a console service of its own (the protocol of mynos_console.h,
+   It is a console service of its own (console/1, module Console;
    registered as "term<pid>"), and starts sh with MYNOS_CONSOLE naming it:
    libmynos then sends the shell's (and its programs') reads, terminal
    modes and output here instead of to consoled and the kernel's screen.
@@ -325,6 +325,8 @@ let reply ch s =
   (try Mynos.send ch s with Mynos.Error _ -> ());
   (try Mynos.free_channel ch with Mynos.Error _ -> ())
 
+let read_reply s = Console.reply (Console.Read 0) s
+
 (* give waiting reads what there is (under the lock) *)
 let serve_reads () =
   let now = Mynos.uptime () in
@@ -334,47 +336,43 @@ let serve_reads () =
         let s = Buffer.sub input 0 n in
         let rest = Buffer.sub input n (Buffer.length input - n) in
         Buffer.clear input; Buffer.add_string input rest;
-        reply chn s; false
-      end else if !eof then (eof := false; reply chn ""; false)
-      else if deadline > 0. && now >= deadline then (reply chn ""; false)
+        reply chn (read_reply s); false
+      end else if !eof then (eof := false; reply chn (read_reply ""); false)
+      else if deadline > 0. && now >= deadline then (reply chn (read_reply ""); false)
       else true) !pending
 
-let i32 s o = Int32.to_int (String.get_int32_le s o)
-
 let handle chn msg =
-  if String.length msg < 24 then reply chn ""
-  else
-    let op = i32 msg 0 and len = i32 msg 4 in
+  match Console.decode msg with
+  | Error answer -> reply chn answer                (* describe, or an error *)
+  | Ok (Console.Protocol.Request req) ->
     Mutex.lock lock;
     Fun.protect ~finally:(fun () -> Mutex.unlock lock) (fun () ->
-        match op with
-        | 1 ->                                    (* CONSOLE_READ *)
+        let ok (type a) (r : a Console.request) (v : a) = reply chn (Console.reply r v) in
+        match req with
+        | Console.Read len ->
           let deadline =
             if not !canon && !vmin = 0 && !vtime > 0
             then Mynos.uptime () +. float !vtime /. 10. else 0. in
           pending := !pending @ [ (chn, max 1 len, deadline) ];
           serve_reads ()
-        | 2 ->                                    (* CONSOLE_MODE *)
-          let mode = i32 msg 12 in
-          canon := mode land 1 <> 0; echo := mode land 2 <> 0;
-          isig := mode land 4 = 0;
-          vmin := i32 msg 16; vtime := i32 msg 20;
+        | Console.Mode (mode, vm, vt) as r ->
+          canon := mode land Console.canon <> 0; echo := mode land Console.echo <> 0;
+          isig := mode land Console.nosig = 0;
+          vmin := vm; vtime := vt;
           if !canon then Buffer.clear line;
-          reply chn ""
-        | 3 -> reply chn "\000"                   (* CONSOLE_KEYMAP *)
-        | 5 ->                                    (* CONSOLE_FOREGROUND *)
-          let pid = i32 msg 12 in
+          ok r ()
+        | Console.Keymap _ as r -> ok r Console.layout_us
+        | Console.Foreground pid as r ->
           let caller = try Mynos.channel_peer chn with Mynos.Error _ -> -1 in
           let child = List.exists (fun (p : Mynos.process) ->
               p.p_pid = pid && p.parent = caller)
               (try Mynos.processes () with Mynos.Error _ -> []) in
           if pid = 0 || child then foreground := pid;
-          reply chn ""
-        | 4 ->                                    (* CONSOLE_WRITE *)
-          output (String.sub msg 24 (min len (String.length msg - 24)));
-          reply chn "";
-          render ()
-        | _ -> reply chn "")
+          ok r ()
+        | Console.Write data as r ->
+          output data;
+          ok r ();
+          render ())
 
 let serve port =
   while true do

@@ -60,6 +60,26 @@ let () =
    let d = Ipc.describe "memrofs" in
    ok &&& check "memrofs (C) describes fs/1 as fs.ml"
      (d.Ipc.protocol = "fs/1" && shape d.requests = shape Fs.Protocol.requests));
+  (* the registry (C) over typed IPC: registry/1 (console/1: the seventh
+     boot, which has consoled) *)
+  (let same name (summary, requests) =
+     match Ipc.describe name with
+     | d -> d.Ipc.summary = summary && d.requests = requests
+     | exception _ -> false in
+   ok &&& check "registry (C) describes registry/1 as registry.ml"
+     (same "registry" Registry.Protocol.(summary, requests));
+   let me = Mynos.getpid () in
+   let port = Registry.call (Registry.Register "typedname") in
+   ok &&& check "registry/1: register, lookup, list"
+     (Registry.call (Registry.Lookup "typedname") = port
+      && List.mem ("typedname", port, me) (Registry.call Registry.List)
+      && Mynos.lookup "typedname" = port);
+   ok &&& check "registry/1: a name taken, a name missing"
+     ((match Registry.call (Registry.Register "typedname") with
+       | _ -> false | exception Ipc.Remote_error (_, m) -> String.starts_with ~prefix:"exists" m)
+      && (match Registry.call (Registry.Lookup "no-such-name") with
+          | _ -> false | exception Ipc.Remote_error (_, m) -> String.starts_with ~prefix:"not_found" m));
+   ());
   (* typed IPC: the wire format *)
   let round c x = Wire.of_string c (Wire.to_string c x) = x in
   let malformed c s = match Wire.of_string c s with
@@ -220,9 +240,9 @@ let () =
   let sends = Array.to_list r.Tracer.events
               |> List.filter (fun e -> e.Tracer.kind = Tracer.Send) in
   ok &&& check "trace: a request to the registry is recorded"
-    (List.exists (fun e -> Tracer.describe r e = "registry LOOKUP \"tracedservice\"") sends);
+    (List.exists (fun e -> Tracer.describe r e = "registry/1 Lookup \"tracedservice\"") sends);
   ok &&& check "trace: and its reply, as a call"
-    (List.exists (fun c -> c.Tracer.request = "registry LOOKUP \"tracedservice\""
+    (List.exists (fun c -> c.Tracer.request = "registry/1 Lookup \"tracedservice\""
                            && c.reply <> "" && c.finish >= c.start)
        (Tracer.calls r));
   ok &&& check "trace: process names" (Tracer.name r 0 = "kernel(0)");

@@ -139,6 +139,25 @@ module Make (P : PROTOCOL) = struct
     | Error m -> error m
     | exception Wire.Error m -> error ("malformed request: " ^ m)
 
+  (* answering later: the request, or the reply to send at once *)
+  let decode msg =
+    match
+      let r = Wire.reader msg in
+      let id = Wire.read r Wire.string in
+      if id = describe_id && Wire.at_end r then
+        Error (Wire.to_string (Wire.result description_codec Wire.string)
+                 (Ok { protocol = P.id; summary = P.summary; requests = P.requests }))
+      else if id <> P.id then Error (error (Printf.sprintf "protocol %S, expected %S" id P.id))
+      else match P.read_request r with
+        | P.Request _ as p ->
+          if Wire.at_end r then Ok p else Error (error "bytes left over in the request")
+    with
+    | x -> x
+    | exception Wire.Error m -> Error (error ("malformed request: " ^ m))
+
+  let reply req v = Wire.to_string (reply_codec req) (Ok v)
+  let error_reply m = error m
+
   let serve_port port h =
     while true do
       let ch = Mynos.listen port in

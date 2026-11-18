@@ -117,6 +117,14 @@ Alternatives:
    memrofs (C, 2002) speaks it through `mynos_wire.h` and describes
    itself the same way (a test compares its description with `fs.ml`'s);
    libmynos is its client for every program. The client is the caller the
-   kernel names (`channelPeer`), not a pid written in the request. Every
-   service of MyNOS now speaks typed IPC except the console and the
-   registry.
+   kernel names (`channelPeer`), not a pid written in the request.
+8. **The registry and the consoles** (2026-11-18, mynos-nty): the last two
+   C protocols. registry/1 (register, lookup, list; module `Registry`)
+   in the C registry, which is now in its own table as "registry" so that
+   it can be described like any service; console/1 (read, mode, keymap,
+   write, foreground; module `Console`) in consoled (C) and in each
+   terminal window (OCaml). A terminal keeps reads waiting until there is
+   input: `Ipc.Make` gained `decode` and `reply`, for services that answer
+   later. libmynos speaks both for every program, with the same results as
+   before. Tests compare consoled's and the registry's descriptions with
+   the OCaml modules'. Every service of MyNOS now speaks typed IPC.

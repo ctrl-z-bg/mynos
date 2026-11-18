@@ -21,22 +21,18 @@
 #ifndef __MYNOS_REGISTRY_H__
 #define __MYNOS_REGISTRY_H__
 
-// Registry commands
-#define MYNOS_REGISTRY_REGISTER (1)
-#define MYNOS_REGISTRY_LOOKUP   (2)
-#define MYNOS_REGISTRY_DELETE   (3)
-#define MYNOS_REGISTRY_LIST     (4)   /* the reply: an int, how many, then
-					 that many mynos_reg_entry_t */
+/* registry/1, typed IPC (mynos_wire.h; module Registry in OCaml): a
+   request is "registry/1", its case and its arguments; the reply Ok and
+   the value, or Error and a message starting with not_found, exists or
+   invalid. The registry answers at the well-known port MYNOS_PORT_REGISTRY,
+   and is in its own table as "registry" (so that it can describe itself).
+   A name belongs to the process that registered it while it runs. */
+#define REGISTRY_PROTOCOL "registry/1"
+#define REGISTRY_REGISTER 0   /* (name:S) -> I: a new port, now the caller's   */
+#define REGISTRY_LOOKUP   1   /* (name:S) -> I: the port of a name            */
+#define REGISTRY_LIST     2   /* U -> L<(name:S,port:I,owner:I)>: every name  */
 
 #define MAXNAMELEN 20
-
-typedef struct {
-  int cmd;
-  char name[MAXNAMELEN+1];
-  int arg1;
-  int arg2;
-  int arg3;
-} mynos_reg_cmd_t;
 
 /* a name of the registry: its port and the process that registered it */
 typedef struct {
@@ -45,9 +41,11 @@ typedef struct {
   int owner;
 } mynos_reg_entry_t;
 
+/* the port of a new name (MYNOS_ERR_INVALID if it is taken) */
 int mynos_registryRegister(char * name);
+/* the port of a name (MYNOS_ERR_INVALID if there is none) */
+int mynos_registryLookUp(char * name);
 /* the names registered by live processes, at most max: how many */
 int mynos_registryList(mynos_reg_entry_t * buf, int max);
-int mynos_registryLookUp(char * name);
 
 #endif

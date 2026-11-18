@@ -55,6 +55,7 @@
 #include <sys/stat.h>
 #include <mynos.h>
 #include <mynos_console.h>
+#include <mynos_wire.h>
 #include "../keyboard/keymap.h"
 
 #define LINE_MAX 256
@@ -634,6 +635,30 @@ static int take_input(char * buf, int n, int timeout_ms)
   return got;
 }
 
+/* console/1 (mynos_console.h): its description, as module Console says it */
+static const wire_request_doc requests[] = {
+  { 0, "read", "max:I", "S",
+    "Up to max bytes of input: a line in line mode, keys in raw mode; \"\" at the "
+    "end of the input (Ctrl-D, a hang-up) or when VTIME passes." },
+  { 0, "mode", "(mode:I,vmin:I,vtime:I)", "U",
+    "The input mode: 1 line editing, 2 echo, 4 Ctrl-C is a key (not an interrupt); "
+    "vmin and vtime as termios VMIN and VTIME (raw mode)." },
+  { 0, "keymap", "layout:I", "I",
+    "The keyboard layout: 0 us, 1 it (-1: unchanged); the one in use." },
+  { 0, "write", "data:S", "U", "Output, to the screen." },
+  { 0, "foreground", "pid:I", "U",
+    "The program the caller waits for (one of its children; 0: none): Ctrl-C ends "
+    "it." },
+};
+
+static void describe(wire_writer * w)
+{
+  wire_reply_description(w, CONSOLE_PROTOCOL,
+    "A console: the keyboard and the screen of programs (consoled, the text console; "
+    "a terminal window's console). Line editing or keys one by one, echo, Ctrl-C.",
+    requests, sizeof requests / sizeof requests[0]);
+}
+
 int main()
 {
   int irq, port;
@@ -682,54 +707,82 @@ int main()
   while (1) {
     int channel = mynos_listenPort(port);
     mynos_msg_t * msg;
-    struct console_req req;
     static char buf[QUEUE_MAX];
-    int n;
+    wire_reader r;
+    wire_writer w;
+    const char * id;
+    unsigned int idlen;
+    long long kind, a1 = 0, a2 = 0, a3 = 0;
+    const char * data = NULL;
+    unsigned int dlen = 0;
+    int caller, n;
 
     if (channel < 0) continue;
     if (mynos_recv(channel, &msg, 0, 0) < 0) {
       mynos_freeChannel(channel);
       continue;
     }
-    if (msg->size == sizeof(req)) {
-      memcpy(&req, msg->start, sizeof(req));
-      if (req.op == CONSOLE_READ) {
-	if (req.len > (int)sizeof(buf)) req.len = sizeof(buf);
-	if (!canon && req.pid != mode_owner) {
-	  canon = echo = 1;      /* its program is gone (or did not restore) */
-	  vmin = 1;
-	  vtime = 0;
-	  isig = 1;
-	}
-	history_sync();          /* a program is about to read: a good time */
-	keymap_sync();
-	n = take_input(buf, req.len,
-		       (!canon && vmin == 0 && vtime > 0) ? vtime * 100 : 0);
-	mynos_send(channel, buf, n, 0);
-      } else if (req.op == CONSOLE_KEYMAP) {
-	char l;
-	if (req.mode == CONSOLE_LAYOUT_US || req.mode == CONSOLE_LAYOUT_IT) {
-	  layout = req.mode;
-	  keymap_saved = 0;
-	}
-	l = (char)layout;
-	mynos_send(channel, &l, 1, 0);
-	keymap_sync();
-      } else if (req.op == CONSOLE_FOREGROUND) {
-	int caller = mynos_channelPeer(channel);
-	if (req.mode == 0 || child_of(req.mode, caller)) foreground = req.mode;
-	mynos_send(channel, buf, 0, 0);
-      } else if (req.op == CONSOLE_MODE) {
-	canon = (req.mode & CONSOLE_CANON) != 0;
-	echo = (req.mode & CONSOLE_ECHO) != 0;
-	isig = !(req.mode & CONSOLE_NOSIG);
-	vmin = req.vmin;
-	vtime = req.vtime;
-	mode_owner = req.pid;
-	if (canon) line_len = 0;
-	mynos_send(channel, buf, 0, 0);
-      }
+    caller = mynos_channelPeer(channel);
+    wire_writer_init(&w);
+    wire_reader_init(&r, msg->start, msg->size);
+    id = wire_get_string(&r, &idlen);
+    kind = -1;
+    if (!r.error && idlen == strlen(WIRE_DESCRIBE) && !memcmp(id, WIRE_DESCRIBE, idlen)
+        && wire_at_end(&r)) {
+      describe(&w);
+      goto reply;
     }
+    if (!r.error && idlen == strlen(CONSOLE_PROTOCOL) && !memcmp(id, CONSOLE_PROTOCOL, idlen)) {
+      kind = wire_get_int(&r);
+      if (kind == CONSOLE_WRITE) data = wire_get_string(&r, &dlen);
+      else if (kind == CONSOLE_MODE) {
+        a1 = wire_get_int(&r); a2 = wire_get_int(&r); a3 = wire_get_int(&r);
+      } else a1 = wire_get_int(&r);
+      if (r.error || !wire_at_end(&r) || kind < CONSOLE_READ || kind > CONSOLE_FOREGROUND)
+        kind = -1;
+    }
+    if (kind < 0) {
+      wire_reply_error(&w, "invalid: the console speaks " CONSOLE_PROTOCOL);
+    } else if (kind == CONSOLE_READ) {
+      int len = a1 < 0 ? 0 : a1 > (long long)sizeof(buf) ? (int)sizeof(buf) : (int)a1;
+      if (!canon && caller != mode_owner) {
+        canon = echo = 1;        /* its program is gone (or did not restore) */
+        vmin = 1;
+        vtime = 0;
+        isig = 1;
+      }
+      history_sync();            /* a program is about to read: a good time */
+      keymap_sync();
+      n = take_input(buf, len, (!canon && vmin == 0 && vtime > 0) ? vtime * 100 : 0);
+      wire_reply_ok(&w);
+      wire_put_string(&w, buf, n);
+    } else if (kind == CONSOLE_KEYMAP) {
+      if (a1 == CONSOLE_LAYOUT_US || a1 == CONSOLE_LAYOUT_IT) {
+        layout = a1;
+        keymap_saved = 0;
+      }
+      wire_reply_ok(&w);
+      wire_put_int(&w, layout);
+      keymap_sync();
+    } else if (kind == CONSOLE_FOREGROUND) {
+      if (a1 == 0 || child_of(a1, caller)) foreground = a1;
+      wire_reply_ok(&w);
+    } else if (kind == CONSOLE_MODE) {
+      canon = (a1 & CONSOLE_CANON) != 0;
+      echo = (a1 & CONSOLE_ECHO) != 0;
+      isig = !(a1 & CONSOLE_NOSIG);
+      vmin = a2;
+      vtime = a3;
+      mode_owner = caller;
+      if (canon) line_len = 0;
+      wire_reply_ok(&w);
+    } else {                     /* CONSOLE_WRITE: to the screen */
+      if (dlen) write(1, data, dlen);
+      wire_reply_ok(&w);
+    }
+  reply:
+    if (!w.error) mynos_send(channel, w.buf, w.len, 0);
+    wire_writer_free(&w);
     mynos_freeMsg(&msg);
     mynos_freeChannel(channel);
   }

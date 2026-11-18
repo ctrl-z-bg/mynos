@@ -19,6 +19,7 @@
 */
 
 #include "../include/mynos.h"
+#include "../include/mynos_wire.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -38,90 +39,85 @@ static int connectToRegistry(void) {
   return channel;
 }
 
-int mynos_registryRegister(char * name) {
-  mynos_reg_cmd_t cmd;
+/* a registry/1 request (mynos_registry.h): the reply's reader on Ok (the
+   caller frees *msg), MYNOS_ERR_INVALID on an Error reply, or another error */
+static int registry_call(wire_writer * w, wire_reader * r, mynos_msg_t ** msg)
+{
   int channel;
-  mynos_msg_t * msg;
-  int port;
-
-  if (strlen(name) > MAXNAMELEN) {
-    printf("register lib: service name too long\n");
-    return MYNOS_ERR_INVALID;
-  }
-
-  /* get a channel connecting to the registry server */
+  if (w->error) { wire_writer_free(w); return MYNOS_ERR_FULL; }
   channel = connectToRegistry();
-  if (channel < 0) return channel;
-
-  cmd.cmd = MYNOS_REGISTRY_REGISTER;
-  strcpy(cmd.name, name);
-  cmd.arg1 = getpid();
-  
-  /* send the request */
-  mynos_send(channel, &cmd, sizeof(mynos_reg_cmd_t), 0);
-
-  /* wait the response */
-  if (mynos_recv(channel, &msg, 0, 0) < 0) {
+  if (channel < 0) { wire_writer_free(w); return channel; }
+  mynos_send(channel, w->buf, w->len, 0);
+  wire_writer_free(w);
+  if (mynos_recv(channel, msg, 0, 0) < 0) {
     mynos_freeChannel(channel);
     return MYNOS_ERR_BROKEN;
   }
-
-  port = *((int*)(msg->start));
-
-  /* free the allocated stuff */
-  mynos_freeMsg(&msg);
   mynos_freeChannel(channel);
-  return port;
+  wire_reader_init(r, (*msg)->start, (*msg)->size);
+  if (wire_get_int(r) != 0) {           /* Error: taken, not found, invalid */
+    mynos_freeMsg(msg);
+    return MYNOS_ERR_INVALID;
+  }
+  return 0;
+}
+
+static void registry_start(wire_writer * w, int kind)
+{
+  wire_writer_init(w);
+  wire_put_cstring(w, REGISTRY_PROTOCOL);
+  wire_put_int(w, kind);
+}
+
+/* register or look up a name: its port, or an error */
+static int name_request(int kind, const char * name)
+{
+  wire_writer w;
+  wire_reader r;
+  mynos_msg_t * msg;
+  int ret;
+  long long port;
+
+  if (strlen(name) > MAXNAMELEN) return MYNOS_ERR_INVALID;
+  registry_start(&w, kind);
+  wire_put_cstring(&w, name);
+  if ((ret = registry_call(&w, &r, &msg)) < 0) return ret;
+  port = wire_get_int(&r);
+  ret = r.error ? MYNOS_ERR_INVALID : (int)port;
+  mynos_freeMsg(&msg);
+  return ret;
+}
+
+int mynos_registryRegister(char * name) {
+  return name_request(REGISTRY_REGISTER, name);
 }
 
 int mynos_registryLookUp(char * name) {
-  mynos_reg_cmd_t cmd;
-  int channel;
-  mynos_msg_t * msg;
-  int port;
-
-  if (strlen(name) > MAXNAMELEN) {
-    printf("register lib: service name too long\n");
-    return MYNOS_ERR_INVALID;
-  }
-
-  channel = connectToRegistry();
-  if (channel < 0) return channel;
-
-  cmd.cmd = MYNOS_REGISTRY_LOOKUP;
-  strcpy(cmd.name, name);
-  
-  mynos_send(channel, &cmd, sizeof(mynos_reg_cmd_t), 0);
-  mynos_recv(channel, &msg, 0, 0);
-  port = *((int*)(msg->start));
-  mynos_freeMsg(&msg);
-  mynos_freeChannel(channel);
-  return port;
+  return name_request(REGISTRY_LOOKUP, name);
 }
 
 /* the names registered by live processes, at most max: how many */
 int mynos_registryList(mynos_reg_entry_t * buf, int max) {
-  mynos_reg_cmd_t cmd;
+  wire_writer w;
+  wire_reader r;
   mynos_msg_t * msg;
-  int channel, n;
+  long long n, i;
+  int ret;
 
-  channel = connectToRegistry();
-  if (channel < 0) return channel;
-  memset(&cmd, 0, sizeof cmd);
-  cmd.cmd = MYNOS_REGISTRY_LIST;
-  mynos_send(channel, &cmd, sizeof(mynos_reg_cmd_t), 0);
-  if (mynos_recv(channel, &msg, 0, 0) < 0) {
-    mynos_freeChannel(channel);
-    return MYNOS_ERR_BROKEN;
+  registry_start(&w, REGISTRY_LIST);
+  if ((ret = registry_call(&w, &r, &msg)) < 0) return ret;
+  n = wire_get_int(&r);
+  for (i = 0; i < n && !r.error; i++) {
+    char name[64];
+    wire_get_cstring(&r, name, sizeof name);
+    long long port = wire_get_int(&r), owner = wire_get_int(&r);
+    if (r.error || i >= max) continue;
+    memset(&buf[i], 0, sizeof buf[i]);
+    strncpy(buf[i].name, name, sizeof buf[i].name - 1);
+    buf[i].port = (int)port;
+    buf[i].owner = (int)owner;
   }
-  n = msg->size >= (int)sizeof(int) ? *(int *)msg->start : MYNOS_ERR_INVALID;
-  if (n > max) n = max;
-  if (n > 0 && msg->size >= (int)(sizeof(int) + n * sizeof(mynos_reg_entry_t)))
-    memcpy(buf, (char *)msg->start + sizeof(int), n * sizeof(mynos_reg_entry_t));
-  else if (n > 0)
-    n = MYNOS_ERR_INVALID;
+  ret = r.error ? MYNOS_ERR_INVALID : (int)(n < max ? n : max);
   mynos_freeMsg(&msg);
-  mynos_freeChannel(channel);
-  return n;
+  return ret;
 }
-

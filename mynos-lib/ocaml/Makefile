@@ -34,6 +34,18 @@ fs.cmi: fs.mli ipc.cmi
 fs.cmo: fs.ml fs.cmi
 	$(OCAMLC) -c fs.ml
 
+console.cmi: console.mli ipc.cmi
+	$(OCAMLC) -c console.mli
+
+console.cmo: console.ml console.cmi
+	$(OCAMLC) -c console.ml
+
+registry.cmi: registry.mli ipc.cmi
+	$(OCAMLC) -c registry.mli
+
+registry.cmo: registry.ml registry.cmi
+	$(OCAMLC) -c registry.ml
+
 net.cmi: net.mli ipc.cmi
 	$(OCAMLC) -c net.mli
 
@@ -100,7 +112,7 @@ tracer.cmi: tracer.mli
 tracer.cmo: tracer.ml tracer.cmi
 	$(OCAMLC) -c tracer.ml
 
-MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo fs.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo tracer.cmo agent.cmo gfx.cmo display.cmo gui.cmo power.cmo
+MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo fs.cmo console.cmo registry.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo tracer.cmo agent.cmo gfx.cmo display.cmo gui.cmo power.cmo
 
 mynos.cma: $(MODULES)
 	$(OCAMLC) -a -o $@ $(MODULES)

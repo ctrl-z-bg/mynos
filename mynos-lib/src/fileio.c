@@ -157,27 +157,49 @@ static int call(int port, const void * req, int len, mynos_msg_t ** reply,
 
 /* ---- console ---- */
 
-/* output to a terminal's console service: a CONSOLE_WRITE request, the
-   bytes after it, in pieces */
+/* a console/1 request (mynos_console.h) to the console at port; on Ok,
+   *msg holds the reply and r reads its value (the caller frees *msg).
+   -1 otherwise (a console that has gone, an Error reply) */
+static void console_start(wire_writer * w, int kind)
+{
+  wire_writer_init(w);
+  wire_put_cstring(w, CONSOLE_PROTOCOL);
+  wire_put_int(w, kind);
+}
+
+static int console_request(int port, wire_writer * w, wire_reader * r, mynos_msg_t ** msg)
+{
+  int ret = w->error ? -1 : call(port, w->buf, w->len, msg, NULL);
+  wire_writer_free(w);
+  if (ret < 0) return -1;
+  wire_reader_init(r, (*msg)->start, (*msg)->size);
+  if (wire_get_int(r) != 0 || r->error) { mynos_freeMsg(msg); return -1; }
+  return 0;
+}
+
+/* a request whose reply is unit: 0, or -1 */
+static int console_simple(int port, wire_writer * w)
+{
+  wire_reader r;
+  mynos_msg_t * msg;
+  if (console_request(port, w, &r, &msg) < 0) return -1;
+  mynos_freeMsg(&msg);
+  return 0;
+}
+
+/* output to a terminal's console service: Write requests, in pieces */
 static ssize_t console_write(int port, const void * buf, size_t count)
 {
-  static char msg[sizeof(struct console_req) + 8192];
-  struct console_req req;
   size_t done = 0;
   while (done < count) {
     size_t n = count - done > 8192 ? 8192 : count - done;
-    mynos_msg_t * reply;
-    memset(&req, 0, sizeof(req));
-    req.op = CONSOLE_WRITE;
-    req.len = n;
-    req.pid = getpid();
-    memcpy(msg, &req, sizeof(req));
-    memcpy(msg + sizeof(req), (const char *)buf + done, n);
-    if (call(port, msg, sizeof(req) + n, &reply, NULL) < 0) {
+    wire_writer w;
+    console_start(&w, CONSOLE_WRITE);
+    wire_put_string(&w, (const char *)buf + done, n);
+    if (console_simple(port, &w) < 0) {
       errno = EIO;
       return done ? (ssize_t)done : -1;
     }
-    mynos_freeMsg(&reply);
     done += n;
   }
   return done;
@@ -185,19 +207,21 @@ static ssize_t console_write(int port, const void * buf, size_t count)
 
 static ssize_t console_read(int port, void * buf, size_t count)
 {
-  struct console_req req;
+  wire_writer w;
+  wire_reader r;
   mynos_msg_t * msg;
-  int n;
+  const char * data;
+  unsigned int n;
 
-  memset(&req, 0, sizeof(req));
-  req.op = CONSOLE_READ;
-  req.len = count;
-  req.pid = getpid();
+  console_start(&w, CONSOLE_READ);
+  wire_put_int(&w, count);
   /* a console that has gone (its terminal closed): the end of the input,
      as a hang-up is in Unix, so that programs reading it end */
-  if (call(port, &req, sizeof(req), &msg, NULL) < 0) return 0;
-  n = msg->size < count ? msg->size : count;
-  memcpy(buf, msg->start, n);
+  if (console_request(port, &w, &r, &msg) < 0) return 0;
+  data = wire_get_string(&r, &n);
+  if (r.error) n = 0;
+  if (n > count) n = count;
+  memcpy(buf, data, n);
   mynos_freeMsg(&msg);
   return n;
 }
@@ -227,18 +251,14 @@ static void tio_init(void)
    character, and for raw reads VMIN and VTIME; -1 without a console */
 static int console_mode(int canon, int echo, int isig, int vmin, int vtime)
 {
-  struct console_req req;
-  mynos_msg_t * msg;
+  wire_writer w;
   if (service_port(console_name(), &console_cache) < 0) return -1;
-  memset(&req, 0, sizeof(req));
-  req.op = CONSOLE_MODE;
-  req.pid = getpid();
-  req.mode = (canon ? CONSOLE_CANON : 0) | (echo ? CONSOLE_ECHO : 0)
-    | (isig ? 0 : CONSOLE_NOSIG);
-  req.vmin = vmin;
-  req.vtime = vtime;
-  if (call(console_cache.port, &req, sizeof(req), &msg, NULL) < 0) return -1;
-  mynos_freeMsg(&msg);
+  console_start(&w, CONSOLE_MODE);
+  wire_put_int(&w, (canon ? CONSOLE_CANON : 0) | (echo ? CONSOLE_ECHO : 0)
+               | (isig ? 0 : CONSOLE_NOSIG));
+  wire_put_int(&w, vmin);
+  wire_put_int(&w, vtime);
+  if (console_simple(console_cache.port, &w) < 0) return -1;
   tio_init();
   if (canon) tio.c_lflag |= ICANON; else tio.c_lflag &= ~ICANON;
   if (echo) tio.c_lflag |= ECHO; else tio.c_lflag &= ~ECHO;
@@ -257,16 +277,11 @@ int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
 /* the program the caller waits for: Ctrl-C ends it (0: none) */
 int mynos_consoleForeground(int pid)
 {
-  struct console_req req;
-  mynos_msg_t * msg;
+  wire_writer w;
   if (service_port(console_name(), &console_cache) < 0) return -1;
-  memset(&req, 0, sizeof(req));
-  req.op = CONSOLE_FOREGROUND;
-  req.pid = getpid();
-  req.mode = pid;
-  if (call(console_cache.port, &req, sizeof(req), &msg, NULL) < 0) return -1;
-  mynos_freeMsg(&msg);
-  return 0;
+  console_start(&w, CONSOLE_FOREGROUND);
+  wire_put_int(&w, pid);
+  return console_simple(console_cache.port, &w);
 }
 
 /* ioctl: the terminal requests on fds 0-2 (tcgetattr, tcsetattr, the

@@ -2073,3 +2073,26 @@ the console's two requests were missing.
 the next (threads): reading what is already there first turned an
 estimate of two or three days into an afternoon.
 
+## 2026-11-18 — The registry and the console speak typed IPC
+
+**Done.** The two protocols left from 2002, C structs with a pid written
+inside, moved to typed IPC: registry/1 and console/1. Every MyNOS service
+now speaks it, and describes itself.
+
+**Two design points.** A terminal window keeps a read waiting until a key
+comes, so its handler cannot return the reply: `Ipc.Make` now offers
+`decode` (the request, or the reply to send at once: a description, an
+error) and `reply`, and the terminal keeps the channel with the request.
+And the registry could not describe itself, since it was not in its own
+table: it now registers "registry" at start, and answers `describe` like
+any other service.
+
+**What the caller says vs. what the kernel says.** Both old protocols
+carried the client's pid in the request (consoled used it for "who owns
+the raw mode"). As for fs/1, the kernel now says who is calling
+(`channelPeer`): a program can no longer claim to be another.
+
+**Lesson.** The test that compares a C service's description with the
+OCaml module's caught nothing this time, but it is what makes a protocol
+written twice (C and OCaml) safe to change: a mismatch fails the suite.
+

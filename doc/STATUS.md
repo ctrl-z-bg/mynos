@@ -99,9 +99,12 @@ talking through IPC.
   zigzag LEB128 ints, length-prefixed strings, variants as case numbers),
   checked when read: a malformed request gets an error reply, never a
   crash. Services are then callable from the toplevel
-  (`Block.call d (Block.Read (0, 1))`). The block service is the first
-  user; the file services keep their C protocol (`mynos_fs.h`), which
-  libmynos speaks for the C library.
+  (`Block.call d (Block.Read (0, 1))`). Every service speaks it: block/1,
+  net/1, llm/1, display/1, fs/1 (the file services), registry/1 and
+  console/1 (the last two, C structs since 2002, moved on 2026-11-18). C
+  services and libmynos speak it through `mynos_wire.h`; a service that
+  keeps a request waiting (a console read) decodes it with `Ipc`'s
+  `decode` and answers later with `reply`.
 - **Drivers in user space:** a process calls `mynos_driverRegister(name, irq, …)`
   for any IRQ but 0 (the timer) and 2 (the cascade), and gets a semaphore.
   On every interrupt of that line the kernel acknowledges the PICs, signals
@@ -1030,4 +1033,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   threads with Mutex, Condition, Event, Thread.delay, and MyNOS calls
   that wait while other threads run; a threaded program compiled inside
   MyNOS.
+- **2026-11-18** — The last C protocols to typed IPC (mynos-nty,
+  typed-ipc.md): registry/1 (C registry, libmynos client, module
+  `Registry`; the registry is in its own table) and console/1 (consoled,
+  terminal windows, libmynos, sh's `keymap`; module `Console`; the
+  caller from `channelPeer`, no pid in the request). `Ipc.Make` gains
+  `decode`/`reply` for services that answer later. The recorder decodes
+  both; tour notes follow. Every MyNOS service now speaks typed IPC.
 
