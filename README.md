@@ -90,7 +90,9 @@ the standard system, like `tools/run-demo.sh`. See the scripts for details.
 
 `tools/run-demo.sh` opens QEMU's window on MyNOS's shell; `help` lists the
 commands. `/disk` is a FAT disk image (`system/disk.img`) kept across
-boots; `/tmp` is in memory; `/` is the read-only RAM disk.
+boots; `/tmp` is in memory; `/` is the read-only RAM disk. `shutdown`
+turns the machine off (QEMU ends), `shutdown -r` restarts it; `gui`
+starts the graphical session.
 
 **The console.** Shift + Page Up / Page Down scroll back through the
 lines that went off the screen (500 are kept). Accented letters are

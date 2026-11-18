@@ -49,7 +49,50 @@ let status_text = function
   | Mynos.Exited n -> Printf.sprintf "exit code %d" n
   | Mynos.Signaled s -> Printf.sprintf "signal %d" s
 
+(* ---- the power (Power, "power/1"): any process may ask ---- *)
+
+let power_off () =
+  (* the graphical session first: the text console is back *)
+  (match Mynos.lookup "display" with
+   | _ -> (try Display.call (Display.connect ()) Display.Stop with _ -> ())
+   | exception Mynos.Error _ -> ());
+  Mynos.sleep 0.3
+
+let shutdown () =
+  log "shutting down";
+  power_off ();
+  print_endline "\nMyNOS: turning the machine off.";
+  (* ACPI's PM1a control, sleep state 5: QEMU's PIIX4 (0x604), older QEMU
+     and Bochs (0xB004), VirtualBox (0x4004) *)
+  Mynos.outw 0x604 0x2000;
+  Mynos.outw 0xB004 0x2000;
+  Mynos.outw 0x4004 0x3400;
+  Mynos.sleep 1.0;
+  print_endline "MyNOS: the machine did not turn itself off; it can be turned off now.";
+  while true do Mynos.sleep 3600. done
+
+let reboot () =
+  log "restarting";
+  power_off ();
+  print_endline "\nMyNOS: restarting.";
+  (* the keyboard controller's reset line *)
+  for _ = 1 to 100 do
+    if Mynos.inb 0x64 land 2 = 0 then Mynos.outb 0x64 0xFE
+  done;
+  Mynos.sleep 1.0;
+  log "the machine did not restart"
+
+let power_service () =
+  Power.serve { Power.handle = fun (type a) caller (r : a Power.request) : a ->
+      (* the reply first: then act, from another domain *)
+      let act = match r with Power.Shutdown -> shutdown | Power.Reboot -> reboot in
+      log "%s asked by pid %d" (match r with Power.Shutdown -> "shutdown" | Power.Reboot -> "reboot")
+        caller.Ipc.pid;
+      ignore (Domain.spawn (fun () -> Mynos.sleep 0.2; act ()));
+      match r with Power.Shutdown -> () | Power.Reboot -> () }
+
 let () =
+  ignore (Domain.spawn power_service);
   let running = Hashtbl.create 8 in            (* pid -> entry *)
   let launch e =
     match start e with

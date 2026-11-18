@@ -370,6 +370,7 @@ let help out =
      agent TASK (a language model does it with tools, asking first)...\n\
      ask REQUEST: a command for it, from a language model; run if you agree.\n\
      keymap [us|it]: the keyboard layout. Shift+PgUp/PgDn: lines scrolled away.\n\
+     shutdown (-r: restart) turns the machine off; gui starts the windows.\n\
      Syntax: 'quotes' \"quotes\" $VAR $? NAME=value ; && || < > >> | *.ml\n\
      Files: / is the RAM disk, /tmp is in memory, /disk is the FAT disk.\n"
 

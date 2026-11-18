@@ -879,4 +879,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   scrollback with a scrollbar in `terminal`, scroll boxes in the service
   explorer. Our toolkit rather than microui, with microui's design. Tests:
   nested clips; the graphical test scrolls a terminal back with the wheel.
+- **2026-11-18** — `shutdown` (and `shutdown -r`): init serves "power/1"
+  (module `Power`, described): it ends the graphical session, then turns
+  the machine off through ACPI (PM1a control: 0x604 in QEMU, 0xB004 in
+  Bochs, 0x4004 in VirtualBox) or resets it through the keyboard
+  controller. Any process may ask (one user); the power is init's, which
+  has the io privilege. Also in the GUI's menu ("Shut down"). Tests: the
+  graphical boot ends with `shutdown` (QEMU ends by itself), another with
+  `shutdown -r` under `-no-reboot`.
 

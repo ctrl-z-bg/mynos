@@ -76,13 +76,19 @@ gui.cmi: gui.mli display.cmi
 gui.cmo: gui.ml gui.cmi
 	$(OCAMLC) -c gui.ml
 
+power.cmi: power.mli ipc.cmi
+	$(OCAMLC) -c power.mli
+
+power.cmo: power.ml power.cmi
+	$(OCAMLC) -c power.ml
+
 tracer.cmi: tracer.mli
 	$(OCAMLC) -c tracer.mli
 
 tracer.cmo: tracer.ml tracer.cmi
 	$(OCAMLC) -c tracer.ml
 
-MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo gfx.cmo display.cmo gui.cmo tracer.cmo
+MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo gfx.cmo display.cmo gui.cmo power.cmo tracer.cmo
 
 mynos.cma: $(MODULES)
 	$(OCAMLC) -a -o $@ $(MODULES)

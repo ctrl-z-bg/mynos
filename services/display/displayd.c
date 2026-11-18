@@ -317,6 +317,7 @@ static const struct menu_item menu[] = {
   { "Services", "/services.byte" },
   { NULL, NULL },
   { "Exit", NULL },
+  { "Shut down", "/shutdown.byte" },
 };
 #define NMENU ((int)(sizeof menu / sizeof menu[0]))
 #define MENU_X 4

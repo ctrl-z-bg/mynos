@@ -23,7 +23,7 @@ displayd: ../services/display/displayd
 ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2/bin/ocamlc.byte)
 	cp $< $@
 
-FILES = ../init/init.byte init.rc ocamlrun consoled kilo netd displayd ../httpd/httpd.byte \
+FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo netd displayd ../httpd/httpd.byte \
 	../gui/gui.byte ../gui/welcome.byte ../gui/clock.byte ../gui/services.byte ../gui/terminal.byte \
 	../third_party/fonts/terminus16.psf ../third_party/fonts/terminus16-bold.psf \
 	../trace/trace.byte ../fetch/fetch.byte ../llm/llm.byte ../agent/agent.byte \
@@ -40,6 +40,7 @@ FILES = ../init/init.byte init.rc ocamlrun consoled kilo netd displayd ../httpd/
 	../mynos-lib/ocaml/tracer.cmi ../mynos-lib/ocaml/json.cmi ../mynos-lib/ocaml/http.cmi \
 	../mynos-lib/ocaml/llm.cmi ../mynos-lib/ocaml/tools.cmi \
 	../mynos-lib/ocaml/gfx.cmi ../mynos-lib/ocaml/display.cmi ../mynos-lib/ocaml/gui.cmi \
+	../mynos-lib/ocaml/power.cmi \
 	../tests/hello/hello.byte ../tests/spawn/child.byte \
 	../tests/ramdisk/AUTOEXEC.BAT
 

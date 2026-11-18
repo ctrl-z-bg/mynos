@@ -206,12 +206,12 @@ fi
 # the system as QEMU's window starts it: no second serial port (COM1 only).
 # consoled must not wait for a port that is not there: the shell answers
 # within seconds (read from the screen, through QEMU's monitor)
-nocom2=
+nocom2= rebooted=
 if [ -f system/ramdisk.dsk ]; then
     MEM=256 tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
-        -- -display none -serial null -monitor "unix:$tmp/mon-nc,server,nowait" &
+        -- -no-reboot -display none -serial null -monitor "unix:$tmp/mon-nc,server,nowait" &
     qemu=$!
     sleep 5
     tools/type-keys.py "$tmp/mon-nc" 'X=ok; echo nocom2-$X\n'
@@ -221,14 +221,22 @@ if [ -f system/ramdisk.dsk ]; then
 import sys
 s = bytes(int(x, 16) & 0xFF for x in sys.stdin.read().split())
 sys.exit(0 if b"nocom2-ok" in s else 1)' && nocom2=yes
-    printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-nc" >/dev/null || true
+    # restarting: init resets the machine (QEMU, with -no-reboot, ends)
+    tools/type-keys.py "$tmp/mon-nc" 'shutdown -r\n'
+    i=0
+    while [ $i -lt 20 ] && kill -0 $qemu 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
+    if kill -0 $qemu 2>/dev/null; then
+        printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-nc" >/dev/null || true
+    else
+        rebooted=yes
+    fi
     wait $qemu || true
 fi
 
 # the graphical session (doc/decisions/gui.md): displayd, windows of
 # programs, the mouse, back to text mode. QEMU's monitor moves the mouse
 # relatively: vmmouse (absolute) is off, the PS/2 mouse is used
-gui_ok=
+gui_ok= powered_off=
 if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     : > "$tmp/logg"
     MEM=256 tools/run-qemu.sh "$ocamlrun" \
@@ -272,7 +280,15 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     click 20 10; sleep 1; click 30 149; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt\n'; sleep 2
     mon "screendump $tmp/gui3.ppm"; sleep 1
-    printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-g" >/dev/null || true
+    # turning the machine off: init does it, QEMU ends by itself
+    tools/type-keys.py "$tmp/mon-g" 'shutdown\n'
+    i=0
+    while [ $i -lt 20 ] && kill -0 $qemu 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
+    if kill -0 $qemu 2>/dev/null; then
+        printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-g" >/dev/null || true
+    else
+        powered_off=yes
+    fi
     wait $qemu || true
     cat "$tmp/logg" >> "$log"
     python3 - "$tmp/gui1.ppm" "$tmp/gui2.ppm" "$tmp/gui3.ppm" "$tmp/gui4.ppm" "$tmp/gui5.ppm" <<'PY' && gui_ok=yes
@@ -600,6 +616,17 @@ PY
         echo "FAIL  gui: a session, windows of programs, a click, back to text"; fail=1
     fi
     expect "gui: displayd describes display/1 as display.ml does"
+    expect "init: shutdown asked by pid"
+    if [ -n "$powered_off" ]; then
+        echo "ok    shutdown: init turned the machine off (ACPI)"
+    else
+        echo "FAIL  shutdown: init turned the machine off (ACPI)"; fail=1
+    fi
+    if [ -n "$rebooted" ]; then
+        echo "ok    shutdown -r: init restarted the machine"
+    else
+        echo "FAIL  shutdown -r: init restarted the machine"; fail=1
+    fi
     expect "gui: the graphical session ended"
     expect "text-ok"
     expect "term-ok"
