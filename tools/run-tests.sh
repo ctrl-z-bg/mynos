@@ -293,7 +293,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     tools/type-keys.py "$tmp/mon-g" 'gui check\n'; sleep 3
     tools/type-keys.py "$tmp/mon-g" 'gui\n'; sleep 8
     mon "screendump $tmp/gui1.ppm"
-    click 271 364; sleep 8               # the welcome window's Clock button
+    click 271 428; sleep 8               # the welcome window's Clock button
     mon "screendump $tmp/gui2.ppm"
     # a terminal window (the menu's first item): sh runs in it, its console
     # is the window (MYNOS_CONSOLE); what it writes is checked from text mode
@@ -335,6 +335,14 @@ g1, g2, g3, g4, g5 = (load(p) for p in sys.argv[1:6])
 assert g1[:2] == (1024, 768), "graphics mode"
 assert px(g1, 500, 10) == 0x111820, "the top bar"
 assert px(g1, 300, 86) == 0x2D6CA2, "the welcome window, focused"
+# the logo, light on the welcome window's banner (86-235, 106-218)
+assert sum(1 for x in range(86, 235) for y in range(106, 218)
+           if px(g1, x, y) != 0x1B3A57) > 300, "the logo in the welcome window"
+# and faint on the desktop (702-1000, 508-732): lighter than the gradient
+# left of it, at the same height
+def light(c): return (c >> 16) + ((c >> 8) & 255) + (c & 255)
+assert sum(1 for x in range(702, 1000, 2) for y in range(508, 732, 2)
+           if light(px(g1, x, y)) > light(px(g1, 690, y)) + 6) > 300, "the desktop's watermark"
 assert px(g2, 150, 114) == 0x2D6CA2, "the clock's window, focused"
 assert px(g2, 400, 86) == 0x4A5560, "the welcome window, behind"
 assert g3[:2] == (720, 400), "text mode again"

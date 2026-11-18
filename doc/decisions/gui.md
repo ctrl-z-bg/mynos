@@ -172,6 +172,18 @@ already does; and clipping and the wheel were needed with it too.
 Nuklear is the same, larger. So `Gui` stays OCaml, and borrows microui's
 design: containers that clip and remember their content's size.
 
+## The logo (2026-11-18)
+
+The 2003 website's drawing (`doc/website/img/mynos-logo.jpg`, a Minotaur:
+Minos's) is the session's logo: in the welcome window's banner, light on
+blue, and faint in the desktop's corner. MyNOS reads no JPEG and the
+build container has no image tools, so `gui/make-logo.sh` (ImageMagick,
+on the host) turns it into two grey PGM files kept in the repository,
+its levels cleaned so that the paper is white. A grey image is drawn as
+a *mask*: black is ink of a chosen colour, white is left as it was
+(`Gfx.load_mask`, `Gfx.draw_mask` with an opacity; displayd blends the
+large one into its gradient). One drawing serves on light and dark.
+
 ## Not now
 
 - Several screens, other resolutions chosen by the user, other cards

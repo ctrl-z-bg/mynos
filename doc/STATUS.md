@@ -896,4 +896,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   unmarked was given twice. Also: the kernel zeroes its BSS at entry, and
   fresh frames (`__OS_askPages` with `alloc_now`) are zeroed. A test
   restarts three times and checks that each boot reaches the shell.
+- **2026-11-18** — The logo in the GUI: the 2003 website's drawing as grey
+  masks (`gui/make-logo.sh`, PGM), drawn as ink of one colour
+  (`Gfx.load_mask`, `Gfx.draw_mask`, with an opacity and the clip): light on
+  the welcome window's banner, faint in the desktop's corner (displayd).
+  Tests: a mask's pixels (mynos-ocaml); the logo and the watermark found on
+  the graphical test's screen.
 

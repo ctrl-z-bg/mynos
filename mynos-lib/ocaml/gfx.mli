@@ -60,3 +60,23 @@ val mix : int -> int -> float -> int
 val send_shared : int -> t -> unit
 (** Send the pixels on an IPC channel, shared: the receiver sees the same
     memory from then on. *)
+
+(** {2 Masks}
+
+    A grey image drawn as ink of one colour: black is the ink, white the
+    paper (left as it was), greys in between. The same drawing serves on a
+    light background and on a dark one (the MyNOS logo, /mynos-logo.pgm). *)
+
+type mask = { mask_width : int; mask_height : int; grey : string }
+(** [grey]: one byte a pixel, row by row; 0 is the ink. *)
+
+val load_mask : string -> mask
+(** A PGM file (binary, P5, 8 bits). @raise Failure if it is not one. *)
+
+val mask_of_pgm : string -> mask
+
+val draw_mask : ?opacity:int -> t -> int -> int -> mask -> int -> unit
+(** [draw_mask g x y m colour]: the mask's top left at [(x, y)], each pixel
+    taking [colour] as much as it has ink, times [opacity] (0-255, 255 by
+    default); within the clip. *)
+

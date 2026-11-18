@@ -189,6 +189,35 @@ static void load_font(int which, const char * path)
   if (which == 0) font_ok = 1;
 }
 
+/* ---- the logo: a grey PGM (0 the ink), drawn faint on the desktop ---- */
+
+#define LOGO "/mynos-logo-2x.pgm"
+static unsigned char * logo;           /* NULL: none */
+static int logo_w, logo_h;
+
+static void load_logo(void)
+{
+  static char data[80000];
+  int fd = open(LOGO, O_RDONLY), n, pos = 2, field[3], k;
+  if (fd < 0) return;
+  n = read(fd, data, sizeof data);
+  close(fd);
+  if (n < 2 || data[0] != 'P' || data[1] != '5') return;
+  for (k = 0; k < 3; k++) {             /* width, height, maximum */
+    while (pos < n && (data[pos] == ' ' || data[pos] == '\n' || data[pos] == '\r' ||
+		       data[pos] == '\t' || data[pos] == '#'))
+      if (data[pos] == '#') while (pos < n && data[pos] != '\n') pos++;
+      else pos++;
+    field[k] = 0;
+    while (pos < n && data[pos] >= '0' && data[pos] <= '9') field[k] = field[k] * 10 + data[pos++] - '0';
+  }
+  pos++;
+  if (field[2] != 255 || n - pos < field[0] * field[1]) return;
+  logo_w = field[0];
+  logo_h = field[1];
+  logo = (unsigned char *)data + pos;
+}
+
 /* ---- drawing, in the back buffer, within the clip ---- */
 
 static int cx0, cy0, cx1, cy1;          /* the clip: the damaged rectangle */
@@ -347,6 +376,19 @@ static void draw_desktop(void)
     unsigned int * p = back + y * W;
     int x;
     for (x = cx0; x < cx1; x++) p[x] = c;
+  }
+  if (logo) {                          /* the logo, faint, above the line */
+    int lx = W - logo_w - 24, ly = H - logo_h - 36, x;
+    for (y = (ly > cy0 ? ly : cy0); y < ly + logo_h && y < cy1; y++)
+      for (x = (lx > cx0 ? lx : cx0); x < lx + logo_w && x < cx1; x++) {
+	int a = (255 - logo[(y - ly) * logo_w + (x - lx)]) * 40 / 255;
+	unsigned int d = back[y * W + x];
+	if (!a) continue;
+	back[y * W + x] =
+	  ((((d >> 16) & 255) * (255 - a) + 0xD8 * a) / 255) << 16 |
+	  ((((d >> 8) & 255) * (255 - a) + 0xE6 * a) / 255) << 8 |
+	  (((d & 255) * (255 - a) + 0xF0 * a) / 255);
+      }
   }
   text(W - 8 * 30 - 16, H - 28, "MyNOS \xc2\xb7 OCaml on a microkernel", 40, 0x5F7A90, 0);
   /* the top bar */
@@ -1101,6 +1143,7 @@ int main(void)
   for (i = 0; i < 65536; i++) glyph_of[i] = 0xFFFF;
   load_font(0, FONT);
   load_font(1, FONT_BOLD);
+  load_logo();
 
   if (bga_get(0) < 0xB0C0 || bga_get(0) > 0xB0CF || !(lfb = find_lfb())) {
     mynos_log("displayd: no Bochs VGA (QEMU's standard VGA): no graphics\n");

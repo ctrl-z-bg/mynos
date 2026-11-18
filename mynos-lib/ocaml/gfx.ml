@@ -16,6 +16,8 @@ external blit : t -> int -> int -> t -> int -> int -> int -> int -> unit
   = "caml_gfx_blit_byte" "caml_gfx_blit"
 external get : t -> int -> int -> int = "caml_gfx_get"
 external send_shared : int -> t -> unit = "caml_gfx_send_shared"
+external draw_mask_raw : t -> int -> int -> string -> int -> int -> int -> int -> unit
+  = "caml_gfx_draw_mask_byte" "caml_gfx_draw_mask"
 external set_clip : int -> int -> int -> int -> unit = "caml_gfx_set_clip"
 external no_clip : unit -> unit = "caml_gfx_no_clip"
 
@@ -57,3 +59,38 @@ let mix a b t =
   let ch c s = (c lsr s) land 255 in
   let m s = int_of_float (float (ch a s) *. (1. -. t) +. float (ch b s) *. t) in
   rgb (m 16) (m 8) (m 0)
+
+(* masks: grey images, drawn as ink of one colour *)
+type mask = { mask_width : int; mask_height : int; grey : string }
+
+let mask_of_pgm data =
+  (* P5, then width, height and the maximum (255), each after blanks or
+     comments, then one byte a pixel *)
+  let n = String.length data in
+  let pos = ref 2 in
+  let rec blank () =
+    if !pos < n then
+      match data.[!pos] with
+      | ' ' | '\t' | '\n' | '\r' -> incr pos; blank ()
+      | '#' -> while !pos < n && data.[!pos] <> '\n' do incr pos done; blank ()
+      | _ -> () in
+  let number () =
+    blank ();
+    let start = !pos in
+    while !pos < n && data.[!pos] >= '0' && data.[!pos] <= '9' do incr pos done;
+    match int_of_string_opt (String.sub data start (!pos - start)) with
+    | Some v -> v
+    | None -> failwith "Gfx.load_mask: not a PGM" in
+  if n < 2 || String.sub data 0 2 <> "P5" then failwith "Gfx.load_mask: not a PGM (P5)";
+  let w = number () in
+  let h = number () in
+  if number () <> 255 then failwith "Gfx.load_mask: not 8 bits";
+  incr pos;                                   (* the one blank after it *)
+  if n - !pos < w * h then failwith "Gfx.load_mask: cut";
+  { mask_width = w; mask_height = h; grey = String.sub data !pos (w * h) }
+
+let load_mask path = mask_of_pgm (In_channel.with_open_bin path In_channel.input_all)
+
+let draw_mask ?(opacity = 255) g x y m colour =
+  draw_mask_raw g x y m.grey m.mask_width m.mask_height colour (max 0 (min 255 opacity))
+

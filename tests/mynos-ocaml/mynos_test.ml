@@ -187,6 +187,18 @@ let () =
      Gfx.get g 12 12 = 0xAAAAAA && Gfx.get g 16 12 = 0 && Gfx.get g 5 5 = 0
      && Gfx.get g 20 25 = 0xBBBBBB && Gfx.get g 35 25 = 0
      && Gfx.get g 0 0 = 0xCCCCCC && Gfx.clip () = None);
+  ok &&& check "gfx: a PGM mask drawn as ink"
+    (let m = Gfx.mask_of_pgm "P5\n# a comment\n3 1\n255\n\000\128\255" in
+     let g = Gfx.create 4 2 in
+     Gfx.fill g 0 0 4 2 0x000000;
+     Gfx.draw_mask g 0 0 m 0xFFFFFF;
+     Gfx.draw_mask ~opacity:0 g 0 1 m 0xFFFFFF;
+     Gfx.with_clip 0 0 1 2 (fun () -> Gfx.draw_mask g 1 1 m 0xFF0000);
+     m.Gfx.mask_width = 3 && m.mask_height = 1
+     && Gfx.get g 0 0 = 0xFFFFFF && Gfx.get g 1 0 = 0x7F7F7F && Gfx.get g 2 0 = 0
+     && Gfx.get g 0 1 = 0 && Gfx.get g 1 1 = 0
+     && (match Gfx.mask_of_pgm "P6\n1 1\n255\n\000" with
+         | _ -> false | exception Failure _ -> true));
   (* a service served by a second domain of this process, called from the
      first: each end of a channel has its own id (mynos-9e1; the ends were
      told apart by pid, and the call hung) *)

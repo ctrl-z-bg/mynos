@@ -182,6 +182,46 @@ CAMLprim value caml_gfx_blit_byte(value * argv, int argn)
 		       argv[6], argv[7]);
 }
 
+/* ---- masks: an image as ink of one colour (Gfx.draw_mask) ---- */
+
+/* the mask is a string of grey levels, w x h, 0 the ink and 255 the paper;
+   each pixel takes colour as much as there is ink, times opacity/255 */
+CAMLprim value caml_gfx_draw_mask(value t, value vx, value vy, value ink, value vw,
+				  value vh, value c, value vopacity)
+{
+  int x = Long_val(vx), y = Long_val(vy), w = Long_val(vw), h = Long_val(vh);
+  int opacity = Long_val(vopacity), bw = BW(t), bx0, by0, bx1, by1, i, j;
+  unsigned int col = Long_val(c), * p = PIX(t);
+  const unsigned char * m = (const unsigned char *)String_val(ink);
+  int cr = (col >> 16) & 255, cg = (col >> 8) & 255, cb = col & 255;
+  if (caml_string_length(ink) < (mlsize_t)(w * h)) caml_invalid_argument("Gfx.draw_mask");
+  bounds(t, &bx0, &by0, &bx1, &by1);
+  for (j = 0; j < h; j++) {
+    int yy = y + j;
+    if (yy < by0 || yy >= by1) continue;
+    for (i = 0; i < w; i++) {
+      int xx = x + i, a;
+      unsigned int d;
+      if (xx < bx0 || xx >= bx1) continue;
+      a = (255 - m[j * w + i]) * opacity / 255;
+      if (a == 0) continue;
+      d = p[yy * bw + xx];
+      p[yy * bw + xx] =
+	((((d >> 16) & 255) * (255 - a) + cr * a) / 255) << 16 |
+	((((d >> 8) & 255) * (255 - a) + cg * a) / 255) << 8 |
+	(((d & 255) * (255 - a) + cb * a) / 255);
+    }
+  }
+  return Val_unit;
+}
+
+CAMLprim value caml_gfx_draw_mask_byte(value * argv, int argn)
+{
+  (void)argn;
+  return caml_gfx_draw_mask(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5],
+			    argv[6], argv[7]);
+}
+
 /* ---- text ---- */
 
 static unsigned char glyphs[2][512 * 16];
