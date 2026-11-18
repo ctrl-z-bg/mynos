@@ -321,6 +321,33 @@ graphical program runs (a Terminal window, Files, or `&` in the session)
 and ends with status 2. Before, a window made from the text console was
 never shown, and its program waited for events forever.
 
+## The tour (2026-11-18)
+
+MyNOS as a teaching system (mynos-5zp): **Tour** (`gui/tour.ml`; the
+menu's Tour, the welcome window's button) lists lessons on how an
+operating system works, each with MyNOS as the specimen: a file from the
+RAM disk, a directory from the disk (and its cache, the second time), a
+program born, the network, a language model.
+
+- A lesson (`gui/lesson.ml`; the lessons in `/tour.txt` on the RAM disk,
+  more in `/disk/tour.txt`) is a title, a command, the programs to show,
+  notes, and a text. Notes are `PATTERN | words`: the words are said at
+  the first step whose description contains the pattern (`fs OPEN
+  "init.rc"`, `spawn of hello`, `IRQ 9`), once.
+- "Run and watch" records the command (`trace -o`, in a domain) and opens
+  the System window on the recording with `--lesson`: only the lesson's
+  programs, the others faint, the lesson's text before the first step,
+  its words at the steps it explains, "Next note" to go from one to the
+  next, a tick on the progress bar at each.
+- The System window now also shows a process born (a green arrow from
+  its parent, through the kernel, to it) and one ending: lessons are
+  about programs starting as much as about messages.
+
+A note says what a step *is*: the first try said "the newborn process
+reads its program" at a step where sh, not the newborn, opened the file
+(to see whether it is bytecode). The test caught the wrong step; the
+lessons are checked against the recordings they make.
+
 ## The logo (2026-11-18)
 
 The 2003 website's drawing (`doc/website/img/mynos-logo.jpg`, a Minotaur:

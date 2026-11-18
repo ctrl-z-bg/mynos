@@ -31,7 +31,12 @@ type node = {
   lang : string;              (* "OCaml" (bytecode, on ocamlrun), "C"; "": unknown *)
 }
 
-type step = Call of Tracer.call | Mark of Tracer.event | Irq of Tracer.event
+type step =
+  | Call of Tracer.call
+  | Mark of Tracer.event
+  | Irq of Tracer.event
+  | Born of Tracer.event       (* Spawn: pid the parent, peer the child, data its name *)
+  | Ended of Tracer.event      (* Exit: pid, arg the status *)
 
 type selection = Nothing | Box of int | Kernel | Device of int
 
@@ -50,6 +55,9 @@ type st = {
   mutable field : string;
   mutable message : string;
   mutable recording : bool;
+  mutable lesson : Lesson.t option;   (* the tour: what to show, what to say *)
+  mutable notes : string option array;   (* a lesson's words, at the first step each fits *)
+  mutable actors : (int, unit) Hashtbl.t;   (* the pids of the recording's steps *)
 }
 
 let lock = Mutex.create ()
@@ -141,15 +149,55 @@ let poll st =
 
 let is_gui r pid = Tracer.program r pid = "displayd"
 
+let exit_words status =
+  if status land 0x7F = 0 then Printf.sprintf "exit, status %d" (status lsr 8)
+  else Printf.sprintf "killed, signal %d" (status land 0x7F)
+
+(* a step in words: what a lesson's notes are matched against *)
+let describe r = function
+  | Call c -> Printf.sprintf "%s -> %s  %s" (Tracer.name r c.client) (Tracer.name r c.server) c.request
+  | Mark e -> Printf.sprintf "%s: # %s" (Tracer.name r e.pid) e.data
+  | Irq e -> Printf.sprintf "IRQ %d -> %s" e.arg (Tracer.name r e.pid)
+  | Born e -> Printf.sprintf "spawn of %s(%d), by %s" e.data e.peer (Tracer.name r e.pid)
+  | Ended e -> Printf.sprintf "exit of %s: %s" (Tracer.name r e.pid) (exit_words e.arg)
+
+(* a lesson's notes, each said once: at the first step whose description
+   fits it *)
+let place_notes st =
+  st.notes <- Array.make (Array.length st.steps) None;
+  match st.lesson, st.r with
+  | Some l, Some r ->
+    List.iter (fun (p, w) ->
+        let one = { l with Lesson.notes = [ (p, w) ] } in
+        let k = ref 0 in
+        while !k < Array.length st.steps
+              && (st.notes.(!k) <> None || Lesson.note_for one (describe r st.steps.(!k)) = None)
+        do incr k done;
+        if !k < Array.length st.steps then st.notes.(!k) <- Some w)
+      l.notes
+  | _ -> ()
+
+let note_of st i =
+  if i >= 0 && i < Array.length st.notes then st.notes.(i) else None
+
 let load st file =
   match Tracer.load file with
   | r ->
+    (* a lesson shows only its programs *)
+    let shown pid = match st.lesson with
+      | Some l when l.Lesson.show <> [] ->
+        List.mem (if pid = 1 then "init" else Tracer.program r pid) l.show
+      | _ -> true in
     let calls = List.filter (fun (c : Tracer.call) ->
-        not (is_gui r c.client || is_gui r c.server)) (Tracer.calls r) in
+        not (is_gui r c.client || is_gui r c.server)
+        && (shown c.client || shown c.server)) (Tracer.calls r) in
     let others = List.filter_map (fun (e : Tracer.event) ->
         match e.kind with
-        | Tracer.Mark -> Some (e.time, Mark e)
-        | Tracer.Irq when e.arg <> 12 -> Some (e.time, Irq e)
+        | Tracer.Mark when shown e.pid -> Some (e.time, Mark e)
+        | Tracer.Irq when e.arg <> 12 && shown e.pid -> Some (e.time, Irq e)
+        | Tracer.Spawn when (shown e.pid || shown e.peer) && not (is_gui r e.peer) ->
+          Some (e.time, Born e)
+        | Tracer.Exit when shown e.pid && not (is_gui r e.pid) -> Some (e.time, Ended e)
         | _ -> None) (Array.to_list r.events) in
     let all = List.map (fun (c : Tracer.call) -> (c.start, Call c)) calls @ others in
     st.steps <- Array.of_list (List.map snd (List.stable_sort (fun (a, _) (b, _) ->
@@ -159,7 +207,14 @@ let load st file =
     st.step <- -1;
     st.playing <- false;
     st.sel <- Nothing;
-    st.message <- Printf.sprintf "%s: %d steps" (Filename.basename file) (Array.length st.steps)
+    st.message <- Printf.sprintf "%s: %d steps" (Filename.basename file) (Array.length st.steps);
+    place_notes st;
+    st.actors <- Hashtbl.create 16;
+    Array.iter (function
+        | Call c -> Hashtbl.replace st.actors c.client (); Hashtbl.replace st.actors c.server ()
+        | Mark e | Irq e | Ended e -> Hashtbl.replace st.actors e.pid ()
+        | Born e -> Hashtbl.replace st.actors e.pid (); Hashtbl.replace st.actors e.peer ())
+      st.steps
   | exception (Sys_error e | Failure e) -> st.message <- e
   | exception e -> st.message <- Printexc.to_string e
 
@@ -216,7 +271,8 @@ let ghosts st =
         | Call c ->
           Hashtbl.replace pids c.client (); Hashtbl.replace pids c.server ();
           Hashtbl.replace served c.server ()
-        | Mark e | Irq e -> Hashtbl.replace pids e.pid ()) st.steps;
+        | Mark e | Irq e | Ended e -> Hashtbl.replace pids e.pid ()
+        | Born e -> Hashtbl.replace pids e.pid (); Hashtbl.replace pids e.peer ()) st.steps;
     Hashtbl.fold (fun pid () acc ->
         if pid <= 0 || live_match st r pid then acc
         else
@@ -306,8 +362,16 @@ let ms t = if t >= 1. then Printf.sprintf "%.2f ms" t else Printf.sprintf "%.0f 
 let () =
   let st = { nodes = Hashtbl.create 32; last_poll = -10.; registered = []; stats = None;
              r = None; file = ""; steps = [||]; step = -1; playing = false; last_play = 0.;
-             sel = Nothing; field = ""; message = ""; recording = false } in
-  if Array.length Sys.argv > 1 then (st.field <- Sys.argv.(1); load st Sys.argv.(1));
+             sel = Nothing; field = ""; message = ""; recording = false; lesson = None;
+             notes = [||]; actors = Hashtbl.create 1 } in
+  (* system [FILE] [--lesson LESSON]: a recording, replayed as a lesson of the tour *)
+  let rec args = function
+    | "--lesson" :: f :: rest ->
+      st.lesson <- (match Lesson.load f with l :: _ -> Some l | [] -> None); args rest
+    | f :: rest -> st.field <- f; args rest
+    | [] -> () in
+  args (List.tl (Array.to_list Sys.argv));
+  if st.field <> "" then load st st.field;
   Gui.run ~title:"System" ~tick:0.25 width height () (fun ui () ->
       let g = ui.Gui.g in
       let now = Mynos.uptime () in
@@ -357,9 +421,14 @@ let () =
           st.playing <- not st.playing; st.last_play <- 0.;
           if st.playing && st.step + 1 >= n then st.step <- -1
         end;
-        if Gui.button ui 664 ty 96 "Next mark" then begin
+        (* the next mark; in a lesson, the next step it explains *)
+        let marked k = match st.lesson with
+          | Some _ -> note_of st k <> None
+          | None -> (match st.steps.(k) with Mark _ -> true | _ -> false) in
+        if Gui.button ui 664 ty 96 (if st.lesson = None then "Next mark" else "Next note")
+        then begin
           let k = ref (st.step + 1) in
-          while !k < n && (match st.steps.(!k) with Mark _ -> false | _ -> true) do incr k done;
+          while !k < n && not (marked !k) do incr k done;
           if !k < n then st.step <- !k
         end;
         if Gui.button ui 766 ty 56 "Live" then begin
@@ -437,8 +506,10 @@ let () =
             let fill, border = colours n.layer in
             let ghost = not n.alive && n.died = neg_infinity in
             let fading = not n.alive && not ghost in
-            let fill = if ghost || fading then 0xF1F2F3 else fill in
-            let border = if ghost || fading then 0xB0B6BB else border in
+            (* a lesson: who takes no part in it, faint *)
+            let extra = st.lesson <> None && n.alive && not (Hashtbl.mem st.actors n.pid) in
+            let fill = if ghost || fading then 0xF1F2F3 else if extra then 0xF8F9FA else fill in
+            let border = if ghost || fading then 0xB0B6BB else if extra then 0xDDE2E6 else border in
             Gfx.fill g x y w h fill;
             Gfx.rect g x y w h border;
             if n.alive && now -. n.born < 6. && n.born > 0. then begin
@@ -446,7 +517,7 @@ let () =
               Gfx.rect g (x - 3) (y - 3) (w + 6) (h + 6) 0xF29B38
             end;
             if st.sel = Box n.key then Gfx.rect g (x + 1) (y + 1) (w - 2) (h - 2) 0x1A2228;
-            let text_c = if ghost || fading then Gui.muted else Gui.foreground in
+            let text_c = if ghost || fading || extra then Gui.muted else Gui.foreground in
             let cols = (w - 10) / 8 in
             ignore (Gfx.text ~bold:true ~max:cols g (x + 6) (y + 4) n.name text_c);
             ignore (Gfx.text ~max:cols g (x + 6) (y + 20)
@@ -489,6 +560,30 @@ let () =
             let x, y, w, _ = device_box d in
             arrow g [ (x + w / 2, y); (x + w / 2, by + 20); (bx, by + 20); (bx, by + 1) ] 0x7B4FA0
           | _ -> ())
+       | Some (Born e) ->
+         (* a process is born: from its parent, through the kernel, to it *)
+         (match centre e.pid, centre e.peer with
+          | Some (px, py), Some (cx, cy) ->
+            let lane = kernel_y + 30 in
+            arrow g [ (px, py); (px, lane); (cx, lane); (cx, cy + 1) ] 0x2E8B57;
+            (match Hashtbl.find_opt pos (key_of st e.peer) with
+             | Some (x, y, w, h) ->
+               Gfx.rect g (x - 2) (y - 2) (w + 4) (h + 4) 0x2E8B57;
+               Gfx.rect g (x - 3) (y - 3) (w + 6) (h + 6) 0x2E8B57
+             | None -> ());
+            let label = "spawn " ^ e.data in
+            let lx = min (right - 8 * Gfx.cells label - 8) (max left (min px cx)) in
+            Gfx.fill g lx (kernel_y - 24) (8 * Gfx.cells label + 8) 20 0xFFFFFF;
+            ignore (Gfx.text g (lx + 4) (kernel_y - 22) label 0x2E8B57)
+          | _ -> ())
+       | Some (Ended e) ->
+         (match Hashtbl.find_opt pos (key_of st e.pid) with
+          | Some (x, y, w, h) ->
+            Gfx.rect g (x - 2) (y - 2) (w + 4) (h + 4) 0x5A6670;
+            let label = exit_words e.arg in
+            Gfx.fill g x (y + h + 4) (8 * Gfx.cells label + 8) 18 0xE9ECEF;
+            ignore (Gfx.text g (x + 4) (y + h + 5) label 0x3A444C)
+          | None -> ())
        | Some (Mark e) ->
          (match Hashtbl.find_opt pos (key_of st e.pid) with
           | Some (x, y, w, h) ->
@@ -503,9 +598,13 @@ let () =
       if st.r <> None && Array.length st.steps > 0 then begin
         let n = Array.length st.steps in
         Gfx.fill g left bar_y (right - left) 8 0xE3E8EC;
-        Array.iteri (fun i s -> match s with
-            | Mark _ -> Gfx.fill g (left + i * (right - left) / n) (bar_y - 2) 2 12 0xF29B38
-            | _ -> ()) st.steps;
+        Array.iteri (fun i s ->
+            let tick = match st.lesson, s with
+              | Some _, _ -> note_of st i <> None
+              | None, Mark _ -> true
+              | None, _ -> false in
+            if tick then Gfx.fill g (left + i * (right - left) / n) (bar_y - 2) 2 12 0xF29B38)
+          st.steps;
         if st.step >= 0 then
           Gfx.fill g left bar_y ((st.step + 1) * (right - left) / n) 8 0x2D6CA2;
         let px, py = ui.press in
@@ -519,8 +618,35 @@ let () =
       let name_of pid = match node_of (key_of st pid) with
         | Some n -> Printf.sprintf "%s(%d)" n.name pid
         | None -> (match st.r with Some r -> Tracer.name r pid | None -> string_of_int pid) in
-      (match st.sel, current with
-       | Box key, _ ->
+      (match st.sel, current, st.lesson, st.r with
+       | Nothing, _, Some l, Some r ->
+         (* a lesson: its words for this step, or its introduction *)
+         let say k ?(colour = Gui.foreground) s =
+           Gui.paragraph ~colour ui 18 (detail_y + 8 + k) (width - 52) s in
+         (match current with
+          | None ->
+            line 0 ~bold:true (l.Lesson.title ^ "  \xc2\xb7  " ^ l.command);
+            let h = ref 22 in
+            List.iter (fun p -> h := !h + say !h p + 6) (String.split_on_char '\n' l.text);
+            ignore (say (!h + 2) ~colour:Gui.muted
+                      "Next goes step by step; Next note to the steps explained; Play runs it.")
+          | Some s ->
+            let d = describe r s in
+            line 0 ~bold:true d;
+            (match note_of st st.step with
+             | Some w -> ignore (say 24 w)
+             | None ->
+               ignore (say 24 ~colour:Gui.muted
+                         (match s with
+                          | Call c -> "A message: " ^ Tracer.name r c.client ^ " asks, "
+                                      ^ Tracer.name r c.server ^ " answers"
+                                      ^ (if c.reply = "" then "." else ": " ^ c.reply ^ ".")
+                          | Born _ -> "A process is born: the kernel starts it for its parent."
+                          | Ended _ -> "A process ends: the kernel frees what it held."
+                          | Irq _ -> "An interrupt: the device wakes its driver."
+                          | Mark _ -> "A mark: a phase the program labelled."));
+               ignore (say 50 ~colour:Gui.muted "Next note: the next step this lesson explains.")))
+       | Box key, _, _, _ ->
          (match node_of key with
           | Some n ->
             let pid = n.pid in
@@ -560,7 +686,7 @@ let () =
                                            !as_client !as_server)
              | None -> ())
           | None -> st.sel <- Nothing)
-       | Kernel, _ ->
+       | Kernel, _, _, _ ->
          line 0 ~bold:true "The microkernel";
          line 1 "Processes and threads, their memory, the timer and the scheduler, and IPC: ports, \
                  and channels that carry messages.";
@@ -568,13 +694,13 @@ let () =
                                    disk, the network, the display. A message from one to another";
          line 3 ~colour:Gui.muted "is copied (or its pages lent) by the kernel; the recorder sees \
                                    each one, which is how a recording is made."
-       | Device i, _ ->
+       | Device i, _, _, _ ->
          let d = devices.(i) in
          line 0 ~bold:true d.d_name;
          line 1 d.d_what;
          if d.drivers <> [] then
            line 2 ~colour:Gui.muted ("drivers: " ^ String.concat ", " d.drivers)
-       | Nothing, Some (Call c) ->
+       | Nothing, Some (Call c), _, _ ->
          line 0 ~bold:true (Printf.sprintf "%s \xe2\x86\x92 %s   %s" (name_of c.client)
                               (name_of c.server) c.request);
          line 1 ("reply: " ^ (if c.reply = "" then "(none in the recording)" else c.reply));
@@ -590,11 +716,22 @@ let () =
          if c.depth > 0 then
            line 4 ~colour:Gui.muted (Printf.sprintf "%s made it while serving another call."
                                        (name_of c.client))
-       | Nothing, Some (Mark e) ->
+       | Nothing, Some (Born e), _, _ ->
+         line 0 ~bold:true (Printf.sprintf "%s \xe2\x86\x92 %s(%d)   spawn" (name_of e.pid)
+                              e.data e.peer);
+         line 1 "A process is born: its parent asks the kernel, which loads the program and \
+                 starts it.";
+         line 2 ~colour:Gui.muted (Printf.sprintf "at %s" (ms e.time))
+       | Nothing, Some (Ended e), _, _ ->
+         line 0 ~bold:true (Printf.sprintf "%s   %s" (name_of e.pid) (exit_words e.arg));
+         line 1 "A process ends: the kernel frees its memory, ports and channels, and tells \
+                 its parent.";
+         line 2 ~colour:Gui.muted (Printf.sprintf "at %s" (ms e.time))
+       | Nothing, Some (Mark e), _, _ ->
          line 0 ~bold:true (Printf.sprintf "%s: %s" (name_of e.pid) e.data);
          line 1 ~colour:Gui.muted (Printf.sprintf "at %s: a mark, a phase the program labelled. \
                                                   Next mark jumps to the next one." (ms e.time))
-       | Nothing, Some (Irq e) ->
+       | Nothing, Some (Irq e), _, _ ->
          let drv = match st.r with Some r -> Tracer.program r e.pid | None -> "" in
          let d = device_of_irq e.arg drv in
          line 0 ~bold:true (Printf.sprintf "IRQ %d \xe2\x86\x92 %s" e.arg (name_of e.pid));
@@ -602,7 +739,7 @@ let () =
                                  the driver's thread."
                    (if d >= 0 then devices.(d).d_name else "a device"));
          line 2 ~colour:Gui.muted (Printf.sprintf "at %s" (ms e.time))
-       | Nothing, None ->
+       | Nothing, None, _, _ ->
          line 0 ~bold:true "MyNOS as it is now: every box is a process, updated every second.";
          line 1 ~colour:Gui.muted "Drivers (orange) reach the hardware; services (blue) serve \
                                    requests; programs (green) ask. All talk through the kernel.";

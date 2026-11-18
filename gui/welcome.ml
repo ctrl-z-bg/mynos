@@ -30,7 +30,7 @@ let () =
           if Gui.button ui (24 + i * 96) y 88 label then
             match program with Some p -> Gui.spawn p | None -> raise Gui.Quit)
         [ "Terminal", Some "/terminal.byte"; "Clock", Some "/clock.byte";
-          "Services", Some "/services.byte"; "Agent", Some "/agent_window.byte";
+          "Tour", Some "/tour.byte"; "Agent", Some "/agent_window.byte";
           "Close", None ];
       Gui.label ~colour:Gui.muted ui 24 (y + 44)
         "The MyNOS menu, top left, opens programs and ends the session.")

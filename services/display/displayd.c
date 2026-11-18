@@ -349,6 +349,7 @@ static const struct menu_item menu[] = {
   { "Recordings", "/recordings.byte" },
   { "System", "/system.byte" },
   { "Files", "/files.byte" },
+  { "Tour", "/tour.byte" },
   { NULL, NULL },
   { "Exit", NULL },
   { "Shut down", "/shutdown.byte" },

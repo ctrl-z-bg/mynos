@@ -159,7 +159,9 @@ conversation; Recordings shows a recording as a timeline of calls; System
 draws MyNOS's architecture live (the hardware, the kernel, the drivers,
 services and programs that are running) and replays a recording on it,
 as arrows through the kernel. `ps` lists the processes and their
-services; Files browses `/`, `/tmp` and `/disk` (and says which service
+services; Tour has lessons on how an operating system works, each a
+command replayed in the System window with words at each step it explains;
+Files browses `/`, `/tmp` and `/disk` (and says which service
 serves each); `PROGRAM &` leaves one running, `kill PID` (or the name of
 its service) ends it. The top bar has a tab for each window.
 

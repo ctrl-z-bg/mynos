@@ -393,7 +393,16 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     mon "screendump $tmp/gui19.ppm"
     click 848 161; sleep 1; click 400 125; sleep 1
     tools/type-keys.py "$tmp/mon-g" 'newdir\n'; sleep 2
-    click 20 10; sleep 1; click 30 237; sleep 4    # the MyNOS menu, Exit
+    # the tour (the menu's ninth item, at 72,98): a lesson run and replayed
+    # in a System window (at 20,64), at its first note
+    click 20 10; sleep 1; click 40 215; sleep 8
+    mon "screendump $tmp/gui20.ppm"
+    click 197 203; sleep 1                  # the third lesson: a program is born
+    click 402 469; sleep 30
+    click 732 117; sleep 1                   # its first note: sh looks at hello.byte;
+    click 732 117; sleep 2                   # the second: the birth of hello
+    mon "screendump $tmp/gui21.ppm"
+    click 20 10; sleep 1; click 30 259; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt; ls /disk\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too
@@ -430,7 +439,7 @@ PY
               "$tmp"/gui6.ppm "$tmp"/gui7.ppm "$tmp"/gui8.ppm "$tmp"/gui9.ppm \
               "$tmp"/gui10.ppm "$tmp"/gui11.ppm "$tmp"/gui12.ppm "$tmp"/gui13.ppm \
               "$tmp"/gui14.ppm "$tmp"/gui15.ppm "$tmp"/gui16.ppm "$tmp"/gui17.ppm \
-              "$tmp"/gui18.ppm "$tmp"/gui19.ppm <<'PY' && gui_ok=yes
+              "$tmp"/gui18.ppm "$tmp"/gui19.ppm "$tmp"/gui20.ppm "$tmp"/gui21.ppm <<'PY' && gui_ok=yes
 import sys
 def load(path):
     d = open(path, "rb").read()
@@ -441,8 +450,8 @@ def px(img, x, y):
     w, h, d = img
     i = 3 * (y * w + x)
     return (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]
-g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17, g18, g19 = \
-    (load(p) for p in sys.argv[1:20])
+(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17, g18, g19,
+ g20, g21) = (load(p) for p in sys.argv[1:22])
 assert g1[:2] == (1024, 768), "graphics mode"
 assert px(g1, 500, 10) == 0x111820, "the top bar"
 assert px(g1, 300, 86) == 0x2D6CA2, "the welcome window, focused"
@@ -515,6 +524,11 @@ assert px(g18, 500, 59) == 0x2D6CA2, "the Files window, focused"
 assert px(g18, 340, 80) == 0x1B3A57, "the Files window's header"
 assert count(g19, 0x1A2228, 230, 180, 900, 220, 1) > 40, "a text viewed"
 assert px(g19, 820, 161) == 0x2D6CA2, "the viewer's Back button"
+# the tour: its window, then a lesson in the System window, at the birth
+# of hello: the green arrow, the processes taking no part faint
+assert px(g20, 400, 108) == 0x1B3A57, "the tour's window"
+assert count(g21, 0x2E8B57, 132, 140, 1010, 520, 1) > 100, "a lesson: hello is born"
+assert count(g21, 0xF8F9FA, 132, 140, 1010, 400) > 300, "a lesson: the others faint"
 PY
 fi
 }
@@ -748,11 +762,11 @@ for lane in ${LANES:-a b c d e}; do
         part=$tmp/part-$lane
         : > "$part"
         case $lane in
-            a) sec_first; sec_effects; sec_storage; sec_fat; sec_domains ;;
-            b) sec_mlib; sec_files; sec_stress; sec_spawn; sec_console ;;
-            c) sec_nocom2; sec_reboots ;;
-            d) sec_gui ;;
-            e) sec_net; sec_seventh ;;
+            a) sec_first || true; sec_effects || true; sec_storage || true; sec_fat || true; sec_domains || true ;;
+            b) sec_mlib || true; sec_files || true; sec_stress || true; sec_spawn || true; sec_console || true ;;
+            c) sec_nocom2 || true; sec_reboots || true ;;
+            d) sec_gui || true ;;
+            e) sec_net || true; sec_seventh || true ;;
         esac
         save_results "$lane"
     ) &

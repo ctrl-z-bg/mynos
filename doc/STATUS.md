@@ -997,4 +997,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   its cluster chain: 2.85 ms the first time, 0.64 ms from the cache. fatfs
   and ata still serve one request at a time. Test: a 100 KB file read
   twice, the disk requests counted in the recordings (8, then 0).
+- **2026-11-18** — The tour (mynos-5zp, `doc/decisions/gui.md`): lessons
+  on how an OS works (`/tour.txt`: a file from the RAM disk, a directory
+  from the disk, a program born, the network, a language model), each run
+  under the recorder and replayed in the System window with its words at
+  the steps it explains; the System window shows processes born and
+  ending. In the menu and the welcome window. `run-tests.sh`: a section
+  that fails no longer stops its lane (the results it found are kept).
+  Test: the third lesson replayed, at the birth of hello.
 
