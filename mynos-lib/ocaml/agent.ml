@@ -283,7 +283,8 @@ let run a ~emit ~confirm task =
     if n > a.max_turns then begin
       emit (Note (Printf.sprintf "stopped after %d model calls" a.max_turns));
       (messages, 1)
-    end else
+    end else begin
+      if recording then Tracer.mark (Printf.sprintf "model call %d" n);
       match Llm.call a.llm (Llm.Chat { Llm.chat with profile = a.profile; system = a.system;
                                                      messages; tools = a.tools }) with
       | exception Ipc.Remote_error (_, m) -> emit (Note m); (messages, 1)
@@ -301,6 +302,14 @@ let run a ~emit ~confirm task =
         match r.stop, calls with
         | Llm.Tool_use, _ :: _ ->
           let results = List.map (fun (id, name, input) ->
+              if recording then begin
+                (* the tool and the start of its input: what the step is *)
+                let arg = match Json.of_string input with
+                  | Json.Object ((_, Json.String s) :: _) -> s
+                  | _ | exception _ -> "" in
+                let arg = String.map (fun c -> if c < ' ' then ' ' else c) arg in
+                Tracer.mark (name ^ (if arg = "" then "" else ": " ^ arg))
+              end;
               let content, error = execute ~emit ~confirm a.service_tools name input in
               drain ();
               emit (Result { text = content; error });
@@ -309,7 +318,8 @@ let run a ~emit ~confirm task =
           turn (n + 1) (messages @ [ { Llm.role = User; content = results } ])
         | Llm.Max_tokens, _ -> emit (Note "the answer was cut (max_tokens)"); (messages, 1)
         | Llm.Refusal, _ -> emit (Note "the model declined"); (messages, 1)
-        | _ -> (messages, 0) in
+        | _ -> (messages, 0)
+    end in
   emit (Task task);
   let messages, code = turn 1 (a.messages @ [ Llm.user task ]) in
   (* a conversation ends with the model's answer: a refused or cut turn is

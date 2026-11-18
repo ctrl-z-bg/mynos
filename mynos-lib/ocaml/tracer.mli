@@ -23,6 +23,7 @@ type kind =
   | Recv      (** [pid] received [size] bytes from [peer] on [channel] *)
   | Free      (** [pid] freed its end of [channel] *)
   | Irq       (** interrupt [arg] for the driver [pid], interrupting [peer] *)
+  | Mark      (** [pid] labelled this moment: [data] ({!mark}) *)
   | Other of int
 
 type event = {
@@ -52,6 +53,10 @@ val start : unit -> unit
 (** Start a recording (the kernel's buffer: 8192 events). *)
 
 val stop : unit -> unit
+
+val mark : string -> unit
+(** A label in the recording, if one is on (an event [Mark] of this
+    process, its first 56 bytes): a program's phases ("model call 2"). *)
 
 val read : unit -> string
 (** The events recorded since the last [read], raw (96 bytes each): read

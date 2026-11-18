@@ -384,7 +384,7 @@ fi
 
 # seventh boot: the system RAM disk, init starts the services and sh, driven
 # through the keyboard: the OCaml toplevel (ocaml), programs, sh again
-history_saved= kilo_saved= edit_saved= sh_saved= trace_calls= trace_json=
+history_saved= kilo_saved= edit_saved= sh_saved= trace_calls= trace_json= agent_marks=
 serial_same_sh=
 if [ -f system/ramdisk.dsk ]; then
     # a disk, for /disk and the shell's history: a copy of the FAT16 test image
@@ -479,6 +479,9 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" "agent -y '[run_ocaml] let () = print_endline 42'\n"
     waitfor "It does not compile" 90
     sleep 2
+    # its recording: the steps it marked, among the calls; the processes
+    tools/type-keys.py "$tmp/mon7" 'trace calls /tmp/agent.trc > /disk/agent-calls.txt\n'; sleep 4
+    tools/type-keys.py "$tmp/mon7" 'ps\n'; sleep 2
     # the host's terminal on COM2: a line typed, then two pasted at once
     # (a burst: the shell must not read an end of file), then the keyboard
     banners=$(grep -ac 'MyNOS sh. help' "$log7")
@@ -506,6 +509,11 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
             2>/dev/null > "$tmp/calls.txt" || true
         grep -q 'sh(.*-> fatfs(.*fs OPEN "s.txt"' "$tmp/calls.txt" &&
             grep -q '^ .*  fatfs(.*-> ata(.*block/1 Read' "$tmp/calls.txt" && trace_calls=yes
+        tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/agent-calls.txt \
+            2>/dev/null > "$tmp/agent-calls.txt" || true
+        grep -q '# agent([0-9]*): model call 1' "$tmp/agent-calls.txt" &&
+            grep -q '# agent([0-9]*): run_ocaml: let () = print_endline 42' "$tmp/agent-calls.txt" &&
+            grep -q 'agent(.*-> llmd(.*llm/1 Chat' "$tmp/agent-calls.txt" && agent_marks=yes
         tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/t.json \
             2>/dev/null > "$tmp/t.json" || true
         python3 -c 'import json, sys
@@ -612,6 +620,12 @@ if [ -f system/ramdisk.dsk ]; then
     expect "- : int = 40000"
     expect "AUTOEXEC.BAT: Read-only file system"
     expect "init: sh.byte (pid"
+    if [ -n "$agent_marks" ]; then
+        echo "ok    trace: the agent's steps marked in its recording"
+    else
+        echo "FAIL  trace: the agent's steps marked in its recording"; fail=1
+    fi
+    expect "io  consoled        console"     # ps: a driver, its service
     if [ -n "$trace_calls" ]; then
         echo "ok    trace: sh -> fatfs -> ata0, nested calls"
     else

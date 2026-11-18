@@ -135,7 +135,17 @@ void mynos_log(const char * fmt, ...);
 #define MYNOS_TRACE_READ  2   /* arg1: buffer, arg2: events -> how many */
 #define MYNOS_TRACE_INFO  3   /* arg1: 9 words */
 #define MYNOS_TRACE_FREE  4
+#define MYNOS_TRACE_MARK  5   /* arg1: a label, arg2: its length */
 #define MYNOS_TRACE_EVENT_SIZE 96
+
+/* the live processes (native 33): 32 bytes each, at most max: how many */
+typedef struct {
+  int pid, ppid;
+  unsigned int privileges;    /* MYNOS_PRIV_* */
+  unsigned int threads;
+  char name[16];              /* the program's base name */
+} mynos_process_t;
+int mynos_processes(mynos_process_t * buf, int max);
 int mynos_trace(int op, void * arg1, unsigned int arg2);
 
 /* PROCESSES */

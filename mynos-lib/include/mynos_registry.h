@@ -25,6 +25,8 @@
 #define MYNOS_REGISTRY_REGISTER (1)
 #define MYNOS_REGISTRY_LOOKUP   (2)
 #define MYNOS_REGISTRY_DELETE   (3)
+#define MYNOS_REGISTRY_LIST     (4)   /* the reply: an int, how many, then
+					 that many mynos_reg_entry_t */
 
 #define MAXNAMELEN 20
 
@@ -36,7 +38,16 @@ typedef struct {
   int arg3;
 } mynos_reg_cmd_t;
 
+/* a name of the registry: its port and the process that registered it */
+typedef struct {
+  char name[24];
+  int port;
+  int owner;
+} mynos_reg_entry_t;
+
 int mynos_registryRegister(char * name);
+/* the names registered by live processes, at most max: how many */
+int mynos_registryList(mynos_reg_entry_t * buf, int max);
 int mynos_registryLookUp(char * name);
 
 #endif

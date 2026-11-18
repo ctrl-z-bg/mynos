@@ -136,6 +136,14 @@ int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2) {
     w[8] = timerTicks;
     return 0;
   }
+  case TRACE_MARK_OP: {
+    char label[TRACE_DATA];
+    if (!trace_on) return 0;
+    if (arg2 > TRACE_DATA) arg2 = TRACE_DATA;
+    if (copy_from_user(label, (void *)arg1, arg2)) return MYNOS_ERR_INVALID;
+    trace_event(TRACE_MARK, processTable[currProcess]->pid, -1, -1, 0, 0, label, arg2);
+    return 0;
+  }
   case TRACE_FREE_BUFFER:
     trace_on = 0;
     if (events) kfree(events);
@@ -145,3 +153,22 @@ int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2) {
   }
   return MYNOS_ERR_INVALID;
 }
+
+int _mynos_syscall_processes(uint32_t buf, uint32_t max) {
+  uint32_t i, n = 0;
+  for (i = 0; i < numProcess && n < max; i++) {
+    process_descriptor_t * p = processTable[i];
+    uint32_t e[PROCESS_ENTRY / 4];
+    if (p == NULL || !p->isAlive) continue;
+    e[0] = p->pid;
+    e[1] = p->ppid;
+    e[2] = p->privileges;
+    e[3] = p->numThreads;
+    kmemcpy(&e[4], p->name, 16);
+    if (copy_to_user((char *)buf + n * PROCESS_ENTRY, e, PROCESS_ENTRY))
+      return MYNOS_ERR_INVALID;
+    n++;
+  }
+  return n;
+}
+

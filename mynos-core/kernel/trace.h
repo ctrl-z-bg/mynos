@@ -37,8 +37,9 @@ enum {
   TRACE_SEND,          /* pid, peer: the receiver, channel, size, data */
   TRACE_RECV,          /* pid, peer: the sender, channel, size */
   TRACE_FREE,          /* pid, peer: the other side, channel */
-  TRACE_IRQ            /* pid: the driver, peer: the process interrupted,
+  TRACE_IRQ,           /* pid: the driver, peer: the process interrupted,
 			  arg: the IRQ */
+  TRACE_MARK           /* pid, data: a label the program gave (its phases) */
 };
 
 /* trace system call operations */
@@ -48,6 +49,7 @@ enum {
 #define TRACE_INFO  3   /* arg1: 9 words: recording, pending, dropped,
 			   tsc and timer ticks at the start (3 words), now (3) */
 #define TRACE_FREE_BUFFER 4
+#define TRACE_MARK_OP 5 /* arg1: a label, arg2: its length (at most 56 kept) */
 
 extern int trace_on;
 
@@ -58,6 +60,11 @@ void trace_event(int kind, int pid, int peer, int channel, uint32_t size,
   do { if (trace_on) trace_event(k, pid, peer, ch, size, arg, data, n); } while (0)
 
 int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2);
+
+/* processes (33): the live processes, 32 bytes each (pid, parent,
+   privileges, threads, name: 16 bytes), into buf, at most max: how many */
+#define PROCESS_ENTRY 32
+int _mynos_syscall_processes(uint32_t buf, uint32_t max);
 
 /* a process's name from its argv (base name; for "ocamlrun X.byte", X) */
 void trace_setName(char * name, char ** argv);

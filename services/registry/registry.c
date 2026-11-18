@@ -90,6 +90,37 @@ int registryLookUp(char * name) {
   return ret;
 }
 
+/* the reply to LIST: the count, then the live entries (the others are
+   dropped on the way, as in a lookup) */
+static void registryList(int channel) {
+  struct table_entry_s ** pp, * e;
+  int n = 0, size;
+  char * buf;
+  mynos_P(registry.sem);
+  pp = &registry.head;
+  while ((e = *pp) != NULL) {
+    int info = mynos_processInfo(e->owner);
+    if (info < 0 || !(info & MYNOS_PROC_ALIVE)) { *pp = e->next; free(e); continue; }
+    n++;
+    pp = &e->next;
+  }
+  size = sizeof(int) + n * sizeof(mynos_reg_entry_t);
+  buf = calloc(1, size);
+  if (buf != NULL) {
+    mynos_reg_entry_t * out = (mynos_reg_entry_t *)(buf + sizeof(int));
+    *(int *)buf = n;
+    for (e = registry.head; e != NULL; e = e->next, out++) {
+      strncpy(out->name, e->name, sizeof out->name - 1);
+      out->port = e->port;
+      out->owner = e->owner;
+    }
+  }
+  mynos_V(registry.sem);
+  if (buf == NULL) { n = MYNOS_ERR_FULL; mynos_send(channel, &n, sizeof n, 0); return; }
+  mynos_send(channel, buf, size, 0);
+  free(buf);
+}
+
 /* serve one request on a new channel. Requests are served one at a time
    by the main thread: they are short, and the 2004 version's thread per
    request leaked its stack (and used the C library from threads that
@@ -149,6 +180,11 @@ static void serve(int channel) {
     case MYNOS_REGISTRY_LOOKUP:
       ret = registryLookUp(cmd->name);
       break;
+    case MYNOS_REGISTRY_LIST:
+      registryList(channel);
+      mynos_freeMsg(&msg);
+      mynos_freeChannel(channel);
+      return;
     }
   
   // BE AWARE SENDING STUFF ON THE STACK!!!

@@ -75,6 +75,10 @@ val register : string -> int
 val lookup : string -> int
 (** The port of a registered service. *)
 
+val registered : unit -> (string * int * int) list
+(** The registry's names, with their ports and the processes that
+    registered them (only live ones). *)
+
 (** {1 Starting programs} *)
 
 type status =
@@ -102,6 +106,17 @@ val process_info : int -> process_info option
 (** [None]: no such process (it ended and was collected). Pids are not
     reused: when a process's slot is taken again, the new one has another
     pid. *)
+
+type process = {
+  p_pid : int;
+  parent : int;
+  p_io : bool;          (** the io privilege: a driver *)
+  threads : int;
+  name : string;        (** the program's base name ("fatfs", "sh") *)
+}
+
+val processes : unit -> process list
+(** The live processes, by slot. *)
 
 val environment : unit -> string array
 (** Our environment, as ["NAME=value"] strings. A child gets it unless

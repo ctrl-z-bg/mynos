@@ -97,6 +97,20 @@ could not be trusted to be complete; overwriting the oldest events
 (Linux's ftrace default) suits "what happened just before the crash",
 which can be an option later.
 
+## Marks, and the system as it is (2026-11-18, mynos-bm9)
+
+- **Marks**: a program labels a moment of a recording (`Tracer.mark
+  "model call 2"`; operation 5 of native call 32): an event `Mark` with
+  its pid and the label's first 56 bytes, if a recording is on. `trace
+  calls` prints marks among the calls (`# agent(14): run_ocaml: ...`).
+  The agent marks each model call and each tool it runs, so a recording
+  shows what each of its decisions made the system do.
+- **The live processes** (native call 33, `Mynos.processes`): pid,
+  parent, privileges, threads, name, for each one. The **registry lists
+  its names** (request 4, `Mynos.registered`): name, port, owner. `ps` in
+  `sh` shows both: which process serves which name. With these, a window
+  can draw the system as it is now (mynos-81t).
+
 ## Later
 
 Filters (a program and what it talks to), more event classes, a graphical

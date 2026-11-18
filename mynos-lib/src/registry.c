@@ -99,4 +99,29 @@ int mynos_registryLookUp(char * name) {
   return port;
 }
 
+/* the names registered by live processes, at most max: how many */
+int mynos_registryList(mynos_reg_entry_t * buf, int max) {
+  mynos_reg_cmd_t cmd;
+  mynos_msg_t * msg;
+  int channel, n;
+
+  channel = connectToRegistry();
+  if (channel < 0) return channel;
+  memset(&cmd, 0, sizeof cmd);
+  cmd.cmd = MYNOS_REGISTRY_LIST;
+  mynos_send(channel, &cmd, sizeof(mynos_reg_cmd_t), 0);
+  if (mynos_recv(channel, &msg, 0, 0) < 0) {
+    mynos_freeChannel(channel);
+    return MYNOS_ERR_BROKEN;
+  }
+  n = msg->size >= (int)sizeof(int) ? *(int *)msg->start : MYNOS_ERR_INVALID;
+  if (n > max) n = max;
+  if (n > 0 && msg->size >= (int)(sizeof(int) + n * sizeof(mynos_reg_entry_t)))
+    memcpy(buf, (char *)msg->start + sizeof(int), n * sizeof(mynos_reg_entry_t));
+  else if (n > 0)
+    n = MYNOS_ERR_INVALID;
+  mynos_freeMsg(&msg);
+  mynos_freeChannel(channel);
+  return n;
+}
 

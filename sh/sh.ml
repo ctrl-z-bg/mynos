@@ -305,7 +305,7 @@ let run_program file args c =
 
 let builtins = [ "cd"; "pwd"; "echo"; "cat"; "ls"; "cp"; "mv"; "rm"; "mkdir";
                  "rmdir"; "touch"; "export"; "unset"; "env"; "which"; "source";
-                 "free"; "clear"; "help"; "exit"; "true"; "false"; "ocaml";
+                 "free"; "ps"; "clear"; "help"; "exit"; "true"; "false"; "ocaml";
                  "ifconfig"; "ping"; "host"; "ask"; "keymap" ]
 
 (* every command: built-ins, and the programs of PATH (NAME.byte as NAME,
@@ -363,7 +363,7 @@ let copy src dst =
 let help out =
   output_string out
     "MyNOS sh. Built in: cd pwd echo cat ls [-l] cp mv rm mkdir rmdir touch\n\
-     export unset env which source free clear help exit;\n\
+     export unset env which source free ps clear help exit;\n\
      network: ifconfig, ping HOST [COUNT], host NAME.\n\
      Programs: edit FILE, ocamlc, kilo, hello, ocaml (the OCaml toplevel),\n\
      trace COMMAND (record what the system does meanwhile), llm QUESTION,\n\
@@ -548,6 +548,16 @@ let rec builtin name args c out =
    | "free", _ ->
      let p = (Mynos.stats ()).Mynos.free_pages in
      Printf.fprintf out "%d KB free\n" (p * 4)
+   | "ps", [] ->
+     (* the processes, with the names they registered (their services) *)
+     let names = try Mynos.registered () with Mynos.Error _ -> [] in
+     Printf.fprintf out "%5s %5s %3s %-3s %-15s %s\n" "pid" "ppid" "thr" "io" "name" "services";
+     List.iter (fun p ->
+         let own = List.filter_map (fun (n, _, o) -> if o = p.Mynos.p_pid then Some n else None)
+             names in
+         Printf.fprintf out "%5d %5d %3d %-3s %-15s %s\n" p.Mynos.p_pid p.parent p.threads
+           (if p.p_io then "io" else "") p.name (String.concat " " (List.sort compare own)))
+       (Mynos.processes ())
    | "ifconfig", [] ->
      ok := with_net (fun n ->
          let c = Net.call n Net.Config in
@@ -602,7 +612,7 @@ let rec builtin name args c out =
 
 and is_builtin = function
   | "cd" | "pwd" | "echo" | "cat" | "ls" | "cp" | "mv" | "rm" | "mkdir" | "rmdir"
-  | "touch" | "export" | "unset" | "env" | "which" | "source" | "." | "free"
+  | "touch" | "export" | "unset" | "env" | "which" | "source" | "." | "free" | "ps"
   | "clear" | "help" | "exit" | "true" | "false" | "ifconfig" | "ping" | "host"
   | "ask" | "keymap" -> true
   | _ -> false

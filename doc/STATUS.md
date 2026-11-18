@@ -225,7 +225,9 @@ All services are linked statically against `libmynos` and placed at
   protocols (`fs OPEN "a.txt"`, `registry LOOKUP "fatfs"`), calls
   rebuilt from channels and nested, and the Chrome trace event format for
   Perfetto. The `trace` program: `trace COMMAND`, `trace -s SECONDS`,
-  `trace show|calls|json FILE`.
+  `trace show|calls|json FILE`. Programs mark their phases in it
+  (`Tracer.mark`; the agent marks its steps). The live processes (native
+  call 33) and the registry's names (request 4) are listed too: `ps`.
 - **Identity and permissions** (2026,
   `doc/decisions/identity-and-permissions.md`): pids, channel and port ids
   carry a generation (`slot + size * generation`), so an id names one
@@ -903,4 +905,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   and the fake provider; a task typed in the window, its confirmation
   seen, Allow clicked, the command's file read back in text mode
   (`SHOTS=DIR` keeps the screens). Trace viewer: mynos-0o5.
+- **2026-11-18** — Foundations for the trace viewer and the System window
+  (mynos-bm9, `doc/decisions/tracer.md`): marks in recordings (a program
+  labels its phases; the agent marks each model call and tool), a list of
+  the live processes from the kernel (native call 33: pid, parent,
+  privileges, threads, name), the registry's names (request 4, with
+  their owners), `ps` in `sh`. Tests: the agent's marks in `trace calls`,
+  `ps` naming consoled's service.
 

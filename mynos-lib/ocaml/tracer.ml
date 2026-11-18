@@ -5,7 +5,7 @@ external control : int -> int = "caml_mynos_trace_control"
 external read_raw : int -> string = "caml_mynos_trace_read"
 external info_raw : unit -> string = "caml_mynos_trace_info"
 
-type kind = Process | Spawn | Exit | Connect | Send | Recv | Free | Irq | Other of int
+type kind = Process | Spawn | Exit | Connect | Send | Recv | Free | Irq | Mark | Other of int
 
 type event = {
   seq : int; time : float; kind : kind; pid : int; tid : int; peer : int;
@@ -24,6 +24,8 @@ let event_size = 96
 
 let start () = ignore (control 0)
 let stop () = ignore (control 1)
+external mark_raw : string -> int = "caml_mynos_trace_mark"
+let mark s = try ignore (mark_raw s) with _ -> ()
 
 let read () =
   let b = Buffer.create 4096 in
@@ -74,7 +76,7 @@ let of_raw ~raw i =
       let nd = min (u16 36) 56 in
       let kind = match u16 12 with
         | 1 -> Process | 2 -> Spawn | 3 -> Exit | 4 -> Connect | 5 -> Send
-        | 6 -> Recv | 7 -> Free | 8 -> Irq | k -> Other k in
+        | 6 -> Recv | 7 -> Free | 8 -> Irq | 9 -> Mark | k -> Other k in
       let e = { seq = int_of_float (u32 raw o); time = (tsc o -. t0) /. i.khz;
                 kind; pid = u16 14; tid = i32 raw (o + 16); peer = i32 raw (o + 20);
                 channel = i32 raw (o + 24); size = int_of_float (u32 raw (o + 28));
@@ -309,6 +311,7 @@ let describe r e =
   | Connect -> Printf.sprintf "port %d" e.arg
   | Recv -> Printf.sprintf "%d bytes" e.size
   | Irq -> Printf.sprintf "IRQ %d" e.arg
+  | Mark -> e.data
   | Free | Other _ -> ""
 
 let print_events oc r =
@@ -341,6 +344,7 @@ let print_events oc r =
       | Recv -> line "<-" other (Printf.sprintf "received %d bytes" e.size)
       | Free -> line "" "" (Printf.sprintf "free channel %d" e.channel)
       | Irq -> line "!" other (Printf.sprintf "IRQ %d (interrupted %s)" e.arg other)
+      | Mark -> line "#" "" e.data
       | Other k -> line "?" "" (Printf.sprintf "event %d" k))
     r.events
 
@@ -430,12 +434,22 @@ let print_calls oc r =
   Printf.fprintf oc "%d calls%s\n" (List.length cs)
     (if r.dropped > 0 then Printf.sprintf " (%d events lost)" r.dropped else "");
   Printf.fprintf oc "%9s %9s  %s\n" "ms" "took" "call";
+  (* the marks, between the calls *)
+  let marks = ref (List.filter (fun e -> e.kind = Mark) (Array.to_list r.events)) in
+  let marks_until t =
+    let rec go () = match !marks with
+      | m :: rest when m.time <= t ->
+        Printf.fprintf oc "%9.3f %9s  # %s: %s\n" m.time "" (name r ~seq:m.seq m.pid) m.data;
+        marks := rest; go ()
+      | _ -> () in go () in
   List.iter (fun c ->
+      marks_until c.start;
       let took = if Float.is_nan c.finish then "?" else Printf.sprintf "%.3f" (c.finish -. c.start) in
       Printf.fprintf oc "%9.3f %9s  %s%s -> %s  %s%s\n" c.start took
         (String.make (2 * c.depth) ' ') (name r c.client) (name r c.server) c.request
         (if c.reply = "" then "" else "  =>  " ^ c.reply))
-    cs
+    cs;
+  marks_until infinity
 
 (* ---- Chrome trace event format ---- *)
 
@@ -479,6 +493,8 @@ let to_json r =
                   (json_string (Printf.sprintf "exit %d" e.arg)) e.pid e.tid (us e.time)
       | Irq -> add "{\"ph\": \"i\", \"s\": \"p\", \"name\": %s, \"pid\": %d, \"tid\": 0, \"ts\": %.3f}"
                  (json_string (Printf.sprintf "IRQ %d" e.arg)) e.pid (us e.time)
+      | Mark -> add "{\"ph\": \"i\", \"s\": \"g\", \"name\": %s, \"pid\": %d, \"tid\": %d, \"ts\": %.3f}"
+                  (json_string e.data) e.pid e.tid (us e.time)
       | _ -> ()) r.events;
   (* calls: a box on the client while it waits, one on the server while it
      serves, an arrow from one to the other *)

@@ -89,6 +89,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .mynos_log\n"\
 	 "   cmpl $32, %eax\n"\
 	 "   je .mynos_trace\n"\
+	 "   cmpl $33, %eax\n"\
+	 "   je .mynos_processes\n"\
 	 "   cmpl $31, %eax\n"\
 	 "   je .mynos_log\n"\
 	 "   cmpl $100, %eax\n"\
@@ -247,6 +249,12 @@ __asm__ (".pushsection .text\n" \
 	 "   popl %edx\n"\
 	 "   popl %esi\n"
 	 "   popl %edi\n"\
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_processes:\n"\
+	 "   pushl %ecx\n"\
+	 "   pushl %ebx\n"\
+	 "   call _mynos_syscall_processes\n"\
+	 "   addl $8, %esp\n"\
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_trace:\n"\
 	 "   pushl %edx\n"\

@@ -216,6 +216,29 @@ CAMLprim value caml_mynos_registry_lookup(value name)
   return check("registry_lookup", ret);
 }
 
+/* the registry's names: (name, port, owner) array */
+CAMLprim value caml_mynos_registry_list(value unit)
+{
+  CAMLparam1(unit);
+  CAMLlocal2(r, t);
+  mynos_reg_entry_t es[128];
+  int n, i;
+  caml_enter_blocking_section();
+  n = mynos_registryList(es, 128);
+  caml_leave_blocking_section();
+  if (n < 0) mynos_error("registry_list", n);
+  r = caml_alloc(n, 0);
+  for (i = 0; i < n; i++) {
+    es[i].name[sizeof es[i].name - 1] = 0;
+    t = caml_alloc_tuple(3);
+    Store_field(t, 0, caml_copy_string(es[i].name));
+    Store_field(t, 1, Val_int(es[i].port));
+    Store_field(t, 2, Val_int(es[i].owner));
+    Store_field(r, i, t);
+  }
+  CAMLreturn(r);
+}
+
 /* ---- processes ---- */
 
 static char ** c_strings(value arr)
@@ -426,6 +449,37 @@ CAMLprim value caml_mynos_trace_read(value max)
   if (n < 0) { free(buf); mynos_error("trace", n); }
   r = caml_alloc_initialized_string(n * MYNOS_TRACE_EVENT_SIZE, buf);
   free(buf);
+  CAMLreturn(r);
+}
+
+/* a label in the recording (an event Mark), if one is on */
+CAMLprim value caml_mynos_trace_mark(value label)
+{
+  return check("trace", mynos_trace(MYNOS_TRACE_MARK, (void *)String_val(label),
+                                    caml_string_length(label)));
+}
+
+/* the live processes: (pid, parent, privileges, threads, name) array */
+CAMLprim value caml_mynos_processes(value unit)
+{
+  CAMLparam1(unit);
+  CAMLlocal2(r, t);
+  mynos_process_t ps[256];
+  int n = mynos_processes(ps, 256), i;
+  if (n < 0) mynos_error("processes", n);
+  r = caml_alloc(n, 0);
+  for (i = 0; i < n; i++) {
+    char name[17];
+    memcpy(name, ps[i].name, 16);
+    name[16] = 0;
+    t = caml_alloc_tuple(5);
+    Store_field(t, 0, Val_int(ps[i].pid));
+    Store_field(t, 1, Val_int(ps[i].ppid));
+    Store_field(t, 2, Val_int(ps[i].privileges));
+    Store_field(t, 3, Val_int(ps[i].threads));
+    Store_field(t, 4, caml_copy_string(name));
+    Store_field(r, i, t);
+  }
   CAMLreturn(r);
 }
 
