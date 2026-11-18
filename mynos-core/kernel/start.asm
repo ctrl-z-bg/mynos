@@ -18,6 +18,8 @@
 
 [BITS 32]			; this isn't DOS! ;-)
 extern mynos_main		; the real main is not in this file
+extern __bss_start		; the linker's: where the BSS starts...
+extern _end			; ...and where it ends
 extern boot_info_global		; for soft reset
 
 
@@ -83,6 +85,18 @@ _start:
 
 
 multiboot_entry:
+
+	;; the BSS zeroed first: the C code expects its uninitialized
+	;; variables at 0. A cold start's memory is, but after a reset
+	;; (shutdown -r) it holds the previous run's values: the kernel heap's
+	;; free lists, the physical memory bitmap... and the third boot found
+	;; the heap corrupted. ebx (the multiboot information) is kept.
+	cld
+	mov	edi, __bss_start
+	mov	ecx, _end
+	sub	ecx, edi
+	xor	eax, eax
+	rep stosb
 
 	;; the bootloader leaves esp undefined (multiboot spec): use our own
 	;; small boot stack before the first push

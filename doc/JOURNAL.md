@@ -1730,3 +1730,47 @@ the ID) is now read as it comes, before the mouse's IRQ is on.
 reaches it: one line of logging in the server told the sign convention
 apart from a bug.
 
+## 2026-11-18 — The third boot: a page given twice
+
+**Symptom.** The owner: `shutdown -r` in a terminal window restarted into a
+kernel panic, "lmemtrack.c: Block not found". Reproduced without the GUI:
+boot, `shutdown -r`, `shutdown -r` again: the third boot panics, always,
+right after "RAMDISK found", preceded by "kernel heap: free list corrupted".
+A cold boot with the same disk is fine.
+
+**Diagnosis, step by step.**
+- The kernel did not zero its BSS (`start.asm`): after a reset its
+  variables would start with the previous run's values. A real bug, fixed
+  (`rep stosb` from `__bss_start` to `_end` at entry), but the panic stayed.
+- The `.data` section is reloaded at each reset (a variable that starts at
+  1 and is set to 0 at the end of boot read 1 each time), and the modules
+  are the same (checksums, taken once their memory was mapped: a first try
+  read them before, faulted before the IDT existed, and the machine reset
+  in a loop with nothing on the log).
+- `HEAP_CHECK` (poisoned blocks) changed nothing: no use of uninitialized
+  heap memory. Zeroing every fresh frame changed nothing either.
+- A sentinel walking the heap's free lists after each boot step, then
+  after each step of `createProcess`: the heap broke when the first
+  process's page directory was zeroed. The broken block was all zeros: the
+  page directory's frame *was* a page of the kernel heap.
+- So the physical page bitmap was wrong. `pmem_createPhyMemManager` set
+  `initialized = 1` first, then called `kmalloc` for its bitmap and its
+  array of reference counts. Those allocations took pages, and `pmem_set`,
+  seeing the manager initialized, used `pmemdes.page[page].countref`
+  before the array existed: a null pointer (a stale one, before the BSS
+  was zeroed), so a count read in the first pages of memory. A cold start
+  has zeros there; after resets, the BIOS leaves its own values. A count
+  found not 0 was only incremented, the page was not marked in the
+  bitmap, and it was given again.
+
+**Fix.** The manager is marked ready at the end, once its arrays exist and
+hold the counts; the pages taken meanwhile go through the bitmap alone,
+which is then copied with them. Kept from the hunt: the BSS zeroed at
+entry, and fresh frames zeroed (nothing of a previous owner leaks). A test
+restarts three times.
+
+**Lesson.** "Works at the first boot" proves little for code that reads
+memory it did not write: QEMU's cold memory is all zeros, and a zero is
+the value that hides most of these bugs. A reset is a cheap way to give
+such reads something else to find.
+

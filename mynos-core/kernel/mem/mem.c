@@ -245,12 +245,17 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
       INIT_PAGE_TABLE(__GET_PAGE_TABLE_ENTRY(__PAGE_PD_INDEX(page), 0));
     }
 
-    if (alloc_now)
+    if (alloc_now) {
       __SET_PAGE_TABLE_ENTRY_AND_ALLOC(__PAGE_PD_INDEX(page),
 				       __PAGE_PT_INDEX(page),
 				       (pmem_findAFreePhysicalPage() << 12),
 				       flags)
-    else
+      /* a fresh frame reads as zeros: after a reset (shutdown -r) memory
+	 holds the previous run's data, and it must not leak between
+	 processes either */
+      INVALIDATE_THE_CACHE(page << 12);
+      kbzero((void *)(page << 12), PAGE_SIZE);
+    } else
       __SET_PAGE_TABLE_ENTRY(__PAGE_PD_INDEX(page),
 			     __PAGE_PT_INDEX(page),
 			     flags);

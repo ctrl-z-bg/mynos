@@ -233,6 +233,35 @@ sys.exit(0 if b"nocom2-ok" in s else 1)' && nocom2=yes
     wait $qemu || true
 fi
 
+# restarting again and again (shutdown -r): after a reset memory holds the
+# previous run's data, which the kernel once read as its own (a page given
+# twice at the third boot); four boots, each must reach the shell
+reboots_ok=
+if [ -f system/ramdisk.dsk ] && [ -f init/shutdown.byte ]; then
+    : > "$tmp/logr"
+    MEM=256 tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        system/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$tmp/logr" \
+           -monitor "unix:$tmp/mon-r,server,nowait" &
+    qemu=$!
+    k=1
+    while [ $k -le 4 ]; do
+        i=0
+        while [ $i -lt 60 ] && [ "$(grep -ac 'MyNOS sh. help' "$tmp/logr")" -lt $k ] &&
+              ! grep -aq PANIC "$tmp/logr"; do
+            sleep 0.5; i=$((i + 1))
+        done
+        [ "$(grep -ac 'MyNOS sh. help' "$tmp/logr")" -lt $k ] && break
+        [ $k -lt 4 ] && { sleep 1; tools/type-keys.py "$tmp/mon-r" 'shutdown -r\n'; }
+        k=$((k + 1))
+    done
+    [ $k -gt 4 ] && reboots_ok=yes
+    printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-r" >/dev/null || true
+    wait $qemu || true
+    cat "$tmp/logr" >> "$log"
+fi
+
 # the graphical session (doc/decisions/gui.md): displayd, windows of
 # programs, the mouse, back to text mode. QEMU's monitor moves the mouse
 # relatively: vmmouse (absolute) is off, the PS/2 mouse is used
@@ -621,6 +650,11 @@ PY
         echo "ok    shutdown: init turned the machine off (ACPI)"
     else
         echo "FAIL  shutdown: init turned the machine off (ACPI)"; fail=1
+    fi
+    if [ -n "$reboots_ok" ]; then
+        echo "ok    shutdown -r three times: four boots reach the shell"
+    else
+        echo "FAIL  shutdown -r three times: four boots reach the shell"; fail=1
     fi
     if [ -n "$rebooted" ]; then
         echo "ok    shutdown -r: init restarted the machine"

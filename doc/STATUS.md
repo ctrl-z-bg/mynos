@@ -887,4 +887,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   has the io privilege. Also in the GUI's menu ("Shut down"). Tests: the
   graphical boot ends with `shutdown` (QEMU ends by itself), another with
   `shutdown -r` under `-no-reboot`.
+- **2026-11-18** — Fixed: a kernel panic at the third boot after
+  `shutdown -r` ("lmemtrack.c: Block not found", after "kernel heap: free
+  list corrupted"). The physical memory manager marked itself ready
+  before allocating its own arrays; the pages those allocations took went
+  through `pmem_set` with the reference counts not there yet, read from
+  low memory, which a reset leaves full of the BIOS's values: a page left
+  unmarked was given twice. Also: the kernel zeroes its BSS at entry, and
+  fresh frames (`__OS_askPages` with `alloc_now`) are zeroed. A test
+  restarts three times and checks that each boot reaches the shell.
 

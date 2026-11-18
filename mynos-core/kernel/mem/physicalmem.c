@@ -65,8 +65,13 @@ static uint32_t  initialized = 0;
 void pmem_createPhyMemManager() {
   uint32_t i;
 
-  /* ok, I'm creating the manager */
-  initialized = 1;
+  /* (initialized stays 0 until the arrays below exist and hold the
+     counts: the kmallocs that allocate them take pages, and pmem_set
+     with initialized set would have used pmemdes.page before it was
+     there: a null pointer, read in low memory, where a reset leaves the
+     BIOS's values. A count found there not 0 left the page unmarked in
+     the bitmap, and it was given a second time: after two shutdown -r,
+     a process's page directory was a page of the kernel heap.) */
 
   /* allocate space for the new bitmap location */
   pmemdes.bitmap = kmalloc(__memory_bitmap_size);
@@ -87,6 +92,9 @@ void pmem_createPhyMemManager() {
       // TODO FLAGS!!!
     }
   }
+
+  /* ok, the manager exists */
+  initialized = 1;
 }
 
 /* pages beyond RAM (a device's memory, mapped by mapPhysical) are not
