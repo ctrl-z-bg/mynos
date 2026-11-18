@@ -105,13 +105,15 @@ void init_memory() {
 
   _init_gdt();
 
-  /* let the first (_asm_last_kernel_page_dir_entry_used + 1) PTs 
-     be allocated (to be share by all processes).
-     we'll use the kernel space's last PT to map the page tables of
-     another process, so, for the moment, we tag it as allocated.
-  */
+  /* allocate the kernel's page tables now, so that every process shares
+     them (a process copies the kernel's directory entries when it is
+     made). The last entry of the kernel's gigabyte stays empty, and
+     __OS_askPages never reaches it. (Until 2026 it pointed at physical
+     page 0 "to tag it as allocated", with the user bit: low memory, where
+     the page fault handler saves EAX, was read as a page table, and a
+     program could choose what that table mapped: mynos-vm8.) */
   printk("Allocating the first ");
-  print_ulong(_asm_last_kernel_page_dir_entry_used + 1);
+  print_ulong(_asm_last_kernel_page_dir_entry_used);
   printk(" PTs...");
   for (i = 0; i < _asm_last_kernel_page_dir_entry_used; i++)
     if (__IS_PAGE_TABLE_FREE(i)) {
@@ -119,7 +121,6 @@ void init_memory() {
       __SET_PAGE_DIR_ENTRY(i, newptaddr);
       INIT_PAGE_TABLE(__GET_PAGE_TABLE_ENTRY(i, 0));
     }
-  __SET_PAGE_DIR_ENTRY(_asm_last_kernel_page_dir_entry_used, 0);
   printk(" done\n");
 
 
@@ -170,10 +171,12 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
   }
 #endif
 
+  /* the kernel's pages: below its last page directory entry, which stays
+     empty (init_memory) */
   page_addr = 0;
-  last_page = ((_asm_last_kernel_page_dir_entry_used+1) * FOURMB - 
+  last_page = (_asm_last_kernel_page_dir_entry_used * FOURMB -
 	       PAGE_SIZE) >> 12;
-  for (; page_addr <= last_page; page_addr++) {
+  for (; page_addr + npages - 1 <= last_page; page_addr++) {
     if (__pg_free_pages_from_page(page_addr, npages, &not_used) == npages)
       return __OS_askPagesFrom((void *)(page_addr<<12), npages, alloc_now,
 			       flags);

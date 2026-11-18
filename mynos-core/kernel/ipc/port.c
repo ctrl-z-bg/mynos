@@ -110,6 +110,14 @@ void initPort(port_t * p, pid_t pid) {
   kbzero(p->queue, MAXREQ * sizeof(req_t*));
 }
 
+/* a connector still waiting: its process is alive (a request of a process
+   that ended is left in the queue; its thread, semaphore and stack are
+   gone: mynos-blv) */
+static int reqAlive(req_t * req) {
+  process_descriptor_t * d = proc(req->pid);
+  return d != NULL && d->isAlive;
+}
+
 int32_t __OS_port_freePort(int32_t p) {
   port_t * port = getPort(p);
   if (port == NULL) return MYNOS_ERR_INVALID;
@@ -120,13 +128,9 @@ int32_t __OS_port_freePort(int32_t p) {
 
   listExtractElem(processTable[currProcess]->portList, (void*)p, NULL);
 
-  // TODO free the req queue
-  __OS_sem_freeSemaphore(port->sem);
-  kfree(port);
-  pTable.table[p % MAXPORTS] = NULL;
-  if (p % MAXPORTS >= MYNOS_FIRST_FREE_PORT)
-    portGeneration[p % MAXPORTS] =
-      (portGeneration[p % MAXPORTS] + 1) % PORT_GENERATIONS;
+  /* as when its owner ends: the processes queued to connect are told
+     (MYNOS_ERR_BROKEN) instead of waiting for ever */
+  __OS_port_freeDead(p);
   return 0;
 }
 
@@ -139,8 +143,10 @@ void __OS_port_freeDead(int32_t p) {
   req_t * req;
   if (port == NULL) return;
   while ((req = nextReq(port)) != NULL) {
-    *(req->chan) = MYNOS_ERR_BROKEN;
-    __OS_sem_V(req->sem);
+    if (reqAlive(req)) {
+      *(req->chan) = MYNOS_ERR_BROKEN;
+      __OS_sem_V(req->sem);
+    }
     kfree(req);
   }
   pTable.free++;
@@ -196,9 +202,13 @@ int32_t __OS_port_listenPort(int32_t p) {
   if (port->owner != processTable[currProcess]->pid) return MYNOS_ERR_DENY;
   if (port->locked) return MYNOS_ERR_BUSY;
   LOCK_PORT(port);
-  __OS_sem_P(port->sem);
-  req = nextReq(port);
-  if (req == NULL) KPANIC("PANIC IN listenPort!");
+  for (;;) {                        /* one V on port->sem per request */
+    __OS_sem_P(port->sem);
+    req = nextReq(port);
+    if (req == NULL) KPANIC("PANIC IN listenPort!");
+    if (reqAlive(req)) break;
+    kfree(req);                     /* its connector has ended */
+  }
   channel = allocChannel(processTable[currProcess]->pid, req->pid);
   TRACE(TRACE_CONNECT, req->pid, CURRPID, channel, 0, p, NULL, 0);
   *(req->chan) = channel < 0 ? channel : channel + 1;  /* the other end */

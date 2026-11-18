@@ -8,6 +8,7 @@
 #include <mynos.h>
 #include <pthread.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 
 static int failures = 0;
 
@@ -36,6 +37,28 @@ static int big_port, big_sem;
 static void * big_listener(void * unused) {
   int ch = mynos_listenPort(big_port);
   mynos_P(big_sem);
+  if (ch >= 0) mynos_freeChannel(ch);
+  return NULL;
+}
+
+/* a thread waiting in recv is woken when the other end is freed
+   (mynos-3bb) */
+static int wake_port, wake_result = 1, wake_done;
+
+static void * wake_waiter(void * unused) {
+  mynos_msg_t * msg;
+  int ch = mynos_listenPort(wake_port);
+  wake_result = mynos_recv(ch, &msg, 0, 0);      /* no timeout */
+  mynos_freeChannel(ch);
+  wake_done = 1;
+  return NULL;
+}
+
+/* a live connector, after one that ended in the queue (mynos-blv) */
+static int queue_port;
+
+static void * queue_connector(void * unused) {
+  int ch = mynos_connectToPort(queue_port);
   if (ch >= 0) mynos_freeChannel(ch);
   return NULL;
 }
@@ -154,6 +177,66 @@ int main(int argc, char ** argv) {
     for (i = 0; i < n; i++) munmap(chunk[i], CHUNK);
     mynos_freeChannel(ch);
     check("and the system goes on", getpid() > 0);
+  }
+
+  /* the RAM disk's pages (0x40400000 up, when there is one) are every
+     process's: munmap refuses them (mynos-q5b) */
+  check("munmap refuses the RAM disk",
+        munmap((void *)0x40400000, 4096) == -1 && errno == EINVAL);
+
+  /* the last page directory entry of the kernel's gigabyte (0x3FC00000)
+     is empty: it used to point at physical page 0 with the user bit, and
+     the page fault handler saves EAX there, so a program could map any
+     frame for itself (mynos-vm8). A child tries; it must be ended. */
+  {
+    int st = 0;
+    pid_t pid = fork();
+    if (pid == 0) {
+      volatile char * fresh = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+      /* EAX = 7 (frame 0, present, writable, user) at a page fault the
+         kernel resolves (a fresh page, allocated on use) */
+      asm volatile("movl $7, %%eax\n\tmovb $1, (%0)" :: "r"(fresh) : "eax", "memory");
+      (void)*(volatile int *)0x3FC00000;
+      _exit(0);
+    }
+    waitpid(pid, &st, 0);
+    check("no user mapping below 1 GB", pid > 0 && WIFSIGNALED(st));
+  }
+
+  {
+    pthread_t t;
+    int ch, i;
+    wake_port = mynos_allocPort();
+    pthread_create(&t, NULL, wake_waiter, NULL);
+    ch = mynos_connectToPort(wake_port);
+    mynos_sleep(100000);                 /* the waiter is in recv */
+    mynos_freeChannel(ch);
+    for (i = 0; i < 20 && !wake_done; i++) mynos_sleep(100000);
+    check("recv is woken when the other end is freed",
+          wake_done && wake_result == MYNOS_ERR_BROKEN);
+    if (wake_done) pthread_join(t, NULL);
+  }
+
+  {
+    pthread_t t;
+    int st, ch;
+    pid_t child;
+    queue_port = mynos_allocPort();
+    child = fork();
+    if (child == 0) {                    /* queued, never listened to */
+      mynos_connectToPort(queue_port);
+      _exit(0);
+    }
+    mynos_sleep(200000);
+    mynos_kill(child);
+    waitpid(child, &st, 0);
+    pthread_create(&t, NULL, queue_connector, NULL);
+    ch = mynos_listenPort(queue_port);
+    check("listen skips a connector that has ended",
+          ch >= 0 && mynos_channelPeer(ch) == getpid());
+    if (ch >= 0) mynos_freeChannel(ch);
+    pthread_join(t, NULL);
   }
 
   printf("abi: %s\n", failures ? "SOME CHECKS FAILED" : "all checks passed");

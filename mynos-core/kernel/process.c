@@ -705,6 +705,19 @@ static int isRamdiskPT(uint32_t frame) {
 #define isRamdiskPT(frame) 0
 #endif
 
+/* whether [start, start + len) in the current process touches the RAM
+   disk's page tables, shared by every process (munmap must leave them
+   alone: mynos-q5b) */
+int __OS_touchesRamdisk(uint32_t start, uint32_t len) {
+  uint32_t pd;
+  if (len == 0) return 0;
+  for (pd = start >> 22; pd <= (start + len - 1) >> 22; pd++) {
+    uint32_t pde = *(uint32_t *)__GET_PAGE_DIR_ENTRY(pd);
+    if ((pde & PF_PRESENT) && isRamdiskPT(pde >> 12)) return 1;
+  }
+  return 0;
+}
+
 /*
  * Frees every frame of an ended process's address space, from another
  * process: its pages (program, heap, stacks, kernel stacks, process info;

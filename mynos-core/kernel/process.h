@@ -103,6 +103,8 @@ extern tss_t * currThread;
 /* the current process's pid */
 #define CURRPID (processTable[currProcess]->pid)
 
+int __OS_touchesRamdisk(uint32_t start, uint32_t len);
+
 /* the process of a pid (alive, or ended and not collected yet), or NULL:
    no such pid, or its slot holds a later process */
 static inline process_descriptor_t * proc(pid_t pid) {

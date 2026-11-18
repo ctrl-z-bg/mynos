@@ -707,6 +707,9 @@ int _linux_syscall_munmap(void *start, size_t length) {
       (uint32_t)start + length > USER_AREA_END)
     return -22;
   npages = (length - 1) / PAGE_SIZE + 1;
+  /* the RAM disk is every process's: not to be unmapped (mynos-q5b) */
+  if (__OS_touchesRamdisk((uint32_t)start, npages * PAGE_SIZE))
+    return -22;
   if (__OS_releasePages(start, npages, 1, 1) == NULL)
     return -1;
   return 0;

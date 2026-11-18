@@ -187,6 +187,26 @@ can be started again without the rest stopping.
   waiting for ever. A process ended by `kill` has its ports and channels
   freed as their owner (the kernel acts as the dying process meanwhile).
 
+### 9. What stays open, on purpose (2026-11-18)
+
+The documentation's review found three services that serve any process.
+The owner decided to leave them open: MyNOS has one user, and they are
+tools of that user.
+
+- **The event recorder** (mynos-kwe): any process may record, and a
+  recording keeps the first 56 bytes of every message, including what
+  other processes read (llmd reading `/disk/llm.env` in the Tour's model
+  lesson). It is a window on the whole system, and meant as one. Fixed
+  instead: two recordings no longer erase each other (one at a time;
+  only the process that started it stops and reads it).
+- **The disk's sectors** (`ata0`, block/1): any process may read and
+  write raw sectors, beneath fatfs (mynos-dow).
+- **Power** (power/1, served by init): any process may power off or
+  reboot, as anyone may press a PC's button.
+
+When MyNOS has users, these are the first three to close: the caller is
+already known to each service (`Ipc.caller`, section 4).
+
 ## Not now
 
 - **Users and files.** MyNOS is single-user; file services do not check

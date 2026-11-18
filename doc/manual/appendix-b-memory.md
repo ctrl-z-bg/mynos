@@ -43,7 +43,7 @@ works because the first gigabyte is the same in every process.
   0x40400000 ├─────────────────────────────────┤   shared by every process
              │ the program (text, data, bss)   │ at most 4 MB
   0x40000000 ╞═════════════════════════════════╡ ── user space above
-             │ PDE 255 (see B.14)              │
+             │ PDE 255: empty, never used      │
   0x3FC00000 ├─────────────────────────────────┤
              │ two one-page windows at         │
              │ 0x3FBFE000 (copy) and 0x3FBFF000│
@@ -58,8 +58,13 @@ works because the first gigabyte is the same in every process.
 
 **The kernel's gigabyte.** Page directory entries 0–255 (`KLAST_PAGE_DIR_ENTRY_USED`
 is 255 in `start.asm`) are copied into every new page directory. At boot
-`init_memory` (`mem.c`) allocates a page table for every one of them, 254
-pages that may be empty for ever. The point is that the kernel never adds
+`init_memory` (`mem.c`) allocates a page table for entries 0–254, pages
+that may stay empty for ever; entry 255 stays empty, and `__OS_askPages`
+never allocates in it. (Until November 2026 it pointed at physical page 0
+with the user bit set, "to tag it as allocated": low memory, where the
+page fault handler saves EAX, was read as a page table, so a program
+could put a value in EAX, cause a harmless fault, and get any physical
+frame mapped for itself at `0x3FC00000`: mynos-vm8.) The point is that the kernel never adds
 a page table to its own space after boot: if it did, the new directory
 entry would have to be written into every process's page directory. With
 all of them in place, a kernel mapping made in one address space appears
@@ -408,17 +413,14 @@ descriptor and the pid remain until the parent collects the status.
   not that a page it accepts for writing is writable: a system call
   writing into the RAM disk now ends the process (the write faults)
   instead of returning an error.
-- **`munmap` drops a reference on any user page**, including the RAM
-  disk's, whose page tables are shared: a process that unmaps them
-  removes them from every process and frees their frames (mynos-q5b).
+- `munmap` checks only that its range is in the user area, and (since
+  November 2026, mynos-q5b) that it does not touch the RAM disk's shared
+  page tables; it used to remove the RAM disk from every process.
 - A program's segments are all mapped writable: the text is not
   protected. `mprotect` is accepted and does nothing; `mmap` ignores its
   address and flags (mynos-51c).
 - Program text is not shared between processes running the same program
   (B.12).
-- Directory entry 255, the last of the kernel's gigabyte, is a
-  placeholder that points to physical page 0 (`init_memory`). Its
-  "entries" are whatever low memory holds (mynos-vm8).
 - One processor (mynos-awn): the single kernel window of B.11 and the
   page fault handler, which saves EAX at address 0, assume nothing else
   runs in the kernel.

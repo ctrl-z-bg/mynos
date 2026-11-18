@@ -1082,4 +1082,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   1, over the kernel's page table; the machine reset. Test in
   `tests/abi` (the linear space filled with `mmap`, a 128 MB send);
   without the fix the machine reboots in a loop.
+- **2026-11-18** — Four kernel bugs from the appendices' review, each
+  with a test in `tests/abi` that fails without the fix:
+  `munmap` refuses the RAM disk's shared page tables (mynos-q5b; with
+  CR0.WP it had become a kernel panic); page directory entry 255 is left
+  empty (mynos-vm8: it pointed at physical page 0 with the user bit, and
+  a program could map any frame for itself through the EAX the page
+  fault handler saves at address 0); freeing a channel end wakes the
+  thread waiting on the other side (mynos-3bb); `listenPort` skips a
+  connector that ended while queued, and `freePort` wakes the queued
+  ones (mynos-blv).
 

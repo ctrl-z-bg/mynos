@@ -160,7 +160,7 @@ int32_t isChannelBroken(int32_t c) {
 
 int32_t __OS_ipc_freeChannel(int32_t c) {
   channel_t * chan = getChannel(c);
-  unichannel_t * uc;
+  unichannel_t * uc, * w;
   int32_t broken;
 
   // check if I'm a channel partner
@@ -177,7 +177,25 @@ int32_t __OS_ipc_freeChannel(int32_t c) {
   // check if broken BEFORE erasing the receiver field
   // it could interfer with isChannelBroken 
   broken = isChannelBroken(c);
+  w = getMyWriteChannel(c);        /* (only while this end is still mine) */
   uc->receiver = -1;
+
+  /* wake whoever waits on the other side (mynos-3bb): a thread in recv
+     on the other direction finds no message and gets MYNOS_ERR_BROKEN; a
+     sender waiting for this side to take its message is released (its
+     next recv finds the channel broken) */
+  {
+    uint32_t i;
+    if (w && w->sem != -1) {
+      __OS_sem_V(w->sem);
+      w->sem = -1;
+    }
+    for (i = 0; i < MAXMSGS; i++)
+      if (uc->msg[i] && uc->msg[i]->sem != -1) {
+	__OS_sem_V(uc->msg[i]->sem);
+	uc->msg[i]->sem = -1;
+      }
+  }
   
 #ifdef DEBUG
   printk("process ");

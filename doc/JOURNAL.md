@@ -2202,3 +2202,36 @@ returns `MYNOS_ERR_FULL`.
 for every caller; here the caller checked for the convention of the rest
 of the kernel (negative errors) and not for this function's own.
 
+## 2026-11-18 — A placeholder that was a page table
+
+**Symptom.** None in use. The appendices' review noticed that page
+directory entry 255 pointed at physical page 0 with the user bit; a test
+showed what it meant.
+
+**Diagnosis.** In 2002 `init_memory` allocated page tables for the
+kernel's gigabyte and "tagged" the last entry as allocated by pointing it
+at address 0, to keep the kernel from using those 4 MB. A directory entry
+is not a tag: the processor reads the page it points to as a page table.
+Page 0 holds the BIOS's interrupt vectors and, at its very first word,
+the EAX that the page fault handler saves there (it uses address 0 as
+scratch). So a program could set EAX to `7` (frame 0, present, writable,
+user), touch a fresh page (a fault the kernel resolves, and returns from),
+and then read physical page 0 at `0x3FC00000`. Any other frame number
+works the same way. `tests/abi` does it in a forked child: without the
+fix the child reads and exits normally.
+
+**Fix.** Entry 255 stays empty; `__OS_askPages` stops at entry 254 for
+kernel pages, so it never needs a table there.
+
+**Three more from the same review.** `munmap` of the RAM disk (after
+CR0.WP, a kernel panic, since the shared page tables are read-only in
+the kernel's window); a freed channel end that woke nobody: the check
+used `getMyWriteChannel` after the end had been marked free, which then
+returns NULL; and a connector that ended while queued, whose request
+`listenPort` answered by writing into the dead thread's memory (the
+listener was the one killed).
+
+**Lesson.** Encoding "reserved" in a structure the hardware reads
+gives the hardware a vote. Reserve in the software's own bookkeeping
+instead.
+

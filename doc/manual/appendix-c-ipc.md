@@ -244,14 +244,22 @@ when `kill` (call 34) ended a service, the caller was the killer, the
 checks said "denied", and the service's ports stayed open (JOURNAL, "A
 killed service left a port that swallowed its clients").
 
-- **Its ports** go through `__OS_port_freeDead`, which, unlike `freePort`,
-  frees a port even if its owner died listening on it, and wakes every
-  process queued to connect with `MYNOS_ERR_BROKEN`. A client of
+- **Its ports** go through `__OS_port_freeDead`, which frees a port even
+  if its owner died listening on it, and wakes every process queued to
+  connect with `MYNOS_ERR_BROKEN` (`freePort` does the same). A client of
   libmynos or of `Ipc.Make` then asks the registry again, and finds the
   service init has restarted on a new port.
 - **Its channels** are freed end by end, as with `freeChannel`: the other
   side's `send` gets `MYNOS_ERR_BROKEN`, its `recv` the messages already
-  queued and then `MYNOS_ERR_BROKEN`.
+  queued and then `MYNOS_ERR_BROKEN`. Freeing an end also wakes the
+  other side if it is already waiting: a thread in `recv` (it then gets
+  `MYNOS_ERR_BROKEN`), and a sender waiting for its message to be taken
+  (its next `recv` finds the channel broken). Until November 2026 such
+  threads waited for ever (mynos-3bb).
+- **Its requests to connect**, if it ended while queued on another
+  process's port, stay in that queue: `listenPort` skips a request whose
+  process is no longer alive and waits for the next. (It used to write
+  the new channel into the dead thread's memory, and fault: mynos-blv.)
 
 The kernel sends no message when a process ends. A service that keeps
 something for its clients (netd's sockets, the registry's names) asks
@@ -296,13 +304,6 @@ full"), and the call returns `MYNOS_ERR_FULL`.
 
 ## C.9 Known limits
 
-- **A thread blocked on a channel is not woken when the other side frees
-  it.** Freeing an end only marks it; a `recv` without a timeout already
-  waiting, or a `send` waiting for its message to be taken, keeps
-  waiting. libmynos's clients receive without a timeout (mynos-3bb).
-- `freePort` does not wake the processes queued to connect (only
-  `__OS_port_freeDead` does), and a request queued by a process that then
-  ends stays in the port's queue (mynos-blv).
 - A long message's pages are mapped into the receiver when it is sent: a
   message never received (a queue full, a channel freed) leaves them in
   the receiver's address space until it ends. The receiver also sees the
