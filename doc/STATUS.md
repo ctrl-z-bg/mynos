@@ -984,4 +984,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   program started outside the session says so and ends (displayd refuses
   the window). Tests: Ctrl-C on the text console and in a Terminal
   window; a window from text mode.
+- **2026-11-18** — Screenshots in the README (the welcome window, the
+  System window, the shell), taken by `tools/screenshots.sh` (QEMU
+  headless, driven through its monitor; `tools/ppm2png.py` converts
+  QEMU's screen dumps with the standard library only). The README says
+  the project was taken up again in 2026 with the help of AI.
 

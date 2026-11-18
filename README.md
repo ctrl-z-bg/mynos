@@ -6,10 +6,32 @@
 > architecture and new language definition too.
 
 MyNOS is an experimental operating system for 32-bit x86, written between 2002
-and 2004. It consists of a small microkernel in C and assembly, with drivers and
-services running as user processes, and the OCaml bytecode interpreter ported to
-run on top of it. The long-term goal was an OS whose programs are written in a
-high-level language rather than in C.
+and 2004, and taken up again in 2026 with the help of AI. It consists of a
+small microkernel in C and assembly, with drivers and services running as user
+processes, and the OCaml bytecode interpreter ported to run on top of it. The
+long-term goal was an OS whose programs are written in a high-level language
+rather than in C.
+
+## Screenshots
+
+The graphical session as it starts: every window is a separate process,
+drawing in its own memory, which it shares with the display server.
+
+![The graphical session, with the welcome window](doc/screenshots/welcome.png)
+
+The System window draws the architecture as it is at that moment, from the
+hardware up: the microkernel, the drivers, the services and the programs
+running, each one a process (and what it is written in, OCaml or C). A
+recording of the event recorder can be replayed on it, a message at a time,
+as arrows from one process through the kernel to another.
+
+![The System window](doc/screenshots/system.png)
+
+The text console: the shell, written in OCaml, and its processes.
+
+![The shell, with ps](doc/screenshots/shell.png)
+
+`tools/screenshots.sh` takes them again.
 
 ## What's inside
 
@@ -144,14 +166,16 @@ its service) ends it. The top bar has a tab for each window.
 ## Status
 
 Development stopped at the end of 2004, after the IPC, threads, copy-on-write
-and the bytecode interpreter port were in place. In 2026 the original system
+and the bytecode interpreter port were in place. In 2026 the project was taken
+up again with the help of AI (Claude, through Claude Code): the original system
 was rebuilt, ported to a modern toolchain and moved to OCaml 5.5; it runs
 again in QEMU, and boots into a command shell, with the OCaml toplevel, an
 editor and the OCaml compiler inside. Services are written in OCaml too
 (the disk driver, the FAT file system, a web server, the language model
 service), over typed IPC; the network has TCP, UDP and TLS. The current
 state, known issues and a work log are kept in
-[`doc/STATUS.md`](doc/STATUS.md).
+[`doc/STATUS.md`](doc/STATUS.md); what was found on the way, bug by bug and
+decision by decision, in [`doc/JOURNAL.md`](doc/JOURNAL.md).
 
 ## Authors
 
