@@ -448,5 +448,16 @@ let () =
       if ev = Display.Tick && not (alive ()) then () else loop ()
     | exception _ -> () in
   loop ();
+  (* closed with sh still running: a hang-up. sh and what it started (a
+     program in the foreground, jobs started with &) end with the
+     terminal; what has left the tree (a service an agent started, whose
+     parent has ended) stays *)
+  if alive () then begin
+    let ps = try Mynos.processes () with Mynos.Error _ -> [] in
+    let rec tree pid =
+      pid :: List.concat_map (fun (p : Mynos.process) ->
+          if p.parent = pid then tree p.p_pid else []) ps in
+    List.iter (fun pid -> try Mynos.kill pid with Mynos.Error _ -> ()) (tree child)
+  end;
   Display.destroy w;
   exit 0

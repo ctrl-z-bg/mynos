@@ -266,7 +266,7 @@ fi
 # the graphical session (doc/decisions/gui.md): displayd, windows of
 # programs, the mouse, back to text mode. QEMU's monitor moves the mouse
 # relatively: vmmouse (absolute) is off, the PS/2 mouse is used
-gui_ok= powered_off=
+gui_ok= powered_off= gui_hangup=
 if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     : > "$tmp/logg"
     # the agent window's model: the fake provider, as in the seventh boot
@@ -362,6 +362,8 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     click 20 10; sleep 1; click 30 215; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt\n'; sleep 2
     mon "screendump $tmp/gui3.ppm"; sleep 1
+    # the terminal closed with its sh running: a hang-up, sh ended too
+    tools/type-keys.py "$tmp/mon-g" 'ps\n'; sleep 3
     # turning the machine off: init does it, QEMU ends by itself
     tools/type-keys.py "$tmp/mon-g" 'shutdown\n'
     i=0
@@ -374,6 +376,14 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     wait $qemu || true
     kill $llmg_pid 2>/dev/null; wait $llmg_pid 2>/dev/null || true
     [ -n "${SHOTS:-}" ] && cp "$tmp"/gui*.ppm "$SHOTS"/   # SHOTS=DIR keeps the screens
+    python3 - "$tmp/logg" <<'PY' && gui_hangup=yes
+import re, sys
+s = open(sys.argv[1], "rb").read().decode("latin-1")
+table = s[s.rfind("  pid  ppid thr"):].splitlines()[1:]
+rows = [l.split() for l in table if re.match(r"\s+\d+\s+\d+\s+\d+\s", l)]
+names = [r[4] if r[3] == "io" else r[3] for r in rows]
+assert names.count("sh") == 1 and "terminal" not in names, names
+PY
     cat "$tmp/logg" >> "$log"
     python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
               "$tmp"/gui6.ppm "$tmp"/gui7.ppm "$tmp"/gui8.ppm "$tmp"/gui9.ppm \
@@ -785,6 +795,11 @@ PY
         echo "FAIL  gui: a session, windows of programs, a click, back to text"; fail=1
     fi
     expect "gui: displayd describes display/1 as display.ml does"
+    if [ -n "$gui_hangup" ]; then
+        echo "ok    gui: a terminal closed ends its sh (a hang-up)"
+    else
+        echo "FAIL  gui: a terminal closed ends its sh (a hang-up)"; fail=1
+    fi
     expect "init: shutdown asked by pid"
     if [ -n "$powered_off" ]; then
         echo "ok    shutdown: init turned the machine off (ACPI)"

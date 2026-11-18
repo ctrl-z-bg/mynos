@@ -947,4 +947,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   ghosts that served calls among the services. Tests: kill by name and by
   `$!`, init refused; a slip off the close box, a close, a tab; another
   boot's recording (`tests/greeter/old-boot.trc`).
+- **2026-11-18** — A terminal closed with its close box left its sh
+  running, reading a console that was gone (the owner saw the processes
+  grow). Now a read from a console that has gone is the end of the input,
+  and the terminal ends sh and its descendants when closed (a hang-up).
+  Test: after the graphical session, `ps` shows one sh and no terminal.
 

@@ -1890,3 +1890,25 @@ their own processes.
 waits), look for the state the system already handles that the new case
 reduces to.
 
+## 2026-11-18 — A terminal closed with its box left its sh behind
+
+**Symptom** (the owner). Leaving a terminal window with Ctrl-D kept the
+number of processes steady; closing it with its close box made it grow
+every time.
+
+**Diagnosis.** Ctrl-D ends sh, and the terminal, seeing its child gone,
+closes: both end. The close box ends the terminal only. Its sh stayed,
+reading from a console service that no longer existed: libmynos turned
+the failed call into an error (EIO), not an end of file, so sh (and any
+program reading) did not know it had to end.
+
+**Fix.** As Unix does on a hang-up: a read from a console that has gone
+returns the end of the input; and the terminal, closed while its sh
+runs, ends sh and every process under it (now that `kill` exists).
+Services an agent started have left the tree (their parent ended) and
+stay.
+
+**Lesson.** A process's end has to reach what depended on it: here, the
+far end of a console. "Nobody answers" is an end of file, not an error to
+retry.
+

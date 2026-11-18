@@ -177,7 +177,9 @@ static ssize_t console_read(int port, void * buf, size_t count)
   req.op = CONSOLE_READ;
   req.len = count;
   req.pid = getpid();
-  if (call(port, &req, sizeof(req), &msg, NULL) < 0) { errno = EIO; return -1; }
+  /* a console that has gone (its terminal closed): the end of the input,
+     as a hang-up is in Unix, so that programs reading it end */
+  if (call(port, &req, sizeof(req), &msg, NULL) < 0) return 0;
   n = msg->size < count ? msg->size : count;
   memcpy(buf, msg->start, n);
   mynos_freeMsg(&msg);
