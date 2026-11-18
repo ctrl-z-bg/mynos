@@ -15,7 +15,7 @@ up=$1; shift
 # compiled for the standard runtime refers to the builtin primitives by
 # their position in this table, so ours must not shift any of them.
 { cat "$up/primitives"
-  sed -n -e 's/^CAMLprim value \([a-z][a-z0-9_]*\).*$/\1/p' "$@" | sort |
+  sed -n -e 's/^CAMLprim value \([a-z][a-z0-9_]*\).*$/\1/p' "$@" | sort -u |
     { grep -vxF -f "$up/primitives" || true; }
 } > primitives
 

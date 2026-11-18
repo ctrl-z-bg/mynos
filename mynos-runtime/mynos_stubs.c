@@ -403,17 +403,23 @@ CAMLprim value caml_mynos_time(value unit)
 
 /* ---- console ---- */
 
+/* (a request to the console service: other threads run meanwhile) */
 CAMLprim value caml_mynos_console_mode(value canon, value echo, value vmin,
 				       value vtime)
 {
-  mynos_consoleMode(Bool_val(canon), Bool_val(echo), Int_val(vmin),
-		    Int_val(vtime));
+  int c = Bool_val(canon), e = Bool_val(echo), m = Int_val(vmin), t = Int_val(vtime);
+  caml_enter_blocking_section();
+  mynos_consoleMode(c, e, m, t);
+  caml_leave_blocking_section();
   return Val_unit;
 }
 
 CAMLprim value caml_mynos_console_foreground(value pid)
 {
-  mynos_consoleForeground(Int_val(pid));
+  int p = Int_val(pid);
+  caml_enter_blocking_section();
+  mynos_consoleForeground(p);
+  caml_leave_blocking_section();
   return Val_unit;
 }
 

@@ -307,8 +307,9 @@ links it with a short `main()` that picks the bytecode file to open
 programs with `Mynos.spawn "ocamlrun" [| "ocamlrun"; "prog.byte"; … |]`
 and `Mynos.wait`. Bytecode is compiled with `ocamlc` 5.5.2.
 Effect handlers and domains work (`tests/effects`, `tests/domains`, and
-`Domain.spawn` in the shell); the `Thread` module needs the systhreads and
-unix stubs in the runtime (mynos-09i).
+`Domain.spawn` in the shell), and so do OCaml's threads (`Thread`,
+`Mutex`, `Condition`, `Event`: the systhreads and unix stubs are in the
+runtime, mynos-09i).
 Decision and evidence: `doc/decisions/ocaml-runtime.md`.
 
 ### Boot flow
@@ -468,7 +469,6 @@ last commit that still builds with that toolchain `legacy-last`.
 
 | Issue | Where | Problem |
 |---|---|---|
-| mynos-09i | `mynos-runtime/` | No OCaml `Thread` module yet (needs systhreads and unix stubs); domains work. |
 | mynos-awn | `mynos-core/kernel/` | One CPU: threads and domains run in turn, not in parallel. |
 | mynos-37p | `mynos-core/kernel/` | The io privilege is all or nothing (no per-port I/O bitmap yet); copies to user memory go through `copy_to_user` only where a call blocks first (`recv`, `wait4`): elsewhere the entry check suffices, as the kernel is not preempted. |
 | — | `mynos-core/kernel/threads.c` | Native MyNOS threads (`mynos_threadCreate`) share their creator's TLS: code that uses the C library should use pthreads. |
@@ -1021,4 +1021,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   caller the kernel names. Recordings decode it like any protocol
   (`fs/1 Open ("init.rc", 0)`); the tour's notes and the tests follow.
   Tests: memrofs lists, refuses a write, describes fs/1 as `fs.ml` does.
+- **2026-11-18** — OCaml's threads (mynos-09i, ocaml-runtime.md): the
+  systhreads and unix C stubs, built with musl from sources the container
+  keeps, are linked into `ocamlrun` with their primitives; programs link
+  the compiler's `unix.cma` and `threads.cma` with `-noautolink` (no
+  shared libraries); both are on the RAM disk for `ocamlc` inside MyNOS.
+  The console stubs release the runtime lock while they wait. Tests:
+  threads with Mutex, Condition, Event, Thread.delay, and MyNOS calls
+  that wait while other threads run; a threaded program compiled inside
+  MyNOS.
 

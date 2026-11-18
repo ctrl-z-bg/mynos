@@ -4,7 +4,9 @@
 # User-space programs are static Linux i386 binaries built with musl.
 # OCaml 5.5.2 (doc/decisions/ocaml-runtime.md):
 #   /opt/ocaml-5.5.2            the compiler (bytecode only), to compile programs
-#   /opt/ocaml-runtime-musl     the upstream bytecode runtime built with musl
+#   /opt/ocaml-runtime-musl     the upstream bytecode runtime built with musl,
+#                               and the C sources of the unix and threads
+#                               libraries (mynos-runtime builds them)
 #                               (libcamlrun.a, prims.o) linked into MyNOS's
 #                               ocamlrun by mynos-runtime/Makefile, plus what
 #                               is needed to add primitives: the primitives
@@ -52,6 +54,9 @@ RUN mkdir /tmp/musl && cd /tmp/musl \
  && cp runtime/libcamlrun.a runtime/prims.o runtime/prims.c runtime/primitives \
        runtime/build_config.h /opt/ocaml-runtime-musl/ \
  && cp -r runtime/caml /opt/ocaml-runtime-musl/caml \
+ && mkdir -p /opt/ocaml-runtime-musl/otherlibs \
+ && cp -r otherlibs/unix otherlibs/systhreads /opt/ocaml-runtime-musl/otherlibs/ \
+ && cp Makefile.config /opt/ocaml-runtime-musl/ \
  && echo "${OCAML_VERSION}" > /opt/ocaml-runtime-musl/VERSION
 
 # --- Stage 3: the toolchain --------------------------------------------------

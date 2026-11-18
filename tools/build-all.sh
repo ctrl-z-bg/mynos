@@ -48,6 +48,7 @@ make -C tests/spawn
    -I ../../mynos-lib/ocaml mynos.cma -o greeter.byte greeter.ml)
 (cd tests/effects && ocamlc -o effects.byte effects.ml)
 (cd tests/domains && ocamlc -o domains.byte domains.ml)
+make -C tests/threads
 (cd tests/ramdisk && ../../services/fs/memrofs/tool/createDisk AUTOEXEC.BAT)
 make -C third_party/kilo
 make -C third_party/notty

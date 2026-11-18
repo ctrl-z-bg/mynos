@@ -116,6 +116,17 @@ if [ -f tests/fat/ramdisk.dsk ]; then
 fi
 }
 
+sec_threads() {
+# OCaml's threads (systhreads): Mutex, Condition, Event, and MyNOS calls
+# that wait without stopping the other threads
+if [ -f tests/threads/threads_test.byte ]; then
+    MEM=128 timeout "${WAIT:-20}" tools/run-qemu.sh "$ocamlrun" \
+        tests/threads/threads_test.byte services/registry/registry \
+        -- -display none -serial null -serial "file:$tmp/logt" || true
+    cat "$tmp/logt" >> "$part"
+fi
+}
+
 sec_domains() {
 # eighth boot: domains, i.e. Linux threads (clone, futex)
 if [ -f tests/domains/domains.byte ]; then
@@ -691,6 +702,10 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     # services come back: fatfs killed, restarted by init, found again by
     # sh (libmynos); a client of greeter (OCaml, Ipc) that finds it again
     # after it was killed and started anew
+    # a program with a thread, compiled inside MyNOS (unix.cma, threads.cma
+    # on the RAM disk; -noautolink: the runtime has their primitives)
+    tools/type-keys.py "$tmp/mon7" "echo 'let () = let t = Thread.create (fun () -> print_endline (\"from-a-\" ^ \"thread\")) () in Thread.join t' > /disk/th.ml\n"; sleep 2
+    tools/type-keys.py "$tmp/mon7" 'ocamlc -use-prims /primitives unix.cma threads.cma -noautolink -o /disk/th.byte /disk/th.ml && /disk/th.byte\n'; sleep 25
     tools/type-keys.py "$tmp/mon7" 'kill fatfs\n'; sleep 4
     tools/type-keys.py "$tmp/mon7" 'X=back; echo fatfs-$X > /disk/back.txt; cat /disk/back.txt\n'; sleep 3
     tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte &\n'; sleep 3
@@ -771,7 +786,7 @@ for lane in ${LANES:-a b c d e}; do
         part=$tmp/part-$lane
         : > "$part"
         case $lane in
-            a) sec_first || true; sec_effects || true; sec_storage || true; sec_fat || true; sec_domains || true ;;
+            a) sec_first || true; sec_effects || true; sec_storage || true; sec_fat || true; sec_domains || true; sec_threads || true ;;
             b) sec_mlib || true; sec_files || true; sec_stress || true; sec_spawn || true; sec_console || true ;;
             c) sec_nocom2 || true; sec_reboots || true ;;
             d) sec_gui || true ;;
@@ -808,6 +823,7 @@ expect "5 * 5 = 25"
 expect "Service keyboard registered"
 expect "Service serial registered"
 expect "Hello from memrofs!"
+expect "threads: all checks passed"
 expect "abi: all checks passed"
 if [ -f tests/stress/ramdisk.dsk ]; then
     expect "stress: all checks passed"
@@ -906,6 +922,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "st-137"                                    # Ctrl-C ended greeter
     expect "init: restarting fatfs.byte"               # a killed service, back
     expect "fatfs-back"                                # and found again by sh
+    expect "from-a-thread"                             # threads, compiled in MyNOS
     expect "Hello, reborn again, from MyNOS!"          # by an OCaml client too
     if [ -n "$trace_calls" ]; then
         echo "ok    trace: sh -> fatfs -> ata0, nested calls"

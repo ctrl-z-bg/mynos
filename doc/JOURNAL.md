@@ -2049,3 +2049,27 @@ program now depends on the library it links. Lesson: when a protocol
 changes, the build must rebuild every speaker of it; a test that passes
 alone and fails in the suite may be testing a different binary.
 
+## 2026-11-18 — OCaml's threads, and a bytecode that asked for DLLs
+
+**Done.** The systhreads and unix C stubs, built with musl from sources
+the container now keeps, linked into `ocamlrun` with their primitives;
+the compiler's own `threads.cma` and `unix.cma` link against them. The
+first test passed whole: three threads under a Mutex, a Condition, an
+Event, `Thread.delay`, and threads that keep running while another waits
+in a MyNOS call.
+
+**The one catch.** Linked the usual way, a threaded program's bytecode
+lists `dllunixbyt` and `dllthreads` among the shared libraries to load at
+start; MyNOS's runtime is static and loads none. `-noautolink` leaves
+them out: the primitives are found in the runtime's own table.
+
+**Why the waiting calls were already right.** The stubs that wait (IPC,
+sleep, wait, semaphores) gave the runtime lock up since the domains came:
+a domain waiting in a call while holding it would have stopped the
+others' garbage collection. Threads of one domain needed the same; only
+the console's two requests were missing.
+
+**Lesson.** Work done for one feature (domains) often carries most of
+the next (threads): reading what is already there first turned an
+estimate of two or three days into an afternoon.
+

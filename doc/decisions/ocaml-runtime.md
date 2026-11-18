@@ -120,3 +120,29 @@ gains `clone` and, for real parallelism, SMP.
 
 Effect handlers are the reason to choose 5.x now rather than later: they are
 the natural way to write the OCaml services of mynos-a2j.
+
+## Threads (2026-11-18, mynos-09i)
+
+OCaml's `Thread` module (systhreads), with `Mutex`, `Condition` and
+`Event`, works on MyNOS: threads of one domain, on musl's pthreads
+(clone, futex, as the domains).
+
+- **The C stubs**: the container keeps the musl-configured sources of
+  `otherlibs/unix` and `otherlibs/systhreads` beside the runtime;
+  `mynos-runtime/Makefile` compiles them and links them into `ocamlrun`,
+  and `gen_prims.sh` adds their primitives to the table (684 in all;
+  duplicates from `#ifdef` branches removed). `threads.cma` needs
+  `unix.cma`, so every Unix primitive is there; those whose Linux calls
+  MyNOS lacks fail when called (ENOSYS), until someone needs them.
+- **Linking**: programs use the compiler's own `unix.cma` and
+  `threads.cma` with `-noautolink`: without it the bytecode asks for the
+  shared libraries `dllunixbyt` and `dllthreads`, which a static runtime
+  cannot load. Inside MyNOS they are on the RAM disk:
+  `ocamlc -use-prims /primitives unix.cma threads.cma -noautolink ...`.
+- **The runtime lock**: a stub that waits must let the domain's other
+  threads run (`caml_enter_blocking_section`). Most MyNOS stubs did
+  already, for the domains (send, recv, connect, listen, sleep, wait,
+  spawn, semaphores, the registry); the console's two requests now do too.
+- **Analysis and estimate** (before the work): kept in the issue
+  (`bd show mynos-09i`, design field).
+
