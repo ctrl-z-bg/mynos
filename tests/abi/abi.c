@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <mynos.h>
+#include <pthread.h>
 
 static int failures = 0;
 
@@ -19,6 +20,25 @@ static long linux_syscall0(long n) {
 static void check(const char * what, int ok) {
   printf("abi: %-40s %s\n", what, ok ? "ok" : "FAIL");
   if (!ok) failures++;
+}
+
+/* a long message's pages are copy-on-write in the sender and the
+   receiver: a write by the kernel into the sender's buffer (a system call
+   that returns a value there) must not reach the message (mynos-bvz) */
+static char cow_buf[8192] __attribute__((aligned(4096)));
+static int cow_port, cow_sem, cow_ok = -1;
+
+static void * cow_receiver(void * unused) {
+  mynos_msg_t * msg;
+  int ch = mynos_listenPort(cow_port), i;
+  if (ch < 0 || mynos_recv(ch, &msg, 0, 0) < 0) return NULL;
+  mynos_P(cow_sem);                       /* the sender has written */
+  cow_ok = msg->size == sizeof cow_buf;
+  for (i = 0; i < (int)sizeof cow_buf; i++)
+    if (((char *)msg->start)[i] != 'x') cow_ok = 0;
+  mynos_freeMsg(&msg);
+  mynos_freeChannel(ch);
+  return NULL;
 }
 
 int main(int argc, char ** argv) {
@@ -62,6 +82,39 @@ int main(int argc, char ** argv) {
     clock_gettime(CLOCK_MONOTONIC, &t1);
     ms = (t1.tv_sec - t0.tv_sec) * 1000 + (t1.tv_nsec - t0.tv_nsec) / 1000000;
     check("mynos_sleep(100ms) sleeps 100..300 ms", ms >= 100 && ms < 300);
+  }
+
+  /* pointers into the kernel are refused (-EFAULT), never followed
+     (mynos-3po): the kernel is linked at 2 MB */
+  {
+    void * kernel = (void *)0x200000;
+    long r;
+    asm volatile("int $0x80" : "=a"(r)
+                 : "a"(140), "b"(0), "c"(0), "d"(0), "S"(kernel), "D"(0) : "memory");
+    check("_llseek refuses a result pointer into the kernel", r == -14);
+    asm volatile("int $0x80" : "=a"(r)
+                 : "a"(267), "b"(CLOCK_MONOTONIC), "c"(0), "d"(kernel), "S"(0) : "memory");
+    check("clock_nanosleep refuses a request in the kernel", r == -14);
+    asm volatile("int $0x80" : "=a"(r)
+                 : "a"(407), "b"(CLOCK_MONOTONIC), "c"(0), "d"(kernel), "S"(0) : "memory");
+    check("clock_nanosleep (time64) refuses a request in the kernel", r == -14);
+  }
+
+  {
+    pthread_t t;
+    int ch;
+    memset(cow_buf, 'x', sizeof cow_buf);
+    cow_port = mynos_allocPort();
+    cow_sem = mynos_initSem(0);
+    pthread_create(&t, NULL, cow_receiver, NULL);
+    ch = mynos_connectToPort(cow_port);
+    mynos_send(ch, cow_buf, sizeof cow_buf, 0);
+    clock_gettime(CLOCK_REALTIME, (struct timespec *)cow_buf);  /* the kernel writes */
+    mynos_V(cow_sem);
+    pthread_join(t, NULL);
+    check("a kernel write keeps a sent message intact", cow_ok == 1);
+    check("and reaches the sender's own copy", cow_buf[0] != 'x' || cow_buf[1] != 'x');
+    mynos_freeChannel(ch);
   }
 
   printf("abi: %s\n", failures ? "SOME CHECKS FAILED" : "all checks passed");

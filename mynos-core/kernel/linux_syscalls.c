@@ -385,6 +385,7 @@ int _linux_syscall_nanosleep(struct timespec32 * req, struct timespec32 * rem) {
 int _linux_syscall_clock_nanosleep(uint32_t clock, int flags,
 				   struct timespec32 * req,
 				   struct timespec32 * rem) {
+  USER(req, sizeof *req);
   if (req->tv_sec < 0 || req->tv_nsec < 0 || req->tv_nsec >= 1000000000)
     return -22;
   return sleep_for(clock, flags, req->tv_sec, req->tv_nsec);
@@ -393,6 +394,7 @@ int _linux_syscall_clock_nanosleep(uint32_t clock, int flags,
 int _linux_syscall_clock_nanosleep64(uint32_t clock, int flags,
 				     struct timespec64 * req,
 				     struct timespec64 * rem) {
+  USER(req, sizeof *req);
   if (req->tv_sec < 0 || req->tv_nsec < 0 || req->tv_nsec >= 1000000000)
     return -22;
   return sleep_for(clock, flags, (uint32_t)req->tv_sec,
@@ -624,7 +626,9 @@ long _linux_syscall_lseek(int fd, long offset, uint32_t whence) {
 /* _llseek (140): 64-bit offset in two halves, result written back */
 int _linux_syscall_llseek(uint32_t fd, ulong32_t offhi, ulong32_t offlow,
 			  long long int * result, uint32_t whence) {
-  long long pos = bytecode_seek(((long long)offhi << 32) | offlow, whence);
+  long long pos;
+  USER(result, sizeof *result);
+  pos = bytecode_seek(((long long)offhi << 32) | offlow, whence);
   if (pos < 0) return (int)pos;
   *result = pos;
   return 0;
@@ -851,7 +855,7 @@ int _linux_syscall_fork() {
   }
 
   /* set the PD pointer: now ptc is the last but one PT */
-  ptc[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(pdc) | PF_PRESENT;
+  ptc[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(pdc) | PF_READWRITE | PF_PRESENT;
   kmemcpy((void*)lastPT, (void*)pdc, PAGE_SIZE);
   __OS_releasePages(ptc, 1, 0, 0);
 

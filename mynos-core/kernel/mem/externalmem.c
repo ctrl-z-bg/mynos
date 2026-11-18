@@ -41,7 +41,7 @@ static int32_t __mapPageTo(pid_t pid,
 
 /* map a physical page to the externalVMPage (see mem.h) */
 static void __mapPageToAppPage(uint32_t phyPage) {
-  *(__EXTERNAL_VMSPACE_PAGE_ENTRY) = (phyPage<<12) | 0x1;
+  *(__EXTERNAL_VMSPACE_PAGE_ENTRY) = (phyPage<<12) | PF_READWRITE | PF_PRESENT;
   INVALIDATE_THE_CACHE((void*)__EXTERNAL_VMSPACE_PAGE);
 }
 

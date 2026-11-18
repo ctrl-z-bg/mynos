@@ -464,8 +464,6 @@ service learns that a client went away when its channel breaks
   (mynos-d6k).
 - The kernel's own file calls ignore their path and descriptor: on a
   system without file services every `open` and `stat` finds module 1.
-- `clock_nanosleep` (267, 407) reads its time, and `_llseek` (140)
-  writes its result, without checking the pointer first (mynos-3po).
 - The initial stack must fit in one page; the auxiliary vector is empty.
 - Futexes: 256 waiters in all; no priority inheritance or robust lists.
 - The clocks tick at 100 Hz: no time is finer than 10 ms, and a sleep

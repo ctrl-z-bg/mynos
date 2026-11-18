@@ -245,6 +245,20 @@ the page writable again; otherwise it copies the page into a new frame
 through a fixed kernel window (`0x3FBFE000`), maps the copy writable, and
 drops one reference on the old frame.
 
+**The kernel writes by the same rules.** The processor's write-protect
+bit (CR0.WP) is on (since November 2026, mynos-bvz): in ring 0 too, a
+write to a read-only page faults. So when a system call writes into a
+copy-on-write page (a call that returns a value into a buffer the
+process has just sent as a message), the handler copies the page first,
+and the frame the receiver sees is left alone. Every page of the kernel
+is mapped writable on purpose: the boot's identity mapping, the kernel
+stacks, the page table windows (`start.asm`, `__OS_askPagesFrom`,
+`createProcess`). A kernel write to a page that is read-only and not
+copy-on-write is a bug: it is logged ("kernel write to a read-only
+page") before the process ends or the kernel stops. Before WP was set,
+those writes silently went through: into a frame shared with another
+process, or into the RAM disk.
+
 ## B.8 What the C library sees
 
 musl calls the Linux interface (appendix D), and the kernel answers:
@@ -346,8 +360,9 @@ text of a program is not shared between the processes that run it.
 **fork** (`_linux_syscall_fork`, `linux_syscalls.c`) copies the directory
 and every user page table; user pages become copy-on-write, with one more
 reference each; supervisor pages in user space (kernel stacks) are copied
-at once, because, as its comment says, the processor does not check the
-read-only bit in ring 0 (B.14). The free list is copied too.
+at once (the comment dates from before CR0.WP was set; copying them is
+still right, a kernel stack is the thread's own). The free list is
+copied too.
 
 **A process that ends** cannot free its memory itself: it is running on
 its kernel stack, with its page directory in CR3 (appendix A.9). It joins
@@ -389,12 +404,10 @@ descriptor and the pid remain until the parent collects the status.
 - **No swap.** When physical memory runs out, an allocation on use or a
   copy-on-write stops the system ("full memory!"). Paging to disk through
   an external pager is mynos-vzp.
-- **The processor's write-protect bit (CR0.WP) is not set** (`start.asm`
-  sets only paging). In ring 0 the read-only bit is ignored, so the
-  kernel's own writes into a user page do not fault: a `copy_to_user`
-  into a copy-on-write page writes the shared frame, and into the RAM
-  disk writes the RAM disk. `__mem_userArea` does not check that a page
-  it accepts for writing is writable (mynos-bvz).
+- `__mem_userArea` checks that a pointer is in the process's user pages,
+  not that a page it accepts for writing is writable: a system call
+  writing into the RAM disk now ends the process (the write faults)
+  instead of returning an error.
 - **`munmap` drops a reference on any user page**, including the RAM
   disk's, whose page tables are shared: a process that unmaps them
   removes them from every process and frees their frames (mynos-q5b).

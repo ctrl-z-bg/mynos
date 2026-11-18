@@ -2152,3 +2152,33 @@ floats in the same 10 ms is invisible to a test suite of programs that
 behave. Writing down how a mechanism works, from the code, is what made
 the missing half visible.
 
+## 2026-11-18 — CR0.WP, and a kernel that never asked to write
+
+**Symptom.** Found by the appendices' review: with CR0.WP clear, ring 0
+ignores the read-only bit. `tests/abi` showed it: a thread sends 8 KB, the
+sender then calls `clock_gettime` with the buffer as its result, and the
+receiver's message changes, because the kernel wrote into the frame both
+mappings share.
+
+**Turning WP on was the easy line.** The kernel then did not boot at all.
+Since 2002 it had mapped its own memory with the present bit only:
+`start.asm`'s identity map, its stack and page-table windows,
+`createProcess`'s kernel stacks and process info pages, the window into
+another process's memory (`| 0x1`), the copy-on-write window (flags 0),
+`__OS_askPages` for kernel pages. With WP off, "read-only" meant nothing
+in ring 0, so nobody had noticed. Each was found by booting under
+`qemu -d int` (a fault with `cpl=0`, `e=0003`: present, write,
+supervisor) and `addr2line` on its EIP, then by a log line the handler
+now prints for any kernel write to a read-only page; the full suite runs
+with none.
+
+**Fix.** WP set in `mynos_main` before the first task switch; kernel
+mappings writable by rule (`__OS_askPagesFrom` adds R/W to supervisor
+pages) and at each place that writes entries by hand. The page fault
+handler needed nothing: copy-on-write and allocation on use never looked
+at who faulted.
+
+**Lesson.** A protection the hardware does not enforce is a convention,
+and conventions drift: twenty-four years of code had "read-only" kernel
+pages that were written all the time.
+

@@ -1065,4 +1065,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   kernel is compiled with `-mgeneral-regs-only`. Test `tests/fpu`: two
   threads keep x87 and SSE values and their rounding mode across
   preemptions (it fails on the old kernel).
+- **2026-11-18** — The kernel's writes respect read-only pages
+  (mynos-bvz): CR0.WP is set before the first task switch, so a system
+  call writing into a copy-on-write page copies it first (a sent
+  message's frame was changed under its receiver). Every kernel mapping
+  is now writable on purpose (boot's identity map and page-table
+  windows, kernel stacks, process info pages, the external window, the
+  copy-on-write window); a kernel write to a read-only page is logged.
+  And the pointers of `clock_nanosleep` (both) and `_llseek` are checked
+  (mynos-3po; the other Linux calls with pointers were audited). Tests:
+  `tests/abi` (pointers into the kernel refused; a kernel write keeps a
+  sent message intact).
 

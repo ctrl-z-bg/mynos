@@ -220,6 +220,10 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
   if (npages < 1)
     return NULL;
 
+  /* the kernel's own pages are writable (with CR0.WP its writes respect
+     the R/W bit too) */
+  if (!(flags & PF_USER)) flags |= PF_READWRITE;
+
   /* I don't check the last_page because the last linear page is already
      allocated */
 
@@ -425,7 +429,7 @@ uint32_t __mem_copyPageToCOWSpace(uint32_t addr) {
     __SET_PAGE_TABLE_ENTRY_AND_ALLOC(__COW_TABLE,
 				     __COW_ENTRY,
 				     (pmem_findAFreePhysicalPage() << 12),
-				     0);
+				     PF_READWRITE);
     
     /* reload the cache corresponding to the current cow page */
     INVALIDATE_THE_CACHE((void*)__COW_PAGE);
@@ -659,6 +663,15 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode, uint32_t * frame) {
   if (!((*pte) & PF_LOGICAL_PRESENT) &&
       !((*pte) & PF_COW)) { // not allocated & not cow
     if (errcode & 4) __userSegfault(addr);
+    if ((errcode & 3) == 3) {   /* the kernel wrote on a read-only page */
+      printk("kernel write to a read-only page at ");
+      print_ulong_hex(addr);
+      printk(", pte ");
+      print_ulong_hex(*pte);
+      printk(", eip ");
+      print_ulong_hex(frame[8]);
+      print_char('\n');
+    }
     if (copy_user_fixup(frame)) return;
     if (addr >= USER_AREA_START && addr < USER_AREA_END) __userSegfault(addr);
     kernel_on_screen = 1;

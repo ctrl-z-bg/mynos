@@ -350,15 +350,15 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   currPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(currPF +(PDPT_ENTRIES*i)) 
     | PF_USER | PF_PRESENT | PF_READWRITE;
 
-  newPD[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
-  lastPT[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_PRESENT;
+  newPD[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_READWRITE | PF_PRESENT;
+  lastPT[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | PF_READWRITE | PF_PRESENT;
 
   pun = infoAndStacksPTs;
 
   /* register the last PTs */
   for (i = (LAST_PDPT_INDEX - 1) - nInfoAndStacksPTs + 1; i < LAST_PDPT_INDEX; i++) {
     newPD[i] = LINEAR_TO_PHYSICAL_ADDRESS(pun) | PF_USER | PF_READWRITE | PF_PRESENT;
-    lastPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(pun) | PF_PRESENT;
+    lastPT[i] = LINEAR_TO_PHYSICAL_ADDRESS(pun) | PF_READWRITE | PF_PRESENT;
     pun += PDPT_ENTRIES;
   }
 
@@ -387,7 +387,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   for (i = 0; i < KERNEL_STACK_NPAGES; i++) {
     if ((stackFrame = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
     ALIAS(stackFrame, 1);
-    *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_PRESENT;
+    *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(stackFrame) | PF_READWRITE | PF_PRESENT;
     /* at the end of this cycle stackData points to the last kernel
        stack page of the new process, mapped in the current process page */
     stackData = stackFrame;
@@ -398,7 +398,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
     if ((currPF = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
     ALIAS(currPF, 1);
     kbzero(currPF, PAGE_SIZE);
-    *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_PRESENT;
+    *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(currPF) | PF_READWRITE | PF_PRESENT;
   }
   
   /* copy the first shared entries in the PTs images */
@@ -406,10 +406,10 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
     lastPT[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
 
   lastPT[_asm_last_kernel_page_dir_entry_used + 1] = 
-    LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_PRESENT;
+    LINEAR_TO_PHYSICAL_ADDRESS(currPT) | PF_READWRITE | PF_PRESENT;
   
   /* map the page directory in the process linear space */
-  lastButOnePT[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(newPD) | PF_PRESENT;
+  lastButOnePT[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(newPD) | PF_READWRITE | PF_PRESENT;
 
   /* allocate a new tss */
   desc->tss = (tss_t*)kmalloc(sizeof(tss_t));

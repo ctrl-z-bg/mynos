@@ -336,6 +336,14 @@ void mynos_main(multiboot_info_t *boot_info) {
      graphics information, as SIIII... or NOOOO...) */
 
 
+  /* CR0.WP: from now on the kernel's own writes respect read-only pages,
+     so that a system call writing into a copy-on-write page copies it
+     first (mynos-bvz) */
+  {
+    uint32_t cr0;
+    __asm__ volatile("movl %%cr0, %0" : "=r"(cr0));
+    __asm__ volatile("movl %0, %%cr0" :: "r"(cr0 | 0x10000));
+  }
   tsksw();
 
   /* start the elf modules */

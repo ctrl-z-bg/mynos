@@ -45,7 +45,8 @@ extern boot_info_global		; for soft reset
 %define KERNEL_FIRST_FREE_PHY_PAGE	0x400000; 0x105000 ELF
 
 ;;; flags in page table entries
-%define FLAG_PAGE_PRESENT		0x1
+%define FLAG_PAGE_PRESENT		0x3	; present and writable: the
+					; kernel's writes respect R/W (CR0.WP)
 
 %define FOUR_K				0x1000
 %define ONE_M				0x100000
@@ -185,7 +186,7 @@ multiboot_entry:
 	;; set the first 1024 entry of the first page table
 	;; to map the first 4MB of physical ram
 	mov	ecx, 1024	; ELF
-	mov	eax, 0x1
+	mov	eax, 0x3	; present, writable
 	mov	edi, KERNEL_FIRST_PAGE_TABLE
 .load_pt:	
 	mov	[edi], eax
