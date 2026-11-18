@@ -141,6 +141,37 @@ be.
   draws an 80 x 25 grid in runs of cells of the same attributes, only the
   rows that changed. `edit` (Notty) runs in it.
 
+## Scrolling (2026-11-18)
+
+Windows must scroll: a terminal above all. Two things go by that name.
+
+- **A terminal's scrollback** is no toolkit's business: the VT100
+  emulator keeps the lines that leave the top of its main screen (1000;
+  not those of the alternate screen of full-screen programs) and shows
+  them on demand. `terminal` has a scrollbar beside its grid; the wheel
+  and the bar move the view, a key brings it back to the bottom, and
+  output while one looks back keeps the same lines in view.
+- **Content taller than its box** (a list of requests, a long reply, a
+  conversation) is the toolkit's: `Gui.scroll`, a box whose content is
+  drawn shifted and clipped, its height measured as it is drawn and used
+  at the next frame (immediate mode knows a content's size only after
+  drawing it), with a bar and the wheel.
+
+Both need **clipping** (`Gfx.with_clip`: every primitive draws inside a
+rectangle, nested clips intersected) and **the wheel** (`displayd`:
+vmmouse's z, and the PS/2 mouse switched to IntelliMouse mode, packets of
+four bytes; a `wheel` event, positive downwards, for the window under the
+pointer; QEMU's monitor turns a negative `dz` into "down").
+
+**Our toolkit, or microui?** microui (about 1100 lines of C, immediate
+mode) has scrollable containers, layout rows and text boxes. But it would
+put the widgets' logic in C, against choice 2 above; OCaml would be a
+client of bindings (about forty functions, callbacks from C for text
+sizes, mutable C state); it manages windows of its own, which displayd
+already does; and clipping and the wheel were needed with it too.
+Nuklear is the same, larger. So `Gui` stays OCaml, and borrows microui's
+design: containers that clip and remember their content's size.
+
 ## Not now
 
 - Several screens, other resolutions chosen by the user, other cards

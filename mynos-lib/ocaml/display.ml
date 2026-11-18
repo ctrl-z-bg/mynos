@@ -7,6 +7,7 @@ type event =
   | Close
   | Tick
   | Focus of bool
+  | Wheel of int
 
 type _ request =
   | Info : (int * int) request
@@ -37,7 +38,8 @@ let event_codec =
         (function Mouse { x; y; buttons } -> Some (x, y, buttons) | _ -> None);
       case ~name:"close" 2 unit (fun () -> Close) (function Close -> Some () | _ -> None);
       case ~name:"tick" 3 unit (fun () -> Tick) (function Tick -> Some () | _ -> None);
-      case ~name:"focus" 4 bool (fun b -> Focus b) (function Focus b -> Some b | _ -> None) ])
+      case ~name:"focus" 4 bool (fun b -> Focus b) (function Focus b -> Some b | _ -> None);
+      case ~name:"wheel" 5 int (fun n -> Wheel n) (function Wheel n -> Some n | _ -> None) ])
 
 module Protocol = struct
   let id = "display/1"
@@ -56,8 +58,9 @@ module Protocol = struct
         damage_args Wire.unit;
       request 4 "next_event"
         "The window's next event: keys (UTF-8, VT100 sequences for the others), the \
-         mouse in the window (buttons: 1 left, 2 right, 4 middle), close, focus; tick \
-         when none came within timeout_ms (0: wait forever). Waits."
+         mouse in the window (buttons: 1 left, 2 right, 4 middle), close, focus, the \
+         wheel over it (its notches, positive towards the user: down); tick when none \
+         came within timeout_ms (0: wait forever). Waits."
         event_args event_codec;
       request 5 "destroy" "Close a window." window_f Wire.unit;
       request 6 "set_title" "A window's title." title_args Wire.unit;

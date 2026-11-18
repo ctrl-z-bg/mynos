@@ -250,7 +250,7 @@ static int text(int x, int y, const char * s, int max, unsigned int c, int bold)
 
 /* ---- windows, events ---- */
 
-enum { EV_KEY, EV_MOUSE, EV_CLOSE, EV_TICK, EV_FOCUS };
+enum { EV_KEY, EV_MOUSE, EV_CLOSE, EV_TICK, EV_FOCUS, EV_WHEEL };
 
 struct event {
   int kind;
@@ -507,6 +507,7 @@ static void reply_event(int ch, const struct event * e)
     wire_put_int(&w, e->buttons);
     break;
   case EV_FOCUS: wire_put_bool(&w, e->x); break;
+  case EV_WHEEL: wire_put_int(&w, e->x); break;
   }
   send_reply(ch, &w);
 }
@@ -713,6 +714,21 @@ static void pointer_to(int x, int y, int buttons)
   compose(px, py, px + PW, py + PH);
 }
 
+/* the wheel: to the window under the pointer (positive: down) */
+static void wheel(int dz)
+{
+  int slot;
+  if (!active || dz == 0) return;
+  slot = window_at(px, py);
+  if (slot >= 0) {
+    struct event e;
+    memset(&e, 0, sizeof e);
+    e.kind = EV_WHEEL;
+    e.x = dz;
+    post(&win[slot], &e);
+  }
+}
+
 /* QEMU's vmmouse: absolute coordinates, through the VMware port */
 static void vmport(unsigned int cmd, unsigned int arg, unsigned int r[4])
 {
@@ -747,6 +763,7 @@ static void vmmouse_read(void)
     vmport(39, 4, r);
     buttons = ((r[0] & 0x20) ? 1 : 0) | ((r[0] & 0x10) ? 2 : 0) | ((r[0] & 0x08) ? 4 : 0);
     pointer_to((int)(r[1] * W / 65536), (int)(r[2] * H / 65536), buttons);
+    wheel((signed char)(r[3] & 0xFF));
   }
 }
 
@@ -756,16 +773,31 @@ static void kbc_wait(void)
   for (i = 0; i < 100000 && (inportb(0x64) & 2); i++) ;
 }
 
+/* a byte from the mouse, waited for a while (before its IRQ is on); -1 */
+static int aux_read(void)
+{
+  int i;
+  for (i = 0; i < 200000; i++) {
+    unsigned char st = inportb(0x64);
+    if ((st & 0x21) == 0x21) return inportb(0x60);
+  }
+  return -1;
+}
+
+/* a command to the mouse, its acknowledgement read */
 static void mouse_cmd(unsigned char c)
 {
   kbc_wait(); outportb(0x64, 0xD4);
   kbc_wait(); outportb(0x60, c);
+  aux_read();
 }
+
+static int packet = 3;               /* 4: IntelliMouse, with the wheel */
 
 static void * mouse_thread(void * arg)
 {
   int sem = IDX(arg);
-  unsigned char pkt[3];
+  unsigned char pkt[4];
   int n = 0;
   for (;;) {
     unsigned char st;
@@ -777,13 +809,14 @@ static void * mouse_thread(void * arg)
 	 bit 3 looks like a packet's first byte), or out of step */
       if (n == 0 && (!(b & 0x08) || b == 0xFA)) continue;
       pkt[n++] = b;
-      if (n < 3) continue;
+      if (n < packet) continue;
       n = 0;
       if (vmmouse) continue;                     /* its coordinates instead */
       {
 	int dx = pkt[1] - ((pkt[0] & 0x10) ? 256 : 0);
 	int dy = pkt[2] - ((pkt[0] & 0x20) ? 256 : 0);
 	pointer_to(px + dx, py - dy, pkt[0] & 7);
+	if (packet == 4) wheel((signed char)pkt[3]);
       }
     }
     if (vmmouse) vmmouse_read();
@@ -872,10 +905,11 @@ static const wire_request_doc requests[] = {
   { 0, "damage", "((window:I,x:I,y:I),(width:I,height:I))", "U",
     "A part of the window's pixels changed: it is shown again." },
   { 0, "next_event", "(window:I,timeout_ms:I)",
-    "V(0:key=S,1:mouse=(x:I,y:I,buttons:I),2:close=U,3:tick=U,4:focus=B)",
+    "V(0:key=S,1:mouse=(x:I,y:I,buttons:I),2:close=U,3:tick=U,4:focus=B,5:wheel=I)",
     "The window's next event: keys (UTF-8, VT100 sequences for the others), the "
-    "mouse in the window (buttons: 1 left, 2 right, 4 middle), close, focus; tick "
-    "when none came within timeout_ms (0: wait forever). Waits." },
+    "mouse in the window (buttons: 1 left, 2 right, 4 middle), close, focus, the "
+    "wheel over it (its notches, positive towards the user: down); tick when none "
+    "came within timeout_ms (0: wait forever). Waits." },
   { 0, "destroy", "window:I", "U", "Close a window." },
   { 0, "set_title", "(window:I,title:S)", "U", "A window's title." },
   { 0, "start", "U", "U", "Start the graphical session: the screen leaves text mode." },
@@ -1086,6 +1120,14 @@ int main(void)
     kbc_wait(); outportb(0x64, 0x60);              /* command byte: both IRQs */
     kbc_wait(); outportb(0x60, 0x47);
     mouse_cmd(0xF6);                                /* defaults */
+    /* IntelliMouse: sample rates 200, 100, 80, then its ID says 3: packets
+       of 4 bytes, the wheel in the fourth */
+    mouse_cmd(0xF3); mouse_cmd(200);
+    mouse_cmd(0xF3); mouse_cmd(100);
+    mouse_cmd(0xF3); mouse_cmd(80);
+    kbc_wait(); outportb(0x64, 0xD4);
+    kbc_wait(); outportb(0x60, 0xF2);               /* its ID */
+    if (aux_read() == 0xFA && aux_read() == 3) packet = 4;
     mouse_cmd(0xF4);                                /* reporting on */
     vmmouse_init();
     mynos_enableIrq(12);
@@ -1100,8 +1142,9 @@ int main(void)
     mynos_log("displayd: cannot register (%d)\n", port);
     return 1;
   }
-  mynos_log("displayd: %dx%d, frame buffer at 0x%lx, %s\n", W, H, lfb,
-	    vmmouse ? "vmmouse (absolute)" : "PS/2 mouse");
+  mynos_log("displayd: %dx%d, frame buffer at 0x%lx, %s%s\n", W, H, lfb,
+	    vmmouse ? "vmmouse (absolute)" : "PS/2 mouse",
+	    packet == 4 ? ", wheel" : "");
 
   for (;;) {
     mynos_msg_t * m;

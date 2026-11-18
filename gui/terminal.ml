@@ -45,7 +45,31 @@ let erase r c0 c1 =
   for c = max 0 c0 to min cols c1 - 1 do clear_cell screen.(r).(c) done;
   dirty.(r) <- true
 
+(* ---- scrollback: the lines scrolled off the top of the main screen ---- *)
+
+let history_max = 1000
+let history : cell array array = Array.make history_max [||]
+let hist_len = ref 0 and hist_next = ref 0
+let view = ref 0                       (* lines looked back; 0: the screen *)
+let all_dirty = ref true               (* the view moved: everything again *)
+
+let push_history r =
+  history.(!hist_next) <- Array.map (fun x -> { x with c = x.c }) screen.(r);
+  hist_next := (!hist_next + 1) mod history_max;
+  if !hist_len < history_max then incr hist_len;
+  (* looking back: the same lines stay in view *)
+  if !view > 0 then (view := min !hist_len (!view + 1); all_dirty := true)
+
+(* the k-th line above the screen (1: the last scrolled off) *)
+let history_line k = history.((!hist_next - k + history_max) mod history_max)
+
+let set_view v =
+  let v = max 0 (min !hist_len v) in
+  if v <> !view then (view := v; all_dirty := true)
+
 let scroll_up top n =
+  if top = 0 && !alternate = None then
+    for r = 0 to min n rows - 1 do push_history r done;
   for r = top to rows - 1 do
     if r + n < rows then Array.iteri (fun c x -> copy_cell x screen.(r + n).(c)) screen.(r)
     else erase r 0 cols;
@@ -219,8 +243,9 @@ let colour i default = if i < 0 then default else palette.(i land 15)
 
 let draw_row g r =
   let y = margin + r * ch in
-  let line = screen.(r) in
-  let (cr, cc) = (!row, !col) in
+  let k = r - !view in                 (* < 0: a line of the scrollback *)
+  let line = if k >= 0 then screen.(k) else history_line (- k) in
+  let (cr, cc) = if !view = 0 then (!row, !col) else (-1, -1) in
   let c = ref 0 in
   while !c < cols do
     (* a run of cells of the same attributes *)
@@ -240,14 +265,36 @@ let draw_row g r =
     ignore (Gfx.text ~bold:a.bold g (margin + x0 * cw) y (Buffer.contents b) fg)
   done
 
+(* the scrollbar, right of the grid *)
+let bar_x = cols * cw + 2 * margin
+let bar_w = 12
+let height = rows * ch + 2 * margin
+let drawn_bar = ref (-1, -1)
+
+let draw_bar g =
+  let total = rows + !hist_len in
+  let th = max 24 (height * rows / total) in
+  let ty = if !hist_len = 0 then 0
+    else (height - th) * (!hist_len - !view) / !hist_len in
+  if (ty, th) <> !drawn_bar then begin
+    Gfx.fill g bar_x 0 bar_w height 0x1A2026;
+    if !hist_len > 0 then Gfx.fill g (bar_x + 3) (ty + 2) (bar_w - 6) (th - 4) 0x5A6670;
+    drawn_bar := (ty, th);
+    true
+  end else false
+
 let render () =
   match !window with
   | None -> ()
   | Some w ->
     let g = w.Display.pixels in
+    if !all_dirty then (Array.fill dirty 0 rows true; all_dirty := false);
+    (* looking back, screen rows show lower down: anything changed, all again *)
+    if !view > 0 && Array.exists Fun.id dirty then Array.fill dirty 0 rows true;
+    (* rows on screen move down by view: a screen row r shows at r + view *)
     let (pr, _) = !drawn_cursor in
     if pr >= 0 && pr < rows then dirty.(pr) <- true;
-    dirty.(!row) <- true;
+    if !row + !view < rows then dirty.(!row + !view) <- true;
     let top = ref rows and bottom = ref (-1) in
     for r = 0 to rows - 1 do
       if dirty.(r) then begin
@@ -255,10 +302,13 @@ let render () =
         top := min !top r; bottom := max !bottom r
       end
     done;
-    drawn_cursor := (!row, !col);
-    if !bottom >= 0 then
-      (try Display.damage ~y:(margin + !top * ch) ~h:((!bottom - !top + 1) * ch) w
-       with _ -> ())
+    drawn_cursor := (if !view = 0 then (!row, !col) else (-1, -1));
+    let bar = draw_bar g in
+    (try
+       if bar then Display.damage w
+       else if !bottom >= 0 then
+         Display.damage ~y:(margin + !top * ch) ~h:((!bottom - !top + 1) * ch) w
+     with _ -> ())
 
 (* ---- the console service ---- *)
 
@@ -363,7 +413,7 @@ let () =
   let me = Mynos.getpid () in
   let name = Printf.sprintf "term%d" me in
   let port = Mynos.register name in
-  let w = Display.window ~title:"Terminal" (cols * cw + 2 * margin) (rows * ch + 2 * margin) in
+  let w = Display.window ~title:"Terminal" (cols * cw + 2 * margin + bar_w) height in
   window := Some w;
   Gfx.fill w.Display.pixels 0 0 w.pixels.Gfx.width w.pixels.Gfx.height default_bg;
   Mutex.lock lock; render (); Mutex.unlock lock;
@@ -383,8 +433,14 @@ let () =
     | ev ->
       Mutex.lock lock;
       (match ev with
-       | Display.Key k -> key k
+       | Display.Key k -> set_view 0; key k
        | Display.Focus f -> focused := f
+       | Display.Wheel n -> set_view (!view - 3 * n)
+       | Display.Mouse { x; y; buttons } when buttons land 1 <> 0 && x >= bar_x && !hist_len > 0 ->
+         (* the bar: the thumb follows the pointer *)
+         let th = max 24 (height * rows / (rows + !hist_len)) in
+         let room = max 1 (height - th) in
+         set_view (!hist_len - (y - th / 2) * !hist_len / room)
        | _ -> ());
       serve_reads ();
       render ();

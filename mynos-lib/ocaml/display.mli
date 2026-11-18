@@ -23,6 +23,7 @@ type event =
   | Close                    (** its close box, or the session's end *)
   | Tick                     (** no event within the timeout *)
   | Focus of bool
+  | Wheel of int             (** the wheel over the window: notches, positive down *)
 
 type _ request =
   | Info : (int * int) request

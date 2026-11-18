@@ -69,11 +69,14 @@ let () =
       | Some (name, d, tools) ->
         (* the requests *)
         Gui.label ~bold:true ui 182 10 d.Ipc.protocol;
-        List.iteri (fun i (t : Tools.t) ->
-            let label = t.request.Ipc.name ^ (if t.request.safe then "" else " *") in
-            if Gui.list_item ui 178 (34 + i * 22) 170 ~selected:(i = st.request) label then begin
-              st.request <- i; st.values <- []; st.result <- None
-            end) tools;
+        Gui.scroll ~colour:Gui.background ui 1 176 30 178 450 (fun top ->
+            List.iteri (fun i (t : Tools.t) ->
+                let label = t.request.Ipc.name ^ (if t.request.safe then "" else " *") in
+                if Gui.list_item ui 178 (top + i * 22) 160 ~selected:(i = st.request) label
+                then begin
+                  st.request <- i; st.values <- []; st.result <- None
+                end) tools;
+            22 * List.length tools);
         Gui.label ~colour:Gui.muted ui 182 496 "* changes things";
         (* the request's form *)
         let x = 362 and w = 386 in
@@ -111,9 +114,9 @@ let () =
               let y = y + 40 in
               Gui.label ~bold:true ~colour:(if ok then 0x2E7D32 else 0xC62828) ui x y
                 (if ok then "Reply" else "Error");
-              Gui.panel ui x (y + 20) w (520 - y - 30);
-              List.iteri (fun i l ->
-                  if y + 26 + i * 18 < 500 then
-                    ignore (Gfx.text g (x + 8) (y + 26 + i * 18) l Gui.foreground))
-                (wrap (w - 16) text)));
+              let lines = wrap (w - 16 - 10) text in
+              Gui.scroll ui 2 x (y + 20) w (max 40 (520 - y - 30)) (fun top ->
+                  List.iteri (fun i l ->
+                      ignore (Gfx.text g (x + 8) (top + 6 + i * 18) l Gui.foreground)) lines;
+                  12 + 18 * List.length lines)));
         st)

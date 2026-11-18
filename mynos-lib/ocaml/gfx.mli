@@ -40,6 +40,13 @@ val blit : t -> int -> int -> t -> int -> int -> int -> int -> unit
 (** [blit src sx sy dst dx dy w h]; [src] and [dst] may be the same
     buffer (scrolling). *)
 
+val with_clip : int -> int -> int -> int -> (unit -> 'a) -> 'a
+(** [with_clip x y w h f]: [f ()], every primitive drawing only inside
+    the rectangle (within the clip around it, if any). *)
+
+val clip : unit -> (int * int * int * int) option
+(** The clip in force: [(x, y, w, h)]. *)
+
 val get : t -> int -> int -> int
 (** The pixel's colour; -1 outside. *)
 

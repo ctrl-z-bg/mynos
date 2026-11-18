@@ -263,13 +263,19 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     click 20 10; sleep 1; click 40 39; sleep 10
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo term-$X > /tmp/term.txt\n'; sleep 4
     mon "screendump $tmp/gui4.ppm"
+    # its scrollback: a long listing, then the wheel up over the window
+    tools/type-keys.py "$tmp/mon-g" 'ls /\n'; sleep 5
+    to 400 300
+    for k in 1 2 3; do mon "mouse_move 0 0 3"; sleep 0.5; done; sleep 2
+    mon "screendump $tmp/gui5.ppm"
+    mon "sendkey backspace"; sleep 1                # a key: back to the bottom
     click 20 10; sleep 1; click 30 149; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt\n'; sleep 2
     mon "screendump $tmp/gui3.ppm"; sleep 1
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-g" >/dev/null || true
     wait $qemu || true
     cat "$tmp/logg" >> "$log"
-    python3 - "$tmp/gui1.ppm" "$tmp/gui2.ppm" "$tmp/gui3.ppm" "$tmp/gui4.ppm" <<'PY' && gui_ok=yes
+    python3 - "$tmp/gui1.ppm" "$tmp/gui2.ppm" "$tmp/gui3.ppm" "$tmp/gui4.ppm" "$tmp/gui5.ppm" <<'PY' && gui_ok=yes
 import sys
 def load(path):
     d = open(path, "rb").read()
@@ -280,7 +286,7 @@ def px(img, x, y):
     w, h, d = img
     i = 3 * (y * w + x)
     return (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]
-g1, g2, g3, g4 = (load(p) for p in sys.argv[1:5])
+g1, g2, g3, g4, g5 = (load(p) for p in sys.argv[1:6])
 assert g1[:2] == (1024, 768), "graphics mode"
 assert px(g1, 500, 10) == 0x111820, "the top bar"
 assert px(g1, 300, 86) == 0x2D6CA2, "the welcome window, focused"
@@ -289,6 +295,10 @@ assert px(g2, 400, 86) == 0x4A5560, "the welcome window, behind"
 assert g3[:2] == (720, 400), "text mode again"
 assert px(g4, 500, 140) == 0x2D6CA2, "the terminal's window, focused"
 assert px(g4, 600, 520) == 0x0F1419, "the terminal's background"
+# the scrollbar (x 784-796): its thumb has left the bottom after the wheel
+bar = [px(g5, 790, y) for y in range(154, 562)]
+assert 0x5A6670 in bar, "the scrollbar's thumb"
+assert bar[-6] == 0x1A2026, "scrolled back: the thumb is not at the bottom"
 PY
 fi
 

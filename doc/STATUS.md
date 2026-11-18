@@ -210,7 +210,8 @@ All services are linked statically against `libmynos` and placed at
   keys from the console in raw mode; protocol "display/1", described.
   Programs draw with `Gfx` (C primitives in the runtime, Terminus 8x16
   font in `third_party/fonts`), build windows with `Display` and `Gui`
-  (immediate mode: labels, buttons, text fields, lists). `gui` starts a
+  (immediate mode: labels, buttons, text fields, lists, scroll boxes;
+  `Gfx.with_clip`; the mouse wheel). `gui` starts a
   session (welcome, clock, the service explorer, which makes a form for
   any request of any typed service from its description, and terminal
   windows: `sh` in a VT100 emulator, its console a service of the window,
@@ -871,4 +872,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   through a VT100 emulator. `sh`, pipes and `edit` (full screen) run in a
   window. The graphical test opens one, runs a command in it, and reads
   its effect from the text console after Exit.
+- **2026-11-18** — Scrolling (mynos-73m, `doc/decisions/gui.md`): clipping
+  in `Gfx` (`with_clip`, nested), the mouse wheel in `displayd` (vmmouse,
+  PS/2 IntelliMouse) as a `wheel` event of display/1, `Gui.scroll` (a box
+  whose content's height is measured as it is drawn), a 1000-line
+  scrollback with a scrollbar in `terminal`, scroll boxes in the service
+  explorer. Our toolkit rather than microui, with microui's design. Tests:
+  nested clips; the graphical test scrolls a terminal back with the wheel.
 

@@ -39,6 +39,37 @@
 #define BW(t) Long_val(Field(t, 1))
 #define BH(t) Long_val(Field(t, 2))
 
+/* the clip: every primitive draws only inside it (and the buffer).
+   Gfx.with_clip sets it, nested ones intersected on the OCaml side */
+static int clip_on = 0, clip_x0, clip_y0, clip_x1, clip_y1;
+
+CAMLprim value caml_gfx_set_clip(value x, value y, value w, value h)
+{
+  clip_on = 1;
+  clip_x0 = Long_val(x); clip_y0 = Long_val(y);
+  clip_x1 = clip_x0 + Long_val(w); clip_y1 = clip_y0 + Long_val(h);
+  return Val_unit;
+}
+
+CAMLprim value caml_gfx_no_clip(value unit)
+{
+  (void)unit;
+  clip_on = 0;
+  return Val_unit;
+}
+
+/* where t may be drawn on */
+static void bounds(value t, int * x0, int * y0, int * x1, int * y1)
+{
+  *x0 = 0; *y0 = 0; *x1 = BW(t); *y1 = BH(t);
+  if (clip_on) {
+    if (clip_x0 > *x0) *x0 = clip_x0;
+    if (clip_y0 > *y0) *y0 = clip_y0;
+    if (clip_x1 < *x1) *x1 = clip_x1;
+    if (clip_y1 < *y1) *y1 = clip_y1;
+  }
+}
+
 CAMLprim value caml_gfx_alloc(value w, value h)
 {
   long n = Long_val(w) * Long_val(h), size;
@@ -54,12 +85,13 @@ CAMLprim value caml_gfx_alloc(value w, value h)
 CAMLprim value caml_gfx_fill(value t, value x, value y, value w, value h, value c)
 {
   int x0 = Long_val(x), y0 = Long_val(y), x1 = x0 + Long_val(w), y1 = y0 + Long_val(h);
-  int bw = BW(t), bh = BH(t), i, j;
+  int bw = BW(t), i, j, bx0, by0, bx1, by1;
   unsigned int col = Long_val(c), * p = PIX(t);
-  if (x0 < 0) x0 = 0;
-  if (y0 < 0) y0 = 0;
-  if (x1 > bw) x1 = bw;
-  if (y1 > bh) y1 = bh;
+  bounds(t, &bx0, &by0, &bx1, &by1);
+  if (x0 < bx0) x0 = bx0;
+  if (y0 < by0) y0 = by0;
+  if (x1 > bx1) x1 = bx1;
+  if (y1 > by1) y1 = by1;
   for (j = y0; j < y1; j++)
     for (i = x0; i < x1; i++) p[j * bw + i] = col;
   return Val_unit;
@@ -80,7 +112,9 @@ CAMLprim value caml_gfx_get(value t, value x, value y)
 
 static void plot(value t, int x, int y, unsigned int c)
 {
-  if (x >= 0 && y >= 0 && x < BW(t) && y < BH(t)) PIX(t)[y * BW(t) + x] = c;
+  int x0, y0, x1, y1;
+  bounds(t, &x0, &y0, &x1, &y1);
+  if (x >= x0 && y >= y0 && x < x1 && y < y1) PIX(t)[y * BW(t) + x] = c;
 }
 
 /* a line, Bresenham's */
@@ -125,6 +159,12 @@ CAMLprim value caml_gfx_blit(value src, value vsx, value vsy, value dst, value v
   if (dx + w > dw) w = dw - dx;
   if (sy + h > sh) h = sh - sy;
   if (dy + h > dh) h = dh - dy;
+  if (clip_on) {                       /* the destination, within the clip */
+    if (dx < clip_x0) { w -= clip_x0 - dx; sx += clip_x0 - dx; dx = clip_x0; }
+    if (dy < clip_y0) { h -= clip_y0 - dy; sy += clip_y0 - dy; dy = clip_y0; }
+    if (dx + w > clip_x1) w = clip_x1 - dx;
+    if (dy + h > clip_y1) h = clip_y1 - dy;
+  }
   if (w <= 0 || h <= 0) return Val_unit;
   if (s == d && dy > sy)
     for (r = h - 1; r >= 0; r--)
@@ -202,11 +242,12 @@ CAMLprim value caml_gfx_text(value t, value vx, value vy, value s, value c,
 			     value bold, value vmax)
 {
   int x = Long_val(vx), y = Long_val(vy), max = Long_val(vmax), cells = 0;
-  int bw = BW(t), bh = BH(t), b = Bool_val(bold);
+  int bw = BW(t), b = Bool_val(bold), bx0, by0, bx1, by1;
   unsigned int col = Long_val(c), * p = PIX(t);
   const unsigned char * q = (const unsigned char *)String_val(s);
   const unsigned char * end = q + caml_string_length(s);
   if (!font()) return Val_long(0);
+  bounds(t, &bx0, &by0, &bx1, &by1);
   while (q < end && cells < max) {
     unsigned int u = *q++;
     int g, r, k, gx = x + 8 * cells;
@@ -216,14 +257,14 @@ CAMLprim value caml_gfx_text(value t, value vx, value vy, value s, value c,
       while (more-- && q < end && (*q & 0xC0) == 0x80) u = (u << 6) | (*q++ & 0x3F);
     }
     cells++;
-    if (gx >= bw || gx + 8 <= 0 || y >= bh || y + 16 <= 0) continue;
+    if (gx >= bx1 || gx + 8 <= bx0 || y >= by1 || y + 16 <= by0) continue;
     g = glyph_index(u);
     for (r = 0; r < 16; r++) {
       unsigned char bits = glyphs[b][g * 16 + r];
       int yy = y + r;
-      if (!bits || yy < 0 || yy >= bh) continue;
+      if (!bits || yy < by0 || yy >= by1) continue;
       for (k = 0; k < 8; k++)
-	if ((bits & (0x80 >> k)) && gx + k >= 0 && gx + k < bw)
+	if ((bits & (0x80 >> k)) && gx + k >= bx0 && gx + k < bx1)
 	  p[yy * bw + gx + k] = col;
     }
   }

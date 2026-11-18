@@ -12,6 +12,7 @@ type ui = {
   mutable focused : bool;
   mutable tick : bool;
   mutable field : int;
+  mutable wheel : int;
 }
 
 let background = 0xF4F6F8
@@ -37,7 +38,11 @@ let panel ?(colour = panel_colour) ui x y w h =
   Gfx.fill ui.g x y w h colour;
   Gfx.rect ui.g x y w h 0xD5DBE1
 
-let hovered ui x y w h = ui.mx >= x && ui.my >= y && ui.mx < x + w && ui.my < y + h
+let hovered ui x y w h =
+  ui.mx >= x && ui.my >= y && ui.mx < x + w && ui.my < y + h
+  && (match Gfx.clip () with
+      | None -> true
+      | Some (cx, cy, cw, ch) -> ui.mx >= cx && ui.my >= cy && ui.mx < cx + cw && ui.my < cy + ch)
 
 let button ?(h = 26) ui x y w text =
   let over = hovered ui x y w h in
@@ -99,20 +104,67 @@ let list_item ui x y w ~selected label =
   let px, py = ui.press in
   ui.clicked && over && px >= x && py >= y && px < x + w && py < y + h
 
+(* scroll boxes: how far each is scrolled, and its content's height as
+   measured at the last frame (immediate mode: known only after drawing) *)
+type scroll_state = { mutable offset : int; mutable content : int; mutable to_end : bool }
+let scrolls : (int, scroll_state) Hashtbl.t = Hashtbl.create 8
+let state id = match Hashtbl.find_opt scrolls id with
+  | Some s -> s
+  | None -> let s = { offset = 0; content = 0; to_end = false } in Hashtbl.add scrolls id s; s
+
+let scroll_to_end _ui id = (state id).to_end <- true
+
+let bar_w = 10
+
+let scroll ?(colour = panel_colour) ui id x y w h content =
+  let s = state id in
+  let inner = h - 2 in
+  let max_off () = max 0 (s.content - inner) in
+  if s.to_end then (s.offset <- max_off (); s.to_end <- false);
+  (* the wheel over it: three lines a notch *)
+  if ui.wheel <> 0 && hovered ui x y w h then begin
+    s.offset <- s.offset + ui.wheel * 3 * 18;
+    ui.wheel <- 0
+  end;
+  (* the bar: pressed or dragged, the thumb follows the pointer *)
+  let thumb_h () = max 24 (inner * inner / max 1 s.content) in
+  let bx = x + w - bar_w - 1 in
+  let px, py = ui.press in
+  if max_off () > 0 && ui.buttons land 1 <> 0
+     && px >= bx && px < x + w && py >= y && py < y + h then begin
+    let room = inner - thumb_h () in
+    if room > 0 then
+      s.offset <- (ui.my - y - thumb_h () / 2) * max_off () / room
+  end;
+  s.offset <- max 0 (min (max_off ()) s.offset);
+  Gfx.fill ui.g x y w h colour;
+  let used = Gfx.with_clip (x + 1) (y + 1) (w - 2 - bar_w) inner
+      (fun () -> content (y + 1 - s.offset)) in
+  s.content <- used;
+  s.offset <- max 0 (min (max_off ()) s.offset);
+  Gfx.rect ui.g x y w h 0xD5DBE1;
+  if max_off () > 0 then begin
+    let th = thumb_h () in
+    let ty = y + 1 + (inner - th) * s.offset / max_off () in
+    Gfx.fill ui.g bx (y + 1) bar_w inner 0xEDF1F4;
+    Gfx.fill ui.g (bx + 2) ty (bar_w - 4) th
+      (if hovered ui bx y bar_w h || ui.buttons land 1 <> 0 && px >= bx then 0x7F8C98 else 0xA9B4BE)
+  end
+
 exception Quit
 
 let run ?(title = "") ?(tick = 0.) w h state frame =
   let window = Display.window ~title w h in
   let ui = { window; g = window.Display.pixels; mx = -1; my = -1; buttons = 0;
              clicked = false; press = (-1, -1); keys = []; focused = true; tick = false;
-             field = -1 } in
+             field = -1; wheel = 0 } in
   let rec loop state =
     Gfx.fill ui.g 0 0 w h background;
     match frame ui state with
     | exception Quit -> Display.destroy window
     | state ->
       Display.damage window;
-      ui.clicked <- false; ui.keys <- []; ui.tick <- false;
+      ui.clicked <- false; ui.keys <- []; ui.tick <- false; ui.wheel <- 0;
       (match Display.next_event ~timeout:tick window with
        | Display.Close -> Display.destroy window
        | Display.Mouse { x; y; buttons } ->
@@ -123,6 +175,7 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
        | Display.Key k -> ui.keys <- [ k ]; loop state
        | Display.Tick -> ui.tick <- true; loop state
        | Display.Focus f -> ui.focused <- f; loop state
+       | Display.Wheel n -> ui.wheel <- n; loop state
        | exception Ipc.Remote_error _ -> ()) in
   loop state
 

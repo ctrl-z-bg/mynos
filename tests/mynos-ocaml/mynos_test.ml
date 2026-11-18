@@ -177,6 +177,16 @@ let () =
      && Gfx.get g 1 1 = 0x00FF00 && Gfx.get g 2 2 = 0x102030
      && Gfx.get g 30 31 = 0x0000FF && Gfx.get g 42 4 = 0xFF0000
      && Gfx.get g 64 0 = -1 && Gfx.cells "caff\xc3\xa8" = 5);
+  ok &&& check "gfx: drawing within a clip, nested"
+    (let g = Gfx.create 40 40 in
+     Gfx.fill g 0 0 40 40 0;
+     Gfx.with_clip 10 10 20 20 (fun () ->
+         Gfx.with_clip 0 0 15 40 (fun () -> Gfx.fill g 0 0 40 40 0xAAAAAA);
+         Gfx.line g 0 25 39 25 0xBBBBBB);
+     Gfx.fill g 0 0 1 1 0xCCCCCC;                     (* no clip any more *)
+     Gfx.get g 12 12 = 0xAAAAAA && Gfx.get g 16 12 = 0 && Gfx.get g 5 5 = 0
+     && Gfx.get g 20 25 = 0xBBBBBB && Gfx.get g 35 25 = 0
+     && Gfx.get g 0 0 = 0xCCCCCC && Gfx.clip () = None);
   (* a service served by a second domain of this process, called from the
      first: each end of a channel has its own id (mynos-9e1; the ends were
      told apart by pid, and the call hung) *)

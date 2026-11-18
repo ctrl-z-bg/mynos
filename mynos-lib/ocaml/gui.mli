@@ -24,6 +24,7 @@ type ui = {
   mutable focused : bool;
   mutable tick : bool;            (** this frame is a timer's *)
   mutable field : int;            (** the text field that has the keys (-1: none) *)
+  mutable wheel : int;            (** the wheel's notches in this frame (positive: down) *)
 }
 
 (** Colours *)
@@ -46,6 +47,19 @@ val button : ?h:int -> ui -> int -> int -> int -> string -> bool
 (** [button ui x y width label]: [true] in the frame where it is clicked. *)
 
 val hovered : ui -> int -> int -> int -> int -> bool
+(** The pointer is in the rectangle, and in the clip in force (a widget
+    scrolled out of sight is not hovered). *)
+
+val scroll : ?colour:int -> ui -> int -> int -> int -> int -> int -> (int -> int) -> unit
+(** [scroll ui id x y w h content]: a box whose content may be taller than
+    it. [content top] draws the content from [top] (the box's top, less
+    how far it is scrolled), clipped to the box, and returns its height.
+    The wheel over the box, and its bar (clicked or dragged), scroll it.
+    [id] tells a window's boxes apart. *)
+
+val scroll_to_end : ui -> int -> unit
+(** The box [id], scrolled to its end at the next frame (a log, a
+    conversation). *)
 
 val text_field : ui -> int -> int -> int -> int -> string -> string
 (** [text_field ui id x y width value]: an editable line; [id] tells the

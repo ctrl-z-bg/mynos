@@ -1707,3 +1707,26 @@ its state saved by whoever changes it, as a BIOS would; and a graphical
 test that checks a few pixels' colours catches what a person's eye
 forgives.
 
+## 2026-11-18 — Scrolling, and a wheel that turned the other way
+
+**The question.** Windows must scroll, a terminal first; and whether to
+write it or adopt microui. The answer and its reasons are in
+`doc/decisions/gui.md` ("Scrolling"): our toolkit, microui's design.
+
+**A test that scrolled nothing.** The first try turned the wheel through
+QEMU's monitor (`mouse_move 0 0 -4`) and the terminal did not move. A
+trace in displayd showed the packets arriving with the wheel's byte at
++1: QEMU's monitor maps a negative `dz` to the wheel *down*, and a view
+at the bottom cannot go lower. With `dz` positive, three notches moved
+the view nine lines up, and the scrollbar's thumb with it. Each command
+sends one notch, whatever its size.
+
+**The PS/2 wheel.** A PS/2 mouse reports a wheel only once switched to
+IntelliMouse mode: sample rates 200, 100 and 80 in a row, then its ID is
+3 and its packets have four bytes. Each command's acknowledgement (and
+the ID) is now read as it comes, before the mouse's IRQ is on.
+
+**Lesson.** Before deciding that a feature does not work, look at what
+reaches it: one line of logging in the server told the sign convention
+apart from a bug.
+
