@@ -1912,3 +1912,25 @@ stay.
 far end of a console. "Nobody answers" is an end of file, not an error to
 retry.
 
+## 2026-11-18 — The tests in parallel, and the result that erased the others
+
+**Change.** The test run had grown to 10-11 minutes: a dozen QEMU boots,
+one after the other. They share almost nothing, so they now run in five
+lanes at once (16 cores). Two things were shared: the fake model's port
+(47090, used by the network boot, the graphical session and the seventh
+boot: the session got 47091) and the main log (each lane writes its own
+part; they are joined before the checks).
+
+**Bug.** A lane is a subshell: the results its boots set (`gui_ok=yes`,
+`fat_checks`...) die with it. Each lane wrote them to a file, read back
+after all ended. The first parallel run failed checks in three lanes
+whose boots had passed: every lane wrote *every* result variable,
+including the empty ones of other lanes, and reading the files one after
+another, an empty value from a later lane erased a good one from an
+earlier lane.
+
+**Fix.** A lane saves only what it found (non-empty values).
+
+**Lesson.** When separate workers report into one place, each must
+report only what it knows: "I did not see it" is not "it is not so".
+

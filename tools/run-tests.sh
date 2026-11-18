@@ -3,8 +3,17 @@
 # to COM2) and check the expected output. Build first with tools/build-all.sh.
 #
 # Usage: tools/run-tests.sh            exit status 0 if all checks pass
+# The boots run in five lanes at once (about 4.5 minutes in all):
+#   a  the first boots: bytecode, effects, the ATA disk, FAT, domains
+#   b  the library, files, the kernel stress test, spawning, the console
+#   c  without COM2, and restarting again and again
+#   d  the graphical session
+#   e  the network, then the whole system driven by the keyboard (the
+#      seventh boot: the shell, the toplevel, the agent, kill...)
 # Environment: WAIT seconds to let the system run (default 10); SHOTS a
-# directory where the graphical session's screens are kept
+# directory where the graphical session's screens are kept; LANES the
+# lanes to run (default "a b c d e": the checks of the others then fail);
+# KEEP keeps the temporary files (logs, screens) and says where
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -12,11 +21,25 @@ cd "$root"
 
 ocamlrun=$(tools/ocamlrun-path.sh)
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+if [ -n "${KEEP:-}" ]; then echo "run-tests.sh: files kept in $tmp" >&2
+else trap 'rm -rf "$tmp"' EXIT; fi
 log=$tmp/log1 log2=$tmp/log2 log3=$tmp/log3 log4=$tmp/log4 log5=$tmp/log5
 log6=$tmp/log6 log7=$tmp/log7 log8=$tmp/log8 log9=$tmp/log9 logf=$tmp/logf
 logs=$tmp/logs logn=$tmp/logn
 
+# The boots run in five lanes at once (they share nothing: each its own
+# files, monitor sockets and host ports); within a lane, one after the
+# other. Each lane appends its logs to its own part of the log, and writes
+# the results the checks need to a file; the checks run once all are done.
+results="net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh"
+save_results() {
+    for v in $results; do
+        eval "x=\${$v:-}"            # only what the lane found: an empty
+        [ -z "$x" ] || printf "%s='%s'\n" "$v" "$x"   # one would hide another's
+    done > "$tmp/results-$1"
+}
+
+sec_first() {
 timeout "${WAIT:-10}" tools/run-qemu.sh \
     "$ocamlrun" \
     tests/hello/hello.byte \
@@ -27,44 +50,18 @@ timeout "${WAIT:-10}" tools/run-qemu.sh \
     "tests/abi/abi one two" \
     tests/ramdisk/ramdisk.dsk \
     -- -display none -serial null -serial "file:$log" || true
+}
 
+sec_effects() {
 # second boot: effect handlers (OCaml 5 only)
 if [ -f tests/effects/effects.byte ]; then
     timeout "${WAIT:-10}" tools/run-qemu.sh "$ocamlrun" tests/effects/effects.byte \
         -- -display none -serial null -serial "file:$log2" || true
-    cat "$log2" >> "$log"
+    cat "$log2" >> "$part"
 fi
+}
 
-# the network: netd (lwIP and the NE2000 driver) with QEMU's user network;
-# on the host, a TCP server (47001), a UDP one (47053), a client of MyNOS's port 80
-# (forwarded from 47080), HTTPS servers (47443-47445, tests/net/tls) and a
-# fake language model provider (47090, for llmd)
-net_fetched=
-if [ -f tests/net/ramdisk.dsk ]; then
-    tools/net-peer.py echo 47001 & echo_pid=$!
-    tools/net-peer.py udpecho 47053 & udp_pid=$!
-    tools/net-peer.py fetch 47080 "$tmp/fetched" & fetch_pid=$!
-    tls=tests/net/tls
-    tools/net-peer.py https 47443 $tls/good.pem $tls/good.key & https_pid=$!
-    tools/net-peer.py https 47444 $tls/untrusted.pem $tls/untrusted.key & https2_pid=$!
-    tools/net-peer.py https 47445 $tls/wrongname.pem $tls/wrongname.key & https3_pid=$!
-    tools/net-peer.py llm 47090 & llm_pid=$!
-    NET=1 HTTP=47080 timeout "${WAIT_NET:-40}" tools/run-qemu.sh "$ocamlrun" \
-        services/registry/registry services/fs/memrofs/memrofsd \
-        tests/net/ramdisk.dsk \
-        -- -display none -serial null -serial "file:$logn" &
-    qemu=$!
-    i=0
-    while [ $i -lt "${WAIT_NET:-40}" ] &&
-          ! grep -aq 'net: all checks passed\|net: FAIL\|PANIC' "$logn" 2>/dev/null; do
-        sleep 1; i=$((i + 1))
-    done
-    kill $qemu $echo_pid $udp_pid $fetch_pid $https_pid $https2_pid $https3_pid $llm_pid 2>/dev/null || true
-    wait $qemu 2>/dev/null || true
-    cat "$logn" >> "$log"
-    grep -q "hello from a server in MyNOS" "$tmp/fetched" 2>/dev/null && net_fetched=yes
-fi
-
+sec_storage() {
 # ninth boot: the ATA driver (OCaml) on a QEMU disk: 2048 sectors, each
 # starting with "MYNOS SECTOR n"; the test writes sector 1000
 disk_written=
@@ -79,13 +76,15 @@ with open(sys.argv[1], "wb") as f:
         services/registry/registry services/fs/memrofs/memrofsd \
         tests/storage/ramdisk.dsk \
         -- -display none -serial null -serial "file:$log9" || true
-    cat "$log9" >> "$log"
+    cat "$log9" >> "$part"
     disk_written=$(python3 -c '
 import sys
 d = open(sys.argv[1], "rb").read()
 print(d[1000 * 512:1000 * 512 + 16].decode("latin-1"))' "$tmp/disk.img")
 fi
+}
 
+sec_fat() {
 # tenth and eleventh boots: fatfs (OCaml) on FAT16 and FAT32 images made by
 # mkfs.fat and mtools; afterwards fsck.fat must find them consistent, and
 # mtools must read what MyNOS wrote
@@ -97,7 +96,7 @@ if [ -f tests/fat/ramdisk.dsk ]; then
             services/registry/registry services/fs/memrofs/memrofsd \
             tests/fat/ramdisk.dsk \
             -- -display none -serial null -serial "file:$logf" || true
-        sed "s/^fat: /fat ($img): /" "$logf" >> "$log"
+        sed "s/^fat: /fat ($img): /" "$logf" >> "$part"
         if fsck.fat -n tests/fat/run-$img.img >/dev/null 2>&1; then
             fat_checks="$fat_checks $img:fsck-ok"
         fi
@@ -115,24 +114,30 @@ if [ -f tests/fat/ramdisk.dsk ]; then
         rm -f tests/fat/run-$img.img
     done
 fi
+}
 
+sec_domains() {
 # eighth boot: domains, i.e. Linux threads (clone, futex)
 if [ -f tests/domains/domains.byte ]; then
     MEM=128 timeout "${WAIT:-15}" tools/run-qemu.sh "$ocamlrun" \
         tests/domains/domains.byte \
         -- -display none -serial null -serial "file:$log8" || true
-    cat "$log8" >> "$log"
+    cat "$log8" >> "$part"
 fi
+}
 
+sec_mlib() {
 # third boot: the Mynos OCaml library, reading a file through memrofs
 if [ -f tests/mynos-ocaml/mynos_test.byte ]; then
     timeout "${WAIT:-10}" tools/run-qemu.sh "$ocamlrun" \
         tests/mynos-ocaml/mynos_test.byte services/registry/registry \
         services/fs/memrofs/memrofsd tests/ramdisk/ramdisk.dsk \
         -- -display none -serial null -serial "file:$log3" || true
-    cat "$log3" >> "$log"
+    cat "$log3" >> "$part"
 fi
+}
 
+sec_files() {
 # fifth boot: no bytecode module; ocamlrun loads init.byte from the RAM disk
 # and it reads files through the standard library
 if [ -f tests/files/ramdisk.dsk ]; then
@@ -140,10 +145,12 @@ if [ -f tests/files/ramdisk.dsk ]; then
         services/registry/registry services/fs/memrofs/memrofsd \
         tests/files/ramdisk.dsk \
         -- -display none -serial null -serial "file:$log5" || true
-    cat "$log5" >> "$log"
+    cat "$log5" >> "$part"
 fi
+}
 
-# the kernel stress test (C, both toolchains): processes, IPC, timers,
+sec_stress() {
+# the kernel stress test (C): processes, IPC, timers,
 # semaphores, invalid arguments and pointers, memory coming back
 if [ -f tests/stress/ramdisk.dsk ]; then
     timeout "${WAIT_STRESS:-120}" tools/run-qemu.sh \
@@ -158,9 +165,11 @@ if [ -f tests/stress/ramdisk.dsk ]; then
     done
     kill $qemu 2>/dev/null || true
     wait $qemu 2>/dev/null || true
-    cat "$logs" >> "$log"
+    cat "$logs" >> "$part"
 fi
+}
 
+sec_spawn() {
 # sixth boot: init.byte starts other programs from the RAM disk (about
 # twenty-five of them, one after the other)
 if [ -f tests/spawn/ramdisk.dsk ]; then
@@ -168,9 +177,11 @@ if [ -f tests/spawn/ramdisk.dsk ]; then
         services/registry/registry services/fs/memrofs/memrofsd \
         tests/spawn/ramdisk.dsk \
         -- -display none -serial null -serial "file:$log6" || true
-    cat "$log6" >> "$log"
+    cat "$log6" >> "$part"
 fi
+}
 
+sec_console() {
 # fourth boot: typing on the keyboard, read by OCaml through consoled
 if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     # COM2 is a terminal too (doc/decisions/console.md): tools/serial-peer.py
@@ -201,9 +212,11 @@ if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon" >/dev/null || true
     wait $qemu || true
     kill $peer 2>/dev/null || true
-    cat "$log4" >> "$log"
+    cat "$log4" >> "$part"
 fi
+}
 
+sec_nocom2() {
 # the system as QEMU's window starts it: no second serial port (COM1 only).
 # consoled must not wait for a port that is not there: the shell answers
 # within seconds (read from the screen, through QEMU's monitor)
@@ -233,7 +246,9 @@ sys.exit(0 if b"nocom2-ok" in s else 1)' && nocom2=yes
     fi
     wait $qemu || true
 fi
+}
 
+sec_reboots() {
 # restarting again and again (shutdown -r): after a reset memory holds the
 # previous run's data, which the kernel once read as its own (a page given
 # twice at the third boot); four boots, each must reach the shell
@@ -260,23 +275,28 @@ if [ -f system/ramdisk.dsk ] && [ -f init/shutdown.byte ]; then
     [ $k -gt 4 ] && reboots_ok=yes
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-r" >/dev/null || true
     wait $qemu || true
-    cat "$tmp/logr" >> "$log"
+    cat "$tmp/logr" >> "$part"
 fi
+}
 
+sec_gui() {
 # the graphical session (doc/decisions/gui.md): displayd, windows of
 # programs, the mouse, back to text mode. QEMU's monitor moves the mouse
 # relatively: vmmouse (absolute) is off, the PS/2 mouse is used
 gui_ok= powered_off= gui_hangup=
 if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     : > "$tmp/logg"
-    # the agent window's model: the fake provider, as in the seventh boot
+    # the agent window's model: the fake provider, as in the seventh boot,
     gdisk=
     if [ -f tests/fat/fat16.img ]; then
         gdisk=tests/fat/run-gui.img
         cp tests/fat/fat16.img "$gdisk"
-        tools/in-container.sh dev sh -c "mcopy -i $gdisk tests/net/llm-test.env ::/llm.env && mcopy -i $gdisk tests/greeter/old-boot.trc ::/old-boot.trc"
+        # its own port (the seventh boot, at the same time, has 47090)
+        sed 's/:47090/:47091/' tests/net/llm-test.env > tests/fat/run-gui.env
+        tools/in-container.sh dev sh -c "mcopy -i $gdisk tests/fat/run-gui.env ::/llm.env && mcopy -i $gdisk tests/greeter/old-boot.trc ::/old-boot.trc"
+        rm -f tests/fat/run-gui.env
     fi
-    tools/net-peer.py llm 47090 & llmg_pid=$!
+    tools/net-peer.py llm 47091 & llmg_pid=$!
     NET=1 DISK=$gdisk MEM=256 tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
@@ -384,7 +404,7 @@ rows = [l.split() for l in table if re.match(r"\s+\d+\s+\d+\s+\d+\s", l)]
 names = [r[4] if r[3] == "io" else r[3] for r in rows]
 assert names.count("sh") == 1 and "terminal" not in names, names
 PY
-    cat "$tmp/logg" >> "$log"
+    cat "$tmp/logg" >> "$part"
     python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
               "$tmp"/gui6.ppm "$tmp"/gui7.ppm "$tmp"/gui8.ppm "$tmp"/gui9.ppm \
               "$tmp"/gui10.ppm "$tmp"/gui11.ppm "$tmp"/gui12.ppm "$tmp"/gui13.ppm \
@@ -469,7 +489,41 @@ assert px(g16, 500, 172) == 0x2D6CA2, "the agent window, in front again"
 assert count(g17, 0xF1F2F3, 132, 270, 1010, 322) > 300, "another boot's service, a ghost"
 PY
 fi
+}
 
+sec_net() {
+# the network: netd (lwIP and the NE2000 driver) with QEMU's user network;
+# on the host, a TCP server (47001), a UDP one (47053), a client of MyNOS's port 80
+# (forwarded from 47080), HTTPS servers (47443-47445, tests/net/tls) and a
+# fake language model provider (47090, for llmd)
+net_fetched=
+if [ -f tests/net/ramdisk.dsk ]; then
+    tools/net-peer.py echo 47001 & echo_pid=$!
+    tools/net-peer.py udpecho 47053 & udp_pid=$!
+    tools/net-peer.py fetch 47080 "$tmp/fetched" & fetch_pid=$!
+    tls=tests/net/tls
+    tools/net-peer.py https 47443 $tls/good.pem $tls/good.key & https_pid=$!
+    tools/net-peer.py https 47444 $tls/untrusted.pem $tls/untrusted.key & https2_pid=$!
+    tools/net-peer.py https 47445 $tls/wrongname.pem $tls/wrongname.key & https3_pid=$!
+    tools/net-peer.py llm 47090 & llm_pid=$!
+    NET=1 HTTP=47080 timeout "${WAIT_NET:-40}" tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        tests/net/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$logn" &
+    qemu=$!
+    i=0
+    while [ $i -lt "${WAIT_NET:-40}" ] &&
+          ! grep -aq 'net: all checks passed\|net: FAIL\|PANIC' "$logn" 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    kill $qemu $echo_pid $udp_pid $fetch_pid $https_pid $https2_pid $https3_pid $llm_pid 2>/dev/null || true
+    wait $qemu 2>/dev/null || true
+    cat "$logn" >> "$part"
+    grep -q "hello from a server in MyNOS" "$tmp/fetched" 2>/dev/null && net_fetched=yes
+fi
+}
+
+sec_seventh() {
 # seventh boot: the system RAM disk, init starts the services and sh, driven
 # through the keyboard: the OCaml toplevel (ocaml), programs, sh again
 history_saved= kilo_saved= edit_saved= sh_saved= trace_calls= trace_json= agent_marks=
@@ -598,7 +652,7 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null || true
     wait $qemu || true
     kill $llm7_pid $peer7 2>/dev/null || true
-    cat "$log7" >> "$log"
+    cat "$log7" >> "$part"
     if [ -f tests/fat/run-shell.img ]; then
         tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/.history \
             2>/dev/null | grep -qx '6 \* 7;;' && history_saved=yes
@@ -626,6 +680,29 @@ assert any(e["ph"] == "f" for e in d)' "$tmp/t.json" 2>/dev/null && trace_json=y
         rm -f tests/fat/run-shell.img
     fi
 fi
+}
+
+pids=
+for lane in ${LANES:-a b c d e}; do
+    (
+        trap - EXIT
+        part=$tmp/part-$lane
+        : > "$part"
+        case $lane in
+            a) sec_first; sec_effects; sec_storage; sec_fat; sec_domains ;;
+            b) sec_mlib; sec_files; sec_stress; sec_spawn; sec_console ;;
+            c) sec_nocom2; sec_reboots ;;
+            d) sec_gui ;;
+            e) sec_net; sec_seventh ;;
+        esac
+        save_results "$lane"
+    ) &
+    pids="$pids $!"
+done
+lanes_ok=yes
+for p in $pids; do wait "$p" || lanes_ok=; done
+for f in "$tmp"/results-*; do [ -f "$f" ] && . "$f"; done
+cat "$tmp"/part-* >> "$log"
 
 fail=0
 expect() {
@@ -635,6 +712,9 @@ expect() {
         printf 'FAIL  %s\n' "$1"; fail=1
     fi
 }
+if [ -z "$lanes_ok" ]; then
+    echo "FAIL  a lane of boots stopped early (a command failed in it)"; fail=1
+fi
 reject() {
     if grep -aqF -- "$1" "$log"; then
         echo "FAIL  unexpected: $1"; fail=1

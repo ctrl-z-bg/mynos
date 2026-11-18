@@ -963,4 +963,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
 - **2026-11-18** — The System window says what each process is written
   in, OCaml (bytecode on `ocamlrun`) or C: the kernel marks the processes
   started as `ocamlrun` (`MYNOS_PROC_BYTECODE`, `Mynos.process.bytecode`).
+- **2026-11-18** — `tools/run-tests.sh` runs its boots in five lanes at
+  once (mynos-9vi): 4.5 minutes instead of 10-11. Each lane appends to
+  its own part of the log and saves the results it found for the checks;
+  the graphical session's fake model has its own port (47091). `LANES=d`
+  runs a lane alone while working on it, `KEEP=1` keeps the logs and
+  screens. The full run stays the check before a commit.
 
