@@ -81,7 +81,8 @@ talking through IPC.
   everything back: its IPC objects and semaphores at once, its memory
   (pages, page tables, kernel stacks, `tss`) from the next context switch
   (`reapZombies`: it cannot free the stack it runs on), its descriptor and
-  pid when the parent has collected the status. Pids are reused. Exited
+  pid when the parent has collected the status. Slots are reused, pids
+  never (a pid carries a generation). Exited
   threads leave their `tss` and kernel stack to the next thread.
 - **Synchronization:** kernel semaphores (`sem.c`). Every thread has a private
   semaphore.
@@ -89,8 +90,9 @@ talking through IPC.
   bidirectional **channels** carry messages; each end of a channel has its
   own id (the listener's even, the connector's the next one), so two threads
   of one process can talk over a channel. Short messages (≤ 8 bytes) are
-  copied; larger ones can be shared (`MYNOS_IPC_SHARED`). Port 0 is reserved
-  for the registry.
+  copied; longer ones are mapped into the receiver page by page,
+  copy-on-write (`MYNOS_IPC_SHARED`: shared, at any size). Port 0 is
+  reserved for the registry.
 - **Typed IPC** (`mynos-lib/ocaml/wire.ml`, `ipc.ml`;
   `doc/decisions/typed-ipc.md`): above the bytes, a service's protocol is an
   OCaml GADT of requests indexed by the type of their reply, and
@@ -234,14 +236,14 @@ All services are linked statically against `libmynos` and placed at
   Perfetto. The `trace` program: `trace COMMAND`, `trace -s SECONDS`,
   `trace show|calls|json FILE`. Programs mark their phases in it
   (`Tracer.mark`; the agent marks its steps). The live processes (native
-  call 33) and the registry's names (request 4) are listed too: `ps`.
+  call 33) and the registry's names (registry/1 `list`) are listed too: `ps`.
 - **Identity and permissions** (2026,
   `doc/decisions/identity-and-permissions.md`): pids, channel and port ids
   carry a generation (`slot + size * generation`), so an id names one
   object for its whole life; `channelPeer` tells a service who calls,
   `processInfo` whether a process still runs. One privilege, `io` (port
   I/O through IOPL 3, IRQs): boot modules have it, `init` gives it to the
-  `driver` lines of `init.rc` (consoled, ata, netd), a child gets at most
+  `driver` lines of `init.rc` (consoled, ata, netd, displayd), a child gets at most
   its parent's; `sh` and what it starts have none (an `outb` ends the
   program). Semaphores are their process's own, IRQ lines their driver's;
   well-known ports (0-15) are taken by privileged processes only. Tables:
@@ -257,9 +259,8 @@ All services are linked statically against `libmynos` and placed at
   pool replaced after each request.
 - `tmpfs` (2026): **the first MyNOS service written in OCaml**
   (`services/tmpfs/tmpfs.ml`), a writable filesystem in memory. It speaks
-  the same protocol, which has `WRITE` and `UNLINK` too; `fileio.c` sends
-  `/tmp/NAME` to it as `NAME` (one flat directory, lost at shutdown), and
-  replaces `write` and `unlink` as well. Started by init.
+  fs/1, like the other file services; `fileio.c` sends `/tmp/NAME` to it
+  as `NAME` (one flat directory, lost at shutdown). Started by init.
 
 #### shell
 
@@ -293,7 +294,8 @@ runs from the RAM disk (`OCAMLLIB=/`), and `compile "/disk/a.ml"` makes
 
 `init` (`init/init.ml`, OCaml) is the first program: `ocamlrun` runs
 `init.byte` from the RAM disk. It reads `init.rc` and starts each line's
-program, `start` for services (consoled, tmpfs, ata, fatfs), `respawn` for
+program: `driver` (with the `io` privilege: consoled, ata, netd,
+displayd) or `start` (tmpfs, fatfs, llmd, httpd) for services, `respawn` for
 the login shell, `sh`, which it restarts when it ends (`exit`). Its messages go to the kernel log. The
 system RAM disk (`system/ramdisk.dsk`) holds init and `init.rc`, a stripped
 `ocamlrun`, `consoled`, the shell with the standard library's and
@@ -454,9 +456,11 @@ last commit that still builds with that toolchain `legacy-last`.
   - `memrofs/tool/createDisk` is a host tool but was built like a MyNOS
     program; now built with plain gcc.
 - **Changes for the modern toolchain:**
-  - Programs are linked with `-Wl,-N -Wl,--build-id=none`: modern `ld` puts
-    the ELF headers and a build-id note in an extra segment far below
-    `0x40000000`, while the kernel loads one contiguous image from there. The
+  - Programs are linked with `-Ttext-segment=0x40000000 -z
+    noseparate-code --build-id=none` (`mynos.mk`; with the period
+    toolchain it was `-N`): modern `ld` puts the ELF headers and a
+    build-id note in an extra segment far below `0x40000000`, while the
+    kernel loads one contiguous image from there. The
     kernel now also jumps to the ELF entry point instead of a fixed address.
   - dietlibc 0.34 needs three Linux ABI features the 2008 kernel lacked:
     `set_thread_area` (TLS, used for `errno`), `mmap2`, and a Linux-style
@@ -486,7 +490,8 @@ last commit that still builds with that toolchain `legacy-last`.
 
 ### Not started
 
-- Drivers are still in C; of the services, `tmpfs` and `init` are in OCaml.
+- Some drivers are in C (consoled, netd, displayd); `ata`, and the
+  services `tmpfs`, `fatfs`, `llmd`, `httpd` and `init`, are in OCaml.
 - Nothing on "new language definition".
 
 ### Direction
@@ -894,7 +899,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   Tests: a mask's pixels (mynos-ocaml); the logo and the watermark found on
   the graphical test's screen.
 - **2026-11-18** — The legacy toolchain retired (mynos-g8l): it had found
-  nothing the dev one did not for weeks, cost half an hour per kernel or
+  nothing the dev one did not, cost half an hour per kernel or
   library change, and left the tree unusable for the demo meanwhile. Its
   last verified commit is tagged `legacy-last` (`git checkout legacy-last`,
   `tools/build-all.sh legacy`). Removed: `mynos-byterun/` (OCaml 3.06), the
@@ -1040,4 +1045,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   caller from `channelPeer`, no pid in the request). `Ipc.Make` gains
   `decode`/`reply` for services that answer later. The recorder decodes
   both; tour notes follow. Every MyNOS service now speaks typed IPC.
+- **2026-11-18** — The manual's architecture appendices (mynos-1t9,
+  `doc/manual/`): A to J, written against the code, every claim checked
+  in it. Writing them found bugs, filed: the FPU state not saved
+  (mynos-t6p), kernel writes ignoring read-only pages (mynos-bvz), a
+  message mapped into the kernel's page table (mynos-py9), unchecked
+  pointers in Linux calls (mynos-3po), munmap of the RAM disk
+  (mynos-q5b), IPC waiters never woken (mynos-3bb, mynos-blv), page
+  directory entry 255 (mynos-vm8), anyone may record (mynos-kwe) or
+  write the disk and power off (mynos-dow), C stdio input (mynos-d6k),
+  and minor findings (mynos-6qs, mynos-1ev, mynos-f2d, mynos-uoq).
+  Stale lines here and in the decision docs corrected.
 

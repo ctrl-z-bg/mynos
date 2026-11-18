@@ -2096,3 +2096,28 @@ the raw mode"). As for fs/1, the kernel now says who is calling
 OCaml module's caught nothing this time, but it is what makes a protocol
 written twice (C and OCaml) safe to change: a mismatch fails the suite.
 
+## 2026-11-18 — Documenting the kernel found its bugs
+
+**What happened.** The architecture appendices of the manual were
+written with one rule: every statement checked in the code, not copied
+from STATUS or from comments. Explaining how a context switch works
+meant reading `switchTo` line by line, and it saves no floating-point
+state at all (mynos-t6p). Explaining how the kernel reads a process's
+pointers meant asking which calls check them: `_llseek` writes its
+result anywhere (mynos-3po). Explaining copy-on-write meant asking what
+happens when the kernel itself writes: CR0.WP was never set, so the
+kernel's writes ignore read-only pages (mynos-bvz). About twenty
+findings in all, filed as issues; and a dozen lines of STATUS and the
+decision docs that had drifted from the code (pids "reused", messages
+"copied up to 8 bytes, larger can be shared", tmpfs's old protocol).
+
+**Why tests had not found them.** The tests exercise what programs do
+when they behave. None of these bugs shows up unless a program misbehaves
+(a bad pointer, a huge message, an `munmap` of the RAM disk) or two
+threads use floats at the same moment, which the suite never arranges.
+
+**Lesson.** Writing the explanation for someone else is a code review
+with a different question: not "does it work?" but "what exactly does it
+do?". Documentation written from the code, and not from memory, is worth
+doing for that alone.
+

@@ -55,12 +55,19 @@ Conventions:
 - [A. The microkernel](appendix-a-microkernel.md): boot, descriptors,
   processes and threads, the scheduler, semaphores, interrupts, system
   calls
-- B. Memory *(to be written)*
-- C. IPC in the kernel *(to be written)*
-- D. Linux compatibility *(to be written)*
-- E. Services and their protocols *(to be written)*
-- F. The OCaml runtime on MyNOS *(to be written)*
-- G. The event recorder *(to be written)*
-- H. Building and testing MyNOS *(to be written)*
-- I. Glossary *(to be written)*
-- J. Bibliography *(to be written)*
+- [B. Memory](appendix-b-memory.md): paging, the address space,
+  physical pages, the kernel heap, copy-on-write, pointers from processes
+- [C. IPC in the kernel](appendix-c-ipc.md): ports, channels, messages,
+  one exchange step by step
+- [D. Linux compatibility](appendix-d-linux.md): `int 0x80`, the calls
+  MyNOS answers, musl, the initial stack, threads
+- [E. Services and their protocols](appendix-e-services.md): typed IPC,
+  init and supervision, every service and its requests
+- [F. The OCaml runtime on MyNOS](appendix-f-ocaml-runtime.md): the
+  upstream runtime, the primitives, threads and domains, the libraries
+- [G. The event recorder](appendix-g-recorder.md): what the kernel
+  records, `Tracer`, `trace`, the windows and the Tour
+- [H. Building and testing MyNOS](appendix-h-building.md): the toolchain,
+  the build, QEMU, the test suite, debugging
+- [I. Glossary](appendix-i-glossary.md)
+- [J. Bibliography](appendix-j-bibliography.md)

@@ -39,7 +39,7 @@ In the kernel, at the points every interaction passes through:
 | `Spawn` | `spawn`/`fork` | parent, child, child's name |
 | `Exit` | a process ends | pid, status |
 | `Connect` | a client's connection is accepted | client, server, port, channel |
-| `Send` | a message is sent | sender, receiver, channel, size, its first 64 bytes |
+| `Send` | a message is sent | sender, receiver, channel, size, its first 56 bytes |
 | `Recv` | a message is received | receiver, sender, channel, size |
 | `Free` | a channel end is freed | pid, channel |
 
@@ -53,14 +53,14 @@ beginning. When nothing is recorded, the cost is one test of a flag.
 Processes get a **name** (the program's base name; for `ocamlrun X.byte`,
 `X`), which the kernel did not keep so far.
 
-Not in this first version: semaphores, futexes, interrupts and the Linux
+Not in this first version: semaphores, futexes and the Linux
 system calls (`write` to the screen...). They can be added as event
-classes later.
+classes later. (Interrupts were added: `TRACE_IRQ`, `irq.c`.)
 
 ### Meaning: the first bytes are enough
 
 Typed IPC messages start with the protocol id and the request's case
-number, in the `Wire` format: 64 bytes are enough for the player to show
+number, in the `Wire` format: 56 bytes are enough for the player to show
 `block/1 Read (2061, 1)` or `net/1 Connect ("10.0.2.2", 80)`, and a reply
 as `Ok …` or `Error "…"`. The C protocols are decoded too: the file
 services' requests (`mynos_fs.h`) start with their type and descriptor,

@@ -118,7 +118,7 @@ Alternatives:
    itself the same way (a test compares its description with `fs.ml`'s);
    libmynos is its client for every program. The client is the caller the
    kernel names (`channelPeer`), not a pid written in the request.
-8. **The registry and the consoles** (2026-11-18, mynos-nty): the last two
+4. **The registry and the consoles** (2026-11-18, mynos-nty): the last two
    C protocols. registry/1 (register, lookup, list; module `Registry`)
    in the C registry, which is now in its own table as "registry" so that
    it can be described like any service; console/1 (read, mode, keymap,

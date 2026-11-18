@@ -1,4 +1,4 @@
-(* The event recorder and its player: see trace.mli. The event layout is
+(* The event recorder and its player: see tracer.mli. The event layout is
    the kernel's (mynos-core/kernel/trace.h). *)
 
 external control : int -> int = "caml_mynos_trace_control"

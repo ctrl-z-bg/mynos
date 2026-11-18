@@ -151,8 +151,8 @@ segment registers and returns to user mode with `iret`.
 There are two kinds of threads, with the same `tss_t`:
 
 - **native threads** (`mynos_threadCreate`, system call 200, 2002):
-  they share their process's address space and TLS. MyNOS's C services
-  use them (consoled's keyboard thread, netd's lwIP thread).
+  they share their process's address space and TLS. consoled uses them
+  for its keyboard and serial threads.
 - **Linux threads** (`clone`, 2026, `kernel/lthreads.c`): what musl's
   pthreads and therefore OCaml's domains and threads use. Each has its own
   TLS (`set_thread_area`), a thread id (from 1,000,000,000 up, so it is

@@ -14,7 +14,7 @@
  * the kernel writes an event for every interaction between processes
  * (spawn, exit, IPC connections and messages) into a ring buffer, which a
  * program reads with the trace system call (native 32). Events are 96
- * bytes, little endian; module Trace (mynos-lib/ocaml/trace.ml) decodes
+ * bytes, little endian; module Tracer (mynos-lib/ocaml/tracer.ml) decodes
  * them:
  *
  *    0 seq     4 tsc low   8 tsc high   12 kind (16 bits)   14 pid (16)
