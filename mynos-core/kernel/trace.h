@@ -62,7 +62,8 @@ void trace_event(int kind, int pid, int peer, int channel, uint32_t size,
 int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2);
 
 /* processes (33): the live processes, 32 bytes each (pid, parent,
-   privileges, threads, name: 16 bytes), into buf, at most max: how many */
+   privileges | MYNOS_PROC_BYTECODE for OCaml programs, threads, name: 16
+   bytes), into buf, at most max: how many */
 #define PROCESS_ENTRY 32
 int _mynos_syscall_processes(uint32_t buf, uint32_t max);
 

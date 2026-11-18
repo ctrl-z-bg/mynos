@@ -8,6 +8,9 @@
      agent -n TURNS ...         at most so many model calls (20)
      agent -t FILE ...          the recording's file (/tmp/agent.trc)
 
+   Tools: commands, files, OCaml programs (run_ocaml: type-checked, then
+   run; build_ocaml: into a file, such as a window to start with &), the
+   typed services (module Agent).
    What changes things is shown and done only once confirmed: y, n, or a
    (yes to all). The event recorder runs meanwhile: "trace calls FILE"
    shows what the agent, the model service and every other process did. *)

@@ -216,6 +216,13 @@ with no tool call (or after 20 model calls, `-n`). Its tools:
   interface (the toplevel's `#show_module`), so the model looks before it
   writes. The type checker is the contract between the model and the
   system's interfaces;
+- `build_ocaml` (2026-11-18): the same compilation into a file the agent
+  names (`/disk/life.byte`, its source kept beside it), not run. For
+  programs that keep running: a window (`Gfx`, `Display`, `Gui`) or a
+  service is started with `run_command "PROG &"`; a program for the
+  terminal is the user's to run, since `run_command` keeps the output. The
+  system prompt tells the agent how a window is made (`Gui.run ~tick`,
+  `Gfx`) and the terminal's escape sequences and key mode;
 - every request of the typed services it is given (`-s net,llm`; `net` by
   default), from their descriptions (`Tools`).
 

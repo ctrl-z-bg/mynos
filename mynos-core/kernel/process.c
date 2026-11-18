@@ -533,6 +533,11 @@ int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
   desc->ppid = ppid;
   desc->privileges = privileges;
   trace_setName(desc->name, argv);
+  {                                    /* OCaml bytecode, on ocamlrun? */
+    const char * a = argv && argv[0] ? argv[0] : "", * base = a;
+    for (; *a; a++) if (*a == '/') base = a + 1;
+    desc->bytecode = !kmemcmp((char *)base, "ocamlrun", 9);
+  }
   if (spawnProcess(desc, elf, len, argv, envp) == NULL) {
     /* a bad image fails before allocating; out of memory, after (and
        leaks what it took: processes do not free memory yet) */

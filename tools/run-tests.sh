@@ -450,6 +450,8 @@ assert count(g11, 0xDCEAF7, 132, 270, 1010, 322) > 500, "services' boxes"
 assert count(g11, 0xFBE3D0, 132, 332, 1010, 384) > 500, "drivers' boxes"
 assert count(g11, 0x24313C, 132, 412, 1010, 512) > 2000, "the kernel"
 assert count(g11, 0xE9ECEF, 132, 534, 1010, 578) > 1000, "the hardware"
+assert count(g11, 0xE8762C, 132, 270, 1010, 322, 1) > 100, "OCaml tags (services)"
+assert count(g11, 0x5A6670, 132, 332, 1010, 384, 1) > 100, "C tags (drivers)"
 # replaying: a call's arrow (red), IPC lit in the kernel, an ended
 # process of the recording as a ghost
 assert count(g12, 0xD9534F, 132, 140, 1010, 520, 1) > 60, "a call's arrow"
@@ -567,6 +569,11 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     sleep 2
     # its recording: the steps it marked, among the calls
     tools/type-keys.py "$tmp/mon7" 'trace calls /tmp/agent.trc > /disk/agent-calls.txt\n'; sleep 4
+    # a program built into a file (build_ocaml: the fake model takes a JSON
+    # object as the tool's input), then run from sh
+    tools/type-keys.py "$tmp/mon7" "agent -y '[build_ocaml] {\"output\": \"/tmp/b.byte\", \"code\": \"let () = print_int (6 * 7 * 1000 + 1); print_newline ()\"}'\n"
+    waitfor "Built /tmp/b.byte" 90; sleep 2
+    tools/type-keys.py "$tmp/mon7" '/tmp/b.byte\n'; sleep 3
     # a service started by the agent, left running (sh's &): ps shows it
     # with its name, and a client gets its answer
     tools/type-keys.py "$tmp/mon7" "agent -y '[run_command] /disk/greeter.byte &'\n"
@@ -724,6 +731,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "io  consoled        console"     # ps: a driver, its service
     expect "greeter         greeter"         # ps: the service the agent started
     expect "Hello, agent, from MyNOS!"
+    expect "42001"                                   # built by the agent, run by sh
     expect "(greeter) killed by"                     # kill greeter
     expect "done, status 137"                        # & then kill $!
     expect "kill: 1: not allowed (init, or a driver)"

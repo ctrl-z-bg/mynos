@@ -257,6 +257,14 @@ architecture as it is now, not as a document says it is:
   ports, its children, its calls in the recording), the kernel, a
   device.
 
+Each live box says what its program is written in: **OCaml** (bytecode,
+run by `ocamlrun`) or **C** (native code): the kernel remembers, when it
+starts a process, whether its program was `ocamlrun`
+(`MYNOS_PROC_BYTECODE` in the list of processes, `Mynos.process.bytecode`).
+The interpreter itself is never a box: the kernel names a process after
+the bytecode it runs (`ocamlrun /sh.byte` is `sh`); init, which the
+kernel starts as a bare `ocamlrun`, is shown as `init`.
+
 A process of a recording is drawn as the live box only if the pid **and**
 the program are the same: a recording of an earlier boot has the same
 pids for other processes (pids start again at each boot), and its

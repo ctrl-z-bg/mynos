@@ -77,12 +77,14 @@ let process_info pid =
   if r < 0 then None
   else Some { alive = r land 0x100 <> 0; io = r land 1 <> 0 }
 
-type process = { p_pid : int; parent : int; p_io : bool; threads : int; name : string }
+type process = { p_pid : int; parent : int; p_io : bool; threads : int; name : string;
+                 bytecode : bool }
 
 external processes_raw : unit -> (int * int * int * int * string) array = "caml_mynos_processes"
 let processes () =
   Array.to_list (Array.map (fun (p_pid, parent, priv, threads, name) ->
-      { p_pid; parent; p_io = priv land 1 <> 0; threads; name }) (processes_raw ()))
+      { p_pid; parent; p_io = priv land 1 <> 0; threads; name;
+        bytecode = priv land 0x200 <> 0 }) (processes_raw ()))
 
 external kill : int -> unit = "caml_mynos_kill"
 

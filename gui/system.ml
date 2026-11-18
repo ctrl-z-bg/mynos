@@ -28,6 +28,7 @@ type node = {
   alive : bool;
   born : float;               (* uptime when first seen (0: at the start) *)
   died : float;               (* uptime when it ended (infinity: alive) *)
+  lang : string;              (* "OCaml" (bytecode, on ocamlrun), "C"; "": unknown *)
 }
 
 type step = Call of Tracer.call | Mark of Tracer.event | Irq of Tracer.event
@@ -126,7 +127,7 @@ let poll st =
             layer = classify ~io:p.p_io ~parent:p.parent ~names ~name:p.name; names;
             threads = p.threads; parent = p.parent; alive = true;
             born = (match old with Some o -> o.born | None -> if first then 0. else now);
-            died = infinity }
+            died = infinity; lang = if p.bytecode then "OCaml" else "C" }
       end) live;
   (* the ones that ended: fading, then gone *)
   Hashtbl.filter_map_inplace (fun pid n ->
@@ -223,7 +224,7 @@ let ghosts st =
           let layer = if List.mem name known_driver then Drivers
             else if Hashtbl.mem served pid then Services else Programs in
           { key = - pid - 1; pid; name; layer; names = []; threads = 0; parent = -1;
-            alive = false; born = 0.; died = neg_infinity } :: acc) pids []
+            alive = false; born = 0.; died = neg_infinity; lang = "" } :: acc) pids []
 
 (* ---- layout ---- *)
 
@@ -398,7 +399,8 @@ let () =
         devices;
       Gfx.fill g left kernel_y (right - left) kernel_h 0x24313C;
       ignore (Gfx.text ~bold:true g (left + 10) (kernel_y + 5)
-                "MyNOS microkernel: every message between processes passes through it" 0xFFFFFF);
+                "MyNOS microkernel (C): every message between processes passes through it"
+                0xFFFFFF);
       (* the messages' lane *)
       Gfx.fill g (left + 8) (kernel_y + 26) (right - left - 16) 16 0x2E3D49;
       Array.iteri (fun i part ->
@@ -446,8 +448,16 @@ let () =
             ignore (Gfx.text ~max:cols g (x + 6) (y + 20)
                       (if ghost then Printf.sprintf "pid %d, ended" n.pid
                        else Printf.sprintf "pid %d \xc2\xb7 %d thr" n.pid n.threads) Gui.muted);
+            (* the language: a tag at the bottom right *)
+            let tag_w = if n.lang = "" then 0 else 8 * String.length n.lang + 6 in
+            if n.lang <> "" && w > 70 then begin
+              let tx = x + w - tag_w - 3 and ty = y + h - 18 in
+              Gfx.fill g tx ty tag_w 15 (if n.lang = "OCaml" then 0xE8762C else 0x5A6670);
+              ignore (Gfx.text g (tx + 3) (ty - 1) n.lang 0xFFFFFF)
+            end;
             if n.names <> [] then
-              ignore (Gfx.text ~max:cols g (x + 6) (y + 35) (String.concat " " n.names) border);
+              ignore (Gfx.text ~max:((w - 12 - tag_w) / 8) g (x + 6) (y + 35)
+                        (String.concat " " n.names) border);
             if ui.clicked && Gui.hovered ui x y w h then st.sel <- Box n.key)
         nodes;
       (* the step: its arrows *)
@@ -518,6 +528,12 @@ let () =
                 | Services -> "A service: it serves requests from other processes over IPC \
                                (its names are in the registry)."
                 | Programs -> "A program: it asks the services for what it needs.");
+            if n.lang <> "" then
+              line 6 ~colour:Gui.muted
+                (if n.lang = "OCaml" then
+                   "Written in OCaml: bytecode, run by ocamlrun (the OCaml 5.5 runtime, in C, \
+                    with musl)."
+                 else "Written in C: native i386 code, with musl and libmynos.");
             if n.parent >= 0 then
               line 2 ~colour:Gui.muted (Printf.sprintf "started by %s; %d threads"
                                           (if n.parent = 0 then "the kernel (a boot module)"
@@ -588,5 +604,7 @@ let () =
                                    requests; programs (green) ask. All talk through the kernel.";
          line 2 ~colour:Gui.muted "A new process appears outlined; one that ends fades away. \
                                    Click a box, the kernel or a device for what it is.";
+         line 4 ~colour:Gui.muted "Each box says what it is written in: OCaml (bytecode, on \
+                                   ocamlrun) or C (native).";
          line 3 ~colour:Gui.muted "A recording (the field: a file to Open, or a command to \
                                    Record) is replayed here step by step."))

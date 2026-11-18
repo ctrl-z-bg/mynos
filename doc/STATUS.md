@@ -952,4 +952,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   grow). Now a read from a console that has gone is the end of the input,
   and the terminal ends sh and its descendants when closed (a hang-up).
   Test: after the graphical session, `ps` shows one sh and no terminal.
+- **2026-11-18** — The agent builds programs (`build_ocaml`): compiled
+  into a file it names, with MyNOS's libraries (also `Gfx`, `Display`,
+  `Gui`), its source kept beside it, not run; windows and services are
+  then started with `&`. Its prompt now says how a window is drawn and
+  how a terminal program places characters (VT100 sequences, the key
+  mode). `run_ocaml` says it is not for programs that keep running. The
+  fake provider takes a JSON object as a tool's input. Test: a program
+  built by the agent, run from sh.
+- **2026-11-18** — The System window says what each process is written
+  in, OCaml (bytecode on `ocamlrun`) or C: the kernel marks the processes
+  started as `ocamlrun` (`MYNOS_PROC_BYTECODE`, `Mynos.process.bytecode`).
 

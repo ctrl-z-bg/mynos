@@ -92,6 +92,7 @@ typedef struct {
   /* the program's name, for the event recorder (trace.c) */
   char name[16];
   uint32_t privileges;        /* MYNOS_PRIV_* */
+  uint32_t bytecode;          /* started as ocamlrun: an OCaml program */
 } process_descriptor_t;
 
 extern process_descriptor_t * processTable[];

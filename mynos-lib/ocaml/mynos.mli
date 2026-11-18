@@ -113,6 +113,7 @@ type process = {
   p_io : bool;          (** the io privilege: a driver *)
   threads : int;
   name : string;        (** the program's base name ("fatfs", "sh") *)
+  bytecode : bool;      (** an OCaml program, run by ocamlrun; else native (C) *)
 }
 
 val processes : unit -> process list

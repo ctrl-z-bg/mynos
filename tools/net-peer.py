@@ -160,7 +160,14 @@ def pick(tools, text, name_of):
 
 
 def fill(schema, text):
-    """a tool's input: each property of its schema set to the request's text"""
+    """a tool's input: the request's text if it is a JSON object (each
+    property its own value), else each property of the schema set to it"""
+    try:
+        given = json.loads(text)
+        if isinstance(given, dict):
+            return given
+    except ValueError:
+        pass
     return {k: text for k in schema.get("properties", {})}
 
 

@@ -45,6 +45,7 @@
 #define MYNOS_PRIV_IO 1        /* port I/O and IRQs: drivers */
 /* processInfo's result: the privileges, and this bit while it runs */
 #define MYNOS_PROC_ALIVE 0x100
+#define MYNOS_PROC_BYTECODE 0x200   /* processes(): an OCaml program, on ocamlrun */
 
 // under this size (byte) the message is copied if not shared
 // (copied twice, to be honest)

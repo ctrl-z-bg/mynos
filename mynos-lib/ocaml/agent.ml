@@ -40,12 +40,26 @@ let own_tools = [
                    standard library). If it does not type-check, the compiler's \
                    errors come back and nothing runs. If it does, the user confirms, \
                    then it runs: its exit status and output come back. Prefer it to \
-                   run_command for anything a typed interface does better.";
+                   run_command for anything a typed interface does better. It waits \
+                   for the program's end and keeps its output: not for programs that \
+                   keep running (a window, an animation, a service): build_ocaml.";
     schema = schema [ "code", "the program: an OCaml compilation unit (let () = ...)" ] };
+  { name = "build_ocaml";
+    description = "Compile an OCaml 5 program, against MyNOS's libraries as run_ocaml \
+                   does (also Gfx, Display, Gui: windows), into a program file, \
+                   without running it; its source is kept beside it (.ml). The \
+                   compiler's errors come back if it does not type-check. For \
+                   programs that keep running: start a window or a service with \
+                   run_command \"PROGRAM &\" (it returns at once); a program for \
+                   the terminal (escape sequences, keys) is for the user to run.";
+    schema = schema [ "code", "the program: an OCaml compilation unit (let () = ...)";
+                      "output", "the program's file, ending in .byte, such as \
+                                 /disk/life.byte" ] };
   { name = "ocaml_signature";
     description = "The signature of an OCaml module of MyNOS or of the standard \
                    library (its types and functions), as the toplevel shows it: \
-                   Mynos, Net, Http, Json, Llm, Ipc, Wire, Tools, Block, List...";
+                   Mynos, Net, Http, Json, Llm, Ipc, Wire, Tools, Block, Gfx, \
+                   Display, Gui, List...";
     schema = schema [ "module", "the module's name, such as Net" ] };
   { name = "read_file"; description = "The contents of a file.";
     schema = schema [ "path", "the file's path" ] };
@@ -149,6 +163,36 @@ let run_ocaml ~emit ~confirm code =
         else ("It compiles, but the user did not allow running it.", true)
       | _, errors -> ("It does not compile:\n" ^ clip errors, true))
 
+(* a program into a file: compiled (the type checker's word), not run *)
+let build_ocaml ~emit ~confirm code output =
+  if not (Filename.check_suffix output ".byte") then
+    ("The output must end in .byte, such as /disk/life.byte.", true)
+  else begin
+    let base = Filename.chop_suffix output ".byte" in
+    let src = base ^ ".ml" in
+    let lines = List.length (String.split_on_char '\n' code) in
+    if not (confirm (Printf.sprintf "build %s (%d lines of OCaml, source in %s)"
+                       output lines src)) then
+      ("The user did not allow building it.", true)
+    else begin
+      Out_channel.with_open_bin src (fun oc -> output_string oc code);
+      emit (Action (Printf.sprintf "compile %s" src));
+      let result = capture [ "/ocamlc.byte"; "-use-prims"; "/primitives"; "mynos.cma";
+                             "-o"; output; src ] in
+      List.iter (fun f -> try Sys.remove f with Sys_error _ -> ())
+        [ base ^ ".cmi"; base ^ ".cmo" ];
+      match result with
+      | 0, warnings ->
+        let size = try In_channel.with_open_bin output In_channel.length with _ -> 0L in
+        (Printf.sprintf "%sBuilt %s (%Ld bytes), source in %s. Start it with \
+                         run_command: \"%s &\" if it keeps running (a window, a \
+                         service), \"%s\" if it ends."
+           (if String.trim warnings = "" then "" else "compiler warnings:\n" ^ clip warnings ^ "\n")
+           output size src output output, false)
+      | _, errors -> ("It does not compile:\n" ^ clip errors, true)
+    end
+  end
+
 let list_directory path =
   let names = List.sort compare (Array.to_list (Sys.readdir path)) in
   String.concat "\n" (List.map (fun n ->
@@ -166,6 +210,7 @@ let execute ~emit ~confirm service_tools name input =
     if confirm ("run: " ^ c) then (run_command c, false)
     else ("The user did not allow this command.", true)
   | "run_ocaml" -> run_ocaml ~emit ~confirm (arg input "code")
+  | "build_ocaml" -> build_ocaml ~emit ~confirm (arg input "code") (arg input "output")
   | "ocaml_signature" ->
     let m = arg input "module" in
     emit (Action ("signature of " ^ m));
@@ -231,6 +276,20 @@ let system_prompt services =
      typed interface helps (Net.call n (Net.Resolve \"example.com\"), \
      Http.get, Json, Llm.ask...). ocaml_signature shows a module's \
      interface: look before you write.";
+    "Programs that keep running are built with build_ocaml into a file. \
+     A window: Gui.run ~title ~tick:0.1 width height state (fun ui state -> \
+     ... next state) calls its function at every event and every tick; \
+     draw with Gfx on ui.Gui.g (Gfx.fill g x y w h colour, Gfx.line, \
+     Gfx.rect, Gfx.text g x y text colour; colours 0xRRGGBB), widgets \
+     with Gui.button, Gui.label...; check Gui and Gfx with ocaml_signature \
+     first. Start a window with run_command \"/disk/prog.byte &\": it \
+     appears in the graphical session (gui). A program for the terminal \
+     writes VT100 escape sequences: \\027[2J clears, \\027[ROW;COLH moves \
+     the cursor (from 1;1), \\027[?25l hides it, \\027[31m colours, \
+     \\027[?1049h and \\027[?1049l enter and leave the alternate screen; \
+     Mynos.console_mode ~canon:false ~echo:false ~vmin:0 ~vtime:1 () reads \
+     keys one by one without waiting; Mynos.sleep seconds. Its output is \
+     the screen, so the user runs it (run_command would keep its output).";
     "Besides, your tools include the requests of these MyNOS services, \
      described by the services themselves: " ^ String.concat ", " services ^ ".";
     "The current directory: " ^ Sys.getcwd () ]

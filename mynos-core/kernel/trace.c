@@ -162,7 +162,7 @@ int _mynos_syscall_processes(uint32_t buf, uint32_t max) {
     if (p == NULL || !p->isAlive) continue;
     e[0] = p->pid;
     e[1] = p->ppid;
-    e[2] = p->privileges;
+    e[2] = p->privileges | (p->bytecode ? MYNOS_PROC_BYTECODE : 0);
     e[3] = p->numThreads;
     kmemcpy(&e[4], p->name, 16);
     if (copy_to_user((char *)buf + n * PROCESS_ENTRY, e, PROCESS_ENTRY))
