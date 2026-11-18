@@ -59,3 +59,6 @@ system/kilo
 
 # Language model keys (llm.env.example is the reference)
 llm.env
+
+# scratch files of the owner, never committed
+/tmp/
