@@ -1202,4 +1202,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `llm.env.example` and the licences. README: "Try it"; manual 5.2.
 - **2026-11-19** — Manual 5.1: what a release needs (QEMU only; mtools
   and python3 optional) apart from what building needs.
+- **2026-11-19** — `sh`'s Tab quotes (mynos-f7k): the word is found as
+  the lexer reads it (a space inside quotes does not end it), completed
+  on its value, and written back between double quotes when it has a
+  space or a character the shell reads, or was begun in quotes; a
+  directory's quote stays open. Test in the seventh boot.
 

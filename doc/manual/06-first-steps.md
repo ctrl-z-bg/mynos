@@ -223,9 +223,13 @@ can.
 - Anywhere else it completes **file names**, with their directory:
   `cat /disk/RE` and Tab gives `cat /disk/README.TXT `.
 
-A complete name gets a space after it, a directory a `/`. When several
-names fit, Tab completes their common part, and a second Tab lists
-them:
+A complete name gets a space after it, a directory a `/`. A name with a
+space (or a character the shell reads, such as `$` or `&`) is completed
+between double quotes: `cat /disk/my` and Tab gives
+`cat "/disk/my file.txt" `; a directory's quote stays open, so that Tab
+goes on inside it. Tab also completes inside quotes you have opened
+(`cat "/disk/my f`). When several names fit, Tab completes their common
+part, and a second Tab lists them:
 
 ```
   mynos:/$ sh            (Tab, Tab)

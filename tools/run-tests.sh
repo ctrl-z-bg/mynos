@@ -746,6 +746,9 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" '/disk/stdio-test\n'; sleep 4
     printf 'sendkey ctrl-c\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null; sleep 2
     tools/type-keys.py "$tmp/mon7" 'X=ctrlc; echo after-$X\n'; sleep 2
+    # Tab completes a name with a space, in quotes (mynos-f7k)
+    tools/type-keys.py "$tmp/mon7" 'X=content; echo spaced-$X > "/disk/my file.txt"\n'; sleep 2
+    tools/type-keys.py "$tmp/mon7" 'cat /disk/my{tab}\n'; sleep 3
     # a rename that changes only the case keeps the file (mynos-qaw)
     tools/type-keys.py "$tmp/mon7" 'echo case-kept > /disk/case.txt; mv /disk/case.txt /disk/CASE.txt; cat /disk/CASE.txt\n'; sleep 3
     tools/type-keys.py "$tmp/mon7" 'kill fatfs\n'; sleep 4
@@ -984,6 +987,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "stdio: isatty(1) 0"                        # ... or a file
     expect "stdio: read [into-a-file]"                 # all of stdout in the file
     expect "case-kept"                                 # mv to other letters
+    expect "spaced-content"                            # Tab quoted a name
     expect "after-ctrlc"                               # Ctrl-C swallows nothing
     expect "server: MyNOS httpd"                       # our own address...
     expect "404 Not Found"                             # ... and no llm.env

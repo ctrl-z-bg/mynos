@@ -881,6 +881,45 @@ let complete_file word =
         (full, (try Sys.is_directory full with Sys_error _ -> false)))
   | exception Sys_error _ -> []
 
+(* the word the cursor ends, as the lexer will read it: where it starts in
+   the line, its value (quotes and backslashes taken away), and whether it
+   has quotes. A space inside quotes does not end a word. *)
+let current_word t pos =
+  let start = ref 0 and value = Buffer.create 32 and quoted = ref false in
+  let state = ref `Plain in
+  let i = ref 0 in
+  while !i < pos do
+    let c = t.[!i] in
+    (match !state, c with
+     | `Plain, (' ' | '\t' | ';' | '|' | '&' | '<' | '>') ->
+       start := !i + 1; Buffer.clear value; quoted := false
+     | `Plain, '\'' -> state := `Single; quoted := true
+     | `Plain, '"' -> state := `Double; quoted := true
+     | `Plain, '\\' when !i + 1 < pos -> incr i; Buffer.add_char value t.[!i]
+     | `Single, '\'' | `Double, '"' -> state := `Plain
+     | `Double, '\\' when !i + 1 < pos && String.contains "\"\\$" t.[!i + 1] ->
+       incr i; Buffer.add_char value t.[!i]
+     | _, c -> Buffer.add_char value c);
+    incr i
+  done;
+  (!start, Buffer.contents value, !quoted)
+
+(* a name as a word of the line: as it is, or between double quotes when
+   it has a space or a character the shell reads (or the user had begun
+   with quotes); [close]: the closing quote too *)
+let as_word ?(quoted = false) ~close s =
+  let special c = String.contains " \t'\"\\$;&|<>*?#()`" c in
+  if not quoted && not (String.exists special s) then s
+  else begin
+    let b = Buffer.create (String.length s + 4) in
+    Buffer.add_char b '"';
+    String.iter (fun c ->
+        if c = '"' || c = '\\' || c = '$' then Buffer.add_char b '\\';
+        Buffer.add_char b c) s;
+    if close then Buffer.add_char b '"';
+    Buffer.contents b
+  end
+
 (* ---- the editor ---- *)
 
 let columns = 80
@@ -928,10 +967,8 @@ let read_line_edited prompt =
     set (String.sub t 0 a ^ String.sub t b (String.length t - b)) a in
   let complete () =
     let t = text () in
-    let start = (match String.rindex_from_opt t (max 0 (!pos - 1)) ' ' with
-        | Some i when !pos > 0 -> i + 1 | _ -> 0) in
-    let start = if !pos = 0 then 0 else start in
-    let word = String.sub t start (!pos - start) in
+    (* the word, its value without quotes: names with spaces complete *)
+    let start, word, quoted = current_word t !pos in
     let first = String.trim (String.sub t 0 start) = "" in
     let cands =
       if first && not (String.contains word '/') then complete_command word
@@ -940,10 +977,13 @@ let read_line_edited prompt =
     | [] -> ()
     | [ (c, dir) ] ->
       delete_range start !pos;
-      insert (c ^ (if dir then "/" else " "))
+      (* a directory: the quote stays open, to go on inside it *)
+      if dir then insert (as_word ~quoted ~close:false (c ^ "/"))
+      else insert (as_word ~quoted ~close:true c ^ " ")
     | _ ->
       let p = common_prefix (List.map fst cands) in
-      if String.length p > String.length word then (delete_range start !pos; insert p)
+      if String.length p > String.length word then
+        (delete_range start !pos; insert (as_word ~quoted ~close:false p))
       else if !last_tab then begin
         (* the second Tab: show them *)
         print_string "\n";
