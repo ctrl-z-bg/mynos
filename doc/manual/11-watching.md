@@ -185,7 +185,7 @@ the picker) or a command (**Record**: it runs under `trace` and opens
 the result). **GUI: hidden** leaves out the display server's traffic,
 the frames every window sends; one click shows it.
 
-![Figure 11-2. The Recordings window: `cat /disk/notes](../screenshots/recordings.png)
+![Figure 11-2. The Recordings window: `cat /disk/notes.txt` recorded, one lane per process; a call chosen, with its request and reply](../screenshots/recordings.png)
 
 *Figure 11-2. The Recordings window: `cat /disk/notes.txt` recorded, one lane per process; a call chosen, with its request and reply.*
 
@@ -361,6 +361,6 @@ and explains each step as it replays (11.6).
 
 *Figure 11-4. Lesson 6: the kernel ends `fatfs` (pid 8), killed...*
 
-![Figure 11-5. ](../screenshots/service-back.png)
+![Figure 11-5. ...and `init` starts a new one (pid 30), which registers its name again](../screenshots/service-back.png)
 
 *Figure 11-5. ...and `init` starts a new one (pid 30), which registers its name again.*
