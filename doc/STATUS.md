@@ -1230,4 +1230,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   the kernel's greeting and version.
 - **2026-11-19** — Manual 5.4: the four boot modules named (ocamlrun,
   registry, memrofsd, ramdisk.dsk).
+- **2026-11-19** — Manual, second outside review of chapter 3: the Lisp
+  machines (language safety apart from process isolation, hardware by
+  generation, the 2002 analogy quoted exactly), seL4's machine-checked
+  proof, Singularity in appendix J. Chapter 4: the SourceForge news
+  before November 2002 (2002-01-08, 10-03, 10-11, 10-22: the OCaml VM as
+  a process), semaphores on 11-26.
 

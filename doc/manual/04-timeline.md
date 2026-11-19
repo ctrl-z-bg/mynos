@@ -20,15 +20,20 @@ Ferrini.
 | Date | Event |
 |---|---|
 | 2001-09-05 | The project is registered on SourceForge, after a long planning (the date on its SourceForge page). |
+| 2002-01-08 | The first news on SourceForge: the kernel's memory management is under development, paging already works, the code will soon be on CVS. |
 | 2002-02-02 | The first commit, by Cesare Zavattari: a floppy boot loader in assembly and the first files of the kernel. |
 | 2002-03 | Tommaso Schiavinotto adds a target to build a boot floppy. |
+| 2002-10-03 | Allocation on first use: pages are given to a process when it first touches them. |
 | 2002-10-08 | The web site opens (its visitor counter starts that day), with the page *Why MyNOS?* (chapter 2). |
+| 2002-10-11 | `fork`, in a simple form, without copy-on-write. |
+| 2002-10-22 | "ocaml virtual machine ran on mynos kernel!": OCaml's virtual machine, compiled against dietlibc, runs as a process on MyNOS's kernel, executing a simple bytecode program. |
 | 2002-11-04 | "Static ELF format supported!": the kernel loads static ELF modules, and the OCaml virtual machine has been tested on it. |
 | 2002-11-09 | "IPC implemented: MyNOS reaches Alpha state!", after a long night's work: send and receive, synchronous or not. |
-| 2002-11-20 | IPC buffers are checked; MyNOS has semaphores. |
+| 2002-11-20 | IPC buffers are checked. |
+| 2002-11-26 | "MyNOS! has Semaphores!", and a first management of process queues. |
 | 2003-04-07 | The serial driver, a process like the keyboard's; services register with the kernel; a message received from the serial port. |
 | 2003 | A private test: messages sent over a serial cable between a PC running MyNOS and a Sinclair ZX Spectrum (4.3). |
-| 2003-07-30 | The task switch moves from the processor's hardware mechanism to software; `fork`. |
+| 2003-07-30 | The task switch moves from the processor's hardware mechanism to software; `fork` reworked, and `sched()`. |
 | 2003-08-18 | Threads: every thread belongs to its process, with the same pid. |
 | 2003-11-07 | Copy-on-write. |
 | 2004-09-01 | The kernel's IPC redesigned from scratch: ports and channels, long messages moved by copy-on-write, the IPC of today (appendix C). |

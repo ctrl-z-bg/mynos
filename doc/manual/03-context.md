@@ -25,20 +25,27 @@ for systems.
 
 ## 3.2 Operating systems in safe languages
 
-Before them all came the **Lisp machines**: workstations born at MIT's
-Artificial Intelligence Laboratory in the mid-1970s, and sold in the
-1980s by Symbolics, LMI and Texas Instruments. Their operating system,
-drivers, editor and window system were written in Lisp, and their
-processor was designed to run it, with tagged memory, type checks in
-the microcode and help for the garbage collector. They were not safe in
-the sense of this chapter: everything shared one address space, and any
-program could redefine any function of the system. But they were a
-whole operating system whose master was a functional language, and that
-idea inspired MyNOS's authors deeply. Their page of 2002 says so
-(chapter 2.1): as LISP once needed a LISP machine, a system in OCaml
-would need "some kind of special hardware support"; MyNOS's answer was
-to make that machine in software, a microkernel under OCaml's virtual
-machine.
+Before them all came the **Lisp machines**: workstations developed at
+MIT's Artificial Intelligence Laboratory from the mid-1970s, and sold in
+the 1980s by Symbolics, Lisp Machines Inc. and Texas Instruments. Much
+of their operating system, the editor and the window system included,
+was written in Lisp, on processors designed for it: tagged data,
+hardware help for type checking and garbage collection, and Lisp-oriented
+instructions in microcode or in dedicated hardware, depending on the
+generation. Lisp itself checked its types at run time and managed memory
+automatically; what these machines did not have was the
+hardware-enforced isolation between processes that MyNOS uses: system
+and user programs lived in one shared Lisp environment, and user
+programs could redefine system functions. But they were a whole
+operating system whose master was a functional language, and that idea
+inspired MyNOS's authors deeply. Their page of 2002 draws the analogy
+(chapter 2.1): as LISP "in the old days required a LISP-machine to run
+effectively", a system in OCaml would need "some kind of special
+hardware support". (Lisp ran on ordinary computers too, the PDP-10
+among them; its machines were built for speed, memory and
+interactivity.) MyNOS took a different route: not an OCaml processor,
+but an "abstract machine" made in software, a microkernel in C with
+OCaml's bytecode virtual machine running on it as an ordinary process.
 
 The idea of an operating system built on a safe language was older than
 MyNOS, and came back while MyNOS was being written.
@@ -83,8 +90,9 @@ choices rather than from the microkernel architecture itself: a kernel
 whose IPC path was designed with care made messages cheap enough for
 drivers and file systems to live outside it. By the early 2000s L4's descendants
 were being developed at Karlsruhe, Dresden and Sydney; one of them,
-seL4, was the first whose functional correctness was formally verified
-(2009), and L4
+seL4, was in 2009 the first general-purpose kernel with a
+machine-checked proof of functional correctness, from its specification
+to its C implementation, and L4
 kernels went on to run inside very large numbers of mobile devices.
 
 **MINIX**, Andrew Tanenbaum's teaching system of 1987, already organized

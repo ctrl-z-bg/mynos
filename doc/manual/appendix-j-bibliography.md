@@ -82,8 +82,9 @@ bitsavers.org, the Unix Heritage Society and multicians.org.
   House.
 - G. C. Hunt, J. R. Larus. "Singularity: Rethinking the Software Stack".
   *ACM SIGOPS Operating Systems Review* 41(2), 2007. Processes isolated
-  by the language, and typed channels with contracts: the closest
-  relative of MyNOS's typed IPC.
+  by the language, and typed channels with contracts: a point of
+  comparison for MyNOS's typed IPC, whose request and reply give weaker
+  guarantees (chapter 3.2).
 - A. Madhavapeddy et al. "Unikernels: Library Operating Systems for the
   Cloud". *ASPLOS*, 2013. MirageOS, an operating system in OCaml.
 
