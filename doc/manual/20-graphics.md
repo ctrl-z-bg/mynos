@@ -390,6 +390,10 @@ A graphical program: start the graphical session (gui), then run it from a Termi
 
 and ends with status 2.
 
+![Figure 20-1. Life in a window, with the glider gun](../screenshots/life.png)
+
+*Figure 20-1. Life in a window, with the glider gun.*
+
 ## 20.6 Known limits
 
 - One screen size (1024 × 768 × 32) and one font (Terminus 8 × 16);

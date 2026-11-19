@@ -1236,4 +1236,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   proof, Singularity in appendix J. Chapter 4: the SourceForge news
   before November 2002 (2002-01-08, 10-03, 10-11, 10-22: the OCaml VM as
   a process), semaphores on 11-26.
+- **2026-11-19** — Manual figures: 12 new screenshots (the menu, tabs,
+  the Terminal, Services, Files; Recordings, the Tour's replay, a
+  service that dies and comes back; the agent's confirmation and result;
+  Life). `tools/screenshots.sh` makes all 15 on a clean disk (no longer
+  system/disk.img), the agent's only with llm.env. Agent window: tabs
+  drawn as a glyph (mynos-1cz).
 

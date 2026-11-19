@@ -185,6 +185,10 @@ the picker) or a command (**Record**: it runs under `trace` and opens
 the result). **GUI: hidden** leaves out the display server's traffic,
 the frames every window sends; one click shows it.
 
+![Figure 11-2. The Recordings window: `cat /disk/notes](../screenshots/recordings.png)
+
+*Figure 11-2. The Recordings window: `cat /disk/notes.txt` recorded, one lane per process; a call chosen, with its request and reply.*
+
 ## 11.5 The System window
 
 The menu's **System** (figure 10-2) draws MyNOS as it is now, in layers:
@@ -288,6 +292,10 @@ shows.
 > the system does, its words would not appear: the course is checked
 > against the system each time it is taught.
 
+![Figure 11-3. Lesson 2 of the Tour, replayed in the System window: `sh` asks `fatfs` for the directory's entries](../screenshots/tour.png)
+
+*Figure 11-3. Lesson 2 of the Tour, replayed in the System window: `sh` asks `fatfs` for the directory's entries.*
+
 ## 11.7 A service that dies
 
 `init`, the first program, starts the services listed in `/init.rc`, and
@@ -348,3 +356,11 @@ and explains each step as it replays (11.6).
 > its clients look its name up again in the registry and carry on.
 > What was in its memory is lost (`/tmp`, if `tmpfs` dies), but the
 > system is not.
+
+![Figure 11-4. Lesson 6: the kernel ends `fatfs` (pid 8), killed](../screenshots/service-dies.png)
+
+*Figure 11-4. Lesson 6: the kernel ends `fatfs` (pid 8), killed...*
+
+![Figure 11-5. ](../screenshots/service-back.png)
+
+*Figure 11-5. ...and `init` starts a new one (pid 30), which registers its name again.*

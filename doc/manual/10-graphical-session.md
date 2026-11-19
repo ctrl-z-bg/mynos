@@ -76,6 +76,10 @@ Click **MyNOS**, top left. The menu opens:
 Click an item to start it; a click anywhere else closes the menu. Each
 item starts a new program, so choosing Clock twice gives two clocks.
 
+![Figure 10-2. The MyNOS menu, open, with the pointer on Files](../screenshots/menu.png)
+
+*Figure 10-2. The MyNOS menu, open, with the pointer on Files.*
+
 ## 10.4 Step 4: windows and tabs
 
 Every window has a title bar, with a close box at its right:
@@ -97,6 +101,10 @@ Every window has a title bar, with a close box at its right:
 
 Windows open in a cascade, a little to the right of and below the last
 one. A window whose program ends disappears within a second.
+
+![Figure 10-3. Five windows, each one a process, and their tabs in the top bar](../screenshots/tabs.png)
+
+*Figure 10-3. Five windows, each one a process, and their tabs in the top bar.*
 
 ## 10.5 The welcome window
 
@@ -133,6 +141,10 @@ programs such as `edit` run in it too.
 
 A graphical program started from a terminal (`/clock.byte`, or your own
 with `&`) opens its window in the session.
+
+![Figure 10-4. A Terminal window: `ls /disk`, then the OCaml toplevel](../screenshots/terminal.png)
+
+*Figure 10-4. A Terminal window: `ls /disk`, then the OCaml toplevel.*
 
 ## 10.7 The Clock
 
@@ -179,27 +191,17 @@ windows' consoles), each one about its protocol: `ata0`, `console`,
 `tmpfs`, and any service of your own. The agent can use them too
 (chapter 12).
 
+![Figure 10-5. Services: `fatfs`'s `list`, called with the path `/`; the reply, as JSON](../screenshots/services.png)
+
+*Figure 10-5. Services: `fatfs`'s `list`, called with the path `/`; the reply, as JSON.*
+
 ## 10.9 Files, and the file picker
 
 The menu's **Files** is a file manager:
 
-```
- ┌─ Files ──────────────────────────────────────────────────────────────┐
- │ Files  /disk                                                         │
- │┌ Places ─────────┐ [Up][Open][New folder][Rename][Delete][Copy][Cut] │
- ││ /     RAM disk  │ [Paste][Refresh]                                  │
- ││ /tmp  memory    │ docs/                                     folder  │
- ││▐/disk FAT disk ▌│ hello.txt                                   23 B  │
- ││                 │ llm.env                                    310 B  │
- ││ /disk: the FAT  │ ...                                               │
- ││ disk, kept      ├───────────────────────────────────────────────────┤
- ││ across boots.   │ /disk/hello.txt: 23 B: Open shows it              │
- ││ Served by fatfs │                                                   │
- ││ (pid 22, OCaml);│                                                   │
- ││ its blocks come │                                                   │
- ││ from ata0 ...   │                                                   │
- │└─────────────────┘                                                   │
-```
+![Figure 10-6. Files on `/disk`: on the left, the process that serves it; a program chosen, and what Open will do](../screenshots/files.png)
+
+*Figure 10-6. Files on `/disk`: on the left, the process that serves it; a program chosen, and what Open will do.*
 
 **Step 1.** Click a place on the left: `/` (the RAM disk), `/tmp` (in
 memory) or `/disk` (the FAT disk). Under the places, the window says
@@ -260,12 +262,12 @@ as a timeline or as a list. Chapter 11 explains it.
 
 The menu's **System** draws MyNOS as it is at this moment: the hardware
 at the bottom, the kernel, then the drivers, the services and the
-programs, one box per process (figure 10-2). A recording can be replayed
+programs, one box per process (figure 10-7). A recording can be replayed
 on it, message by message. Chapter 11 explains it.
 
-![Figure 10-2. The System window](../screenshots/system.png)
+![Figure 10-7. The System window](../screenshots/system.png)
 
-*Figure 10-2. The System window. Every box is a process; orange ones
+*Figure 10-7. The System window. Every box is a process; orange ones
 reach the hardware themselves; each says what it is written in.*
 
 ## 10.12 Agent

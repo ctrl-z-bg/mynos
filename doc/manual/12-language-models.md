@@ -212,6 +212,10 @@ marked safe (`net_connect ...`). `-y` answers yes to all of them. The
 agent runs with no privilege: it can do what your own commands can, no
 more.
 
+![Figure 12-1. The agent asks before it writes a file](../screenshots/agent-confirm.png)
+
+*Figure 12-1. The agent asks before it writes a file.*
+
 ## 12.7 What the agent can use
 
 **Its own tools:**
@@ -304,6 +308,10 @@ take the place of the field:
 same conversation ("and now put it in a file"). **Recording** opens the
 last task's recording in the Recordings window (12.9). The window uses
 the default profile and the `net` service only.
+
+![Figure 12-2. A task done in the Agent window: each tool call, its result, and the agent's answer](../screenshots/agent.png)
+
+*Figure 12-2. A task done in the Agent window: each tool call, its result, and the agent's answer.*
 
 ## 12.9 What the agent did
 
