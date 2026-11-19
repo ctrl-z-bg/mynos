@@ -16,6 +16,21 @@ processes, and the OCaml bytecode interpreter ported to run on top of it. The
 long-term goal was an OS whose programs are written in a high-level language
 rather than in C.
 
+## Try it
+
+Download `mynos-VERSION.tar.gz` from the
+[Releases](https://github.com/ctrl-z-bg/mynos/releases) page, install
+QEMU (`apt install qemu-system-x86`, `brew install qemu`...), and:
+
+```
+tar xzf mynos-*.tar.gz && cd mynos-*/ && ./run-mynos.sh
+```
+
+MyNOS boots in a few seconds; `help` lists the commands, `gui` starts
+the graphical session, and its Tour explains how the system works. The
+manual is in [`doc/manual/`](doc/manual/README.md); building from source
+is described below.
+
 ## Screenshots
 
 The graphical session as it starts: every window is a separate process,

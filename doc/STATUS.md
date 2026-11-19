@@ -1194,4 +1194,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   by git); the kernel prints `Welcome to MyNOS - v...` first and answers
   `uname` (Linux 122); `Mynos.version`, `sh`'s `version`, the welcome
   window, GRUB's menu entry. The README shows the 2003 logo.
+- **2026-11-19** — Releases (mynos-sc9): `tools/make-release.sh` makes
+  `tmp/release/mynos-VERSION.tar.gz` (and a `.sha256`): the ISO, a clean
+  disk, `run-mynos.sh` (only QEMU needed: the disk copied on the first
+  run and kept, `--serial`, `--no-net`, `--http`, `--mem`,
+  `--reset-disk`, `llm.env` copied in when mcopy is there), a README,
+  `llm.env.example` and the licences. README: "Try it"; manual 5.2.
 

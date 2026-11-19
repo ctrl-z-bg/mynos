@@ -30,14 +30,48 @@ than a real one but needs no special permission.
 
 ## 5.2 A ready-made image
 
-A release with everything needed to try MyNOS without building it (a
-bootable image, a disk image, and a script that needs only QEMU) is
-planned (mynos-sc9). Until it exists, MyNOS is built from its sources,
-as described next; once built, `tools/make-iso.sh` makes the bootable
-image, `tmp/mynos.iso` (GRUB, the kernel and its modules), and a clean
-disk, `tmp/mynos-disk.img`; they boot with `qemu-system-i386 -boot d
--cdrom tmp/mynos.iso -m 256 -drive
-file=tmp/mynos-disk.img,format=raw,if=ide,index=0` (H.6).
+The quickest way to try MyNOS needs only QEMU. Each release on the
+project's GitHub page (Releases) has an archive,
+`mynos-VERSION.tar.gz`, with a `.sha256` beside it to check the
+download (`sha256sum -c mynos-VERSION.tar.gz.sha256`).
+
+```
+  $ tar xzf mynos-2026.11-xxxxxxx.tar.gz
+  $ cd mynos-2026.11-xxxxxxx
+  $ ./run-mynos.sh
+```
+
+The archive holds:
+
+| File | What it is |
+|---|---|
+| `mynos.iso` | the system: GRUB, the kernel, the first programs and the RAM disk |
+| `disk-clean.img` | an empty FAT32 disk |
+| `run-mynos.sh` | starts QEMU with the right machine |
+| `README.txt` | these instructions, in short |
+| `llm.env.example` | the model configuration's template (5.7) |
+| `licenses/` | MyNOS's licence (GPL 2) and those of the software it contains |
+
+The first run copies `disk-clean.img` to `disk.img`, which is `/disk`
+from then on: what you save there stays between runs. `run-mynos.sh`
+takes the options of `run-demo.sh` (5.5), spelled as options:
+
+| Option | Effect |
+|---|---|
+| `--serial` | this terminal is a console of MyNOS too, as `SERIAL=1` |
+| `--no-net` | no network card |
+| `--http PORT` | the host port forwarded to the web server (default 8080, if free; 0: none) |
+| `--mem MB` | the memory (default 256) |
+| `--reset-disk` | `/disk` empty again (`disk.img` replaced) |
+| `-- OPTIONS` | passed to QEMU, e.g. `-- -display none` with `--serial` |
+
+A `llm.env` beside the script is copied into the disk at every start
+when `mcopy` (mtools) is installed; without it, write `/disk/llm.env`
+inside MyNOS with `edit`. If QEMU is missing, the script says how to
+install it.
+
+Releases are made with `tools/make-release.sh` (H.6). To build the same
+system from its sources instead, read on.
 
 ## 5.3 Building from source
 

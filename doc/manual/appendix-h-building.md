@@ -186,6 +186,14 @@ again with an empty disk, delete it and build. It is not in git (`*.img`).
 
 ## H.6 Running
 
+**A release.** `tools/make-release.sh` makes
+`tmp/release/mynos-VERSION.tar.gz` and its `.sha256`, for people who
+have only QEMU: the ISO, a clean disk (`disk-clean.img`), `run-mynos.sh`
+and `README.txt` (from `tools/release/`), `llm.env.example`, and the
+licences (MyNOS's GPL 2 and the third parties'). It refuses a `VERSION`
+that is not the current commit's (build again), and warns about
+uncommitted changes. Chapter 5.2 is the user's side.
+
 **A bootable ISO.** `tools/make-iso.sh [OUT]` (default `tmp/mynos.iso`,
 not kept by git) puts GRUB for PC BIOS, the kernel and the four modules of
 `run-demo.sh` on a CD image, with `grub-mkrescue` in the container
