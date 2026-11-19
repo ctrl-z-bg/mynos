@@ -31,6 +31,25 @@ the graphical session, and its Tour explains how the system works. The
 manual is in [`doc/manual/`](doc/manual/README.md); building from source
 is described below.
 
+## The manual
+
+[**The MyNOS Manual**](doc/manual/README.md), written against the code:
+
+- [Part I, Introduction](doc/manual/01-welcome.md): what MyNOS is,
+  [why](doc/manual/02-why.md), its [time](doc/manual/03-context.md) and
+  its [history](doc/manual/04-timeline.md).
+- [Part II, User's Guide](doc/manual/05-installation.md): installing and
+  running it, the console, files, programming inside MyNOS, the network,
+  the graphical session, watching the system at work, language models,
+  the [command reference](doc/manual/13-command-reference.md).
+- [Part III, Programmer's Guide](doc/manual/14-c-and-ocaml.md): C and
+  OCaml programs, processes, IPC and typed IPC, files, network, graphics,
+  the event recorder, writing a driver, the
+  [reference pages](doc/manual/24-reference.md); its programs are in
+  [`doc/manual/examples/`](doc/manual/examples/).
+- [Appendices](doc/manual/appendix-a-microkernel.md): how it works
+  inside, from the microkernel to the build and the tests.
+
 ## Screenshots
 
 The graphical session as it starts: every window is a separate process,
