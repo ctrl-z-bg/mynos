@@ -8,9 +8,10 @@ each other only through the kernel's messages; since 2026 those messages
 carry typed OCaml values, and every service can describe its own
 protocol.
 
-It was begun in 2002 by three students on SourceForge, set aside in
+It was begun in 2002 by three young computer scientists on SourceForge, set aside in
 2004, and taken up again in November 2026, when it reached what it had
-been designed for. Its authors' first page asked "why embark in the
+been designed for. Its name is an exclamation: **My! Not another
+Operating System**. Its authors' first page asked "why embark in the
 writing of yet another OS (therefore the name)?" (chapter 2).
 
 ## 1.1 What MyNOS is, in one page
@@ -54,7 +55,7 @@ it assumes only some familiarity with a command line. Part III is for
 writing programs for it, in OCaml or in C. The appendices explain the
 inside, for readers who know what a page table is or want to learn.
 
-MyNOS is a teaching system and an experiment, not a product: it runs in
+MyNOS is an experimental system, not a product: it runs in
 an emulator, on one processor, for one user.
 
 ## 1.3 What you need to try it

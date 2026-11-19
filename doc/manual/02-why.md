@@ -4,7 +4,7 @@
 
 In 2002 the project's web site opened with a page called *Why MyNOS?*.
 It is reproduced here as it was written (from `doc/website/why.html`),
-because it says better than any summary what three students wanted from
+because it says better than any summary what three young computer scientists wanted from
 an operating system of their own.
 
 > **Why MyNOS?**
@@ -86,6 +86,9 @@ an operating system of their own.
 > Ideally, we would like to get to a point where a different, new,
 > higher level and yet strong abstraction to the machine is achieved
 > through OCAML, similar to what Unix achieved in the 70ies.
+
+The name answers the page's first question: MyNOS stands for **My! Not
+another Operating System**.
 
 ## 2.2 What became of it
 

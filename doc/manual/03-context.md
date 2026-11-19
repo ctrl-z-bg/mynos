@@ -71,11 +71,10 @@ that crash are restarted. MyNOS's `init` does the same since 2026
 ## 3.4 Where MyNOS fits
 
 MyNOS asked the same questions, at the same time, from three young
-computer scientists working in their spare time on SourceForge, the
-public home of free software projects then. Its answers were modest
-beside Singularity's or L4's, and its authors knew it: their page of
-2002 begins by admitting how many such projects never reach a usable
-state (chapter 2). What it had was a particular combination: a
+computer scientists on SourceForge, a public home of free software
+projects then. Its answers were modest beside Singularity's or L4's, and
+its page of 2002 begins by admitting how many such projects never reach
+a usable state (chapter 2). What it had was a particular combination: a
 microkernel in C, OCaml's own bytecode interpreter as an ordinary
 process on it, services as processes, and the ambition to give programs
 "a different, new, higher level and yet strong abstraction to the
