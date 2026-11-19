@@ -5,7 +5,11 @@
 
 STDLIB = $(shell ocamlc -where)
 
-all: ramdisk.dsk disk.img
+# the disk image (tools/make-iso.sh makes a clean one elsewhere with
+# DISK=...)
+DISK ?= disk.img
+
+all: ramdisk.dsk $(DISK)
 
 # the runtime and consoled without their debugging information
 ocamlrun: ../mynos-runtime/ocamlrun
@@ -55,11 +59,11 @@ ramdisk.dsk: $(FILES)
 
 # the disk of the demo, mounted at /disk: made once, and kept (it holds
 # what you save); remove it to start again with an empty one
-disk.img:
+$(DISK):
 	mkfs.fat -C -F 32 -n MYNOS $@ 65536 >/dev/null
-	printf 'This is the MyNOS disk: a FAT32 image, mounted at /disk.\n' > README.TXT
-	mcopy -i $@ README.TXT ::/README.TXT
-	rm -f README.TXT
+	printf 'This is the MyNOS disk: a FAT32 image, mounted at /disk.\n' > $@.readme
+	mcopy -i $@ $@.readme ::/README.TXT
+	rm -f $@.readme
 
 clean:
 	rm -f ocamlrun consoled kilo netd displayd ocamlc.byte ramdisk.dsk

@@ -1173,4 +1173,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   MyNOS's by chance, GRUB 2's do not: the first `iret` faulted). The
   ISO boots to `sh` in 3 s, with the disk, the network and the
   graphical session.
+- **2026-11-19** — `make-iso.sh` also makes a clean disk,
+  `tmp/mynos-disk.img`, every time with `system/Makefile`'s recipe
+  (`DISK=...`): an empty FAT32 and a README, never the developer's
+  `system/disk.img` (which holds `llm.env`). Booted with the ISO: `/disk`
+  holds only `README.TXT`, and llmd says no model is configured.
 
