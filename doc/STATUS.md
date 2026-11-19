@@ -1223,4 +1223,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   stated precisely, Inferno softened; "finished" defined once (2.3);
   SourceForge registration 2001-09-05 in chapter 4; appendix J: Liedtke
   1993, SPIN, JNode, Syme.
+- **2026-11-19** — Manual 3.2: the Lisp machines, an operating system
+  whose master was a functional language, MyNOS's inspiration (the 2002
+  page cites them); appendix J: the MIT progress report and manual.
 

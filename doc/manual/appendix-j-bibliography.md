@@ -62,6 +62,11 @@ bitsavers.org, the Unix Heritage Society and multicians.org.
 
 ## J.4 Systems in safe languages
 
+- A. Bawden, R. Greenblatt, J. Holloway, T. Knight, D. Moon, D. Weinreb.
+  "LISP Machine Progress Report". MIT AI Memo 444, 1977. The machine
+  whose operating system was its language.
+- D. Weinreb, D. Moon. *Lisp Machine Manual*, fourth edition. MIT
+  Artificial Intelligence Laboratory, 1981.
 - N. Wirth, J. Gutknecht. *Project Oberon: The Design of an Operating
   System and Compiler*. Addison-Wesley, 1992.
 - B. N. Bershad, S. Savage, P. Pardyak, E. G. Sirer, M. E. Fiuczynski,

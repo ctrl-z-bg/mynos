@@ -25,6 +25,21 @@ for systems.
 
 ## 3.2 Operating systems in safe languages
 
+Before them all came the **Lisp machines**: workstations born at MIT's
+Artificial Intelligence Laboratory in the mid-1970s, and sold in the
+1980s by Symbolics, LMI and Texas Instruments. Their operating system,
+drivers, editor and window system were written in Lisp, and their
+processor was designed to run it, with tagged memory, type checks in
+the microcode and help for the garbage collector. They were not safe in
+the sense of this chapter: everything shared one address space, and any
+program could redefine any function of the system. But they were a
+whole operating system whose master was a functional language, and that
+idea inspired MyNOS's authors deeply. Their page of 2002 says so
+(chapter 2.1): as LISP once needed a LISP machine, a system in OCaml
+would need "some kind of special hardware support"; MyNOS's answer was
+to make that machine in software, a microkernel under OCaml's virtual
+machine.
+
 The idea of an operating system built on a safe language was older than
 MyNOS, and came back while MyNOS was being written.
 
