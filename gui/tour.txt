@@ -65,3 +65,18 @@ note: IRQ 9 | Packets arrive: the card interrupts, netd wakes.
 A language model is a service of MyNOS like the others: llmd speaks to the providers configured in /disk/llm.env (see llm.env.example), and programs ask it over typed IPC. The agent works the same way, with tools.
 
 It needs a model configured; without one, the lesson shows llmd's answer that there is none.
+---
+title: A service that dies
+command: kill fatfs; ls /disk
+show: sh, fatfs, init, registry, ata
+note: registry/1 List | To end a service by its name, sh asks the registry for every name and the process that registered it. fatfs, the disk's file system, is a process like any other, with a pid.
+note: exit of fatfs | The kernel ends fatfs. It frees what fatfs held, its memory, its ports and channels, and tells whoever was waiting on them. Nothing else stops: the file system was only a program.
+note: spawn of fatfs | init started fatfs at boot, and watches it: it sees it end, and starts it again. A new process, with a new pid.
+note: block/1 Read | The new fatfs reads the disk through ata: it starts from what is on the disk, not from what the old one had in memory.
+note: Register "fatfs" | The new fatfs registers the name fatfs again: a new port, under the old name.
+note: Lookup "fatfs" | ls needs the disk, but the port sh knew for fatfs is gone: sh asks the registry for the name again. Not found, yet: init is starting the new fatfs. sh asks again, a few times, until the new one has registered.
+note: fs/1 List | The directory comes back, from the new fatfs. sh never knew which process answered: only the name.
+
+In a monolithic kernel the file system is part of the kernel: if it fails, the machine stops. In MyNOS it is a process, written in OCaml, that other processes find by name in the registry.
+
+This lesson kills fatfs and then lists the disk. Watch init start a new fatfs, the new one register its name again, and sh find it by name as if nothing had happened.

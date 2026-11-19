@@ -1156,4 +1156,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   compiled before this (outside the build) must be compiled again.
   `tools/build-examples.sh` runs last in `build-all.sh`, after the OCaml
   library.
+- **2026-11-19** — The Tour's sixth lesson, *A service that dies*
+  (`gui/tour.txt`): `kill fatfs; ls /disk`, with notes on the registry's
+  `List`, the kernel ending `fatfs`, `init` starting a new one, its reads
+  through `ata`, its `Register`, `sh`'s lookups until it is back, and the
+  directory from the new one. Each note checked against a recording made
+  in MyNOS.
 

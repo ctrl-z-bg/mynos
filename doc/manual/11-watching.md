@@ -257,6 +257,7 @@ The lessons (in `/tour.txt` on the RAM disk):
 | 3 | A program is born | `hello` | the birth of a process, which reads its own program, writes, and ends |
 | 4 | Over the network | `ping 10.0.2.2 2` | `sh` asking `netd`, and the card's interrupts coming up from the hardware |
 | 5 | Asking a language model | `llm What is a microkernel? Answer in one sentence.` | `llmd` reading its configuration, and going out through `netd` (needs a model, chapter 12) |
+| 6 | A service that dies | `kill fatfs; ls /disk` | `init` starting a new `fatfs` after the kernel ended the old one; the new one registering its name again; `sh` finding it by name (11.7) |
 
 **Your own lessons.** Write them in `/disk/tour.txt`; the Tour lists them
 after its own. A lesson is a few `key: value` lines, a blank line, and
@@ -336,7 +337,8 @@ fatfs: FAT16, 8167 clusters of 2048 bytes, service fs/1 as fatfs
 
 Drivers and `init` cannot be killed (`sh: kill: 7: not allowed (init, or
 a driver)`). In the System window, the old `fatfs` fades and the new one
-appears outlined.
+appears outlined. The Tour's sixth lesson, *A service that dies*, runs this
+and explains each step as it replays (11.6).
 
 > **THE MyNOS FACTOR — A service that dies is just a process that ends:
 > it comes back.**
