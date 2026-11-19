@@ -31,7 +31,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private"
+results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private edit_utf8"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -589,7 +589,7 @@ fi
 sec_seventh() {
 # seventh boot: the system RAM disk, init starts the services and sh, driven
 # through the keyboard: the OCaml toplevel (ocaml), programs, sh again
-history_saved= kilo_saved= edit_saved= sh_saved= trace_calls= trace_json= agent_marks=
+history_saved= kilo_saved= edit_saved= edit_utf8= sh_saved= trace_calls= trace_json= agent_marks=
 disk_reads=
 serial_same_sh=
 if [ -f system/ramdisk.dsk ]; then
@@ -764,6 +764,12 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" 'echo still-$X\n'
     waitfor "still-seriale" 15
     [ "$(grep -ac 'MyNOS sh. help' "$log7")" = "$banners" ] && serial_same_sh=yes
+    # edit takes UTF-8 (mynos-wv4): accented letters typed on the serial
+    # terminal, a backspace over one of them, then Ctrl-S and Ctrl-Q
+    printf 'edit /disk/u.txt\r' >> "$tmp/com2-7.in"; sleep 4
+    printf 'perch\303\251 \303\250 cos\303\254\303\254\177' >> "$tmp/com2-7.in"; sleep 2
+    printf '\023' >> "$tmp/com2-7.in"; sleep 2
+    printf '\021' >> "$tmp/com2-7.in"; sleep 2
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null || true
     wait $qemu || true
     kill $llm7_pid $peer7 2>/dev/null || true
@@ -775,6 +781,8 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
           "typed in kilo" ] && kilo_saved=yes
         [ "$(tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/e.txt 2>/dev/null)" = \
           "$(printf 'first second\nfirst second\n')" ] && edit_saved=yes
+        [ "$(tools/in-container.sh dev mcopy -i tests/fat/run-shell.img ::/u.txt - 2>/dev/null)" = \
+          "$(printf 'perch\303\251 \303\250 cos\303\254\n')" ] && edit_utf8=yes
         [ "$(tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/s.txt 2>/dev/null)" = \
           "$(printf 'from sh\nv4\n')" ] && sh_saved=yes
         tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/calls.txt \
@@ -996,6 +1004,11 @@ if [ -f system/ramdisk.dsk ]; then
         echo "ok    sh: variables, redirections, a pipe, on /disk"
     else
         echo "FAIL  sh: variables, redirections, a pipe, on /disk"; fail=1
+    fi
+    if [ -n "$edit_utf8" ] || [ ! -f tests/fat/fat16.img ]; then
+        echo "ok    edit: accented letters typed, erased, saved (UTF-8)"
+    else
+        echo "FAIL  edit: accented letters typed, erased, saved (UTF-8)"; fail=1
     fi
     if [ -n "$edit_saved" ] || [ ! -f tests/fat/fat16.img ]; then
         echo "ok    edit (OCaml, Notty) saves a file on /disk"

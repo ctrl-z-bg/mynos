@@ -7,10 +7,44 @@
    and Enter join and split lines. Ctrl-S saves, Ctrl-Q quits (twice if
    there are unsaved changes), Ctrl-K cuts the line, Ctrl-U pastes it,
    Ctrl-F searches (Enter: next match, Esc: done). Tabs are expanded to
-   spaces when a file is read. *)
+   spaces when a file is read.
+
+   Text is UTF-8: lines are kept as UTF-8 strings, and the cursor, the
+   columns and the editing keys count characters, not bytes (an accented
+   letter is two bytes). Bytes that are not UTF-8 are shown as '?' and
+   kept as they are. *)
 
 open Notty
 module Term = Notty_mynos.Term
+
+(* ---- UTF-8: characters in a line ---- *)
+
+(* the byte where character [i] starts (the length, past the end) *)
+let byte_of s i =
+  let n = String.length s in
+  let rec go b k =
+    if k = i || b >= n then min b n
+    else go (b + Uchar.utf_decode_length (String.get_utf_8_uchar s b)) (k + 1) in
+  go 0 0
+
+(* how many characters *)
+let length s =
+  let n = String.length s in
+  let rec go b k =
+    if b >= n then k
+    else go (b + Uchar.utf_decode_length (String.get_utf_8_uchar s b)) (k + 1) in
+  go 0 0
+
+(* the characters [from, from + count) *)
+let chars s from count =
+  let a = byte_of s from in
+  let b = byte_of s (from + count) in
+  if a >= b then "" else String.sub s a (b - a)
+
+let utf_8 u =
+  let b = Buffer.create 4 in
+  Buffer.add_utf_8_uchar b u;
+  Buffer.contents b
 
 type editor = {
   file : string;
@@ -29,10 +63,17 @@ let expand_tabs s =
   if not (String.contains s '\t') then s
   else begin
     let b = Buffer.create (String.length s + 16) in
+    let col = ref 0 in                        (* in characters *)
     String.iter (fun c ->
-        if c = '\t' then
-          Buffer.add_string b (String.make (8 - Buffer.length b mod 8) ' ')
-        else Buffer.add_char b c) s;
+        if c = '\t' then begin
+          let k = 8 - !col mod 8 in
+          Buffer.add_string b (String.make k ' ');
+          col := !col + k
+        end else begin
+          Buffer.add_char b c;
+          (* a character starts at every byte but UTF-8's continuations *)
+          if Char.code c land 0xC0 <> 0x80 then incr col
+        end) s;
     Buffer.contents b
   end
 
@@ -66,24 +107,26 @@ let set_line e s = Dynarray.set e.lines e.cy s; e.dirty <- true
 let clamp e =
   let n = Dynarray.length e.lines in
   e.cy <- max 0 (min e.cy (n - 1));
-  e.cx <- max 0 (min e.cx (String.length (line e)))
+  e.cx <- max 0 (min e.cx (length (line e)))
 
 (* ---- editing ---- *)
 
 let insert e s =
   let l = line e in
-  set_line e (String.sub l 0 e.cx ^ s ^ String.sub l e.cx (String.length l - e.cx));
-  e.cx <- e.cx + String.length s
+  let b = byte_of l e.cx in
+  set_line e (String.sub l 0 b ^ s ^ String.sub l b (String.length l - b));
+  e.cx <- e.cx + length s
 
 let newline e =
   let l = line e in
-  set_line e (String.sub l 0 e.cx);
+  let b = byte_of l e.cx in
+  set_line e (String.sub l 0 b);
   Dynarray.add_last e.lines "";
   (* shift the lines below down by one *)
   for i = Dynarray.length e.lines - 1 downto e.cy + 2 do
     Dynarray.set e.lines i (Dynarray.get e.lines (i - 1))
   done;
-  Dynarray.set e.lines (e.cy + 1) (String.sub l e.cx (String.length l - e.cx));
+  Dynarray.set e.lines (e.cy + 1) (String.sub l b (String.length l - b));
   e.cy <- e.cy + 1;
   e.cx <- 0
 
@@ -98,18 +141,19 @@ let remove_line e i =
 let backspace e =
   if e.cx > 0 then begin
     let l = line e in
-    set_line e (String.sub l 0 (e.cx - 1) ^ String.sub l e.cx (String.length l - e.cx));
+    let a = byte_of l (e.cx - 1) and b = byte_of l e.cx in
+    set_line e (String.sub l 0 a ^ String.sub l b (String.length l - b));
     e.cx <- e.cx - 1
   end else if e.cy > 0 then begin
     let prev = Dynarray.get e.lines (e.cy - 1) and l = line e in
     Dynarray.set e.lines (e.cy - 1) (prev ^ l);
     remove_line e e.cy;
     e.cy <- e.cy - 1;
-    e.cx <- String.length prev
+    e.cx <- length prev
   end
 
 let delete e =
-  if e.cx < String.length (line e) then begin
+  if e.cx < length (line e) then begin
     e.cx <- e.cx + 1;
     backspace e
   end else if e.cy < Dynarray.length e.lines - 1 then begin
@@ -147,9 +191,10 @@ let search e s =
     if i > n then false
     else
       let y = (e.cy + i) mod n in
-      let start = if i = 0 then e.cx + 1 else 0 in
-      match find_from (Dynarray.get e.lines y) start with
-      | Some x -> e.cy <- y; e.cx <- x; true
+      let l = Dynarray.get e.lines y in
+      let start = if i = 0 then byte_of l (e.cx + 1) else 0 in
+      match find_from l start with
+      | Some x -> e.cy <- y; e.cx <- length (String.sub l 0 x); true
       | None -> go (i + 1) in
   s <> "" && go 0
 
@@ -164,12 +209,26 @@ let scroll e size =
   if e.cx < e.left then e.left <- e.cx;
   if e.cx >= e.left + w then e.left <- e.cx - w + 1
 
-let visible s left w =
-  let n = String.length s in
-  if left >= n then "" else String.sub s left (min w (n - left))
+(* columns [left, left + w) of a line, in characters *)
+let visible s left w = chars s left w
 
+(* what Notty can draw: control characters and bytes that are not UTF-8
+   become '?', one for each character, so that columns stay right *)
 let printable s =
-  String.map (fun c -> if c < ' ' || c > '~' then '?' else c) s
+  let b = Buffer.create (String.length s) in
+  let n = String.length s in
+  let rec go i =
+    if i < n then begin
+      let d = String.get_utf_8_uchar s i in
+      let u = Uchar.utf_decode_uchar d in
+      if Uchar.utf_decode_is_valid d && Uchar.to_int u >= 0x20
+         && not (Uchar.to_int u >= 0x7F && Uchar.to_int u < 0xA0)
+      then Buffer.add_utf_8_uchar b u
+      else Buffer.add_char b '?';
+      go (i + Uchar.utf_decode_length d)
+    end in
+  go 0;
+  Buffer.contents b
 
 let render e size =
   let w, _ = size and h = rows size in
@@ -193,14 +252,15 @@ let prompt term e label =
   let rec loop acc =
     e.message <- label ^ acc;
     Term.image term (render e (Term.size term));
-    Term.cursor term (Some (String.length e.message, rows (Term.size term) + 1));
+    Term.cursor term (Some (length e.message, rows (Term.size term) + 1));
     match Term.event term with
     | `Key (`Enter, _) -> Some acc
     | `Key (`Escape, _) | `End -> None
     | `Key (`ASCII 'G', [`Ctrl]) -> None
     | `Key (`Backspace, _) ->
-      loop (if acc = "" then acc else String.sub acc 0 (String.length acc - 1))
+      loop (if acc = "" then acc else String.sub acc 0 (byte_of acc (length acc - 1)))
     | `Key (`ASCII c, []) when c >= ' ' -> loop (acc ^ String.make 1 c)
+    | `Key (`Uchar u, []) -> loop (acc ^ utf_8 u)
     | _ -> loop acc in
   loop ""
 
@@ -252,10 +312,10 @@ let main file =
          if e.cx > 0 then e.cx <- e.cx - 1
          else if e.cy > 0 then (e.cy <- e.cy - 1; e.cx <- max_int)
        | `Arrow `Right, _ ->
-         if e.cx < String.length (line e) then e.cx <- e.cx + 1
+         if e.cx < length (line e) then e.cx <- e.cx + 1
          else if e.cy < Dynarray.length e.lines - 1 then (e.cy <- e.cy + 1; e.cx <- 0)
        | `Home, _ -> e.cx <- 0
-       | `End, _ -> e.cx <- String.length (line e)
+       | `End, _ -> e.cx <- length (line e)
        | `Page `Up, _ -> e.cy <- e.cy - rows size
        | `Page `Down, _ -> e.cy <- e.cy + rows size
        | `Enter, _ -> newline e
@@ -263,6 +323,7 @@ let main file =
        | `Delete, _ -> delete e
        | `Tab, _ -> insert e (String.make (8 - e.cx mod 8) ' ')
        | `ASCII c, [] when c >= ' ' -> insert e (String.make 1 c)
+       | `Uchar u, [] -> insert e (utf_8 u)
        | _ -> ());
       clamp e;
       loop ()

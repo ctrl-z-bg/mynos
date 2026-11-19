@@ -141,9 +141,11 @@ when there are unsaved changes, and the cursor's position, and the
 | Ctrl-U | paste the cut line above the cursor's line |
 | Ctrl-F | search: type the text and Enter; Enter again for the next match, any other key to stop; Esc gives up |
 
-`edit` works with plain ASCII text: other characters are shown as `?`
-and cannot be typed, and the tabs of a file become spaces when it is
-read. Ctrl-C is an ordinary key in `edit`: Ctrl-Q quits.
+`edit` works with UTF-8 text: accented letters are typed, shown, erased
+and saved like any other, and the cursor counts characters, not bytes.
+Bytes that are not UTF-8 are shown as `?` and kept as they were. The
+tabs of a file become spaces when it is read. Ctrl-C is an ordinary key
+in `edit`: Ctrl-Q quits.
 
 ## 8.4 The editor `kilo`
 

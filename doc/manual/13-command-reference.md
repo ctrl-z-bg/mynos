@@ -298,8 +298,9 @@ There are no options.
 inserts; Backspace, Delete and Enter join and split lines. Ctrl-S saves,
 Ctrl-Q quits (twice if there are unsaved changes), Ctrl-K cuts a line,
 Ctrl-U pastes it, Ctrl-F searches (Enter: the next match, Esc: done).
-Tabs become spaces when the file is read. It works in a terminal window
-too.
+Tabs become spaces when the file is read. Text is UTF-8: accented
+letters are typed and shown. Ctrl-C is an ordinary key. It works in a
+terminal window too.
 
 **Example** `edit /disk/hello.ml`
 

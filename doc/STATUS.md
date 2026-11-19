@@ -1178,4 +1178,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   (`DISK=...`): an empty FAT32 and a README, never the developer's
   `system/disk.img` (which holds `llm.env`). Booted with the ISO: `/disk`
   holds only `README.TXT`, and llmd says no model is configured.
+- **2026-11-19** — `edit` takes UTF-8 (mynos-wv4): lines stay UTF-8
+  strings, the cursor, the columns, Backspace and Delete count
+  characters, Notty's `Uchar` keys are inserted (they were dropped), and
+  what is shown keeps accented letters (bytes that are not UTF-8 become
+  `?`). Test in the seventh boot: accented letters typed on the serial
+  terminal, one erased, the file saved and read back.
 
