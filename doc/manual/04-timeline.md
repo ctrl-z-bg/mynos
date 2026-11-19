@@ -8,7 +8,7 @@ for 2026, `doc/STATUS.md` and `doc/JOURNAL.md`.
 ## 4.1 The people
 
 MyNOS was written by **Cesare Zavattari**, **Alessandro Tommasi** and
-**Tommaso Schiavinotto**, three young computer scientists, as a free
+**Tommaso Schiavinotto**, three ~~nerds~~ young computer scientists, as a free
 software project hosted on SourceForge (`sourceforge.net/projects/mynos`).
 On SourceForge they signed as *zavatt*, *alley* and *nardo*. The logo,
 the Minotaur that the graphical session still shows, was drawn by Luigi

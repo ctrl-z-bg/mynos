@@ -8,7 +8,7 @@ each other only through the kernel's messages; since 2026 those messages
 carry typed OCaml values, and every service can describe its own
 protocol.
 
-It was begun in 2002 by three young computer scientists on SourceForge, set aside in
+It was begun in 2002 by three ~~nerds~~ young computer scientists on SourceForge, set aside in
 2004, and taken up again in November 2026, when it reached what it had
 been designed for. Its name is an exclamation: **My! Not another
 Operating System**. Its authors' first page asked "why embark in the

@@ -70,7 +70,7 @@ that crash are restarted. MyNOS's `init` does the same since 2026
 
 ## 3.4 Where MyNOS fits
 
-MyNOS asked the same questions, at the same time, from three young
+MyNOS asked the same questions, at the same time, from three ~~nerds~~ young
 computer scientists on SourceForge, a public home of free software
 projects then. Its answers were modest beside Singularity's or L4's, and
 its page of 2002 begins by admitting how many such projects never reach

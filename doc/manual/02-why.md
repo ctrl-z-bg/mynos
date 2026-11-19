@@ -4,7 +4,7 @@
 
 In 2002 the project's web site opened with a page called *Why MyNOS?*.
 It is reproduced here as it was written (from `doc/website/why.html`),
-because it says better than any summary what three young computer scientists wanted from
+because it says better than any summary what three ~~nerds~~ young computer scientists wanted from
 an operating system of their own.
 
 > **Why MyNOS?**
