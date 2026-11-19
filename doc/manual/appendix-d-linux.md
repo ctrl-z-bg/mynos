@@ -250,14 +250,23 @@ Services are found by name in the registry and the port is cached; a
 service that ends (init restarts it, with a new port) is looked up again
 at the next request.
 
-What the replacement cannot reach is musl's own internal I/O. Its stdio
-calls the kernel directly, without going through the `read`, `write` and
-`open` functions: `printf` ends in `writev` (146), the reading side of
-`FILE` in `readv` (145), and `fopen` in a raw `open` (5). So a C
-program's `printf` reaches the screen through the kernel even in a
-terminal window, `fopen` opens the module-1 file, and `fgets(stdin)`
-fails, since `readv` is not implemented. C programs in MyNOS use `open`,
-`read` and `write`; the OCaml runtime does so anyway.
+**stdio** needs one more step. musl's `FILE` functions do their I/O
+through five internal functions that call the kernel directly, not
+through `read` and `write`: `__stdio_read` (with `readv`, 145),
+`__stdio_write` (`writev`, 146), `__stdout_write` (`ioctl`, to choose
+line buffering), `__stdio_seek` and `__stdio_close`; and `fopen` opens
+with a raw `open` (5). `libmynos` replaces those five and `fopen`
+(`mynos-lib/src/stdio.c`), on its own `read`, `write`, `ioctl`, `lseek`,
+`close` and `open`. Nothing in a program calls them by name, so the
+linker would not look for them in `libmynos`: `mynos.mk` names them with
+`-u`, which makes them wanted before any archive is searched. They work
+on musl's `struct _IO_FILE`, whose layout `stdio.c` copies from musl
+1.2.5, the version the container builds with. So `fopen("/disk/a.txt")`
+reaches fatfs, `fgets(stdin)` reads a line from the console or from a
+shell's redirection, and `printf` in a terminal window reaches the window
+(`tests/stdio`). Until November 2026 none of this worked (mynos-d6k):
+`fopen` opened the module-1 file, `fgets(stdin)` failed, `printf` went to
+the text screen.
 
 ## D.5 Unknown calls
 
@@ -459,9 +468,8 @@ service learns that a client went away when its channel breaks
 - There is no `execve`, `brk`, `readv`, `pipe`, `dup`, `select` or socket
   call: `-ENOSYS`. OCaml's `Unix` functions built on them fail with
   `ENOSYS` (appendix F); C programs have no sockets (mynos-t9l).
-- musl's stdio bypasses `libmynos` (D.4): `printf` goes to the text
-  screen even in a terminal window, `fopen` and stdio input do not work
-  (mynos-d6k).
+- `freopen` and `tmpfile` still open with musl's raw `open`; `libmynos`
+  replaces `fopen` only (D.4).
 - The kernel's own file calls ignore their path and descriptor: on a
   system without file services every `open` and `stat` finds module 1.
 - The initial stack must fit in one page; the auxiliary vector is empty.

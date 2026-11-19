@@ -599,7 +599,7 @@ if [ -f system/ramdisk.dsk ]; then
     # of characters the screen's font lacks (doc/decisions/console.md)
     if [ -f tests/fat/run-shell.img ]; then
         printf '\303\210 cos\303\254: \342\202\2545\n' > tests/fat/run-utf8.txt
-        tools/in-container.sh dev sh -c "mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/llm.env && mcopy -i tests/fat/run-shell.img tests/fat/run-utf8.txt ::/utf8.txt && mcopy -i tests/fat/run-shell.img tests/greeter/greeter.byte ::/greeter.byte"
+        tools/in-container.sh dev sh -c "mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/llm.env && mcopy -i tests/fat/run-shell.img tests/fat/run-utf8.txt ::/utf8.txt && mcopy -i tests/fat/run-shell.img tests/greeter/greeter.byte ::/greeter.byte && mcopy -i tests/fat/run-shell.img tests/stdio/stdio ::/stdio-test"
         rm -f tests/fat/run-utf8.txt
     fi
     tools/net-peer.py llm 47090 & llm7_pid=$!
@@ -718,6 +718,10 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" "echo 'let () = let t = Thread.create (fun () -> print_endline (\"from-a-\" ^ \"thread\")) () in Thread.join t' > /disk/th.ml\n"; sleep 2
     tools/type-keys.py "$tmp/mon7" "echo 'let () = let d = Ipc.describe \"console\" in if d.Ipc.summary = Console.Protocol.summary && d.requests = Console.Protocol.requests then print_endline (\"console-\" ^ \"described\")' >> /disk/th.ml\n"; sleep 2
     tools/type-keys.py "$tmp/mon7" 'ocamlc -use-prims /primitives mynos.cma unix.cma threads.cma -noautolink -o /disk/th.byte /disk/th.ml && /disk/th.byte\n'; sleep 25
+    # C's stdio (mynos-d6k): files through fopen, a typed line, a piped one
+    tools/type-keys.py "$tmp/mon7" '/disk/stdio-test\n'; sleep 4
+    tools/type-keys.py "$tmp/mon7" 'typed-line\n'; sleep 3
+    tools/type-keys.py "$tmp/mon7" 'echo piped-line | /disk/stdio-test\n'; sleep 5
     tools/type-keys.py "$tmp/mon7" 'kill fatfs\n'; sleep 4
     tools/type-keys.py "$tmp/mon7" 'X=back; echo fatfs-$X > /disk/back.txt; cat /disk/back.txt\n'; sleep 3
     tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte &\n'; sleep 3
@@ -937,6 +941,9 @@ if [ -f system/ramdisk.dsk ]; then
     expect "fatfs-back"                                # and found again by sh
     expect "from-a-thread"                             # threads, compiled in MyNOS
     expect "console-described"                         # consoled speaks console/1
+    expect "stdio: all checks passed"                  # C stdio: fopen...
+    expect "stdio: read [typed-line]"                  # ... stdin, typed
+    expect "stdio: read [piped-line]"                  # ... and redirected
     expect "Hello, reborn again, from MyNOS!"          # by an OCaml client too
     if [ -n "$trace_calls" ]; then
         echo "ok    trace: sh -> fatfs -> ata0, nested calls"

@@ -2235,3 +2235,27 @@ listener was the one killed).
 gives the hardware a vote. Reserve in the software's own bookkeeping
 instead.
 
+## 2026-11-19 — stdio that went round libmynos
+
+**Symptom.** Found by the appendices' review: a C program's `fopen`
+opened the kernel's one built-in file whatever the path, `fgets(stdin)`
+failed, and `printf` in a terminal window went to the hidden text screen.
+
+**Cause.** libmynos replaces `open`, `read`, `write` at link time, but
+musl's stdio does not call them: its internal `__stdio_read` uses
+`readv` (not implemented), `__stdio_write` uses `writev`, and `fopen`
+makes the raw `open` system call. The OCaml runtime and kilo use `read`
+and `write`, so nothing in the system had noticed.
+
+**Fix.** libmynos defines those five internal functions and `fopen`.
+Two details: nothing names them in a program, so the linker would take
+musl's (an archive member is extracted only for a symbol already
+wanted): `mynos.mk` adds `-u` for each. And they work on musl's private
+`struct _IO_FILE`, copied from musl 1.2.5's source: a later musl could
+change it, and `tests/stdio` is what would say so. `__stdio_read` does
+one `read` where musl does one `readv` into two buffers: two reads could
+wait at the console for a second line.
+
+**Lesson.** "We replace the C library's file functions" was true of the
+functions a program calls, not of the ones the C library calls itself.
+

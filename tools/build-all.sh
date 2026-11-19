@@ -22,6 +22,7 @@
 #                                    (the OCaml toplevel), programs
 #   tests/abi/abi                    system call checks
 #   tests/fpu/fpu                    the FPU state of each thread
+#   tests/stdio/stdio                C stdio over libmynos
 #   tests/stress/stress, ramdisk.dsk kernel stress test
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 #   fetch/fetch.byte                 HTTP and HTTPS from the command line
@@ -37,6 +38,7 @@ make -C services
 make -C mynos-runtime
 make -C tests/abi
 make -C tests/fpu
+make -C tests/stdio
 make -C tests/stress
 make -C mynos-lib/ocaml
 (cd tests/mynos-ocaml && ocamlc -use-prims ../../mynos-runtime/primitives \

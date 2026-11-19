@@ -484,8 +484,8 @@ last commit that still builds with that toolchain `legacy-last`.
 | mynos-t9l | `mynos-lib/` | C programs have no sockets API yet: only OCaml programs reach the network (module `Net`). |
 | — | `services/net/netd.c` | TLS: clients only (no `Listen_tls`); no revocation checks (CRL, OCSP); Mozilla's list is parsed at the first TLS connection (about 1.5 s in QEMU), later handshakes take 0.2-0.4 s; the clear bytes travel between netd and the program over IPC. |
 | — | `services/ata/ata.ml` | The disk is polled (PIO: the driver copies every word anyway, and QEMU completes commands at once); IRQ 14 is free for it. |
-| — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently; the stdio of C programs (musl's direct system calls) is not redirected. |
-| — | `gui/terminal.ml`, `mynos-lib/src/fileio.c` | Terminal windows get what programs `write`; musl's stdio (C programs such as kilo) writes with direct system calls and still goes to the text screen. One size, 80 x 25. |
+| — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently. |
+| — | `gui/terminal.ml`, `mynos-lib/src/fileio.c` | Terminal windows get what programs `write`, C stdio included. One size, 80 x 25. |
 | — | `agent/`, `services/llm/` | The agent has no token budget (only `-n` model calls); answers are not streamed. |
 
 ### Not started
@@ -1092,4 +1092,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   thread waiting on the other side (mynos-3bb); `listenPort` skips a
   connector that ended while queued, and `freePort` wakes the queued
   ones (mynos-blv).
+- **2026-11-19** — C stdio over libmynos (mynos-d6k,
+  `mynos-lib/src/stdio.c`): musl's five internal I/O functions
+  (`__stdio_read`, `__stdio_write`, `__stdout_write`, `__stdio_seek`,
+  `__stdio_close`) and `fopen` replaced at link time (`mynos.mk` names
+  them with `-u`), on libmynos's `read`, `write`, `ioctl`, `lseek`,
+  `close`, `open`. `fopen` reaches the file services, `fgets(stdin)`
+  reads the console or a redirection, `printf` follows redirections and
+  terminal windows. Test `tests/stdio`, run from `sh` in the seventh boot
+  (a typed line, a piped one).
 
