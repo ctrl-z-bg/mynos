@@ -1,5 +1,6 @@
 <p align="center">
-  <img src="doc/website/img/mynos-logo.jpg" alt="The MyNOS Minotaur, drawn by Luigi Ferrini (2003)">
+  <img src="doc/website/img/mynos-logo.jpg" alt="The MyNOS Minotaur, drawn by Luigi Ferrini (2003)"><br>
+  <sub>Logo by Luigi Ferrini</sub>
 </p>
 
 # MyNOS
@@ -223,6 +224,8 @@ decision by decision, in [`doc/JOURNAL.md`](doc/JOURNAL.md).
 [Alessandro Tommasi](https://github.com/aaaaale) and
 [Tommaso Schiavinotto](https://github.com/Teudimundo). Originally hosted on
 SourceForge (`sourceforge.net/projects/mynos`).
+
+Logo by Luigi Ferrini (2003).
 
 Some code in `mynos-core/kernel/idt.[hc]` and `pic.[hc]` is derived from
 gazos-0.2 by Gareth Owen (see [`mynos-core/CREDITS`](mynos-core/CREDITS)).

@@ -6,7 +6,7 @@ system for 32-bit PCs: a microkernel in C, and above it everything else,
 the file systems, the drivers, the shells, the windows, as processes,
 most of them written in OCaml. Written in 2002-2004 by Cesare Zavattari,
 Alessandro Tommasi and Tommaso Schiavinotto; taken up again in 2026 with
-the help of AI.
+the help of AI. Logo by Luigi Ferrini.
 
 This archive runs it in QEMU. Nothing else is needed.
 
