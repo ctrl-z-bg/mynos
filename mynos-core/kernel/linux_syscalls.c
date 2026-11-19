@@ -147,6 +147,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .linux_nosignals\n"\
 	 "   cmpl $163, %eax\n"\
 	 "   je .linux_mremap\n"\
+	 "   cmpl $122, %eax\n"\
+	 "   je .linux_uname\n"\
 	 "   cmpl $195, %eax\n"\
 	 "   je .linux_stat64\n"\
 	 "   cmpl $197, %eax\n"\
@@ -269,6 +271,9 @@ __asm__ (".pushsection .text\n" \
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_nosignals:\n"\
 	 "   call _linux_syscall_nosignals\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_uname:\n"\
+	 "   call _linux_syscall_uname\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_mremap:\n"\
 	 "   call _linux_syscall_mremap\n"\
@@ -437,6 +442,20 @@ int _linux_syscall_tgkill(int tgid, int tid, int sig) {
    delivers no signals yet, so accept the settings and ignore them. Runtimes
    (OCaml 5) refuse to start if they fail. */
 int _linux_syscall_nosignals() {
+  return 0;
+}
+
+/* uname (122): the system's name and version (tools/version.sh) */
+struct new_utsname { char f[6][65]; };
+int _linux_syscall_uname(struct new_utsname * u) {
+  static const char * fields[6] =
+    { "MyNOS", "mynos", MYNOS_VERSION, "#1", "i386", "" };
+  int i, j;
+  USER(u, sizeof *u);
+  for (i = 0; i < 6; i++) {
+    for (j = 0; fields[i][j] && j < 64; j++) u->f[i][j] = fields[i][j];
+    for (; j < 65; j++) u->f[i][j] = 0;
+  }
   return 0;
 }
 

@@ -28,3 +28,8 @@ int mynos_kill(int pid) {
   return __mynos_syscall(34, pid, 0, 0, 0, 0);
 }
 
+/* the kernel's log (native 35) */
+int mynos_klog(unsigned int from, char * buf, unsigned int max) {
+  return __mynos_syscall(35, (int)from, (int)buf, (int)max, 0, 0);
+}
+

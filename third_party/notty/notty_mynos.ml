@@ -14,6 +14,7 @@ module Term = struct
     buf : Buffer.t;
     flt : Unescape.t;
     ibuf : Bytes.t;
+    mutable carry : string;   (* the start of a UTF-8 character cut by a read *)
   }
 
   let write t =
@@ -35,6 +36,7 @@ module Term = struct
       buf = Buffer.create 4096;
       flt = Unescape.create ();
       ibuf = Bytes.create 1024;
+      carry = "";
     } in
     Tmachine.set_size t.trm (80, 25);
     at_exit (fun () -> release t);
@@ -46,6 +48,22 @@ module Term = struct
   let refresh t = Tmachine.refresh t.trm; write t
   let size t = Tmachine.size t.trm
 
+  (* how many bytes at the end of s begin a UTF-8 character not complete
+     yet *)
+  let incomplete_tail s =
+    let n = String.length s in
+    let rec back k =
+      if k > 3 || k > n then 0
+      else
+        let c = Char.code s.[n - k] in
+        if c land 0xC0 = 0x80 then back (k + 1)            (* a continuation *)
+        else
+          let need = if c land 0xE0 = 0xC0 then 2
+            else if c land 0xF0 = 0xE0 then 3
+            else if c land 0xF8 = 0xF0 then 4 else 1 in
+          if need > k then k else 0 in
+    if n = 0 then 0 else back 1
+
   let rec event t =
     if Tmachine.dead t.trm then `End
     else
@@ -56,6 +74,15 @@ module Term = struct
       | #Unescape.event | `End as r -> r
       | `Await ->
         let n = input stdin t.ibuf 0 (Bytes.length t.ibuf) in
-        Unescape.input t.flt t.ibuf 0 n;
+        (* a read may end inside a UTF-8 character (the serial terminal
+           sends one byte at a time): its first bytes wait for the rest,
+           which Unescape would otherwise take for malformed input *)
+        let s = t.carry ^ Bytes.sub_string t.ibuf 0 n in
+        let keep = incomplete_tail s in
+        let whole = String.length s - keep in
+        t.carry <- String.sub s whole keep;
+        if n = 0 then Unescape.input t.flt t.ibuf 0 0          (* the end *)
+        else if whole > 0 then Unescape.input t.flt (Bytes.of_string s) 0 whole;
+        (* (only the start of a character: read on) *)
         event t
 end

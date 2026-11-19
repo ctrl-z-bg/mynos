@@ -62,3 +62,7 @@ llm.env
 
 # scratch files of the owner, never committed
 /tmp/
+
+# the build's version (tools/version.sh, written by tools/build-all.sh)
+/VERSION
+

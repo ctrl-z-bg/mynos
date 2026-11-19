@@ -15,6 +15,9 @@ let () =
 
 external getpid : unit -> int = "caml_mynos_getpid"
 external log : string -> unit = "caml_mynos_log"
+external log_position : unit -> int = "caml_mynos_klog_position"
+external log_read : int -> int -> string = "caml_mynos_klog_read"
+external version : unit -> string = "caml_mynos_version"
 external uptime : unit -> float = "caml_mynos_uptime"
 external time : unit -> float = "caml_mynos_time"
 external sleep_us : int -> unit = "caml_mynos_sleep_us"

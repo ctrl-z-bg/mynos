@@ -26,9 +26,15 @@
 #   tests/stress/stress, ramdisk.dsk kernel stress test
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 #   fetch/fetch.byte                 HTTP and HTTPS from the command line
+#   log/log.byte                     the kernel's log
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
+
+# the version (tools/version.sh), rewritten only when it changes: the
+# kernel is compiled again when it does
+version=$("$root/tools/version.sh")
+[ "$(cat "$root/VERSION" 2>/dev/null)" = "$version" ] || echo "$version" > "$root/VERSION"
 
 exec "$root/tools/in-container.sh" dev sh -euc '
 mkdir -p mynos-lib/lib
@@ -68,6 +74,7 @@ make -C services/net
 make -C httpd
 make -C trace
 make -C fetch
+make -C log
 make -C services/llm
 make -C llm
 make -C agent

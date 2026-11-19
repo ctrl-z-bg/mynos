@@ -21,6 +21,20 @@ val log : string -> unit
 (** Write a line to the kernel log: the serial log port, and not the screen
     once the system has started. For services' messages. *)
 
+val version : unit -> string
+(** The system's version: the year and month it was built, and the commit
+    (["2026.11-71dc1d2"]), as the kernel's uname says. *)
+
+val log_position : unit -> int
+(** The kernel's log (its messages and the services', since boot) is a
+    sequence of bytes: how many have been logged so far. The kernel keeps
+    the last 64 KB of them. *)
+
+val log_read : int -> int -> string
+(** [log_read from max]: the logged bytes from position [from] (or from
+    the oldest kept, if [from] is older), at most [max]. The position after
+    them is [from] plus their length, if [from] was still kept. *)
+
 val uptime : unit -> float
 (** Seconds since boot. *)
 

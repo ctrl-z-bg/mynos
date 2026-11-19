@@ -11,6 +11,7 @@ let () =
       Option.iter (fun m -> Gfx.draw_mask g 14 8 m 0xE8EEF2) logo;
       Gfx.fill g 178 44 6 44 0xF29B38;
       Gui.label ~colour:0xFFFFFF ~bold:true ui 196 42 "MyNOS";
+      ignore (Gfx.text g 252 42 ("v" ^ Mynos.version ()) 0xB8C7D3);
       Gui.label ~colour:0xB8C7D3 ui 196 60 "an operating system in OCaml,";
       Gui.label ~colour:0xB8C7D3 ui 196 76 "on a microkernel";
       let y = 148 in

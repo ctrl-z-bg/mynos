@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="doc/website/img/mynos-logo.jpg" alt="The MyNOS Minotaur, drawn by Luigi Ferrini (2003)">
+</p>
+
 # MyNOS
 
 > The MyNOS project aims at developing a new and different operating

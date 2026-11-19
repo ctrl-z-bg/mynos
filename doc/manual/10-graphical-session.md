@@ -69,6 +69,7 @@ Click **MyNOS**, top left. The menu opens:
 | System | the system as it runs (10.11, chapter 11) |
 | Files | the file manager (10.9) |
 | Tour | lessons on how an operating system works (10.13, chapter 11) |
+| Log | the kernel's log, its messages and the services', followed as it grows (`log -f` in a window) |
 | Exit | ends the session: back to the text console (10.15) |
 | Shut down | turns the machine off (10.15) |
 

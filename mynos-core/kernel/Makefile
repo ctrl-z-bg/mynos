@@ -27,6 +27,11 @@ SUBDIRS	= 3parts ipc mem
 # MYNOS LIB INCLUDE
 CFLAGS += -I../../mynos-lib/include
 
+# the version (tools/version.sh, written to VERSION by tools/build-all.sh):
+# the boot's banner and uname
+MYNOS_VERSION := $(shell cat ../../VERSION 2>/dev/null || echo unknown)
+CFLAGS += -DMYNOS_VERSION='"$(MYNOS_VERSION)"'
+
 .PHONY: kernel clean all $(SUBDIRS)
 
 SRCSC	= 	$(wildcard *.c)
@@ -74,3 +79,6 @@ DEPEND = Makefile.depend
 ifeq ($(wildcard $(DEPEND)),$(DEPEND))
 include $(DEPEND)
 endif
+
+# compiled again when the version changes
+main.o linux_syscalls.o: $(wildcard ../../VERSION)

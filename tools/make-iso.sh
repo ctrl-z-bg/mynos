@@ -31,10 +31,11 @@ cp mynos-core/kernel/kernel.elf mynos-runtime/ocamlrun services/registry/registr
    services/fs/memrofs/memrofsd system/ramdisk.dsk "$tree/boot/"
 # a module's command line is its argv, after the file's name (GRUB 2):
 # argv[0] is the program's name, as with QEMU's -initrd
-cat > "$tree/boot/grub/grub.cfg" <<'CFG'
+version=$(cat VERSION 2>/dev/null || tools/version.sh)
+cat > "$tree/boot/grub/grub.cfg" <<CFG
 set timeout=0
 set default=0
-menuentry "MyNOS" {
+menuentry "MyNOS $version" {
     multiboot /boot/kernel.elf
     module /boot/ocamlrun ocamlrun
     module /boot/registry registry

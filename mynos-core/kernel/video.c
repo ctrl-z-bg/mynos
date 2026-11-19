@@ -21,6 +21,8 @@
 #include "video.h"
 #include "io.h"
 #include "kutils.h"
+#include "mem/mem.h"
+#include "mynos.h"
 
 /* void update_cursor(int row, int col)
  * by Dark Fiber
@@ -594,9 +596,34 @@ static void term_char(char c)
   if (!control(c) && (unsigned char)c >= ' ') put(c, attr);
 }
 
+/* ---- the kernel's log: its messages (printk, the log call), kept in a
+   ring for programs to read (native call 35: log, the Log window). A
+   position counts every byte ever logged; the ring holds the last
+   KLOG_SIZE of them. */
+#define KLOG_SIZE 65536
+static char klog[KLOG_SIZE];
+static uint32_t klog_total = 0;
+
+/* klog(from, buf, max): buf NULL, the position now; otherwise the logged
+   bytes from position `from` (or the oldest kept, if `from` is older),
+   at most max: how many */
+int _mynos_syscall_klog(uint32_t from, char * buf, uint32_t max) {
+  uint32_t oldest = klog_total > KLOG_SIZE ? klog_total - KLOG_SIZE : 0, n, i;
+  if (buf == NULL) return (int)klog_total;
+  if (from < oldest) from = oldest;
+  if (from >= klog_total) return 0;
+  n = klog_total - from;
+  if (n > max) n = max;
+  if (!__mem_userArea(buf, n)) return MYNOS_ERR_INVALID;
+  for (i = 0; i < n; i++) buf[i] = klog[(from + i) % KLOG_SIZE];
+  return (int)n;
+}
+
 void _print_char(char c, char attrib) {
   log_char(c);
   if (attrib == CHAR_KERNEL_ATTRIB) {
+    klog[klog_total % KLOG_SIZE] = c;
+    klog_total++;
     if (!kernel_on_screen)
       return;
     if (view) view_set(0);

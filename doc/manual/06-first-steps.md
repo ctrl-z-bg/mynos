@@ -72,6 +72,8 @@ A command is either **built into** `sh` or a **program**: a file that
 |---|---|
 | `help` | the summary |
 | `cd`, `pwd` | change, print the current directory (chapter 7) |
+| `version` | the system's version (also the boot's first line) |
+| `log [-f]` | the kernel's log, since boot (`-f`: follow it) |
 | `ls [-l] [-a]`, `cat`, `cp`, `mv`, `rm`, `mkdir`, `rmdir`, `touch` | files (chapter 7) |
 | `echo WORDS` | print the words |
 | `export NAME=value`, `unset NAME`, `env` | variables |

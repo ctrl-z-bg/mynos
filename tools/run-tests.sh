@@ -31,7 +31,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private edit_utf8"
+results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private edit_utf8 log_shown"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -423,7 +423,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     click 732 117; sleep 1                   # its first note: sh looks at hello.byte;
     click 732 117; sleep 2                   # the second: the birth of hello
     mon "screendump $tmp/gui21.ppm"
-    click 20 10; sleep 1; click 30 259; sleep 4    # the MyNOS menu, Exit
+    click 20 10; sleep 1; click 30 281; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt; ls /disk\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too
@@ -589,7 +589,7 @@ fi
 sec_seventh() {
 # seventh boot: the system RAM disk, init starts the services and sh, driven
 # through the keyboard: the OCaml toplevel (ocaml), programs, sh again
-history_saved= kilo_saved= edit_saved= edit_utf8= sh_saved= trace_calls= trace_json= agent_marks=
+history_saved= kilo_saved= edit_saved= edit_utf8= log_shown= sh_saved= trace_calls= trace_json= agent_marks=
 disk_reads=
 serial_same_sh=
 if [ -f system/ramdisk.dsk ]; then
@@ -727,6 +727,12 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
        [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:47180/LLM.ENV)" = 404 ]; then
         httpd_private=yes
     fi
+    # the kernel's log, read inside MyNOS (mynos-lfv): its boot messages
+    # come back on the console, so the log port sees them twice
+    tools/type-keys.py "$tmp/mon7" 'log\n'; sleep 4
+    # the version: the boot's banner, and sh's version (uname, mynos-nec)
+    tools/type-keys.py "$tmp/mon7" 'version\n'; sleep 2
+    [ "$(grep -ac 'Calibrating delay loop' "$log7")" -ge 2 ] && log_shown=yes
     # C's stdio (mynos-d6k): files through fopen, a typed line, a piped one
     tools/type-keys.py "$tmp/mon7" '/disk/stdio-test\n'; sleep 4
     tools/type-keys.py "$tmp/mon7" 'typed-line\n'; sleep 3
@@ -868,6 +874,8 @@ expect "keyboardd: sem = "                          # the drivers got their IRQs
 expect "seriald: sem = "
 expect "Hello from memrofs!"
 expect "fpu: all checks passed"
+expect "Welcome to MyNOS - v$(cat VERSION 2>/dev/null)"      # the boot's banner
+expect "MyNOS $(cat VERSION 2>/dev/null)"                    # sh's version (uname)
 expect "threads: all checks passed"
 expect "abi: all checks passed"
 if [ -f tests/stress/ramdisk.dsk ]; then
@@ -1004,6 +1012,11 @@ if [ -f system/ramdisk.dsk ]; then
         echo "ok    sh: variables, redirections, a pipe, on /disk"
     else
         echo "FAIL  sh: variables, redirections, a pipe, on /disk"; fail=1
+    fi
+    if [ -n "$log_shown" ]; then
+        echo "ok    log: the kernel's log read inside MyNOS"
+    else
+        echo "FAIL  log: the kernel's log read inside MyNOS"; fail=1
     fi
     if [ -n "$edit_utf8" ] || [ ! -f tests/fat/fat16.img ]; then
         echo "ok    edit: accented letters typed, erased, saved (UTF-8)"

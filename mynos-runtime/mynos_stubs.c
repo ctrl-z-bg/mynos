@@ -18,6 +18,7 @@
  * primitive table by gen_prims.sh.
  */
 
+#include <sys/utsname.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -282,6 +283,38 @@ CAMLprim value caml_mynos_spawn(value path, value argv, value env, value io)
   free_strings(a);
   if (e) free_strings(e);
   return check("spawn", ret);
+}
+
+/* the system's version, as uname tells it (Mynos.version) */
+CAMLprim value caml_mynos_version(value unit)
+{
+  struct utsname u;
+  if (uname(&u) != 0) return caml_copy_string("unknown");
+  return caml_copy_string(u.release);
+}
+
+/* the kernel's log: the position now (Mynos.log_position) */
+CAMLprim value caml_mynos_klog_position(value unit)
+{
+  return Val_int(mynos_klog(0, NULL, 0));
+}
+
+/* the kernel's log from a position, at most max bytes (Mynos.log_read) */
+CAMLprim value caml_mynos_klog_read(value from, value max)
+{
+  CAMLparam2(from, max);
+  CAMLlocal1(r);
+  int m = Int_val(max), n;
+  char * buf;
+  if (m < 1) m = 1;
+  if (m > 65536) m = 65536;
+  buf = malloc(m);
+  if (buf == NULL) caml_raise_out_of_memory();
+  n = mynos_klog(Int_val(from), buf, m);
+  if (n < 0) { free(buf); check("klog", n); }
+  r = caml_alloc_initialized_string(n, buf);
+  free(buf);
+  CAMLreturn(r);
 }
 
 /* (pid, Linux wait status) of a child that ended: pid > 0 for that child,

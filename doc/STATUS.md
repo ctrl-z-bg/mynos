@@ -1184,4 +1184,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   what is shown keeps accented letters (bytes that are not UTF-8 become
   `?`). Test in the seventh boot: accented letters typed on the serial
   terminal, one erased, the file saved and read back.
+- **2026-11-19** — The log inside MyNOS (mynos-lfv): the kernel keeps
+  its messages and the services' (`printk`, call 31) in a 64 KB ring,
+  read with native call 35 (`mynos_klog`, `Mynos.log_position`,
+  `Mynos.log_read`); the `log [-f]` program and the Log window (the
+  MyNOS menu's tenth item). Versions (mynos-nec, the owner's choice):
+  the build's year and month and the commit, `2026.11-71dc1d2`, from
+  `tools/version.sh`, written by `build-all.sh` to `VERSION` (not kept
+  by git); the kernel prints `Welcome to MyNOS - v...` first and answers
+  `uname` (Linux 122); `Mynos.version`, `sh`'s `version`, the welcome
+  window, GRUB's menu entry. The README shows the 2003 logo.
 

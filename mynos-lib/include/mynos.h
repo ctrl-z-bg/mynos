@@ -158,6 +158,10 @@ int mynos_processes(mynos_process_t * buf, int max);
    privileges the caller lacks; 0 or an error */
 int mynos_kill(int pid);
 int mynos_trace(int op, void * arg1, unsigned int arg2);
+/* the kernel's log (native 35): its messages since boot, the last 64 KB of
+   them. buf NULL: the position now (bytes ever logged); otherwise copies
+   the bytes from position `from` (the oldest kept, if older): how many */
+int mynos_klog(unsigned int from, char * buf, unsigned int max);
 
 /* PROCESSES */
 /* start the ELF program in file path as a child process, with arguments

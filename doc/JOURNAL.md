@@ -2347,3 +2347,24 @@ booted the disk, not the CD, and stopped on "not a bootable disk":
 in ways nobody wrote down. Both bugs needed only a second boot loader to
 show.
 
+## 2026-11-19 — A letter cut in two by a read
+
+**Symptom.** The test of `edit` with accented letters passed, then failed
+on the next run: "perché  così", the "è" gone.
+
+**Cause.** The test types on the serial terminal, which delivers one byte
+at a time; `edit` reads what the console has. A read can end after the
+first byte of "è" (0xC3), and the next one bring the second (0xA8).
+Notty's decoder takes a lone first byte, and a lone continuation, as
+malformed input, and drops them. From the keyboard an accented letter
+arrives whole, in one piece of input, so it had always worked; from the
+serial terminal it worked or not depending on the timing.
+
+**Fix.** The MyNOS backend of Notty keeps the start of a character cut
+by a read and puts it before the next read's bytes; a read that brings
+only such a start reads on (an empty input would be the end, to Notty).
+
+**Lesson.** A stream has no boundaries but its own: whatever is decoded
+from it must survive being cut anywhere. A test that passed once was a
+test that had not yet been cut in the wrong place.
+

@@ -71,6 +71,14 @@ its `argv`.
    only (the second serial port, `0x2F8`), leaving the screen to the
    programs, unless the kernel's command line says `verbose`.
 
+Its first line on the screen is `Welcome to MyNOS - v2026.11-71dc1d2`:
+the version, the year and month of the build and the commit, which
+`tools/build-all.sh` writes to `VERSION` (`tools/version.sh`) and the
+kernel's Makefile compiles in; programs read it with `uname`
+(appendix D), `sh` with `version`. Every message the kernel writes, and
+every line a service logs (call 31), is also kept in a ring of 64 KB,
+which native call 35 reads: the `log` command and the Log window.
+
 The boot then becomes the **idle thread** of process 0, which halts the
 processor (`hlt`) until the next interrupt, whenever nothing else is
 ready. What happens next is `init`'s business: it reads `init.rc` and
@@ -275,6 +283,7 @@ The native calls:
 | 32 | `trace`: the event recorder | G |
 | 33 | `processes`: the list of live processes | A.4 |
 | 34 | `kill` | A.9 |
+| 35 | `klog`: the kernel's log, the last 64 KB of its messages (`printk`, call 31), from a position | A.2 |
 | 100, 101 | `enableIrq`, `disableIrq` | A.7 |
 | 200, 201, 202 | `createThread`, `exitThread`, `selfThread` | A.4 |
 | 300 | `setTimer` | A.5 |

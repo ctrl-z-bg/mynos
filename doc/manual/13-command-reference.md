@@ -606,6 +606,46 @@ llm < question.txt
 
 ---
 
+### LOG
+
+**Purpose** Prints the kernel's log: its messages and the services'
+(`Mynos.log`) since boot, the last 64 KB of them.
+
+**Syntax** `log [-f]`
+
+**Type** Program (`/log.byte`).
+
+**Description** Without options, prints what the kernel has kept. `-f`
+then follows it: new messages appear as they are logged, until Ctrl-C.
+The same messages go to the second serial port, as they always did.
+
+**Example**
+
+```
+mynos:/$ log
+Welcome to MyNOS - v2026.11-71dc1d2
+...
+init: started fatfs.byte (pid 8)
+fatfs: FAT16, 8167 clusters of 2048 bytes, service fs/1 as fatfs
+```
+
+**See also** LOG_WINDOW, TRACE; chapter 11.
+
+---
+
+### LOG_WINDOW
+
+**Purpose** The kernel's log in a window, followed as it grows.
+
+**Syntax** `log_window`
+
+**Type** Program (`/log_window.byte`), graphical; the MyNOS menu's
+**Log**.
+
+**See also** LOG; chapter 10.
+
+---
+
 ### LS
 
 **Purpose** Lists directories.
@@ -1000,6 +1040,26 @@ trace json /tmp/h.trc /disk/h.json
 **Type** Built in.
 
 **See also** ENV, EXPORT.
+
+---
+
+### VERSION
+
+**Purpose** Prints the system's version: the year and month it was
+built, and the commit it was built from.
+
+**Syntax** `version`
+
+**Type** Built in.
+
+**Example**
+
+```
+mynos:/$ version
+MyNOS 2026.11-71dc1d2
+```
+
+**See also** the boot's first line, `Welcome to MyNOS - v...`.
 
 ---
 

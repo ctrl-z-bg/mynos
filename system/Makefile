@@ -34,6 +34,7 @@ FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo n
 	../third_party/fonts/terminus16.psf ../third_party/fonts/terminus16-bold.psf \
 	../gui/mynos-logo.pgm ../gui/mynos-logo-2x.pgm \
 	../trace/trace.byte ../fetch/fetch.byte ../llm/llm.byte ../agent/agent.byte \
+	../log/log.byte ../gui/log_window.byte \
 	../services/llm/llmd.byte \
 	../third_party/ca-certificates/cacert.pem \
 	../services/tmpfs/tmpfs.byte ../services/ata/ata.byte \

@@ -359,7 +359,7 @@ let run_program ?(background = false) file args c =
 let builtins = [ "cd"; "pwd"; "echo"; "cat"; "ls"; "cp"; "mv"; "rm"; "mkdir";
                  "rmdir"; "touch"; "export"; "unset"; "env"; "which"; "source";
                  "free"; "ps"; "kill"; "clear"; "help"; "exit"; "true"; "false"; "ocaml";
-                 "ifconfig"; "ping"; "host"; "ask"; "keymap" ]
+                 "ifconfig"; "ping"; "host"; "ask"; "keymap"; "version" ]
 
 (* every command: built-ins, and the programs of PATH (NAME.byte as NAME,
    and files without an extension) *)
@@ -417,7 +417,7 @@ let copy src dst =
 let help out =
   output_string out
     "MyNOS sh. Built in: cd pwd echo cat ls [-l] [-a] cp mv rm mkdir rmdir touch\n\
-     export unset env which source free ps kill clear help exit;\n\
+     export unset env which source free ps kill clear help exit version;\n\
      PROGRAM & runs it in the background ($! its pid); kill PID|SERVICE;\n\
      network: ifconfig, ping HOST [COUNT], host NAME.\n\
      Programs: edit FILE, ocamlc, kilo, hello, ocaml (the OCaml toplevel),\n\
@@ -425,6 +425,7 @@ let help out =
      agent TASK (a language model does it with tools, asking first)...\n\
      ask REQUEST: a command for it, from a language model; run if you agree.\n\
      keymap [us|it]: the keyboard layout. Shift+PgUp/PgDn: lines scrolled away.\n\
+     log [-f]: the kernel's log (-f: follow it).\n\
      shutdown (-r: restart) turns the machine off; gui starts the windows.\n\
      Syntax: 'quotes' \"quotes\" $VAR $? $! NAME=value ; & && || < > >> | *.ml\n\
      Files: / is the RAM disk, /tmp is in memory, /disk is the FAT disk.\n"
@@ -607,6 +608,7 @@ let rec builtin name args c out =
            | Some f -> output_string out (f ^ "\n")
            | None -> ok := 1) args
    | ("source" | "."), f :: rest -> ok := run_file f rest
+   | "version", _ -> Printf.fprintf out "MyNOS %s\n" (Mynos.version ())
    | "free", _ ->
      let p = (Mynos.stats ()).Mynos.free_pages in
      Printf.fprintf out "%d KB free\n" (p * 4)
@@ -693,7 +695,7 @@ and is_builtin = function
   | "cd" | "pwd" | "echo" | "cat" | "ls" | "cp" | "mv" | "rm" | "mkdir" | "rmdir"
   | "touch" | "export" | "unset" | "env" | "which" | "source" | "." | "free" | "ps" | "kill"
   | "clear" | "help" | "exit" | "true" | "false" | "ifconfig" | "ping" | "host"
-  | "ask" | "keymap" -> true
+  | "ask" | "keymap" | "version" -> true
   | _ -> false
 
 (* ---- running ---- *)
