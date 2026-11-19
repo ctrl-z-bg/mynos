@@ -1226,4 +1226,6 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
 - **2026-11-19** — Manual 3.2: the Lisp machines, an operating system
   whose master was a functional language, MyNOS's inspiration (the 2002
   page cites them); appendix J: the MIT progress report and manual.
+- **2026-11-19** — Manual 5.4: the first boot's transcript starts with
+  the kernel's greeting and version.
 

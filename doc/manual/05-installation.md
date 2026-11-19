@@ -138,9 +138,14 @@ you want to look around in it.
 tools/run-demo.sh
 ```
 
-A QEMU window opens. For a few seconds it shows the kernel's messages:
+A QEMU window opens. For a few seconds it shows the kernel's greeting,
+with the version of the system (the build's date and commit, as
+`version` prints it later), then its messages:
 
 ```
+  Welcome to MyNOS - v2026.11-c647b16
+
+  ...
   Initializing the 8259 Programmable Interrupt Controller... done.
   Loading Interrupt Descriptor Table... done.
   Calibrating delay loop... [427622]
