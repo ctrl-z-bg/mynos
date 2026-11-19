@@ -9,7 +9,7 @@ appendix J.
 
 ## 3.1 Managed code reaches the mainstream
 
-In the late 1990s Java (1995) had made a virtual machine, a garbage
+In the late 1990s Java (announced in 1995) had made a virtual machine, a garbage
 collector and a safe language the ordinary way to write applications.
 In February 2002, the month MyNOS's first line was committed, Microsoft
 released the .NET Framework and its new language, C#: a second managed
@@ -28,7 +28,7 @@ for systems.
 The idea of an operating system built on a safe language was older than
 MyNOS, and came back while MyNOS was being written.
 
-- **Oberon** (Niklaus Wirth and Jürg Gutknecht, ETH Zürich, from 1987):
+- **Oberon** (Niklaus Wirth and Jürg Gutknecht, ETH Zürich, 1986–1989):
   a whole workstation, compiler and system, in one strongly typed
   language, small enough to be explained in one book.
 - **Inferno** (Bell Labs, 1996): the people of Unix and Plan 9 built a
