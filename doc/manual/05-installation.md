@@ -12,15 +12,21 @@ writes goes into one file on your computer, the disk image.
 
 ## 5.1 What you need
 
-| Program | What for | Needed |
-|---|---|---|
-| `qemu-system-i386` | runs MyNOS | always |
-| `podman` | builds MyNOS, in a container | to build |
-| `python3` | `run-demo.sh` checks that port 8080 is free; the tests | to run the scripts |
-| `mtools` (`mcopy`) | copies `llm.env` into the disk image | optional: if the host lacks it, the build container's is used |
-| `socat` | the test suite talks to QEMU's monitor | for the tests |
+To **try a release** (5.2), QEMU is all: the other programs below are
+for building MyNOS from its sources and for its tests.
 
-The host is a Linux PC (x86_64). MyNOS is a 32-bit system: its programs
+| Program | What for | To try a release | To build |
+|---|---|---|---|
+| `qemu-system-i386` | runs MyNOS | **needed** | **needed** |
+| `mtools` (`mcopy`) | copies `llm.env` into the disk image | optional: without it, write `/disk/llm.env` inside MyNOS | optional: the build container's is used |
+| `python3` | checks that port 8080 is free (`run-mynos.sh`, `run-demo.sh`); the tests | optional: without it, `run-mynos.sh` forwards 8080 without checking, and if the port is taken QEMU stops at once (then `--http 0`, or another port) | needed for the tests |
+| `podman` | builds MyNOS, in a container | — | **needed** |
+| `socat` | the test suite talks to QEMU's monitor | — | for the tests |
+
+To build, the host is a Linux PC (x86_64). (A release has been tried on
+Linux; `run-mynos.sh` is a plain shell script, and should run wherever
+QEMU does, macOS included, but that has not been tested.) MyNOS is a
+32-bit system: its programs
 are static Linux i386 programs, and its OCaml is 5.5 built for that
 target. Today's distributions do not ship such a toolchain for a 64-bit
 host, so the build runs in a container image, `mynos-dev` (Debian

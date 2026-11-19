@@ -1200,4 +1200,6 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   run and kept, `--serial`, `--no-net`, `--http`, `--mem`,
   `--reset-disk`, `llm.env` copied in when mcopy is there), a README,
   `llm.env.example` and the licences. README: "Try it"; manual 5.2.
+- **2026-11-19** — Manual 5.1: what a release needs (QEMU only; mtools
+  and python3 optional) apart from what building needs.
 

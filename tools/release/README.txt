@@ -27,7 +27,9 @@ Running it
 Options (./run-mynos.sh --help):
   --serial       this terminal is a console of MyNOS too
   --no-net       no network
-  --http PORT    the host port for MyNOS's web server (default 8080)
+  --http PORT    the host port for MyNOS's web server (default 8080;
+                 if QEMU stops at once because the port is taken, use
+                 another, or --http 0 for none)
   --mem MB       memory (default 256)
   --reset-disk   start /disk again, empty
   -- OPTIONS     passed to QEMU (e.g. -- -display none, with --serial)
