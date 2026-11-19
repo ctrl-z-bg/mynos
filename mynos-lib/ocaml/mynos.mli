@@ -139,9 +139,10 @@ val wait_any : unit -> int * status
 
 (** {1 Drivers}
 
-    MyNOS processes may use the I/O ports directly (the processor runs them
-    with I/O privilege level 3), and receive interrupts as [V]s on a
-    semaphore. *)
+    Processes with the [io] privilege (drivers: the [driver] lines of
+    init.rc) may use the I/O ports directly (the processor runs them with
+    I/O privilege level 3), and receive interrupts as [V]s on a semaphore;
+    in any other process an [inb] or [outb] ends the program. *)
 
 val inb : int -> int
 val outb : int -> int -> unit
@@ -160,7 +161,8 @@ val outsw : int -> string -> unit
 val driver_register : string -> int -> int
 (** [driver_register name irq] makes this process the driver of [irq]:
     returns a semaphore that is [V]ed at each interrupt ({!sem_p} waits for
-    one). The process acknowledges the interrupt controller itself. *)
+    one). The kernel acknowledges the interrupt controllers; [enable_irq]
+    unmasks the line, once. *)
 
 val enable_irq : int -> unit
 

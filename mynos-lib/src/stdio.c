@@ -172,3 +172,12 @@ FILE * fopen64(const char * restrict name, const char * restrict mode)
 {
   return fopen(name, mode);
 }
+
+/* isatty: musl's makes the ioctl system call itself, which knows nothing
+   of a shell's redirections; libmynos's ioctl does */
+int isatty(int fd)
+{
+  struct winsize wsz;
+  return ioctl(fd, TIOCGWINSZ, &wsz) == 0;
+}
+

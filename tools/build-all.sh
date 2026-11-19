@@ -39,6 +39,7 @@ make -C mynos-runtime
 make -C tests/abi
 make -C tests/fpu
 make -C tests/stdio
+tools/build-examples.sh
 make -C tests/stress
 make -C mynos-lib/ocaml
 (cd tests/mynos-ocaml && ocamlc -use-prims ../../mynos-runtime/primitives \

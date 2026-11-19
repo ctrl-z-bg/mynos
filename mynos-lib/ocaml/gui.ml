@@ -175,15 +175,20 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
   let ui = { window; g = window.Display.pixels; mx = -1; my = -1; buttons = 0;
              clicked = false; press = (-1, -1); keys = []; focused = true; tick = false;
              field = -1; wheel = 0 } in
+  (* the window may be gone already (the session ended: displayd closed
+     every window), so its end is quiet *)
+  let destroy () = try Display.destroy window with Ipc.Remote_error _ | Mynos.Error _ -> () in
   let rec loop state =
     Gfx.fill ui.g 0 0 w h background;
     match frame ui state with
-    | exception Quit -> Display.destroy window
+    | exception Quit -> destroy ()
     | state ->
-      Display.damage window;
+      match Display.damage window with
+      | exception (Ipc.Remote_error _ | Mynos.Error _) -> ()
+      | () ->
       ui.clicked <- false; ui.keys <- []; ui.tick <- false; ui.wheel <- 0;
       (match Display.next_event ~timeout:tick window with
-       | Display.Close -> Display.destroy window
+       | Display.Close -> destroy ()
        | Display.Mouse { x; y; buttons } ->
          if buttons land 1 <> 0 && ui.buttons land 1 = 0 then ui.press <- (x, y);
          if buttons land 1 = 0 && ui.buttons land 1 <> 0 then ui.clicked <- true;

@@ -1109,4 +1109,21 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   recorder, the agent works without recording, the Tour shows the
   message. Any process may still record (identity-and-permissions.md,
   section 9). Test in `tests/abi`.
+- **2026-11-19** — The manual's Parts II and III (mynos-1t9,
+  `doc/manual/05-...` to `24-...`): user's guide (installation, the
+  console, files, programming inside, networking, the graphical session,
+  watching the system, language models, command reference) and
+  programmer's guide (C and OCaml programs, processes, IPC, typed IPC,
+  files and console, networking, graphics, language models, the
+  recorder, drivers, reference pages), written against the code, their
+  commands and examples run in MyNOS. The complete examples are in
+  `doc/manual/examples/`, compiled by `tools/build-examples.sh` (in
+  `build-all.sh`). Fixed on the way: `mv` to the same name in other
+  letters emptied and removed the file (sh fell back to copy-and-remove
+  on any error; fatfs refused the new spelling: mynos-qaw); a C
+  program's redirected stdout lost all but its first line (libmynos
+  closed the file before musl flushed); `isatty` follows redirections;
+  a window whose session has ended closes quietly (`Gui.run`). Filed:
+  mynos-n16 (httpd serves llm.env), mynos-5dd, mynos-dby, mynos-smw,
+  mynos-wvv.
 

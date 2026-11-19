@@ -14,6 +14,10 @@ Conventions:
 - **THE MyNOS FACTOR** boxes (quoted blocks) mark what MyNOS does that
   other systems do not.
 - What is not written yet is marked *(to be written)*.
+- The complete programs of Part III are in `examples/`, one directory per
+  chapter; `tools/build-examples.sh` (run by `tools/build-all.sh`)
+  compiles them all, so that a library change that breaks one breaks the
+  build.
 
 ## Contents
 
@@ -24,31 +28,31 @@ Conventions:
 3. The historical context (2000–2004)
 4. Timeline
 
-**Part II — User's Guide** *(to be written)*
+**Part II — User's Guide**
 
-5. Installation
-6. First steps at the console
-7. Files and disks
-8. Programming inside MyNOS
-9. Networking
-10. The graphical session
-11. Watching the system at work
-12. Language models and agents
-13. Command reference
+5. [Installation](05-installation.md)
+6. [First steps at the console](06-first-steps.md)
+7. [Files and disks](07-files.md)
+8. [Programming inside MyNOS](08-programming-inside.md)
+9. [Networking](09-networking.md)
+10. [The graphical session](10-graphical-session.md)
+11. [Watching the system at work](11-watching.md)
+12. [Language models and agents](12-language-models.md)
+13. [Command reference](13-command-reference.md)
 
-**Part III — Programmer's Guide** *(to be written)*
+**Part III — Programmer's Guide**
 
-14. C programs and OCaml programs
-15. Processes, threads and domains
-16. IPC: ports, channels, the name registry
-17. Typed IPC
-18. Files and console
-19. Networking
-20. Graphics
-21. Language models
-22. The event recorder
-23. Writing a driver
-24. Reference pages
+14. [C programs and OCaml programs](14-c-and-ocaml.md)
+15. [Processes, threads and domains](15-processes.md)
+16. [IPC: ports, channels, the name registry](16-ipc.md)
+17. [Typed IPC](17-typed-ipc.md)
+18. [Files and console](18-files-console.md)
+19. [Networking](19-networking.md)
+20. [Graphics](20-graphics.md)
+21. [Language models](21-language-models.md)
+22. [The event recorder](22-recorder.md)
+23. [Writing a driver](23-writing-a-driver.md)
+24. [Reference pages](24-reference.md)
 
 **Appendices — Architecture**
 

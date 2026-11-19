@@ -185,9 +185,10 @@ answers it too, from a table written in a compact notation
 (`wire_put_shape`: `"(socket:I,max:I)"`); the network test checks that it
 is `net.ml`'s.
 
-Descriptions are asked by name (`Ipc.describe`, with a timeout): the
-registry cannot list its names, and the services of 2004 (memrofs, the
-console) expect C structures, not typed messages.
+Descriptions are asked by name (`Ipc.describe`, with a timeout). (When
+this was written the registry could not list its names and the services
+of 2004 spoke C structures; since 2026-11-18 every service speaks typed
+IPC and `Mynos.registered` lists the names.)
 
 From a description alone, module **`Tools`** makes each request a model's
 tool: its name (`net_ping`), its documentation, and a JSON Schema of its

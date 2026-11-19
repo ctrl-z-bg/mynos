@@ -414,12 +414,15 @@ let rec free_slots l k =
     free_slots (load l.dir) k
 
 (* write an entry (and its long name) for name in directory d *)
-let add_entry d name attr first =
+let add_entry ?(renaming = -1) d name attr first =
   if name = "" || String.length name > 255 || name = "." || name = ".."
      || String.exists (fun c -> c = '/' || c = '\\' || c < ' ') name then
     raise (Status invalid);
   let l = load d in
-  if find l name <> None then raise (Status exists);
+  (* the entry being renamed does not count: a new name that differs only
+     in case is still that file's *)
+  if List.exists (fun e -> same e.name name && e.slot <> renaming) (entries l) then
+    raise (Status exists);
   let raw, flags, lfn =
     match fits_short name with
     | Some (raw, flags) -> (raw, flags, [])
@@ -672,11 +675,15 @@ let do_rename name target =
       if moving_dir && (match d2 with Chain c -> c = e.first | Root16 -> false) then
         raise (Status invalid);
       let e = match find (load d) last with Some e -> e | None -> raise (Status not_found) in
-      let slot = add_entry d2 last2 e.attr e.first in
+      let slot = add_entry ~renaming:(if d = d2 then e.slot else -1) d2 last2 e.attr e.first in
       let l = load d2 in
       set_u32 l.data (32 * slot + 28) e.size;
       store l;
-      let e = match find (load d) last with Some e -> e | None -> raise (Status not_found) in
+      (* the old entry, by its place: by name (case-insensitive) a rename
+         that changes only the case would find the new one, delete it, and
+         lose the file (mynos-qaw) *)
+      let e = match List.find_opt (fun x -> x.slot = e.slot) (entries (load d)) with
+        | Some e -> e | None -> raise (Status not_found) in
       delete_entry d e;
       (* a directory moved elsewhere: its ".." names the new parent *)
       if moving_dir && d <> d2 then begin

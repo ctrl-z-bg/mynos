@@ -62,6 +62,10 @@ int main(void)
   check("a missing file: NULL and ENOENT",
         fopen("/tmp/no-such-file", "r") == NULL && errno == ENOENT);
 
+  /* isatty follows the shell's redirections: 1 on the console, 0 in a
+     file */
+  printf("stdio: isatty(1) %d\n", isatty(1));
+
   /* standard input: the console, or what the shell redirected */
   printf("stdio: type a line\n");
   if (fgets(line, sizeof line, stdin)) {

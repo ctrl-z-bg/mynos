@@ -61,4 +61,9 @@ let () =
   Sys.rmdir "/disk/empty";
   ok &&& check "rmdir" (not (Sys.file_exists "/disk/empty"));
   ok &&& check "a missing file" (fails (fun () -> read "/disk/nothing"));
+  (* a rename that changes only the case keeps the file *)
+  Out_channel.with_open_bin "/disk/case.txt" (fun oc -> output_string oc "kept");
+  Sys.rename "/disk/case.txt" "/disk/CASE.txt";
+  ok &&& check "rename to the same name in other letters"
+    (read "/disk/CASE.txt" = "kept" && Array.mem "CASE.txt" (Sys.readdir "/disk"));
   print_endline (if !ok then "fat: all checks passed" else "fat: FAIL")

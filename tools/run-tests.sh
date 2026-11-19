@@ -722,6 +722,9 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" '/disk/stdio-test\n'; sleep 4
     tools/type-keys.py "$tmp/mon7" 'typed-line\n'; sleep 3
     tools/type-keys.py "$tmp/mon7" 'echo piped-line | /disk/stdio-test\n'; sleep 5
+    tools/type-keys.py "$tmp/mon7" 'echo into-a-file | /disk/stdio-test > /tmp/so.txt; cat /tmp/so.txt\n'; sleep 5
+    # a rename that changes only the case keeps the file (mynos-qaw)
+    tools/type-keys.py "$tmp/mon7" 'echo case-kept > /disk/case.txt; mv /disk/case.txt /disk/CASE.txt; cat /disk/CASE.txt\n'; sleep 3
     tools/type-keys.py "$tmp/mon7" 'kill fatfs\n'; sleep 4
     tools/type-keys.py "$tmp/mon7" 'X=back; echo fatfs-$X > /disk/back.txt; cat /disk/back.txt\n'; sleep 3
     tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte &\n'; sleep 3
@@ -944,6 +947,10 @@ if [ -f system/ramdisk.dsk ]; then
     expect "stdio: all checks passed"                  # C stdio: fopen...
     expect "stdio: read [typed-line]"                  # ... stdin, typed
     expect "stdio: read [piped-line]"                  # ... and redirected
+    expect "stdio: isatty(1) 1"                        # a terminal...
+    expect "stdio: isatty(1) 0"                        # ... or a file
+    expect "stdio: read [into-a-file]"                 # all of stdout in the file
+    expect "case-kept"                                 # mv to other letters
     expect "Hello, reborn again, from MyNOS!"          # by an OCaml client too
     if [ -n "$trace_calls" ]; then
         echo "ok    trace: sh -> fatfs -> ata0, nested calls"

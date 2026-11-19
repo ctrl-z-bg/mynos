@@ -2259,3 +2259,30 @@ wait at the console for a second line.
 **Lesson.** "We replace the C library's file functions" was true of the
 functions a program calls, not of the ones the C library calls itself.
 
+## 2026-11-19 — A rename that emptied the file, found by the user's guide
+
+**Symptom.** Writing chapter 7, `mv README.TXT readme.txt` on `/disk`
+left no file at all.
+
+**Diagnosis.** Two pieces, each reasonable alone. fatfs refuses a new
+name that already exists, comparing without case, as FAT does: so a
+rename that changes only the case failed with `exists`. And `sh`'s `mv`,
+when a rename fails, falls back to copy-and-remove, meant for moves
+between two services (`/tmp` to `/disk`). Here the copy's destination was
+the source itself: opening it for writing emptied it, and the remove
+then deleted it.
+
+**Fix.** fatfs ignores the entry being renamed when it checks for a
+duplicate, and finds the old entry again by its slot, not by its name;
+`mv` copies only when the rename fails with `EXDEV` (another service),
+and reports any other error. Tests: `tests/fat` and the seventh boot.
+
+**Also from the manual's runs.** A C program's redirected stdout kept
+only its first line: libmynos closed the redirected file in an `atexit`
+handler, which runs before the C library flushes stdio; it now flushes
+first. The bug was new: until the day before, stdio did not reach
+libmynos at all.
+
+**Lesson.** A fallback that destroys (copy then remove) must be taken
+only for the one error it was written for.
+

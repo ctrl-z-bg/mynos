@@ -24,13 +24,15 @@
  *     the mount points;
  *   - everything else (stdout, stderr, and the kernel's own single file
  *     when there is no memrofs) goes to the kernel.
- * The C library's internal I/O (fopen, ...) may bypass these functions;
- * the OCaml runtime uses open/read/write/lseek/close/stat directly.
+ * The C library's stdio reaches them too (stdio.c replaces its internal
+ * I/O functions); the OCaml runtime uses open/read/write/lseek/close/stat
+ * directly.
  */
 
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
@@ -347,8 +349,8 @@ static int service(int s)
 }
 
 /* the path, cleaned: no leading, trailing or doubled "/", no "." and ".."
-   components (there is no current directory: a relative path starts at
-   the root). -1 if it does not fit. */
+   components (a relative path has been made absolute against PWD before:
+   here it would start at the root). -1 if it does not fit. */
 static int clean_path(const char * path, char * out, int size)
 {
   int len = 0;
@@ -581,8 +583,8 @@ static int name_call(const char * path, int type)
    environment: MYNOS_STDIN=path, MYNOS_STDOUT=path (">>path" appends),
    MYNOS_STDERR=path. The first use of fd 0, 1 or 2 opens the file, and the
    fd stands for it from then on. The variable is then rewritten to append,
-   so that the program's own children add to the file. (C programs' stdio
-   writes with direct system calls and is not redirected.) */
+   so that the program's own children add to the file. C programs' stdio
+   follows the redirections too (stdio.c). */
 
 static int redirected[3] = { -1, -1, -1 };
 static int redir_ready = 0;
@@ -594,6 +596,10 @@ int close(int fd);
 static void redir_close(void)
 {
   int i;
+  /* stdio's buffers first: atexit handlers run before the C library
+     flushes them at exit, and a redirected stdout would lose what is still
+     buffered (all of it but the first line, in a file) */
+  fflush(NULL);
   for (i = 0; i < 3; i++)
     if (redirected[i] >= 0) { close(redirected[i]); redirected[i] = -1; }
 }

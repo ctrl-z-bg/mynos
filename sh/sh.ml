@@ -551,9 +551,18 @@ let rec builtin name args c out =
    | "mv", [ s; d ] ->
      let d = if Sys.file_exists d && Sys.is_directory d
        then Filename.concat d (Filename.basename s) else d in
+     (* another service (EXDEV): copy, then remove; any other error is
+        reported (a copy onto the same file, a name that differs only in
+        case, emptied it and then removed it: mynos-qaw) *)
+     let cross e =
+       let k = "cross-device" in
+       let rec at i = i + String.length k <= String.length e
+                      && (String.sub e i (String.length k) = k || at (i + 1)) in
+       at 0 in
      (try Sys.rename s d
-      with Sys_error _ ->                      (* another service: copy *)
-        (try copy s d; Sys.remove s with Sys_error e -> fail "mv: %s" e))
+      with Sys_error e when cross e ->
+        (try copy s d; Sys.remove s with Sys_error e -> fail "mv: %s" e)
+         | Sys_error e -> fail "mv: %s" e)
    | "rm", _ -> each Sys.remove
    | "mkdir", _ -> each (fun d -> Sys.mkdir d 0o755)
    | "rmdir", _ -> each Sys.rmdir
