@@ -235,7 +235,7 @@ Names starting with `.` are shown, unlike in `ls`.
 opens a picker over their window, to choose a recording:
 
 ```
- ┌─ Open a recording ────────────────────────────────┐
+ ┌─ Open a recording ─────────────────────────────────┐
  │ [/] [/tmp] [/disk] [Up]                 [Filtered] │
  │ / › tmp                                            │
  │   agent.trc                               47 KB    │

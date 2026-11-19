@@ -21,11 +21,11 @@ writing of yet another OS (therefore the name)?" (chapter 2).
   │  programs     sh, the OCaml toplevel, edit, the windows, agent   │
   │               (OCaml bytecode on ocamlrun; C programs on musl)   │
   ├──────────────────────────────────────────────────────────────────┤
-  │  services     registry · memrofs · tmpfs · fatfs · ata · netd     │
-  │               consoled · displayd · llmd · init        (processes)│
+  │  services     registry · memrofs · tmpfs · fatfs · ata · netd    │
+  │               consoled · displayd · llmd · init       (processes)│
   ├──────────────────────────────────────────────────────────────────┤
   │  microkernel  memory · processes and threads · IPC · interrupts  │
-  │               (C and assembly, 32-bit x86)                        │
+  │               (C and assembly, 32-bit x86)                       │
   └──────────────────────────────────────────────────────────────────┘
 ```
 

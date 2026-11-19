@@ -92,9 +92,9 @@ recording starts. Programs read from the front while the kernel writes at
 the back.
 
 ```
-            first                      first + count
-              │                              │
-   ┌──────────▼──────────────────────────────▼───────────┐
+            first                        first + count
+              │                                │
+   ┌──────────▼────────────────────────────────▼──────────┐
    │ (read)   │ e17 e18 e19 ... events waiting │  (free)  │   8192 slots
    └──────────┴────────────────────────────────┴──────────┘
               └── TRACE_READ copies from here, then moves first
@@ -231,7 +231,7 @@ a channel's life is one call:
 
 ```
   client (sh)                 kernel                   server (fatfs)
-      │ Connect ───────────────► channel c ◄──────────────── │
+      │ Connect ───────────────► channel c ◄───────────────── │
       │ Send "fs/1 Read" ─────── c ───────────► Recv          │  server_start
       │                                         ...           │
       │                     Recv ◄──────── c ─── Send "Ok …"  │  server_finish
