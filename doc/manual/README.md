@@ -11,8 +11,10 @@ Conventions:
 - `code` is something you type, or a name in the source tree;
   `file.c:123` points to a line.
 - Diagrams are drawn with characters, as they will be in print.
-- **THE MyNOS FACTOR** boxes (quoted blocks) mark what MyNOS does that
-  other systems do not.
+- **THE MyNOS FACTOR** boxes (quoted blocks) point to what is
+  characteristic of MyNOS: ideas it takes further than most systems, or
+  does in its own way. Other systems, past and present, share some of
+  them (chapter 3).
 - The complete programs of Part III are in `examples/`, one directory per
   chapter; `tools/build-examples.sh` (run by `tools/build-all.sh`)
   compiles them all, so that a library change that breaks one breaks the

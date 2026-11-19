@@ -79,5 +79,6 @@ session at the console.
 | III. Programmer's Guide | writing programs | C and OCaml programs, processes, IPC, typed IPC, files and console, network, graphics, models, the recorder, drivers, reference pages |
 | Appendices | the inside | kernel, memory, IPC, Linux compatibility, services, the OCaml runtime, the recorder, building and testing, glossary, bibliography |
 
-The boxes marked **THE MyNOS FACTOR** point to what MyNOS does that
-other systems do not.
+The boxes marked **THE MyNOS FACTOR** point to what is characteristic of
+MyNOS: ideas it takes further than most systems, or does in its own way.
+Other systems share some of them; chapter 3 names several.

@@ -27,7 +27,12 @@ bitsavers.org, the Unix Heritage Society and multicians.org.
 - *Macintosh System 6.0.4 User's Guide*. Apple Computer, 1989. Teaching a graphical session one figure at a time.
 - *OS/2 2.0 Technical Library*. IBM, 1991–1992.
 
-## J.2 The processor and the boot
+## J.2 The processor, the boot, and the first steps
+
+- R. A. Burgess. *Developing Your Own 32-bit Operating System*. Sams
+  Publishing, 1995 (ISBN 978-0-672-30655-6). A whole protected-mode
+  operating system for the 386, explained and listed; in 2002 the book
+  that showed MyNOS's authors how to begin the real implementation.
 
 - *Intel 80386 Programmer's Reference Manual*. Intel, 1986. The source
   of the 2002 notes in `mynos-core/doc/MyNOS-note.txt`: segments, paging,

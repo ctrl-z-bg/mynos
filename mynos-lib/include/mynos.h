@@ -127,8 +127,9 @@ int mynos_consoleMode(int canon, int echo, int vmin, int vtime);
 /* the program the caller started and waits for: Ctrl-C on the console
    ends it (0: none); -1 without a console */
 int mynos_consoleForeground(int pid);
-/* Ctrl-C an interrupt (1) or a key (0, editors) */
-int mynos_consoleSignals(int on);
+/* the same, and Ctrl-C an interrupt (isig 1) or a key (0, editors), or
+   unchanged (-1) */
+int mynos_consoleModeSig(int canon, int echo, int isig, int vmin, int vtime);
 
 /* LOG */
 /* write a line (printf format) to the kernel log: the serial log port, not

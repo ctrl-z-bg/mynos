@@ -1148,4 +1148,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   "connection refused"; module command lines of 255 characters, a longer
   one said; memrofs's self-test quiet without AUTOEXEC.BAT; the welcome
   screenshot redone (mynos-wvv, mynos-5dd, mynos-smw, mynos-dby).
+- **2026-11-19** — One primitive each for `spawn` and `console_mode`
+  (the owner's choice): `caml_mynos_spawn` takes the environment as an
+  option (None: ours), `caml_mynos_console_mode` takes `isig` (-1
+  unchanged); `caml_mynos_spawn_env` and `caml_mynos_console_signals`,
+  added the same day to keep old bytecode working, are gone. Bytecode
+  compiled before this (outside the build) must be compiled again.
+  `tools/build-examples.sh` runs last in `build-all.sh`, after the OCaml
+  library.
 

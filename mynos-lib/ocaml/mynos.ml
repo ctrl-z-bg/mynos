@@ -63,14 +63,10 @@ let registered () = Array.to_list (registry_raw ())
 
 type status = Exited of int | Signaled of int
 
-external spawn_raw : string -> string array -> string array -> bool -> int
+external spawn_raw : string -> string array -> string array option -> bool -> int
   = "caml_mynos_spawn"
-external spawn_env_raw : string -> string array -> string array -> bool -> int
-  = "caml_mynos_spawn_env"
-let spawn ?env ?(io = false) path argv =
-  match env with
-  | None -> spawn_raw path argv [||] io             (* ours *)
-  | Some env -> spawn_env_raw path argv env io      (* this one, even empty *)
+(* without ~env, ours; with it, exactly that one, even empty *)
+let spawn ?env ?(io = false) path argv = spawn_raw path argv env io
 
 external channel_peer : int -> int = "caml_mynos_channel_peer"
 
@@ -109,12 +105,11 @@ external driver_register : string -> int -> int = "caml_mynos_driver_register"
 external enable_irq_raw : int -> int = "caml_mynos_enable_irq"
 let enable_irq n = ignore (enable_irq_raw n)
 
-external console_mode_raw : bool -> bool -> int -> int -> unit
+external console_mode_raw : bool -> bool -> int -> int -> int -> unit
   = "caml_mynos_console_mode"
-external console_signals_raw : bool -> unit = "caml_mynos_console_signals"
 let console_mode ~canon ~echo ?isig ?(vmin = 1) ?(vtime = 0) () =
-  console_mode_raw canon echo vmin vtime;
-  Option.iter console_signals_raw isig
+  let isig = match isig with None -> -1 | Some true -> 1 | Some false -> 0 in
+  console_mode_raw canon echo isig vmin vtime
 external console_foreground : int -> unit = "caml_mynos_console_foreground"
 
 external environment : unit -> string array = "caml_mynos_environment"

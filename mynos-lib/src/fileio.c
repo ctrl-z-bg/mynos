@@ -270,19 +270,18 @@ static int console_mode(int canon, int echo, int isig, int vmin, int vtime)
   return 0;
 }
 
-int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
+/* the console's mode; isig: Ctrl-C an interrupt (1) or a key (0, as
+   termios without ISIG: an editor), or unchanged (-1) */
+int mynos_consoleModeSig(int canon, int echo, int isig, int vmin, int vtime)
 {
   tio_init();
-  return console_mode(canon, echo, (tio.c_lflag & ISIG) != 0, vmin, vtime);
+  if (isig < 0) isig = (tio.c_lflag & ISIG) != 0;
+  return console_mode(canon, echo, isig, vmin, vtime);
 }
 
-/* Ctrl-C an interrupt (on) or a key (off, as termios without ISIG: an
-   editor), the rest of the mode unchanged */
-int mynos_consoleSignals(int on)
+int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
 {
-  tio_init();
-  return console_mode((tio.c_lflag & ICANON) != 0, (tio.c_lflag & ECHO) != 0, on,
-		      tio.c_cc[VMIN], tio.c_cc[VTIME]);
+  return mynos_consoleModeSig(canon, echo, -1, vmin, vtime);
 }
 
 /* the program the caller waits for: Ctrl-C ends it (0: none) */
