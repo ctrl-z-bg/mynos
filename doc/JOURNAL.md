@@ -2368,3 +2368,28 @@ only such a start reads on (an empty input would be the end, to Notty).
 from it must survive being cut anywhere. A test that passed once was a
 test that had not yet been cut in the wrong place.
 
+## 2026-11-19 — MyNOS in the browser, on v86
+
+**Symptom.** None: the question was whether the release could run in a
+web page, for people who will not install QEMU.
+
+**Diagnosis.** v86 (0.5.473, with SeaBIOS) booted the release's ISO and
+clean disk unchanged: GRUB, the banner in 1.3 s and the prompt in 3.4 s
+under Node; in Chrome the graphical session, the absolute mouse (v86
+emulates VMware's, which displayd already knew), the Tour and its replay.
+v86 emulates an NE2000 too, so netd starts, finds no DHCP and falls back
+to its fixed address: the network is the one thing missing.
+
+**Cause of the one difficulty.** The first page loaded both images whole,
+96 MB, mostly an empty disk. v86 can load an image on demand, either by
+HTTP Range requests or in fixed-size parts; a GitHub Pages page answered
+a Range request with the whole file, so parts it is.
+
+**Fix.** `tools/make-web.sh` cuts each image in 1 MB parts compressed
+with zstd, named as v86 asks for them; v86 decompresses them itself. The
+site is about 10 MB; the disk's zero parts are a few dozen bytes each,
+and only two of them are read at boot. Writes stay in v86's memory.
+
+**Lesson.** An emulator that implements real hardware well needs no port:
+the ISO built for QEMU ran as it was, and so did every driver.
+

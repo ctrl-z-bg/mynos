@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyNOS in your browser</title>
+<meta name="description" content="MyNOS, an operating system in OCaml on a microkernel, running in your browser.">
+<style>
+  :root { --bg: #10161c; --fg: #d8e0e8; --dim: #93a1ae; --bar: #1b3a57; --code: #24303c; --link: #8cc4ff; --accent: #f29b38; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 system-ui, sans-serif; }
+  a { color: var(--link); }
+  header { padding: 14px 16px; background: var(--bar); }
+  header .in { max-width: 1024px; margin: 0 auto; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 20px; }
+  header nav { display: flex; gap: 14px; font-size: 14px; }
+  .note { max-width: 1024px; margin: 12px auto; padding: 0 16px; }
+  .note p { margin: 8px 0; }
+  code { background: var(--code); padding: 1px 5px; border-radius: 3px; }
+  #status { color: var(--accent); }
+  #screen_container { margin: 8px auto 16px; width: 1024px; max-width: 100%; }
+  #screen_container canvas { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  #screen_container > div { padding: 0 16px; }
+  footer { max-width: 1024px; margin: 0 auto 24px; padding: 0 16px; color: var(--dim); font-size: 13px; }
+</style>
+</head>
+<body>
+<header><div class="in">
+  <h1>MyNOS, running in your browser</h1>
+  <nav>
+    <a href="https://github.com/ctrl-z-bg/mynos">Source</a>
+    <a href="https://github.com/ctrl-z-bg/mynos/blob/main/doc/manual/README.md">Manual</a>
+    <a href="https://github.com/ctrl-z-bg/mynos/releases">Releases</a>
+  </nav>
+</div></header>
+<div class="note">
+  <p>MyNOS is an operating system for 32-bit PCs: a microkernel in C, and above it the
+  file systems, the drivers, the shell and the windows as processes, most of them in
+  OCaml. Here it runs on <a href="https://github.com/copy/v86">v86</a>, a PC emulated in
+  JavaScript and WebAssembly. Click on the screen to type. Try <code>help</code>,
+  <code>ls /disk</code>, <code>ocaml</code>, <code>trace ls /disk</code>, then
+  <code>gui</code>: the graphical session, and its <b>Tour</b>, which explains how an
+  operating system works while it runs.</p>
+  <p>Here there is no network, and so <b>no language models or agent</b>; nothing you
+  save is kept. For the full experience, download the
+  <a href="https://github.com/ctrl-z-bg/mynos/releases">release</a> and run it with QEMU.
+  <span id="status">Starting...</span></p>
+</div>
+<div id="screen_container">
+  <div style="white-space: pre; font: 14px monospace; line-height: 14px"></div>
+  <canvas style="display: none"></canvas>
+</div>
+<footer>
+  MyNOS @VERSION@ (GPL 2 or later), by Cesare Zavattari, Alessandro Tommasi and Tommaso
+  Schiavinotto; logo by Luigi Ferrini.
+  Emulated by <a href="https://github.com/copy/v86">v86</a> @V86@ (BSD 2-Clause) with
+  <a href="https://www.seabios.org/">SeaBIOS</a> (LGPL 3; the binaries and their build are in
+  <a href="https://github.com/copy/v86/tree/@BIOS_COMMIT@/bios">v86's bios/</a>).
+</footer>
+<script src="libv86.js"></script>
+<script>
+  const status = document.getElementById("status");
+  const auto = new URLSearchParams(location.search).get("auto");   // a command to type, for tests
+  const image = (name, size) => ({ url: "images/" + name, size, async: true,
+                                   use_parts: true, fixed_chunk_size: @CHUNK@ });
+  let log = "", ready = false;
+  const emulator = new V86({
+    wasm_path: "v86.wasm",
+    bios: { url: "seabios.bin" },
+    vga_bios: { url: "vgabios.bin" },
+    cdrom: image("mynos.iso.zst", @ISO_SIZE@),
+    hda: image("disk.img.zst", @DISK_SIZE@),
+    boot_order: 0x123,                        // the CD, then the disk
+    memory_size: 256 * 1024 * 1024,
+    vga_memory_size: 16 * 1024 * 1024,
+    uart1: true,                              // COM2: MyNOS's log
+    screen_container: document.getElementById("screen_container"),
+    autostart: true,
+  });
+  emulator.add_listener("download-progress", e => {
+    if (!ready && e.lengthComputable && e.total > 1000000)
+      status.textContent = "Loading " + Math.round(100 * e.loaded / e.total) + "%...";
+  });
+  emulator.add_listener("emulator-started", () => { if (!ready) status.textContent = "Booting..."; });
+  emulator.add_listener("serial1-output-byte", b => {
+    log += String.fromCharCode(b);
+    if (!ready && log.includes("mynos:/$")) {
+      ready = true;
+      status.textContent = "Running.";
+      if (auto) setTimeout(() => emulator.keyboard_send_text(auto + "\n"), 1500);
+    }
+  });
+  window.mynosLog = () => log;
+</script>
+</body>
+</html>

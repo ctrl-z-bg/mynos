@@ -19,7 +19,12 @@ rather than in C.
 
 ## Try it
 
-Download `mynos-VERSION.tar.gz` from the
+**In your browser:** [ctrl-z-bg.github.io/mynos](https://ctrl-z-bg.github.io/mynos/)
+runs MyNOS on [v86](https://github.com/copy/v86), a PC emulated in
+JavaScript: the commands, the graphical session and its Tour. There is
+no network there, and so no language models or agent; nothing is kept.
+
+**The full system, with QEMU:** download `mynos-VERSION.tar.gz` from the
 [Releases](https://github.com/ctrl-z-bg/mynos/releases) page, install
 QEMU (`apt install qemu-system-x86`, `brew install qemu`...), and:
 

@@ -1207,4 +1207,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   on its value, and written back between double quotes when it has a
   space or a character the shell reads, or was begun in quotes; a
   directory's quote stays open. Test in the seventh boot.
+- **2026-11-19** — MyNOS in the browser (mynos-2a2): the release's ISO
+  and disk boot unchanged on v86 (no network). `tools/make-web.sh` makes
+  the static site (images in 1 MB zstd chunks, ~10 MB);
+  `tools/publish-release.sh` publishes the GitHub release and the site
+  on GitHub Pages (`gh-pages`). README and manual 5.2 link the page.
 

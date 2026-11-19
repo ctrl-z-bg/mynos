@@ -36,7 +36,15 @@ than a real one but needs no special permission.
 
 ## 5.2 A ready-made image
 
-The quickest way to try MyNOS needs only QEMU. Each release on the
+The quickest look needs nothing at all: **https://ctrl-z-bg.github.io/mynos/**
+runs the latest release in the browser, on v86, a PC emulated in
+JavaScript and WebAssembly. The shell, the files, the OCaml toplevel, the
+graphical session and its Tour work there; the network does not, and so
+neither do the language models, the agent and the Tour's lessons on the
+network and on models; what is saved on `/disk` is lost when the page is
+closed. The whole system needs QEMU, as follows.
+
+The quickest way to run all of MyNOS needs only QEMU. Each release on the
 project's GitHub page (Releases) has an archive,
 `mynos-VERSION.tar.gz`, with a `.sha256` beside it to check the
 download (`sha256sum -c mynos-VERSION.tar.gz.sha256`).

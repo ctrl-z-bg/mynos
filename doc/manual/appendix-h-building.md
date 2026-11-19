@@ -194,6 +194,20 @@ licences (MyNOS's GPL 2 and the third parties'). It refuses a `VERSION`
 that is not the current commit's (build again), and warns about
 uncommitted changes. Chapter 5.2 is the user's side.
 
+**MyNOS in the browser.** `tools/make-web.sh RELEASE_DIR` makes
+`tmp/web`, a static site that runs a release's ISO and clean disk on
+v86, without network: `tools/web/index.html`, v86 and SeaBIOS
+(downloaded at fixed versions, checked by sha256), and the two images cut
+in chunks of 1 MB compressed with zstd (`mynos-0-1048576.iso.zst`...),
+which v86 fetches only when the guest reads them: about 10 MB in all,
+of which the empty disk is a few kilobytes.
+
+**Publishing.** `tools/publish-release.sh`, on a built, committed and
+pushed tree, runs both, creates the GitHub release `vVERSION` with the
+archive, its checksum and the notes of `tools/release/release-notes.md`, and
+pushes `tmp/web`, alone, to the `gh-pages` branch, which GitHub Pages
+serves. It needs `gh`, GitHub's command line, logged in.
+
 **A bootable ISO.** `tools/make-iso.sh [OUT]` (default `tmp/mynos.iso`,
 not kept by git) puts GRUB for PC BIOS, the kernel and the four modules of
 `run-demo.sh` on a CD image, with `grub-mkrescue` in the container
