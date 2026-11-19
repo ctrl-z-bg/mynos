@@ -77,4 +77,9 @@ ENV PATH=/opt/ocaml-${OCAML_VERSION}/bin:$PATH
 ENV MYNOS_CC=musl-gcc \
     MYNOS_LDFLAGS="-static -Wl,-Ttext-segment=0x40000000 -Wl,-z,noseparate-code -Wl,--build-id=none" \
     OCAML_RUNTIME_LIB=/opt/ocaml-runtime-musl
+# GRUB for PC BIOS, for the bootable ISO (tools/make-iso.sh, mynos-sc9);
+# last, so that adding it reuses every layer above
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends grub-pc-bin xorriso \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /mynos

@@ -2315,3 +2315,35 @@ build dependency: the OCaml library's Makefile did not know that every module us
 process; when the process goes, the promise must be dropped, or the next
 caller pays for it.
 
+## 2026-11-19 — Two bugs of 2002 that only GRUB could see
+
+**Symptom.** The first ISO, made with GRUB 2, stopped at "Booting
+'MyNOS'": the machine reset in a loop. The same kernel, with the same
+modules, boots every day under QEMU's `-kernel`.
+
+**First cause.** With `-no-reboot -d int`, a page fault in
+`init_memory`, writing a page table that was not there; a gdb watchpoint
+on the page directory showed `clear_page_table` writing it. The 2002
+routine starts at the last byte of the first entry and clears one byte
+every four: the high byte of each entry. Its low byte, with the present
+bit, kept whatever was in memory. QEMU's loader gives zeroed memory, so
+the directory came out clean anyway; GRUB leaves its own data there (the
+page directory held GCC's version string), and some entries looked
+present. Fixed: each entry cleared whole.
+
+**Second cause.** Then a general protection fault at the first `iret`,
+with CS 0x10. `start.asm` never loads a GDT: the kernel runs on the boot
+loader's until `_init_gdt`, which loads MyNOS's with `lgdt` but did not
+reload the segment registers. QEMU's loader uses 0x08 for code and 0x10
+for data, the same numbers as MyNOS's GDT; GRUB 2 uses 0x10 and 0x18,
+which in MyNOS's GDT are the kernel's data and the users' code. Fixed: a
+far jump to 0x08, and the data registers loaded with 0x10.
+
+**And a third, of the test itself.** With a FAT disk attached, the BIOS
+booted the disk, not the CD, and stopped on "not a bootable disk":
+`-boot d`.
+
+**Lesson.** A program that has run in one environment only depends on it
+in ways nobody wrote down. Both bugs needed only a second boot loader to
+show.
+

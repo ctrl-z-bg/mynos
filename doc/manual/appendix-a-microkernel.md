@@ -85,7 +85,12 @@ not used when booting with GRUB, and does not assemble with today's
 
 **The GDT** (`kernel/gdt.c`) is small, because MyNOS uses a flat memory
 model: every segment spans the whole 4 GB, and protection comes from
-paging (appendix B).
+paging (appendix B). Until `init_memory` the kernel runs on the boot
+loader's GDT and selectors; `_init_gdt` then loads MyNOS's own and
+reloads every segment register from it (a far jump for CS). The boot
+loaders differ: QEMU's uses 0x08 for code and 0x10 for data, as MyNOS
+does, GRUB 2 uses 0x10 and 0x18; until November 2026 the registers were
+not reloaded, and only QEMU's numbers worked.
 
 | Selector | Segment |
 |---|---|

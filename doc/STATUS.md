@@ -1162,4 +1162,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   through `ata`, its `Register`, `sh`'s lookups until it is back, and the
   directory from the new one. Each note checked against a recording made
   in MyNOS.
+- **2026-11-19** — A bootable ISO (mynos-sc9, first part):
+  `tools/make-iso.sh` makes `tmp/mynos.iso` (not kept by git) with GRUB
+  for PC BIOS; the dev container gains `grub-pc-bin` and `xorriso` (a
+  last layer). Booting under GRUB found two bugs of 2002, hidden by
+  QEMU's multiboot loader: `clear_page_table` (`start.asm`) cleared only
+  the last byte of each entry (QEMU gives zeroed memory, GRUB does not:
+  its leftovers became present page tables); and `_init_gdt` loaded the
+  GDT without reloading the segment registers (QEMU's selectors match
+  MyNOS's by chance, GRUB 2's do not: the first `iret` faulted). The
+  ISO boots to `sh` in 3 s, with the disk, the network and the
+  graphical session.
 

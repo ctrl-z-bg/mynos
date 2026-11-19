@@ -236,10 +236,12 @@ multiboot_entry:
 
 ;;; set all entries to not present. edi must have the page address
 clear_page_table:
-	add	edi, 3		; last byte of the first entry
+	;; every entry whole (until 2026 only each entry's last byte was
+	;; cleared: QEMU's -kernel gives zeroed memory, GRUB does not, and its
+	;; leftovers became present page tables)
 	mov	ecx, 1024
 .loop:	
-	mov	BYTE [edi], 0
+	mov	DWORD [edi], 0
 	add	edi, 4		; next entry
 	loop	.loop
 	ret

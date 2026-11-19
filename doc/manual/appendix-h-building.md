@@ -186,6 +186,17 @@ again with an empty disk, delete it and build. It is not in git (`*.img`).
 
 ## H.6 Running
 
+**A bootable ISO.** `tools/make-iso.sh [OUT]` (default `tmp/mynos.iso`,
+not kept by git) puts GRUB for PC BIOS, the kernel and the four modules of
+`run-demo.sh` on a CD image, with `grub-mkrescue` in the container
+(`grub-pc-bin`, `xorriso`). It boots as a real PC would:
+`qemu-system-i386 -boot d -cdrom tmp/mynos.iso -m 256`, with
+`-drive file=DISK,format=raw,if=ide,index=0` for `/disk` and
+`-netdev user,id=n0 -device ne2k_isa,netdev=n0,iobase=0x300,irq=9` for
+the network (`-boot d`: a FAT disk is not bootable, and the BIOS would
+stop on it). GRUB passes a module's arguments after its file name, so
+`grub.cfg` names each program again (`module /boot/ocamlrun ocamlrun`).
+
 ```
   tools/run-demo.sh [-- QEMU OPTIONS...]          the standard system
   tools/run-qemu.sh MODULE... [-- QEMU OPTIONS]   any set of modules

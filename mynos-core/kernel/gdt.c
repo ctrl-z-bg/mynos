@@ -73,6 +73,20 @@ void _init_gdt() {
   loadgdt.idt = gdt_addr;
   loadgdt.limit = (8192 * sizeof(union DT_entry) - 1); /* a full GDT! */
   __asm__ volatile ("lgdtl (loadgdt)\n");
+
+  /* and the segment registers loaded from it: until now they held the
+     boot loader's selectors, which match ours only by chance (QEMU's
+     loader: code 0x08, data 0x10; GRUB 2: code 0x10, data 0x18, which here
+     are the kernel's data and the user's code: the first iret faulted) */
+  __asm__ volatile ("ljmp %0, $1f\n"
+		    "1:\n\t"
+		    "movw %1, %%ax\n\t"
+		    "movw %%ax, %%ds\n\t"
+		    "movw %%ax, %%es\n\t"
+		    "movw %%ax, %%fs\n\t"
+		    "movw %%ax, %%gs\n\t"
+		    "movw %%ax, %%ss\n"
+		    :: "i"(GDT_OS_CODE_SEL), "i"(GDT_OS_DATA_SEL) : "ax", "memory");
 }
 
 void gdt_set_entry(uint32_t entry, uint32_t base,

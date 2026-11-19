@@ -33,7 +33,9 @@ than a real one but needs no special permission.
 A release with everything needed to try MyNOS without building it (a
 bootable image, a disk image, and a script that needs only QEMU) is
 planned (mynos-sc9). Until it exists, MyNOS is built from its sources,
-as described next.
+as described next; once built, `tools/make-iso.sh` makes the bootable
+image, `tmp/mynos.iso` (GRUB, the kernel and its modules), which boots
+with `qemu-system-i386 -boot d -cdrom tmp/mynos.iso -m 256` (H.6).
 
 ## 5.3 Building from source
 
