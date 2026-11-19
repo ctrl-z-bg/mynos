@@ -21,7 +21,9 @@ let usage () =
    [finished] *)
 let record ~at_start finished =
   let buf = Buffer.create 65536 in
-  Tracer.start ();
+  (try Tracer.start () with Tracer.Busy ->
+     prerr_endline "trace: another program is recording (one recording at a time)";
+     exit 1);
   at_start ();
   let rec loop () =
     Buffer.add_string buf (Tracer.read ());
@@ -30,6 +32,7 @@ let record ~at_start finished =
   Tracer.stop ();
   Buffer.add_string buf (Tracer.read ());
   let i = Tracer.info () in
+  Tracer.free ();
   (Buffer.contents buf, i)
 
 let finish file (raw, info) ~show =

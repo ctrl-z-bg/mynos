@@ -263,8 +263,9 @@ linker would not look for them in `libmynos`: `mynos.mk` names them with
 on musl's `struct _IO_FILE`, whose layout `stdio.c` copies from musl
 1.2.5, the version the container builds with. So `fopen("/disk/a.txt")`
 reaches fatfs, `fgets(stdin)` reads a line from the console or from a
-shell's redirection, and `printf` in a terminal window reaches the window
-(`tests/stdio`). Until November 2026 none of this worked (mynos-d6k):
+shell's redirection (`tests/stdio` checks both, on the console), and
+`printf` in a terminal window reaches the window, by the path `write`
+takes. Until November 2026 none of this worked (mynos-d6k):
 `fopen` opened the module-1 file, `fgets(stdin)` failed, `printf` went to
 the text screen.
 

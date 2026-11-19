@@ -139,6 +139,16 @@ name in 16 bytes), with the privilege bit `MYNOS_PROC_BYTECODE` (`0x200`)
 set for processes started as `ocamlrun`. `ps` and the System window use
 it, through `Mynos.processes` in OCaml.
 
+**One recording at a time.** A recording belongs to the process that
+started it: another process's start gets `MYNOS_ERR_BUSY` (in OCaml,
+`Tracer.Busy`), its stop, read or free `MYNOS_ERR_DENY`; info and mark
+are anyone's. When the owner frees the buffer, or ends, the recorder is
+free again. `trace` says "another program is recording" and stops; the
+agent works without recording and says so; the Tour shows `trace`'s
+message. (Until November 2026 a start emptied any recording in progress,
+and anyone could stop it: the agent, `trace` and the Tour erased each
+other's events, mynos-kwe.)
+
 ## G.6 Module `Tracer`
 
 The OCaml side is module `Tracer` (`mynos-lib/ocaml/tracer.mli`, part of
@@ -456,17 +466,12 @@ from its cache.
 
 ## G.15 Known limits
 
-- **Who may record.** Operation 0 has no privilege check: any process can
-  start the recorder, and the recording holds the first 56 bytes of every
-  message in the system, whatever they carry (file contents, the start of
-  network data).
-- **One recorder at a time.** Starting a recording empties the buffer of
-  any recording in progress, and any process can stop it: if `trace`
-  runs while the agent is working, the agent loses the events it has not
-  read yet, and its recording ends when `trace`'s does.
-- `trace` and the agent never free the kernel's buffer (operation 4, only
-  in `stop_and_get`): after the first recording, 768 KB of kernel heap
-  stay allocated.
+- **Who may record.** Any process may, and the recording holds the
+  first 56 bytes of every message in the system, whatever they carry
+  (file contents, the start of network data). A decision, not an
+  oversight: MyNOS has one user, and the recorder is there to see
+  everything (`doc/decisions/identity-and-permissions.md`, section 9).
+- One recording at a time: two programs cannot record at once.
 - The `pid` field of an event is 16 bits, while pids grow by 1,000 with
   every reuse of a slot (appendix A): after some 65,000 processes, pids
   no longer fit and are recorded truncated. `peer` is 32 bits.

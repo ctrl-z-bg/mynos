@@ -33,6 +33,18 @@ typedef struct {
 int trace_on = 0;
 static event_t * events = NULL;
 static uint32_t first = 0, count = 0, seq = 0, dropped = 0;
+
+/* One recording at a time, the process's that started it (mynos-kwe): it
+   alone stops, reads and frees it, until it ends; then anyone may. Any
+   process may record (doc/decisions/identity-and-permissions.md, 9). */
+static pid_t owner = 0;
+
+static int someone_else_owns(void) {
+  process_descriptor_t * p;
+  if (owner == 0 || owner == CURRPID) return 0;
+  p = proc(owner);
+  return p != NULL && p->isAlive;
+}
 static uint32_t start_tsc_lo, start_tsc_hi, start_ticks;
 
 extern uint32_t timerTicks;
@@ -92,6 +104,8 @@ int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2) {
   uint32_t i;
   switch (op) {
   case TRACE_START:
+    if (someone_else_owns()) return MYNOS_ERR_BUSY;
+    owner = CURRPID;
     if (events == NULL) {
       events = kmalloc(TRACE_EVENTS * sizeof(event_t));
       if (events == NULL) return MYNOS_ERR_FULL;
@@ -109,10 +123,12 @@ int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2) {
     }
     return 0;
   case TRACE_STOP:
+    if (someone_else_owns()) return MYNOS_ERR_DENY;
     trace_on = 0;
     return 0;
   case TRACE_READ: {
     uint32_t n = arg2 < count ? arg2 : count, k;
+    if (someone_else_owns()) return MYNOS_ERR_DENY;
     if (n == 0) return 0;
     if (!__mem_userArea((void *)arg1, n * sizeof(event_t)))
       return MYNOS_ERR_INVALID;
@@ -145,6 +161,8 @@ int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2) {
     return 0;
   }
   case TRACE_FREE_BUFFER:
+    if (someone_else_owns()) return MYNOS_ERR_DENY;
+    owner = 0;
     trace_on = 0;
     if (events) kfree(events);
     events = NULL;

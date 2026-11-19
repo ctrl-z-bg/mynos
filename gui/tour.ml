@@ -42,8 +42,12 @@ let run st (l : Lesson.t) =
               [| "MYNOS_STDIN=" ^ out; "MYNOS_STDOUT=>>" ^ out; "MYNOS_STDERR=>>" ^ out |] in
           let pid = Mynos.spawn ~env "ocamlrun"
               [| "ocamlrun"; "/trace.byte"; "-o"; file; l.command |] in
-          ignore (Mynos.wait pid);
-          Ok (file, lesson)
+          if Mynos.wait pid = Mynos.Exited 0 || Sys.file_exists file then Ok (file, lesson)
+          else Error (match In_channel.with_open_bin out In_channel.input_all
+                            |> String.split_on_char '\n'
+                            |> List.find_opt (String.starts_with ~prefix:"trace:") with
+                      | Some m -> m
+                      | None -> "the recording failed")
         with
         | Mynos.Error (f, code) -> Error (f ^ ": " ^ Mynos.error_name code)
         | Sys_error e -> Error e in

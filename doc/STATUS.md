@@ -1101,4 +1101,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   reads the console or a redirection, `printf` follows redirections and
   terminal windows. Test `tests/stdio`, run from `sh` in the seventh boot
   (a typed line, a piped one).
+- **2026-11-19** — One recording at a time (mynos-kwe): the recorder
+  belongs to the process that started it, which alone stops, reads and
+  frees it until it ends (`MYNOS_ERR_BUSY`/`DENY` for others;
+  `Tracer.Busy`, `Tracer.free`). `trace` and the agent free the kernel's
+  buffer when done (768 KB stayed allocated); `trace` reports a busy
+  recorder, the agent works without recording, the Tour shows the
+  message. Any process may still record (identity-and-permissions.md,
+  section 9). Test in `tests/abi`.
 

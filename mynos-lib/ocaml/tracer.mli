@@ -49,10 +49,18 @@ type recording = {
 
 (** {2 Recording} *)
 
+exception Busy
+
 val start : unit -> unit
-(** Start a recording (the kernel's buffer: 8192 events). *)
+(** Start a recording (the kernel's buffer: 8192 events). One recording
+    at a time: it belongs to the process that started it, which alone
+    stops, reads and frees it, until it ends.
+    @raise Busy if another process is recording. *)
 
 val stop : unit -> unit
+
+val free : unit -> unit
+(** Free the kernel's buffer, and the recorder for others. *)
 
 val mark : string -> unit
 (** A label in the recording, if one is on (an event [Mark] of this

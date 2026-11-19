@@ -340,7 +340,12 @@ let run a ~emit ~confirm task =
       | No -> false in
   (* the recorder, read after every step so that its buffer does not fill *)
   let raw = Buffer.create 65536 in
-  let recording = (try Tracer.start (); true with _ -> false) in
+  let recording =
+    match Tracer.start () with
+    | () -> true
+    | exception Tracer.Busy ->
+      emit (Note "not recorded: another program is recording"); false
+    | exception _ -> false in
   let drain () = if recording then Buffer.add_string raw (Tracer.read ()) in
   let rec turn n messages =
     if n > a.max_turns then begin
@@ -391,7 +396,9 @@ let run a ~emit ~confirm task =
   if recording then begin
     Tracer.stop ();
     drain ();
-    match Tracer.save a.trace_file ~raw:(Buffer.contents raw) (Tracer.info ()) with
+    let info = Tracer.info () in
+    Tracer.free ();
+    match Tracer.save a.trace_file ~raw:(Buffer.contents raw) info with
     | () -> emit (Note (Printf.sprintf "recording in %s (trace calls %s)" a.trace_file a.trace_file))
     | exception Sys_error e -> emit (Note ("recording not saved: " ^ e))
   end;

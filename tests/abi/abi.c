@@ -239,6 +239,40 @@ int main(int argc, char ** argv) {
     pthread_join(t, NULL);
   }
 
+  /* one recording at a time, its starter's (mynos-kwe) */
+  {
+    unsigned w[9];
+    char ev[MYNOS_TRACE_EVENT_SIZE];
+    int st = 0;
+    pid_t child;
+    mynos_trace(MYNOS_TRACE_FREE, NULL, 0);          /* none left over */
+    check("start a recording", mynos_trace(MYNOS_TRACE_START, NULL, 0) == 0);
+    if ((child = fork()) == 0) {
+      int bits = 0;
+      if (mynos_trace(MYNOS_TRACE_START, NULL, 0) == MYNOS_ERR_BUSY) bits |= 1;
+      if (mynos_trace(MYNOS_TRACE_STOP, NULL, 0) == MYNOS_ERR_DENY) bits |= 2;
+      if (mynos_trace(MYNOS_TRACE_READ, ev, 1) == MYNOS_ERR_DENY) bits |= 4;
+      if (mynos_trace(MYNOS_TRACE_FREE, NULL, 0) == MYNOS_ERR_DENY) bits |= 8;
+      _exit(bits);
+    }
+    waitpid(child, &st, 0);
+    check("another process may not start, stop, read or free it",
+          WIFEXITED(st) && WEXITSTATUS(st) == 15);
+    check("and the recording goes on",
+          mynos_trace(MYNOS_TRACE_INFO, w, 0) == 0 && w[0] == 1);
+    mynos_trace(MYNOS_TRACE_STOP, NULL, 0);
+    mynos_trace(MYNOS_TRACE_FREE, NULL, 0);
+    if ((child = fork()) == 0) {                      /* starts, never frees */
+      mynos_trace(MYNOS_TRACE_START, NULL, 0);
+      _exit(0);
+    }
+    waitpid(child, &st, 0);
+    check("a recording whose owner ended is free to take",
+          mynos_trace(MYNOS_TRACE_START, NULL, 0) == 0);
+    mynos_trace(MYNOS_TRACE_STOP, NULL, 0);
+    mynos_trace(MYNOS_TRACE_FREE, NULL, 0);
+  }
+
   printf("abi: %s\n", failures ? "SOME CHECKS FAILED" : "all checks passed");
   return failures;
 }

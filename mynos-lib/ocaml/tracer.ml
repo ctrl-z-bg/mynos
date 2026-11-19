@@ -22,8 +22,14 @@ let event_size = 96
 
 (* ---- recording ---- *)
 
-let start () = ignore (control 0)
+exception Busy
+
+let start () =
+  match control 0 with
+  | _ -> ()
+  | exception Mynos.Error (_, code) when Mynos.error_name code = "busy" -> raise Busy
 let stop () = ignore (control 1)
+let free () = try ignore (control 4) with Mynos.Error _ -> ()
 external mark_raw : string -> int = "caml_mynos_trace_mark"
 let mark s = try ignore (mark_raw s) with _ -> ()
 
@@ -101,7 +107,7 @@ let stop_and_get () =
   stop ();
   let raw = read () in
   let i = info () in
-  ignore (control 4);
+  free ();
   of_raw ~raw i
 
 (* ---- names ---- *)
