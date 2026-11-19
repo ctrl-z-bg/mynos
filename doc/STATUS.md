@@ -1212,4 +1212,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   the static site (images in 1 MB zstd chunks, ~10 MB);
   `tools/publish-release.sh` publishes the GitHub release and the site
   on GitHub Pages (`gh-pages`). README and manual 5.2 link the page.
+- **2026-11-19** — First release published: v2026.11-89918d5 on GitHub
+  (archive and checksum), and MyNOS in the browser at
+  https://ctrl-z-bg.github.io/mynos/ (GitHub Pages, branch gh-pages).
+  publish-release.sh: GitHub enables Pages by itself on the first push
+  of gh-pages, so a 409 there is not an error.
 

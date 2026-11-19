@@ -42,8 +42,11 @@ gh release create "$tag" -R "$repo" --target "$(git rev-parse HEAD)" \
     git push -q --force "$remote" gh-pages
     rm -rf .git
 )
+# GitHub usually enables Pages by itself on the first push of gh-pages
+# (then the request answers 409, already enabled)
 if ! gh api "repos/$repo/pages" >/dev/null 2>&1; then
-    gh api -X POST "repos/$repo/pages" -f "source[branch]=gh-pages" -f "source[path]=/" >/dev/null
+    gh api -X POST "repos/$repo/pages" -f "source[branch]=gh-pages" -f "source[path]=/" \
+        >/dev/null 2>&1 || true
 fi
 owner=${repo%%/*}; project=${repo#*/}
 echo "publish-release.sh: https://github.com/$repo/releases/tag/$tag"
