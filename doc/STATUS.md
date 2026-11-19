@@ -1217,4 +1217,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   https://ctrl-z-bg.github.io/mynos/ (GitHub Pages, branch gh-pages).
   publish-release.sh: GitHub enables Pages by itself on the first push
   of gh-pages, so a 409 there is not an error.
+- **2026-11-19** — Manual, chapter 3 checked against sources (an outside
+  review): MINIX 1's drivers were kernel tasks, Singularity's contracts
+  are stronger than MyNOS's request/reply, SPIN added, Mach/L4 and seL4
+  stated precisely, Inferno softened; "finished" defined once (2.3);
+  SourceForge registration 2001-09-05 in chapter 4; appendix J: Liedtke
+  1993, SPIN, JNode, Syme.
 

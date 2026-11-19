@@ -31,15 +31,24 @@ MyNOS, and came back while MyNOS was being written.
 - **Oberon** (Niklaus Wirth and Jürg Gutknecht, ETH Zürich, 1986–1989):
   a whole workstation, compiler and system, in one strongly typed
   language, small enough to be explained in one book.
+- **SPIN** (University of Washington, 1995): an extensible operating
+  system written in Modula-3, a type-safe language. Extensions are linked
+  into the kernel, and the language's safety, with controlled dynamic
+  linking, protects the kernel's interfaces without a hardware protection
+  boundary around each extension.
 - **Inferno** (Bell Labs, 1996): the people of Unix and Plan 9 built a
-  system whose programs, written in the safe language Limbo, run on a
-  virtual machine, Dis, on any hardware or as an application.
+  system whose programs, written in the safe language Limbo, run on the
+  portable Dis virtual machine, across the hardware it was ported to or
+  hosted on an existing operating system.
 - **Singularity** (Microsoft Research, from 2003): a research system
   written in a safe dialect of C#, whose processes are isolated by the
   language rather than by the processor's memory protection, and talk
   over **typed channels** whose protocols are declared as contracts and
-  checked by the compiler. It is the nearest relative of what MyNOS's IPC
-  became in 2026.
+  checked by the compiler. It is a particularly interesting point of
+  comparison for the typed IPC MyNOS gained in 2026, although
+  Singularity's contracts also describe the state of a conversation, and
+  so give stronger guarantees than MyNOS's typed requests and replies,
+  one call per connection (chapter 17).
 - **JNode** (from 2003): an operating system written in Java, run by its
   own Java virtual machine.
 - **House** (Portland State University, 2005): an operating system in
@@ -52,20 +61,23 @@ language's own bytecode interpreter as an ordinary process.
 
 ## 3.3 The microkernel revival
 
-The microkernels of the 1980s, Mach above all, had a reputation for
-being slow: every request to a service a message, every message a trip
-through a large kernel. In the 1990s Jochen Liedtke showed with **L4**
-that the fault was in the implementations, not in the idea: a kernel
-designed only for fast IPC made messages cheap enough for drivers and
-file systems to live outside it. By the early 2000s L4's descendants
+Earlier microkernels, Mach above all, had acquired a reputation for
+expensive interprocess communication. In the 1990s Jochen Liedtke showed
+with L3 and then **L4** that much of that cost came from implementation
+choices rather than from the microkernel architecture itself: a kernel
+whose IPC path was designed with care made messages cheap enough for
+drivers and file systems to live outside it. By the early 2000s L4's descendants
 were being developed at Karlsruhe, Dresden and Sydney; one of them,
-seL4, was later proved correct by formal verification (2009), and L4
+seL4, was the first whose functional correctness was formally verified
+(2009), and L4
 kernels went on to run inside very large numbers of mobile devices.
 
-**MINIX**, Andrew Tanenbaum's teaching system of 1987, already put its
-drivers and file system in processes, and its book showed every line;
-MINIX 3 (2005) took the design further, towards reliability: drivers
-that crash are restarted. MyNOS's `init` does the same since 2026
+**MINIX**, Andrew Tanenbaum's teaching system of 1987, already organized
+its file system, memory manager and device drivers as communicating
+processes, and its book showed every line, although the original
+drivers ran as privileged tasks compiled into the kernel. MINIX 3 (2005)
+moved the drivers into user space and took the design further, towards
+fault isolation and recovery: drivers that crash are restarted. MyNOS's `init` does the same since 2026
 (chapter 11).
 
 ## 3.4 Where MyNOS fits
@@ -83,5 +95,6 @@ machine" through OCaml.
 Two decades later the pieces have become ordinary. OCaml 5 (2022) has
 parallel domains and effect handlers; MirageOS (2013) builds whole
 network appliances in OCaml; Rust has brought a safe language into
-Linux's own kernel. MyNOS, finished in 2026, is a small, complete
-example of the road its authors chose in 2002, and of where it leads.
+Linux's own kernel. MyNOS, finished in 2026 (in the sense of 2.3), is a
+small, working demonstration of the road its authors chose in 2002, and
+of where it leads.

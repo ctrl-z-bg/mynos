@@ -1,8 +1,9 @@
 # 4. Timeline
 
 The dates come from the project's history: the CVS repository of
-2002–2008, imported into git with its authors and dates; the news the
-authors posted on SourceForge (kept in `doc/website/news.html`); and,
+2002–2008, imported into git with its authors and dates; the project's
+SourceForge page and the news the authors posted there (kept in
+`doc/website/news.html`); and,
 for 2026, `doc/STATUS.md` and `doc/JOURNAL.md`.
 
 ## 4.1 The people
@@ -14,10 +15,11 @@ On SourceForge they signed as *zavatt*, *alley* and *nardo*. The logo,
 the Minotaur that the graphical session still shows, was drawn by Luigi
 Ferrini.
 
-## 4.2 2002–2004: the first MyNOS
+## 4.2 2001–2004: the first MyNOS
 
 | Date | Event |
 |---|---|
+| 2001-09-05 | The project is registered on SourceForge, after a long planning (the date on its SourceForge page). |
 | 2002-02-02 | The first commit, by Cesare Zavattari: a floppy boot loader in assembly and the first files of the kernel. |
 | 2002-03 | Tommaso Schiavinotto adds a target to build a boot floppy. |
 | 2002-10-08 | The web site opens (its visitor counter starts that day), with the page *Why MyNOS?* (chapter 2). |

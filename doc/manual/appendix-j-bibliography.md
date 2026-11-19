@@ -51,6 +51,9 @@ bitsavers.org, the Unix Heritage Society and multicians.org.
 - A. S. Tanenbaum. *Operating Systems: Design and Implementation*.
   Prentice Hall, 1987. MINIX: a microkernel, its drivers and file system
   as processes, explained line by line.
+- J. Liedtke. "Improving IPC by Kernel Design". *14th ACM Symposium on
+  Operating Systems Principles (SOSP)*, 1993. L3: how much of IPC's cost
+  is in its implementation.
 - J. Liedtke. "On µ-Kernel Construction". *15th ACM Symposium on
   Operating Systems Principles (SOSP)*, 1995. Why a microkernel must be
   small and its IPC fast; the origin of the L4 family.
@@ -61,9 +64,14 @@ bitsavers.org, the Unix Heritage Society and multicians.org.
 
 - N. Wirth, J. Gutknecht. *Project Oberon: The Design of an Operating
   System and Compiler*. Addison-Wesley, 1992.
+- B. N. Bershad, S. Savage, P. Pardyak, E. G. Sirer, M. E. Fiuczynski,
+  D. Becker, C. Chambers, S. Eggers. "Extensibility, Safety and
+  Performance in the SPIN Operating System". *15th ACM SOSP*, 1995.
+  Kernel extensions in Modula-3, protected by the language.
 - S. Dorward, R. Pike, D. L. Presotto, D. M. Ritchie, H. Trickey,
   P. Winterbottom. "The Inferno Operating System". *Bell Labs Technical
   Journal* 2(1), 1997. Limbo, a safe language, on a virtual machine.
+- JNode, an operating system in Java, from 2003: jnode.org.
 - T. Hallgren, M. P. Jones, R. Leslie, A. Tolmach. "A Principled
   Approach to Operating System Construction in Haskell". *ICFP*, 2005.
   House.
@@ -79,6 +87,8 @@ bitsavers.org, the Unix Heritage Society and multicians.org.
 - X. Leroy et al. *The OCaml System: Documentation and User's Manual*.
   INRIA, current edition (5.5). The language, the bytecode compiler, the
   runtime, and the libraries MyNOS links.
+- D. Syme. "The Early History of F#". *Proceedings of the ACM on
+  Programming Languages* 4 (HOPL), 2020. An ML for .NET, begun in 2002.
 - X. Leroy. "The ZINC Experiment: An Economical Implementation of the ML
   Language". INRIA technical report 117, 1990. The ancestor of the
   bytecode machine that runs every MyNOS program.
