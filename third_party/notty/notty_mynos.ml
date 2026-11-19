@@ -25,11 +25,11 @@ module Term = struct
   let release t =
     if Tmachine.release t.trm then begin
       write t;
-      Mynos.console_mode ~canon:true ~echo:true ()
+      Mynos.console_mode ~canon:true ~echo:true ~isig:true ()
     end
 
   let create ?(mouse = false) () =
-    Mynos.console_mode ~canon:false ~echo:false ();
+    Mynos.console_mode ~canon:false ~echo:false ~isig:false ();   (* Ctrl-C: a key *)
     let t = {
       trm = Tmachine.create ~mouse ~bpaste:false Cap.ansi;
       buf = Buffer.create 4096;

@@ -8,7 +8,7 @@
      tour *)
 
 let width = 780 and height = 500
-let list_w = 230
+let list_w = 248
 
 type st = {
   lessons : Lesson.t array;

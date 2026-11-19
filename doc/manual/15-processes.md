@@ -202,8 +202,7 @@ run: 6 killed by signal 9
 
 A child gets an environment of `NAME=value` strings: the one given to
 `spawn`, or the caller's own when none is given (`envp` NULL in C,
-`?env` left out in OCaml). In OCaml, `~env:[||]` also means "ours": a
-child cannot be given an empty environment. `spawn` always replaces
+`?env` left out in OCaml); `~env:[||]` gives it none. `spawn` always replaces
 `PWD` with the caller's current directory. A program reads its
 environment with `getenv` and `environ` in C, `Sys.getenv_opt` and
 `Mynos.environment ()` in OCaml.
@@ -464,4 +463,3 @@ effect handlers over a small scheduler of its own:
   catch, and no cleanup on the victim's side.
 - One processor: domains and threads take turns (mynos-awn).
 - A native thread must not use the C library (15.8).
-- In OCaml, a child cannot be given an empty environment (15.5).

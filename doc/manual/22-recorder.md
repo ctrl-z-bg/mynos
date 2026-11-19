@@ -151,8 +151,11 @@ machine, the kernel's work, the driver's port I/O, is inside the
 
 ## 22.5 Keeping a recording
 
-`stop_and_get` returns a decoded `recording`, which cannot be saved. To
-keep the events, take them raw:
+`Tracer.stop_and_save "/disk/r.trc"` stops, frees the recorder, saves
+the recording in the file and returns it decoded: the simplest way to
+keep one. (`stop_and_get` returns a decoded `recording` only, and a
+`recording` alone cannot be saved: `save` takes raw events.) To keep
+the events while a long recording goes on, take them raw:
 
 ```ocaml
 Tracer.stop ();
@@ -280,4 +283,4 @@ call a box on its client's and its server's (G.11).
 The limits of appendix G.15 apply: one recording at a time, 8,192 events
 before the buffer must be drained, no filters in the kernel, pids
 recorded in 16 bits. A `recording` from `stop_and_get` or `load` cannot be
-saved again (`save` takes raw events).
+saved again (`save` takes raw events; `stop_and_save` saves as it stops).

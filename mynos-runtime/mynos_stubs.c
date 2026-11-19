@@ -267,21 +267,31 @@ CAMLprim value caml_mynos_process_info(value pid)
   return Val_int(mynos_processInfo(Int_val(pid)));
 }
 
-CAMLprim value caml_mynos_spawn(value path, value argv, value env, value io)
+static value spawn(value path, value argv, value env, value io, int inherit)
 {
   int ret;
   char * p = caml_stat_strdup(String_val(path));
   char ** a = c_strings(argv);
   char ** e = c_strings(env);
   caml_enter_blocking_section();
-  /* no environment given: the child gets ours */
-  ret = mynos_spawnPriv(p, a, Wosize_val(env) ? e : NULL,
-                        Bool_val(io) ? MYNOS_PRIV_IO : 0);
+  ret = mynos_spawnPriv(p, a, inherit ? NULL : e, Bool_val(io) ? MYNOS_PRIV_IO : 0);
   caml_leave_blocking_section();
   caml_stat_free(p);
   free_strings(a);
   free_strings(e);
   return check("spawn", ret);
+}
+
+/* an empty environment: the child gets ours (Mynos.spawn without ~env) */
+CAMLprim value caml_mynos_spawn(value path, value argv, value env, value io)
+{
+  return spawn(path, argv, env, io, Wosize_val(env) == 0);
+}
+
+/* exactly this environment, even an empty one (Mynos.spawn ~env) */
+CAMLprim value caml_mynos_spawn_env(value path, value argv, value env, value io)
+{
+  return spawn(path, argv, env, io, 0);
 }
 
 /* (pid, Linux wait status) of a child that ended: pid > 0 for that child,
@@ -410,6 +420,15 @@ CAMLprim value caml_mynos_console_mode(value canon, value echo, value vmin,
   int c = Bool_val(canon), e = Bool_val(echo), m = Int_val(vmin), t = Int_val(vtime);
   caml_enter_blocking_section();
   mynos_consoleMode(c, e, m, t);
+  caml_leave_blocking_section();
+  return Val_unit;
+}
+
+CAMLprim value caml_mynos_console_signals(value on)
+{
+  int o = Bool_val(on);
+  caml_enter_blocking_section();
+  mynos_consoleSignals(o);
   caml_leave_blocking_section();
   return Val_unit;
 }

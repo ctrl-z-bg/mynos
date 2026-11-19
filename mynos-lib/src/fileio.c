@@ -276,6 +276,15 @@ int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
   return console_mode(canon, echo, (tio.c_lflag & ISIG) != 0, vmin, vtime);
 }
 
+/* Ctrl-C an interrupt (on) or a key (off, as termios without ISIG: an
+   editor), the rest of the mode unchanged */
+int mynos_consoleSignals(int on)
+{
+  tio_init();
+  return console_mode((tio.c_lflag & ICANON) != 0, (tio.c_lflag & ECHO) != 0, on,
+		      tio.c_cc[VMIN], tio.c_cc[VTIME]);
+}
+
 /* the program the caller waits for: Ctrl-C ends it (0: none) */
 int mynos_consoleForeground(int pid)
 {

@@ -73,7 +73,8 @@ them:
 | Message | When |
 |---|---|
 | `host not found` | `Resolve`, or a TLS or HTTP host name, unknown to DNS |
-| `connection reset` | `Connect` to a port where nobody listens (QEMU's user network) |
+| `connection refused` | `Connect` to a port where nobody listens |
+| `connection reset` | the other side reset an open connection |
 | `timeout` | a `Recv`, `Accept` or `Recv_from` longer than `Set_timeout`; a `Ping` without answer |
 | `not your socket`, `not a socket` | a socket of another process, or none |
 | `TLS: ...` | the handshake or the certificate failed (19.7) |

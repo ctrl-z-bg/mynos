@@ -469,6 +469,7 @@ static void input(unsigned int c)
     queue_len = 0;
     mynos_V(lock);
     mynos_kill(pid);
+    mynos_V(available);                /* a read it was waiting in ends */
   } else
     key_typed(c);
   mynos_V(input_lock);
@@ -559,6 +560,10 @@ static void * serial_thread(void * arg)
       unsigned char b = inportb(COM2);
       if (!canon) {                    /* raw: as the terminal sends them */
 	char ch = (char)b;
+	if (b == 0x03 && isig && foreground > 0) {   /* Ctrl-C, as a key */
+	  input(0x03);
+	  continue;
+	}
 	mynos_P(input_lock);
 	queue_input(&ch, 1, 0);
 	if (echo && (b >= ' ' && b != 0x7F)) raw_write(&ch, 1);
@@ -599,6 +604,17 @@ static void * serial_thread(void * arg)
 
 /* take up to n bytes of queued input; 0 = end of file, or no input
    within timeout_ms (if > 0) */
+/* the process whose read take_input is serving: if it ends meanwhile
+   (Ctrl-C kills it), the read is given up, and the next line is not
+   swallowed by a dead reader */
+static int reader = 0;
+
+static int reader_alive(void)
+{
+  int info = reader > 0 ? mynos_processInfo(reader) : 0;
+  return reader <= 0 || (info >= 0 && (info & MYNOS_PROC_ALIVE));
+}
+
 static int take_input(char * buf, int n, int timeout_ms)
 {
   int got, waited = 0;
@@ -618,6 +634,7 @@ static int take_input(char * buf, int n, int timeout_ms)
      wait again */
   if (queue_len == 0 && !eof_pending) {
     mynos_V(lock);
+    if (!reader_alive()) return -1;  /* woken by Ctrl-C: its reader is gone */
     goto again;
   }
   if (queue_len == 0 && eof_pending) {
@@ -753,7 +770,15 @@ int main()
       }
       history_sync();            /* a program is about to read: a good time */
       keymap_sync();
+      reader = caller;
       n = take_input(buf, len, (!canon && vmin == 0 && vtime > 0) ? vtime * 100 : 0);
+      reader = 0;
+      if (n < 0) {                     /* its reader has ended */
+        wire_writer_free(&w);
+        mynos_freeMsg(&msg);
+        mynos_freeChannel(channel);
+        continue;
+      }
       wire_reply_ok(&w);
       wire_put_string(&w, buf, n);
     } else if (kind == CONSOLE_KEYMAP) {

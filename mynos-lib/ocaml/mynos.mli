@@ -90,7 +90,8 @@ val spawn : ?env:string array -> ?io:bool -> string -> string array -> int
     process with arguments [argv] ([argv.(0)] is by convention the program
     name) and returns its pid. A name without [/] is looked for at the root
     of the RAM disk, then in the current directory. The child starts in
-    the current directory, with environment [env] (by default, ours). A bytecode program is
+    the current directory, with environment [env] (without [~env], ours;
+    [~env:[||]], none). A bytecode program is
     started through the runtime:
     [spawn "ocamlrun" [| "ocamlrun"; "prog.byte"; "arg" |]].
     [~io:true] gives the child the [io] privilege (port I/O, IRQs: a
@@ -168,12 +169,15 @@ val enable_irq : int -> unit
 
 (** {1 Console} *)
 
-val console_mode : canon:bool -> echo:bool -> ?vmin:int -> ?vtime:int -> unit -> unit
+val console_mode :
+  canon:bool -> echo:bool -> ?isig:bool -> ?vmin:int -> ?vtime:int -> unit -> unit
 (** The console's input mode, as termios: [canon] for line editing (else
     keys come one by one, the arrows and editing keys as VT100 sequences),
     [echo] to show typed characters; for raw input, [vmin] and [vtime] as
-    termios VMIN and VTIME. The raw mode ends when another process reads
-    the console. The screen is 80x25 and understands VT100 sequences. *)
+    termios VMIN and VTIME; [isig:false] makes Ctrl-C a key instead of an
+    interrupt (editors), [isig:true] an interrupt again (unchanged if
+    omitted). The raw mode ends when another process reads the console.
+    The screen is 80x25 and understands VT100 sequences. *)
 
 val console_foreground : int -> unit
 (** The program this process started and now waits for (0: none): Ctrl-C

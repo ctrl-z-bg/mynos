@@ -11,6 +11,9 @@ Changes for MyNOS (marked `MyNOS:` in `kilo.c`):
   `fopen`/`getline`: musl's stdio reads through direct system calls, which
   do not reach MyNOS's file services;
 - `editorSave` opens with `O_TRUNC` instead of calling `ftruncate`.
+- `editorAtExit` clears the screen, so that the shell's prompt does not
+  appear over the file.
 
-Usage in MyNOS: `run "kilo" ["/disk/notes.txt"]` from the shell; Ctrl-S
-saves, Ctrl-Q quits, Ctrl-F searches.
+Usage in MyNOS: `kilo /disk/notes.txt` from `sh` (or `run "kilo"
+["/disk/notes.txt"]` from the OCaml toplevel); Ctrl-S saves, Ctrl-Q
+quits, Ctrl-F searches.

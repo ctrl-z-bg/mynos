@@ -175,9 +175,10 @@ you asked for. The authorities are read from two files:
 
 Put in `/disk/ca.pem` the authority of a server of your own (a test
 server with a self-made certificate, a company's proxy). Both files are
-read once, at the first `https://` connection after boot, which takes
-about a second and a half; later connections take a few tenths of a
-second. A `/disk/ca.pem` written after that is used from the next boot.
+read at the first `https://` connection after boot, which takes about a
+second and a half; later connections take a few tenths of a second.
+`netd` reads them again when `/disk/ca.pem` changes (its size or date),
+at the next `https://` connection.
 
 When the check fails, the request fails, with the reason:
 
@@ -251,9 +252,11 @@ converted for Perfetto (chapter 11) is written to `/disk` and opened from
 your browser.
 
 `httpd` can serve another directory or port: `httpd [DIR [PORT]]`, for
-instance `httpd /tmp 8081 &`. A program inside MyNOS cannot reach MyNOS's
-own address: `fetch http://10.0.2.15/` waits, then fails with
-`connection aborted`.
+instance `httpd /tmp 8081 &`. A program inside MyNOS can reach MyNOS's
+own address too: `fetch http://10.0.2.15/` asks `httpd` (the packets go
+back in through lwIP's loopback, without the card). `httpd` serves
+neither hidden files nor `.env` files: `llm.env`, which holds the
+models' keys, is not served, nor listed.
 
 > **THE MyNOS FACTOR — The network is a program you can watch.**
 > In MyNOS the TCP/IP stack and the card's driver are one ordinary

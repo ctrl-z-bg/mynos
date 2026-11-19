@@ -52,7 +52,7 @@ than the rest: `AUTOEXEC.BAT`, the test file of the RAM disk in 2002.
 `/tmp` is for files you need only for a while: what a program writes
 before another reads it, a test, a copy. It is fast, and it is emptied
 when the machine stops or restarts. It is one flat list of files:
-`mkdir` there fails (`Invalid argument`). `sh` itself uses it for pipes
+`mkdir` there fails (`/tmp has no directories`). `sh` itself uses it for pipes
 (7.8).
 
 ## 7.4 `/disk`: the hard disk
@@ -122,7 +122,7 @@ A short session, step by step, in `/disk`:
 
 | Command | What it does |
 |---|---|
-| `ls [-l] [PATH...]` | list a directory (`-l`: sizes, `dir` for a directory; `24K` for 24 kilobytes) |
+| `ls [-l] [-a] [PATH...]` | list a directory (`-l`: sizes, `dir` for a directory; `24K` for 24 kilobytes; `-a`: hidden files too, such as `.sh_history`) |
 | `cat FILE...` | print files, one after the other |
 | `cp FROM TO` | copy a file; `TO` may be a directory |
 | `mv FROM TO` | rename or move a file; `TO` may be a directory |

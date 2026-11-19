@@ -145,6 +145,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .linux_nosignals\n"\
 	 "   cmpl $186, %eax\n"\
 	 "   je .linux_nosignals\n"\
+	 "   cmpl $163, %eax\n"\
+	 "   je .linux_mremap\n"\
 	 "   cmpl $195, %eax\n"\
 	 "   je .linux_stat64\n"\
 	 "   cmpl $197, %eax\n"\
@@ -267,6 +269,9 @@ __asm__ (".pushsection .text\n" \
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_nosignals:\n"\
 	 "   call _linux_syscall_nosignals\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_mremap:\n"\
+	 "   call _linux_syscall_mremap\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_lseek:\n"\
 	 "   call _linux_syscall_lseek\n"\
@@ -433,6 +438,13 @@ int _linux_syscall_tgkill(int tgid, int tid, int sig) {
    (OCaml 5) refuse to start if they fail. */
 int _linux_syscall_nosignals() {
   return 0;
+}
+
+/* mremap (163): a mapping is never grown or moved in place; -ENOMEM, and
+   musl's realloc allocates anew and copies, as it does on Linux when a
+   mapping cannot grow (answered quietly: not an unknown call) */
+int _linux_syscall_mremap() {
+  return -12;
 }
 
 /* mprotect (125): no page protections beyond read/write yet, accept it */

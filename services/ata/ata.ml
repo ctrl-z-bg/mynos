@@ -69,9 +69,14 @@ let write_sectors lba count bytes =
     wait_data ();
     Mynos.outsw data (String.sub bytes (512 * i) 512)
   done;
+  (* the last sector written, then the cache flushed: each command only
+     when the drive is ready, and the flush's result checked *)
+  ignore (wait_not_busy ());
   Mynos.outb command cmd_flush;
   delay ();
-  ignore (wait_not_busy ())
+  let s = wait_not_busy () in
+  if s land (st_err lor st_df) <> 0 then
+    raise (Device (Printf.sprintf "flush: error %02x" (Mynos.inb error)))
 
 (* the number of sectors, or None if there is no ATA disk *)
 let identify () =
@@ -123,6 +128,13 @@ let handle sectors : Block.handler = {
 }
 
 let () =
+  (* a driver: without the io privilege (started from sh, not by a driver
+     line of init.rc) the first port access would end it *)
+  (match Mynos.process_info (Mynos.getpid ()) with
+   | Some { Mynos.io = false; _ } ->
+     prerr_endline "ata: a driver: init starts it (a driver line of init.rc)";
+     exit 1
+   | _ -> ());
   match (try identify () with Device _ -> None) with
   | None -> Mynos.log "ata: no ATA disk on the primary channel"
   | Some sectors ->

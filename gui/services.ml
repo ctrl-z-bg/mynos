@@ -4,8 +4,13 @@
    arguments' shape. "Call" sends it as JSON (module Tools) and shows the
    reply. Nothing here knows any protocol in advance. *)
 
-(* the typed services to ask (the registry cannot list its names) *)
-let candidates = [ "display"; "net"; "llm"; "ata0" ]
+(* the typed services to ask: every name in the registry (registry/1),
+   but the terminal windows' consoles ("term<pid>"), one per window *)
+let candidates () =
+  (try Mynos.registered () with Mynos.Error _ -> [])
+  |> List.map (fun (name, _, _) -> name)
+  |> List.filter (fun n -> not (String.starts_with ~prefix:"term" n))
+  |> List.sort_uniq compare
 
 type state = {
   mutable services : (string * Ipc.description * Tools.t list) list;
@@ -52,7 +57,7 @@ let () =
   st.services <- List.filter_map (fun name ->
       match Ipc.describe ~timeout:1.0 name with
       | d -> Some (name, d, Tools.of_description name d)
-      | exception _ -> None) candidates;
+      | exception _ -> None) (candidates ());
   Gui.run ~title:"Services" 760 520 st (fun ui st ->
       let g = ui.Gui.g in
       (* the services *)

@@ -82,6 +82,11 @@ val of_raw : raw:string -> info -> recording
 val stop_and_get : unit -> recording
 (** Stop, read what is left, and free the kernel's buffer. *)
 
+val stop_and_save : string -> recording
+(** The same, and the recording saved in this file too (a [recording]
+    alone cannot be saved: {!save} needs the raw events).
+    @raise Sys_error if the file cannot be written. *)
+
 (** {2 Playing} *)
 
 val name : recording -> ?seq:int -> int -> string

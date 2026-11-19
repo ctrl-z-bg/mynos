@@ -1,6 +1,8 @@
 (* httpd: a small web server for MyNOS, in OCaml, over the network service
-   (module Net). It serves the files of a directory over HTTP/1.0, one
-   connection at a time, and lists directories.
+   (module Net). It serves the files of a directory over HTTP/1.0, with 8
+   worker domains, and lists directories. Hidden files (".name") and
+   ".env" files (llm.env: the language models' keys) are neither served
+   nor listed.
 
      httpd [DIR [PORT]]        DIR: /disk by default, PORT: 80
 
@@ -43,9 +45,14 @@ let decode s =
   go 0;
   Buffer.contents b
 
+(* names not to be served: hidden files, and .env files, which hold
+   configuration and keys (mynos-n16); FAT names ignore case *)
+let private_name n =
+  n = "" || n.[0] = '.' || Filename.check_suffix (String.lowercase_ascii n) ".env"
+
 let listing path dir =
   let names = Sys.readdir dir |> Array.to_list
-              |> List.filter (fun n -> n <> "" && n.[0] <> '.') |> Array.of_list in
+              |> List.filter (fun n -> not (private_name n)) |> Array.of_list in
   Array.sort compare names;
   let link n =
     let d = Sys.is_directory (Filename.concat dir n) in
@@ -69,6 +76,8 @@ let answer request =
     let path = decode (List.hd (String.split_on_char '?' target)) in
     let parts = List.filter (fun p -> p <> "" && p <> ".") (String.split_on_char '/' path) in
     if List.mem ".." parts then response "403 Forbidden" "text/plain" "forbidden\n"
+    else if List.exists private_name parts then
+      response "404 Not Found" "text/plain" "not found\n"
     else begin
       let file = List.fold_left Filename.concat root parts in
       match Sys.is_directory file with

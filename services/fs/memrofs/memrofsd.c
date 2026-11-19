@@ -258,7 +258,10 @@ static void self_test(void)
 
   mynos_log("%s", "Opening a text file...");
   fd = open("AUTOEXEC.BAT", O_RDONLY);
-  if (fd < 0) { mynos_log("%s", "Open failed"); exit(-1); }
+  if (fd < 0) {                          /* a RAM disk without it */
+    mynos_log("%s", "memrofs: no AUTOEXEC.BAT, self test skipped");
+    exit(0);
+  }
   mynos_log("%s", "Reading the file content...");
   n = read(fd, buf, sizeof(buf) - 1);
   close(fd);

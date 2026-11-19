@@ -148,9 +148,9 @@ The second means that a browser on your computer can open
 MyNOS's web server (chapter 9). If port 8080 is taken, the script says
 so and boots without it.
 
-Without `llm.env` (5.7), one line on the screen says
-`llmd: no model configured: write /disk/llm.env (see llm.env.example in
-MyNOS's sources)`. It is a remark, not an error: everything else works.
+Without `llm.env` (5.7), the log (not the screen) says `llmd: no model
+configured: write /disk/llm.env (see llm.env.example in MyNOS's
+sources)`. It is a remark, not an error: everything else works.
 
 **Stopping.** Type `shutdown`: MyNOS turns the machine off, and QEMU
 ends. `shutdown -r` restarts it instead. Closing QEMU's window also

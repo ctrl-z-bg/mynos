@@ -46,6 +46,11 @@
 #define LWIP_ALTCP_TLS_MBEDTLS  1
 #define ALTCP_MBEDTLS_AUTHMODE  MBEDTLS_SSL_VERIFY_REQUIRED
 
+/* packets to the card's own address go back in through a queue, which
+   the main loop empties (netif_poll): a program can reach a server of its
+   own machine (httpd) by its address */
+#define LWIP_NETIF_LOOPBACK     1
+
 #define LWIP_STATS              0
 #define LWIP_DEBUG              0
 #define LWIP_CHECKSUM_CTRL_PER_NETIF 0

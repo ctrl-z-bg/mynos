@@ -209,8 +209,10 @@ void disableRawMode(int fd) {
     }
 }
 
-/* Called at exit to avoid remaining in raw mode. */
+/* Called at exit to avoid remaining in raw mode. MyNOS: and to clear the
+   screen, so that the shell's prompt does not appear over the file. */
 void editorAtExit(void) {
+    write(STDOUT_FILENO, "\x1b[2J\x1b[H", 7);
     disableRawMode(STDIN_FILENO);
 }
 

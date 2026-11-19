@@ -33,6 +33,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <stdint.h>
 #include <time.h>
@@ -403,7 +404,9 @@ static void on_err(void * arg, err_t err) {
   s->pcb = NULL;
   s->err = err;
   if (s->rx_kind == W_CONNECT) {
-    reply_error(s->rx_ch, s->tls ? tls_error(err) : err_text(err));
+    /* a reset while connecting: nobody listens on that port */
+    reply_error(s->rx_ch, err == ERR_RST ? "connection refused"
+                          : s->tls ? tls_error(err) : err_text(err));
     s->state = S_FREE;                    /* the client never had it */
     return;
   }
@@ -635,10 +638,23 @@ static char * append_file(const char * path, char * buf, size_t * len) {
   return buf;
 }
 
+/* /disk/ca.pem: its size and date, to notice a new one */
+static long user_ca_signature(void) {
+  struct stat st;
+  if (stat(CA_USER, &st) != 0) return -1;
+  return (long)st.st_size * 31 + (long)st.st_mtime;
+}
+
+/* the trusted certificates, read at the first TLS connection, and again
+   when /disk/ca.pem changes (the configuration it replaces is kept: a
+   connection may still use it) */
 static struct altcp_tls_config * tls_config(void) {
+  static long signature = -2;
+  long now = user_ca_signature();
   size_t len = 0;
   char * pem;
-  if (tls_conf) return tls_conf;
+  if (tls_conf && now == signature) return tls_conf;
+  signature = now;
   pem = append_file(CA_SYSTEM, NULL, &len);
   pem = append_file(CA_USER, pem, &len);
   if (pem == NULL || len == 0) { free(pem); return NULL; }
@@ -1165,6 +1181,7 @@ int main(void) {
     pthread_mutex_unlock(&lock);
 
     poll_card();
+    netif_poll(&netif);                   /* to our own address */
     sys_check_timeouts();
     check_address();
     ping_timeouts();
@@ -1174,6 +1191,7 @@ int main(void) {
       struct request * next = r->next;
       handle(r->ch, r->caller, r->msg, r->len);
       poll_card();
+      netif_poll(&netif);
       free(r->msg);
       free(r);
       r = next;

@@ -65,7 +65,12 @@ type status = Exited of int | Signaled of int
 
 external spawn_raw : string -> string array -> string array -> bool -> int
   = "caml_mynos_spawn"
-let spawn ?(env = [||]) ?(io = false) path argv = spawn_raw path argv env io
+external spawn_env_raw : string -> string array -> string array -> bool -> int
+  = "caml_mynos_spawn_env"
+let spawn ?env ?(io = false) path argv =
+  match env with
+  | None -> spawn_raw path argv [||] io             (* ours *)
+  | Some env -> spawn_env_raw path argv env io      (* this one, even empty *)
 
 external channel_peer : int -> int = "caml_mynos_channel_peer"
 
@@ -106,8 +111,10 @@ let enable_irq n = ignore (enable_irq_raw n)
 
 external console_mode_raw : bool -> bool -> int -> int -> unit
   = "caml_mynos_console_mode"
-let console_mode ~canon ~echo ?(vmin = 1) ?(vtime = 0) () =
-  console_mode_raw canon echo vmin vtime
+external console_signals_raw : bool -> unit = "caml_mynos_console_signals"
+let console_mode ~canon ~echo ?isig ?(vmin = 1) ?(vtime = 0) () =
+  console_mode_raw canon echo vmin vtime;
+  Option.iter console_signals_raw isig
 external console_foreground : int -> unit = "caml_mynos_console_foreground"
 
 external environment : unit -> string array = "caml_mynos_environment"

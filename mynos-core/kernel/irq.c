@@ -112,7 +112,10 @@ int __OS_driverRegister(char * name, uint32_t irq,
   if (irqOwner[irq] >= 0 && irqOwner[irq] != CURRPID &&
       proc(irqOwner[irq]) && proc(irqOwner[irq])->isAlive)
     return MYNOS_ERR_BUSY;
-  if (__OS_service_registerService(name) == -1) return -1;
+  /* (until 2026 the name also went into the kernel's service table of
+     2002, never freed: a driver restarted a thousand times could not
+     register. The name is only for people: the registry has the names) */
+  (void)name;
   if ((sem = __OS_sem_allocateSemaphore(0)) < 0) return sem;
   if (irqOwner[irq] >= 0) __OS_sem_freeSemaphore(irqSem[irq]);
   __OS_sem_setOwner(sem, CURRPID);

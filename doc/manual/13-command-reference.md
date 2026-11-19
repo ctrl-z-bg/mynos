@@ -609,7 +609,7 @@ llm < question.txt
 
 **Purpose** Lists directories.
 
-**Syntax** `ls [-l] [PATH...]`
+**Syntax** `ls [-l] [-a] [PATH...]`
 
 **Type** Built in.
 
@@ -1042,8 +1042,8 @@ hand:
 | Name | What it is |
 |---|---|
 | `init` | the first program, started at boot; it reads `init.rc` and starts the services: not to be started again |
-| `ata`, `consoled`, `displayd`, `netd` | drivers, started by `init` with the `io` privilege; started from `sh` they have none, and are ended at their first access to the hardware (status 139) |
+| `ata`, `consoled`, `displayd`, `netd` | drivers, started by `init` with the `io` privilege; started from `sh` they have none: `ata` says so and stops, the others are ended at their first access to the hardware (status 139) |
 | `fatfs`, `tmpfs`, `llmd` | services, started by `init` and restarted by it (chapter 11, 11.7) |
 | `httpd` | the web server, started by `init`; `httpd [DIR [PORT]] &` starts another, on another port (chapter 9, 9.7) |
 | `ocamlrun` | the OCaml runtime, which `sh` uses to run every `.byte` program |
-| `primitives`, `runtime-launch-info` | data files for `ocamlc`, not programs; typed, they fail (status 127) |
+| `primitives`, `runtime-launch-info` | data files for `ocamlc`, not programs: `sh` does not offer them as commands |

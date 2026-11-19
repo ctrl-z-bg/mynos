@@ -93,7 +93,8 @@ val outsw : int -> string -> unit
 val driver_register : string -> int -> int
 val enable_irq : int -> unit
 
-val console_mode : canon:bool -> echo:bool -> ?vmin:int -> ?vtime:int -> unit -> unit
+val console_mode :
+  canon:bool -> echo:bool -> ?isig:bool -> ?vmin:int -> ?vtime:int -> unit -> unit
 val console_foreground : int -> unit
 ```
 
@@ -120,7 +121,7 @@ lists `(name, port, owner)` for the live owners.
 name without `/` is looked for at the RAM disk's root, then in the
 current directory) and returns its pid; a bytecode program is started
 as `spawn "ocamlrun" [| "ocamlrun"; "prog.byte"; ... |]`. The child gets
-`env`, or by default our environment; `~io:true` gives it the `io`
+`env` (`~env:[||]`: none), or by default our environment; `~io:true` gives it the `io`
 privilege, if we have it. `wait pid` and `wait_any ()` wait for a child's
 end. `kill pid` ends a process as killed (`Signaled 9`). `environment
 ()` is our environment; a child's `MYNOS_STDIN`, `MYNOS_STDOUT` (`>>path`
@@ -136,8 +137,9 @@ semaphore `V`ed at each interrupt of the line, unmasked by `enable_irq`.
 They need the `io` privilege: without it, an `in` or `out` ends the
 process.
 
-*Console*: `console_mode ~canon ~echo ?vmin ?vtime ()` sets the
-console's input mode as termios would; `console_foreground pid` names
+*Console*: `console_mode ~canon ~echo ?isig ?vmin ?vtime ()` sets the
+console's input mode as termios would (`~isig:false`: Ctrl-C is a key,
+as editors want); `console_foreground pid` names
 the program that Ctrl-C should end (0: none).
 
 **EXCEPTIONS** — `Error (function, code)`: the call failed;
@@ -492,7 +494,7 @@ at most `max` (≤ 16384) bytes, `""` at the end; `Recv`, `Accept` and
 bytes. `Udp_bind 0` takes any port; a datagram is at most 8192 bytes.
 
 **EXCEPTIONS** — `Ipc.Remote_error ("net", m)`, `m` such as `host not
-found`, `connection reset`, `timeout`, `not your socket`, `TLS: ...`.
+found`, `connection refused`, `connection reset`, `timeout`, `not your socket`, `TLS: ...`.
 `Mynos.Error` without the service.
 
 **SEE ALSO** — Http(3); chapter 19; appendix E.12.
@@ -719,6 +721,7 @@ val save : string -> raw:string -> info -> unit
 val load : string -> recording
 val of_raw : raw:string -> info -> recording
 val stop_and_get : unit -> recording
+val stop_and_save : string -> recording
 val name : recording -> ?seq:int -> int -> string
 val program : recording -> ?seq:int -> int -> string
 val describe : recording -> event -> string
@@ -738,7 +741,7 @@ val to_json : recording -> string
 events in the kernel); `stop` ends it; `read` takes the raw events
 waiting (96 bytes each) and removes them; `free` gives the buffer back
 and frees the recorder for others; `stop_and_get` does all three and
-decodes. `mark s` labels the moment, if a recording is on. `info` tells
+decodes; `stop_and_save file` also saves the recording in `file`. `mark s` labels the moment, if a recording is on. `info` tells
 the state and the clock's rate. `save` and `load` handle the recording
 file (`MYNOSTR1`). `calls` rebuilds requests and replies, nested;
 `print_events`, `print_calls` and `to_json` (Chrome trace format, for

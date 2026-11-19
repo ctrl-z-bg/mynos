@@ -78,7 +78,8 @@ terminal, in OCaml).
 The text console stays the system's console. `displayd` starts at boot
 (a `driver` line in `init.rc`) and waits; the `gui` command starts the
 graphical session and its first windows, and returns to the text console
-when the session ends (the menu's "Exit", or Ctrl+Alt+Backspace).
+when the session ends (the menu's "Exit"; there is no key for it: every
+key goes to the focused window).
 
 ### 7. Characters
 
@@ -332,8 +333,8 @@ program born, the network, a language model.
 - A lesson (`gui/lesson.ml`; the lessons in `/tour.txt` on the RAM disk,
   more in `/disk/tour.txt`) is a title, a command, the programs to show,
   notes, and a text. Notes are `PATTERN | words`: the words are said at
-  the first step whose description contains the pattern (`fs OPEN
-  "init.rc"`, `spawn of hello`, `IRQ 9`), once.
+  the first step whose description contains the pattern (`fs/1 Open
+  ("init.rc"`, `spawn of hello`, `IRQ 9`), once.
 - "Run and watch" records the command (`trace -o`, in a domain) and opens
   the System window on the recording with `--lesson`: only the lesson's
   programs, the others faint, the lesson's text before the first step,

@@ -14,7 +14,8 @@
 let config_path =
   if Array.length Sys.argv > 1 then Sys.argv.(1) else "/disk/llm.env"
 
-let log fmt = Printf.ksprintf (fun s -> print_endline ("llmd: " ^ s)) fmt
+(* to the kernel log, as the other services: not to the screen *)
+let log fmt = Printf.ksprintf (fun s -> Mynos.log ("llmd: " ^ s)) fmt
 
 (* --- the configuration --- *)
 

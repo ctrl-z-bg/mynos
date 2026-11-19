@@ -110,6 +110,14 @@ let stop_and_get () =
   free ();
   of_raw ~raw i
 
+let stop_and_save file =
+  stop ();
+  let raw = read () in
+  let i = info () in
+  free ();
+  save file ~raw i;
+  of_raw ~raw i
+
 (* ---- names ---- *)
 
 let program r ?(seq = max_int) pid =

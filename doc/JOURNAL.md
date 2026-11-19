@@ -2286,3 +2286,32 @@ libmynos at all.
 **Lesson.** A fallback that destroys (copy then remove) must be taken
 only for the one error it was written for.
 
+## 2026-11-19 — A read served to a dead program
+
+**Symptom.** Found writing chapter 6: after Ctrl-C on a program waiting
+for a line (the toplevel at its prompt, `edit`), the next line typed
+vanished, and `sh`'s prompt came back only after it.
+
+**Cause.** consoled serves one request at a time, and a read waits in
+it until input comes. Ctrl-C killed the program, but consoled was still
+inside that program's read: the next line went to it, and the reply to
+a dead process was lost.
+
+**Fix.** consoled remembers whose read it is serving; Ctrl-C, after the
+kill, wakes the waiting read, which gives up when its reader is no
+longer alive. The line typed next goes to the next reader, `sh`. A test
+in the seventh boot: Ctrl-C on a program waiting for a line, then a
+command, which must run.
+
+**Also from the same review.** Two small ones with a common shape: a
+timer that restarted at every event (a window's ticks stopped while the
+mouse moved: the wait is now until the tick is due), and a check done
+again from the start at every piece (Http parsed the whole answer after
+every packet: the body's end is now worked out once). And a missing
+build dependency: the OCaml library's Makefile did not know that every module uses `Mynos`, so a change to
+`mynos.mli` stopped the build with "inconsistent assumptions".
+
+**Lesson.** A server that keeps a request waiting holds a promise to a
+process; when the process goes, the promise must be dropped, or the next
+caller pays for it.
+

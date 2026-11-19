@@ -178,7 +178,15 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
   (* the window may be gone already (the session ended: displayd closed
      every window), so its end is quiet *)
   let destroy () = try Display.destroy window with Ipc.Remote_error _ | Mynos.Error _ -> () in
+  (* ticks keep their pace: the wait for the next one is what is left until
+     it is due, not a whole period after every event (moving the mouse over
+     a window stopped its animation) *)
+  let next_tick = ref (Mynos.uptime () +. tick) in
   let rec loop state =
+    if tick > 0. && Mynos.uptime () >= !next_tick then begin
+      ui.tick <- true;
+      next_tick := Mynos.uptime () +. tick
+    end;
     Gfx.fill ui.g 0 0 w h background;
     match frame ui state with
     | exception Quit -> destroy ()
@@ -186,8 +194,14 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
       match Display.damage window with
       | exception (Ipc.Remote_error _ | Mynos.Error _) -> ()
       | () ->
+      (* a click or a key may have changed the state halfway through the
+         frame: what was drawn before it shows the old one (a list's old
+         selection), so the frame is drawn once more at once *)
+      let changed = ui.clicked || ui.keys <> [] in
       ui.clicked <- false; ui.keys <- []; ui.tick <- false; ui.wheel <- 0;
-      (match Display.next_event ~timeout:tick window with
+      if changed then loop state else
+      let timeout = if tick > 0. then max 0.001 (!next_tick -. Mynos.uptime ()) else tick in
+      (match Display.next_event ~timeout window with
        | Display.Close -> destroy ()
        | Display.Mouse { x; y; buttons } ->
          if buttons land 1 <> 0 && ui.buttons land 1 = 0 then ui.press <- (x, y);
@@ -195,7 +209,8 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
          ui.mx <- x; ui.my <- y; ui.buttons <- buttons;
          loop state
        | Display.Key k -> ui.keys <- [ k ]; loop state
-       | Display.Tick -> ui.tick <- true; loop state
+       | Display.Tick ->
+         ui.tick <- true; next_tick := Mynos.uptime () +. tick; loop state
        | Display.Focus f -> ui.focused <- f; loop state
        | Display.Wheel n -> ui.wheel <- n; loop state
        | exception Ipc.Remote_error _ -> ()) in

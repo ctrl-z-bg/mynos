@@ -52,8 +52,8 @@ Things to know:
   restarts. The cursor cannot be moved back into the line.
 - **To leave**, type `#quit;;` or press Ctrl-D: you are back in `sh`.
 - **Ctrl-C ends the whole toplevel**, not only the phrase that is
-  running, and what you defined is lost. When it was waiting at its `#`
-  prompt, press Enter once to get `sh`'s prompt back (6.10).
+  running, and what you defined is lost; `sh`'s prompt comes back
+  (6.10).
 - **A script**: `#use "/tmp/a.ml";;` runs the phrases of a file, and
   `ocaml < FILE` runs a file of phrases from `sh` (7.7).
 
@@ -143,7 +143,7 @@ when there are unsaved changes, and the cursor's position, and the
 
 `edit` works with plain ASCII text: other characters are shown as `?`
 and cannot be typed, and the tabs of a file become spaces when it is
-read. **Ctrl-C ends `edit` without saving** (6.10): save often.
+read. Ctrl-C is an ordinary key in `edit`: Ctrl-Q quits.
 
 ## 8.4 The editor `kilo`
 

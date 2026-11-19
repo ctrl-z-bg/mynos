@@ -119,6 +119,23 @@ let complete s =
          | None -> false)
       | _ -> false
 
+(* what the head says about the body's end, once the head has come: its
+   total length (head included), chunks, or nothing (until the close) *)
+let body_end s =
+  match split_head s with
+  | None -> None
+  | Some (head, rest) ->
+    match parse_head head with
+    | exception Error _ -> Some `Close
+    | _, _, headers ->
+      match List.assoc_opt "transfer-encoding" headers, List.assoc_opt "content-length" headers with
+      | Some te, _ when lower te = "chunked" -> Some `Chunked
+      | _, Some cl ->
+        (match int_of_string_opt (String.trim cl) with
+         | Some n -> Some (`Length (String.length s - String.length rest + n))
+         | None -> Some `Close)
+      | _ -> Some `Close
+
 let request ?net ?meth ?(headers = []) ?body ?(timeout = 30000) url =
   let tls, host, port, path = parse_url url in
   let meth = match meth, body with
@@ -148,12 +165,23 @@ let request ?net ?meth ?(headers = []) ?body ?(timeout = 30000) url =
        call (Net.Set_timeout (s, timeout));
        ignore (call (Net.Send (s, Buffer.contents b)));
        let answer = Buffer.create 4096 in
+       (* the body's end, worked out once the head is in: not the whole
+          answer parsed again after every piece (quadratic on large ones) *)
+       let ending = ref None in
        let rec read () =
          match call (Net.Recv (s, 16384)) with
          | "" -> ()
          | data ->
            Buffer.add_string answer data;
-           if not (complete (Buffer.contents answer)) then read () in
+           if !ending = None then ending := body_end (Buffer.contents answer);
+           let n = Buffer.length answer in
+           let finished = match !ending with
+             | None | Some `Close -> false
+             | Some (`Length total) -> n >= total
+             | Some `Chunked ->
+               n >= 5 && Buffer.sub answer (n - 5) 5 = "0\r\n\r\n"
+               && complete (Buffer.contents answer) in
+           if not finished then read () in
        read ();
        parse_response (Buffer.contents answer))
 

@@ -24,8 +24,7 @@ service (displayd: QEMU's standard VGA is needed)`.
 
 ![Figure 10-1. The graphical session as it starts](../screenshots/welcome.png)
 
-*Figure 10-1. The welcome window. (In this picture, taken earlier, the
-third button reads Services; it now opens the Tour.)*
+*Figure 10-1. The welcome window.*
 
 The welcome window says what MyNOS is, how many processes and threads
 are running, how much memory is free and how long the system has been
@@ -173,9 +172,11 @@ called, gives the same facts as `ifconfig`. A refused request shows
 types say: an `integer` field must hold a number; a field of a
 structured type takes JSON.
 
-The window asks only these four services. Others describe themselves
-too (`fatfs`, `tmpfs`, `memrofs`, `console`, `registry`, `power`), and
-the agent can use them (chapter 12).
+The window asks every service the registry knows (but the terminal
+windows' consoles), each one about its protocol: `ata0`, `console`,
+`display`, `fatfs`, `llm`, `memrofs`, `net`, `power`, `registry`,
+`tmpfs`, and any service of your own. The agent can use them too
+(chapter 12).
 
 ## 10.9 Files, and the file picker
 

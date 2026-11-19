@@ -1126,4 +1126,26 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   a window whose session has ended closes quietly (`Gui.run`). Filed:
   mynos-n16 (httpd serves llm.env), mynos-5dd, mynos-dby, mynos-smw,
   mynos-wvv.
+- **2026-11-19** — The manual's Part I (mynos-1t9): welcome, why MyNOS
+  (the 2002 page quoted, and what each of its points became), the
+  historical context (2000-2004), the timeline (2002-2004 from the CVS
+  history and the SourceForge news, the ZX Spectrum test of 2003, the
+  restart of 2026). The whole working text is written. And the minor
+  issues filed by the manual's review, fixed: httpd serves no hidden or
+  `.env` files (mynos-n16); the Services window asks every registered
+  service; a program reaches its own address (lwIP loopback); netd
+  rereads `/disk/ca.pem` when it changes; `mremap` answers ENOMEM
+  quietly; sh offers only programs as commands, `ls -a`, a bounded
+  history file, a clear `mkdir` error on `/tmp`; Ctrl-C on a program
+  waiting for input no longer swallows the next line, and works from the
+  serial terminal in raw mode; `edit` takes Ctrl-C as a key
+  (`Mynos.console_mode ~isig`); llmd logs to the log; kilo clears the
+  screen; `ata` started from sh says it is a driver; `driverRegister`
+  no longer fills the 2002 service table; ata waits before the cache
+  flush and checks it; Http finds a body's end once; Gui keeps its ticks'
+  pace and redraws after a click; `Tracer.stop_and_save`;
+  `Mynos.spawn ~env:[||]` gives an empty environment; a closed port is
+  "connection refused"; module command lines of 255 characters, a longer
+  one said; memrofs's self-test quiet without AUTOEXEC.BAT; the welcome
+  screenshot redone (mynos-wvv, mynos-5dd, mynos-smw, mynos-dby).
 

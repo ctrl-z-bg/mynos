@@ -31,7 +31,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh"
+results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -603,7 +603,7 @@ if [ -f system/ramdisk.dsk ]; then
         rm -f tests/fat/run-utf8.txt
     fi
     tools/net-peer.py llm 47090 & llm7_pid=$!
-    NET=1 DISK=$([ -f tests/fat/run-shell.img ] && echo tests/fat/run-shell.img) \
+    NET=1 HTTP=47180 DISK=$([ -f tests/fat/run-shell.img ] && echo tests/fat/run-shell.img) \
     MEM=256 tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
@@ -718,11 +718,28 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" "echo 'let () = let t = Thread.create (fun () -> print_endline (\"from-a-\" ^ \"thread\")) () in Thread.join t' > /disk/th.ml\n"; sleep 2
     tools/type-keys.py "$tmp/mon7" "echo 'let () = let d = Ipc.describe \"console\" in if d.Ipc.summary = Console.Protocol.summary && d.requests = Console.Protocol.requests then print_endline (\"console-\" ^ \"described\")' >> /disk/th.ml\n"; sleep 2
     tools/type-keys.py "$tmp/mon7" 'ocamlc -use-prims /primitives mynos.cma unix.cma threads.cma -noautolink -o /disk/th.byte /disk/th.ml && /disk/th.byte\n'; sleep 25
+    # httpd serves /disk, but not its .env files (the models' keys:
+    # mynos-n16), neither by name nor in the listing
+    httpd_private=
+    if curl -s -m 5 http://127.0.0.1:47180/ | grep -q 'greeter.byte' &&
+       ! curl -s -m 5 http://127.0.0.1:47180/ | grep -qi 'llm.env' &&
+       [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:47180/llm.env)" = 404 ] &&
+       [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:47180/LLM.ENV)" = 404 ]; then
+        httpd_private=yes
+    fi
     # C's stdio (mynos-d6k): files through fopen, a typed line, a piped one
     tools/type-keys.py "$tmp/mon7" '/disk/stdio-test\n'; sleep 4
     tools/type-keys.py "$tmp/mon7" 'typed-line\n'; sleep 3
     tools/type-keys.py "$tmp/mon7" 'echo piped-line | /disk/stdio-test\n'; sleep 5
     tools/type-keys.py "$tmp/mon7" 'echo into-a-file | /disk/stdio-test > /tmp/so.txt; cat /tmp/so.txt\n'; sleep 5
+    # MyNOS reaches its own address (lwIP's loopback), and httpd refuses
+    # the .env files from inside too
+    tools/type-keys.py "$tmp/mon7" 'fetch -i http://10.0.2.15/llm.env\n'; sleep 4
+    # Ctrl-C on a program waiting for a line: the next line is sh's, not
+    # swallowed by the program it ended (mynos-5dd)
+    tools/type-keys.py "$tmp/mon7" '/disk/stdio-test\n'; sleep 4
+    printf 'sendkey ctrl-c\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null; sleep 2
+    tools/type-keys.py "$tmp/mon7" 'X=ctrlc; echo after-$X\n'; sleep 2
     # a rename that changes only the case keeps the file (mynos-qaw)
     tools/type-keys.py "$tmp/mon7" 'echo case-kept > /disk/case.txt; mv /disk/case.txt /disk/CASE.txt; cat /disk/CASE.txt\n'; sleep 3
     tools/type-keys.py "$tmp/mon7" 'kill fatfs\n'; sleep 4
@@ -839,8 +856,8 @@ reject() {
 
 expect "Hello from OCaml on MyNOS!"
 expect "5 * 5 = 25"
-expect "Service keyboard registered"
-expect "Service serial registered"
+expect "keyboardd: sem = "                          # the drivers got their IRQs
+expect "seriald: sem = "
 expect "Hello from memrofs!"
 expect "fpu: all checks passed"
 expect "threads: all checks passed"
@@ -951,6 +968,14 @@ if [ -f system/ramdisk.dsk ]; then
     expect "stdio: isatty(1) 0"                        # ... or a file
     expect "stdio: read [into-a-file]"                 # all of stdout in the file
     expect "case-kept"                                 # mv to other letters
+    expect "after-ctrlc"                               # Ctrl-C swallows nothing
+    expect "server: MyNOS httpd"                       # our own address...
+    expect "404 Not Found"                             # ... and no llm.env
+    if [ -n "$httpd_private" ]; then
+        echo "ok    httpd: serves /disk, not its .env files"
+    else
+        echo "FAIL  httpd: serves /disk, not its .env files"; fail=1
+    fi
     expect "Hello, reborn again, from MyNOS!"          # by an OCaml client too
     if [ -n "$trace_calls" ]; then
         echo "ok    trace: sh -> fatfs -> ata0, nested calls"

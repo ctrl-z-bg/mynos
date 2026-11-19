@@ -142,9 +142,10 @@ static char kernel_cmdline[256];
 
 /* the modules' command lines ("path arg1 arg2...", as GRUB's module
    line or QEMU's -initrd entry): their argv */
-#define MODULE_CMDLINE 128
+#define MODULE_CMDLINE 256
 #define MODULE_MAXARGS 16
 static char module_cmdline[MAXMODULES][MODULE_CMDLINE];
+static char module_cut[MAXMODULES];
 static char * module_argv[MAXMODULES][MODULE_MAXARGS + 1];
 
 /* split module i's command line in place into its argv */
@@ -208,6 +209,7 @@ void mynos_main(multiboot_info_t *boot_info) {
       for (j = 0; s[j] && j < MODULE_CMDLINE - 1; j++)
 	module_cmdline[i][j] = s[j];
       module_cmdline[i][j] = 0;
+      module_cut[i] = s[j] != 0;          /* said at start, not in silence */
     }
   }
 
@@ -354,6 +356,13 @@ void mynos_main(multiboot_info_t *boot_info) {
       //module = (module_t*)((uint32_t*)(boot_info->mods_addr) + i);
       modinfo[i].start = (uint32_t*)module[i].mod_start;
       modinfo[i].len = module[i].mod_end - module[i].mod_start;
+      if (i < MAXMODULES && module_cut[i]) {
+	printk("module command line cut at ");
+	print_uint(MODULE_CMDLINE - 1);
+	printk(" characters: ");
+	printk(module_cmdline[i]);
+	print_char('\n');
+      }
       if ((*((char*)modinfo[i].start) == 0x7F) &&
 	  !kmemcmp((char*)modinfo[i].start + 1, "ELF", 3)) {
 	if (createProcess(modinfo[i].start, modinfo[i].len,

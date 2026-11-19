@@ -114,6 +114,9 @@ tracer.cmo: tracer.ml tracer.cmi
 
 MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo fs.cmo console.cmo registry.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo tracer.cmo agent.cmo gfx.cmo display.cmo gui.cmo power.cmo
 
+# every module but Mynos uses Mynos: a change in mynos.mli recompiles them
+$(filter-out mynos.cmo,$(MODULES)) $(filter-out mynos.cmi,$(MODULES:.cmo=.cmi)): mynos.cmi
+
 mynos.cma: $(MODULES)
 	$(OCAMLC) -a -o $@ $(MODULES)
 

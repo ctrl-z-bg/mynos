@@ -72,7 +72,7 @@ A command is either **built into** `sh` or a **program**: a file that
 |---|---|
 | `help` | the summary |
 | `cd`, `pwd` | change, print the current directory (chapter 7) |
-| `ls [-l]`, `cat`, `cp`, `mv`, `rm`, `mkdir`, `rmdir`, `touch` | files (chapter 7) |
+| `ls [-l] [-a]`, `cat`, `cp`, `mv`, `rm`, `mkdir`, `rmdir`, `touch` | files (chapter 7) |
 | `echo WORDS` | print the words |
 | `export NAME=value`, `unset NAME`, `env` | variables |
 | `which NAME` | where a command comes from |
@@ -262,11 +262,8 @@ What Ctrl-C does not do:
 - **It does not stop a built-in command.** `ping 10.0.2.2 100` goes on to
   the end; `cat` reading the keyboard ends with Ctrl-D.
 - **It ends the OCaml toplevel as a whole**, with everything defined
-  in it, and **the editor `edit`**, without saving. `kilo` takes Ctrl-C
-  as an ordinary key.
-- **A program waiting for keyboard input ends only at the next input,
-  which it swallows.** After Ctrl-C on the toplevel waiting at its `#`
-  prompt, or on `edit`, press Enter once to get the prompt back.
+  in it. The editors `edit` and `kilo` take Ctrl-C as an ordinary key:
+  they end with Ctrl-Q, and nothing is lost by a stray Ctrl-C.
 
 A program can also be left running while you go on typing: put `&`
 after it. `sh` prints its pid in brackets, and `$!` holds it:

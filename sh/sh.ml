@@ -256,6 +256,26 @@ let path_dirs () =
 
 let is_file f = Sys.file_exists f && not (Sys.is_directory f)
 
+let is_elf file =
+  match In_channel.with_open_bin file (fun ic -> really_input_string ic 4) with
+  | s -> s = "\127ELF"
+  | exception _ -> false
+
+(* OCaml bytecode ends with its magic number, "Caml1999X" and a version *)
+let is_bytecode file =
+  match In_channel.with_open_bin file (fun ic ->
+      let n = In_channel.length ic in
+      if n < 12L then "" else begin
+        In_channel.seek ic (Int64.sub n 12L);
+        really_input_string ic 12 end) with
+  | s -> String.starts_with ~prefix:"Caml1999X" s
+  | exception _ -> false
+
+(* a command: a ".byte" file, or a program (ELF or bytecode) without a dot;
+   the RAM disk's other files (primitives, runtime-launch-info) are not *)
+let is_command f =
+  is_file f && (Filename.check_suffix f ".byte" || is_elf f || is_bytecode f)
+
 (* the file of a command, or None *)
 let which name =
   let cands =
@@ -263,12 +283,7 @@ let which name =
     else List.concat_map (fun d ->
         let d = if d = "/" then "" else d in
         [ d ^ "/" ^ name; d ^ "/" ^ name ^ ".byte" ]) (path_dirs ()) in
-  List.find_opt is_file cands
-
-let is_elf file =
-  match In_channel.with_open_bin file (fun ic -> really_input_string ic 4) with
-  | s -> s = "\127ELF"
-  | exception _ -> false
+  List.find_opt (if String.contains name '/' then is_file else is_command) cands
 
 (* the shell's own redirections, given to its programs unless a command
    has its own: as fds are inherited elsewhere ("sh -c CMD > FILE" sends
@@ -353,7 +368,7 @@ let commands () =
       match Sys.readdir d with
       | names -> Array.to_list names |> List.filter_map (fun f ->
           if Filename.check_suffix f ".byte" then Some (Filename.chop_suffix f ".byte")
-          else if not (String.contains f '.') && is_file (Filename.concat d f) then Some f
+          else if not (String.contains f '.') && is_command (Filename.concat d f) then Some f
           else None)
       | exception Sys_error _ -> []) (path_dirs ()) in
   List.sort_uniq compare (builtins @ progs)
@@ -372,8 +387,9 @@ let size f =
   | exception Sys_error _ -> 0
 
 let ls out args =
-  let long, paths = List.partition (fun a -> a = "-l") args in
-  let long = long <> [] in
+  let opts, paths = List.partition (fun a -> a = "-l" || a = "-a" || a = "-la" || a = "-al") args in
+  let long = List.exists (fun o -> String.contains o 'l') opts in
+  let all = List.exists (fun o -> String.contains o 'a') opts in
   let paths = if paths = [] then [ "." ] else paths in
   let status = ref 0 in
   let show dir f =
@@ -387,7 +403,7 @@ let ls out args =
         if List.length paths > 1 then Printf.fprintf out "%s:\n" p;
         let names = Sys.readdir p in
         Array.sort compare names;
-        Array.iter (fun f -> if f.[0] <> '.' then show p f) names
+        Array.iter (fun f -> if all || f.[0] <> '.' then show p f) names
       end else show "" p)
     paths;
   !status
@@ -400,7 +416,7 @@ let copy src dst =
 
 let help out =
   output_string out
-    "MyNOS sh. Built in: cd pwd echo cat ls [-l] cp mv rm mkdir rmdir touch\n\
+    "MyNOS sh. Built in: cd pwd echo cat ls [-l] [-a] cp mv rm mkdir rmdir touch\n\
      export unset env which source free ps kill clear help exit;\n\
      PROGRAM & runs it in the background ($! its pid); kill PID|SERVICE;\n\
      network: ifconfig, ping HOST [COUNT], host NAME.\n\
@@ -564,7 +580,13 @@ let rec builtin name args c out =
         (try copy s d; Sys.remove s with Sys_error e -> fail "mv: %s" e)
          | Sys_error e -> fail "mv: %s" e)
    | "rm", _ -> each Sys.remove
-   | "mkdir", _ -> each (fun d -> Sys.mkdir d 0o755)
+   | "mkdir", _ ->
+     each (fun d ->
+         try Sys.mkdir d 0o755
+         with Sys_error _ when
+             (let a = if Filename.is_relative d then Filename.concat (Sys.getcwd ()) d else d in
+              String.starts_with ~prefix:"/tmp/" a) ->
+           raise (Sys_error (d ^ ": /tmp has no directories (one flat list of files)")))
    | "rmdir", _ -> each Sys.rmdir
    | "touch", _ ->
      each (fun f -> close_out (open_out_gen [ Open_wronly; Open_creat; Open_append ] 0o644 f))
@@ -755,9 +777,16 @@ let history : string list ref = ref []        (* the most recent first *)
 let history_load () =
   match In_channel.with_open_bin history_file In_channel.input_lines with
   | lines ->
-    let lines = List.filter (fun l -> l <> "") lines in
-    let n = List.length lines in
-    history := List.rev (List.filteri (fun i _ -> i >= n - history_max) lines)
+    let all = List.filter (fun l -> l <> "") lines in
+    let n = List.length all in
+    let kept = List.filteri (fun i _ -> i >= n - history_max) all in
+    history := List.rev kept;
+    (* the file is appended to at every line: it is cut back to what is
+       kept once it holds twice as much *)
+    if n > 2 * history_max then
+      (try Out_channel.with_open_bin history_file (fun oc ->
+           List.iter (fun l -> output_string oc (l ^ "\n")) kept)
+       with Sys_error _ -> ())
   | exception Sys_error _ -> ()
 
 let history_add line =
