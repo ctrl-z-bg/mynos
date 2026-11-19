@@ -1228,4 +1228,6 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   page cites them); appendix J: the MIT progress report and manual.
 - **2026-11-19** — Manual 5.4: the first boot's transcript starts with
   the kernel's greeting and version.
+- **2026-11-19** — Manual 5.4: the four boot modules named (ocamlrun,
+  registry, memrofsd, ramdisk.dsk).
 

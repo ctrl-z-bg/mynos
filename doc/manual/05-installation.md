@@ -171,9 +171,18 @@ If there is no `system/ramdisk.dsk`, the script says
 and stops.
 
 **What happened.** `run-demo.sh` asked QEMU to load the kernel together
-with four **modules**, as a boot loader would. The kernel starts the
-programs among them, and `ocamlrun` finds `init` on the RAM disk; `init`
-reads its list, `init.rc`, and starts the rest:
+with four **modules**, as a boot loader would (GRUB loads the same four
+from the release's ISO):
+
+| Module | What it is |
+|---|---|
+| 0 `ocamlrun` | OCaml's bytecode interpreter, which will run `init` |
+| 1 `registry` | the name registry: names → ports |
+| 2 `memrofsd` | the service that serves the RAM disk as `/` |
+| 3 `ramdisk.dsk` | the RAM disk's image: not a program, the data `memrofsd` serves (the boot's `RAMDISK found (module 3)`) |
+
+The kernel starts the three programs, and `ocamlrun` finds `init` on
+the RAM disk; `init` reads its list, `init.rc`, and starts the rest:
 
 ```
   QEMU ──► kernel.elf
