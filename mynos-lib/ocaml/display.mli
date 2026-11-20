@@ -59,6 +59,9 @@ val next_event : ?timeout:float -> window -> event
 (** The next event; [Tick] if none came within [timeout] seconds (0.:
     wait forever, the default). *)
 
+val poll : window -> event
+(** The next event if one is waiting, [Tick] at once if none. *)
+
 val set_title : window -> string -> unit
 val move : window -> int -> int -> unit
 val destroy : window -> unit

@@ -10,6 +10,7 @@
 #   mynos-runtime/ocamlrun           the OCaml 5.5 runtime (with unix, threads,
 #                                    str and Num's C stubs)
 #   third_party/num/nums.cma         the Num library
+#   graphics/graphics.cma            OCaml's Graphics, on Display and Gfx
 #   tests/hello/hello.byte           OCaml test program
 #   tests/effects/effects.byte       effect handlers test
 #   tests/domains/domains.byte       domains test: threads, futexes
@@ -85,6 +86,7 @@ make -C llm
 make -C agent
 make -C services/display
 make -C gui
+make -C graphics
 make -C tests/net
 make -C shell
 make -C system

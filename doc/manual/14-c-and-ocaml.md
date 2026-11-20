@@ -213,8 +213,8 @@ F.6):
 ## 14.5 Compiling inside MyNOS
 
 The compiler is on the RAM disk, with the standard library, `unix.cma`,
-`threads.cma`, `str.cma`, `nums.cma`, `mynos.cma` and its interfaces, and
-`primitives`, all at
+`threads.cma`, `str.cma`, `nums.cma`, `graphics.cma` (section 20.6),
+`mynos.cma` and its interfaces, and `primitives`, all at
 the root (appendix F.9). At `sh`:
 
 ```

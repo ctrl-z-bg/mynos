@@ -11,7 +11,10 @@ prims=mynos-runtime/primitives
 for f in doc/manual/examples/*/*.ml; do
     name=$(basename "$f" .ml)
     extra=
-    case "$name" in othreads|keys) extra="-I +unix -I +threads unix.cma threads.cma -noautolink" ;; esac
+    case "$name" in
+        othreads|keys) extra="-I +unix -I +threads unix.cma threads.cma -noautolink" ;;
+        circles) extra="-I graphics graphics.cma" ;;
+    esac
     ocamlc -use-prims $prims -I mynos-lib/ocaml -I "$(dirname "$f")" mynos.cma $extra \
         -o "$out/$name.byte" "$f"
 done

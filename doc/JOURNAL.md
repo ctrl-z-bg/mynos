@@ -2429,3 +2429,37 @@ dangerous ones are the calls whose callers cannot imagine them failing,
 `getrusage` and `getuid`: their error becomes a value. When adding a
 Linux layer, list the calls that "never fail" first.
 
+## 2026-11-20 — OCaml's Graphics, without C
+
+**Symptom.** None: programs written for OCaml's `Graphics` (games,
+teaching examples, 2048-ml, the debugger of a Z-machine interpreter) did
+not link on MyNOS. The library's C part speaks X11 or Win32, neither of
+which MyNOS has.
+
+**Diagnosis.** `Graphics` needs little that `Display` and `Gfx` lack: a
+window, filled rectangles, lines, text, pixels read back, events. So it
+was written again in OCaml, with the same interface, and programs compile
+unchanged against `graphics.cma`. Two things did not map at once:
+- **When to show the drawing.** X11 queues drawing commands and flushes
+  them cheaply. On MyNOS each `damage` is an IPC round trip, so a program
+  that plots a pixel at a time would make one per pixel.
+- **Reading the keys without waiting.** `next_event`'s smallest timeout
+  is not small: displayd checks timeouts every 100 ms. A game loop that
+  calls `key_pressed` every frame would run at 10 frames a second.
+
+**Fix.**
+- Everything is drawn into a buffer of the program's own (X11's backing
+  store). The rectangle of the changes is copied and damaged in one
+  request: at most every 20 ms while drawing, at every read of the
+  input, and at `synchronize`.
+- `next_event` with a negative timeout answers at once, with a tick if
+  nothing is queued. `Display.poll` wraps it.
+
+The test draws every kind of shape and reads the pixels back with
+`point_color`. 2048-ml compiled unchanged and played inside MyNOS. So did
+a Graphics program compiled by `ocamlc` inside MyNOS.
+
+**Lesson.** A protocol that only knows "wait at most T" has no zero: the
+service's timer decides how long zero is. A poll is a different request,
+even when it looks like a small timeout.
+

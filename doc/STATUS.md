@@ -40,6 +40,7 @@ talking through IPC.
 | `system/` | The system RAM disk: `init`, `init.rc`, services, the shell, interfaces, programs |
 | `editor/` | `edit`, the text editor, in OCaml on Notty |
 | `sh/` | `sh`, a bash-like command shell, in OCaml |
+| `graphics/` | OCaml's `Graphics` library (the `graphics` package's interface) in OCaml on `Display` and `Gfx`, and its test |
 | `third_party/` | kilo (C editor), Notty and uutf (OCaml terminal UI), Num (OCaml big numbers), lwIP (TCP/IP), mbedTLS (TLS), Mozilla's certificate authorities, with their licenses and MyNOS changes |
 | `mynos.mk` | Toolchain variables for user-space programs (`MYNOS_CC`, `MYNOS_LDFLAGS`) |
 
@@ -214,7 +215,9 @@ All services are linked statically against `libmynos` and placed at
   Programs draw with `Gfx` (C primitives in the runtime, Terminus 8x16
   font in `third_party/fonts`), build windows with `Display` and `Gui`
   (immediate mode: labels, buttons, text fields, lists, scroll boxes;
-  `Gfx.with_clip`; the mouse wheel). `gui` starts a
+  `Gfx.with_clip`; the mouse wheel), or with OCaml's `Graphics`
+  (`graphics/graphics.cma`, mynos-0rn: programs written for it compile
+  unchanged; 2048-ml runs). `gui` starts a
   session (welcome, clock, the service explorer, which makes a form for
   any request of any typed service from its description, and terminal
   windows: `sh` in a VT100 emulator, its console a service of the window,
@@ -1254,3 +1257,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   (fs/1's `o_excl`, in tmpfs and fatfs). New boot in `run-tests.sh`:
   `tests/libs`. Closed mynos-rld, mynos-yux, mynos-0xy, mynos-469,
   mynos-0r1.
+- **2026-11-20** — OCaml's `Graphics` on MyNOS (`graphics/`): the
+  `graphics` package's interface written again in OCaml on `Display`
+  and `Gfx`, drawing in a backing store shown in batches (every 20 ms
+  while drawing, and at every read of the input). `display/1`'s
+  `next_event` with a negative timeout does not wait (`Display.poll`).
+  `graphics.cma` on the RAM disk; its test in the graphical session's
+  boot; 2048-ml compiled unchanged and played. Manual 20.6. Closed
+  mynos-0rn.

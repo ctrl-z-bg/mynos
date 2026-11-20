@@ -1017,7 +1017,7 @@ static const wire_request_doc requests[] = {
     "The window's next event: keys (UTF-8, VT100 sequences for the others), the "
     "mouse in the window (buttons: 1 left, 2 right, 4 middle), close, focus, the "
     "wheel over it (its notches, positive towards the user: down); tick when none "
-    "came within timeout_ms (0: wait forever). Waits." },
+    "came within timeout_ms (0: wait forever; negative: do not wait). Waits." },
   { 0, "destroy", "window:I", "U", "Close a window." },
   { 0, "set_title", "(window:I,title:S)", "U", "A window's title." },
   { 0, "start", "U", "U", "Start the graphical session: the screen leaves text mode." },
@@ -1152,6 +1152,11 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
       struct event e = w->q[w->qh];
       w->qh = (w->qh + 1) % MAXEV;
       w->qn--;
+      reply_event(ch, &e);
+    } else if (timeout < 0) {                      /* a poll: tick at once */
+      struct event e;
+      memset(&e, 0, sizeof e);
+      e.kind = EV_TICK;
       reply_event(ch, &e);
     } else {
       w->waiting = ch;

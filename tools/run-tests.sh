@@ -326,7 +326,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
         cp tests/fat/fat16.img "$gdisk"
         # its own port (the seventh boot, at the same time, has 47090)
         sed 's/:47090/:47091/' tests/net/llm-test.env > tests/fat/run-gui.env
-        tools/in-container.sh dev sh -c "mcopy -i $gdisk tests/fat/run-gui.env ::/llm.env && mcopy -i $gdisk tests/greeter/old-boot.trc ::/old-boot.trc && mcopy -i $gdisk tests/greeter/greeter.byte ::/greeter.byte"
+        tools/in-container.sh dev sh -c "mcopy -i $gdisk tests/fat/run-gui.env ::/llm.env && mcopy -i $gdisk tests/greeter/old-boot.trc ::/old-boot.trc && mcopy -i $gdisk tests/greeter/greeter.byte ::/greeter.byte && mcopy -i $gdisk graphics/gtest.byte ::/gtest.byte"
         rm -f tests/fat/run-gui.env
     fi
     tools/net-peer.py llm 47091 & llmg_pid=$!
@@ -435,6 +435,11 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     click 732 117; sleep 1                   # its first note: sh looks at hello.byte;
     click 732 117; sleep 2                   # the second: the birth of hello
     mon "screendump $tmp/gui21.ppm"
+    # OCaml's Graphics (graphics/), from a new terminal window: its test
+    # draws, reads the pixels back, writes the result to the log and
+    # closes its window
+    click 20 10; sleep 1; click 40 39; sleep 10
+    tools/type-keys.py "$tmp/mon-g" '/disk/gtest.byte\n'; sleep 12
     click 20 10; sleep 1; click 30 281; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt; ls /disk\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
@@ -1090,6 +1095,7 @@ PY
         echo "FAIL  gui: a session, windows of programs, a click, back to text"; fail=1
     fi
     expect "gui: displayd describes display/1 as display.ml does"
+    expect "graphics: all checks passed"
     if [ -n "$files_ok" ]; then
         echo "ok    files: a file copied between services, a folder made; Ctrl-C in a terminal"
     else

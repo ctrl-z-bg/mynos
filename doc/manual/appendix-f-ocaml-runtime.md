@@ -321,7 +321,8 @@ bytecode program. `system/Makefile` puts on the RAM disk, all in its root
   3.6 MB), unchanged;
 - the standard library: every `.cmi`, `stdlib.cma`, `std_exit.cmo`, and
   `runtime-launch-info`;
-- `unix.cma`, `threads.cma`, `str.cma`, `nums.cma` and their interfaces;
+- `unix.cma`, `threads.cma`, `str.cma`, `nums.cma`, `graphics.cma` and
+  their interfaces;
 - `mynos.cma`, the `.cmi` of its modules, and `primitives`.
 
 Typing `ocamlc` at `sh` finds `/ocamlc.byte` through `PATH` and runs it on

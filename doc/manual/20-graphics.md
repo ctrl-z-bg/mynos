@@ -5,7 +5,8 @@ service for a window, draws into the window's pixels in its own memory,
 and waits for events. This chapter explains the three modules it uses:
 `Display`, the windows and their events (20.2); `Gfx`, drawing on pixels
 (20.3); and `Gui`, a small immediate-mode toolkit (20.4). It ends with a
-complete program, Conway's Game of Life in a window (20.5). The display
+complete program, Conway's Game of Life in a window (20.5), and with
+OCaml's own `Graphics` library, which MyNOS also has (20.6). The display
 server itself is described in appendix E.14, the drawing primitives in
 appendix F.5, and the reasons for the design in `doc/decisions/gui.md`.
 
@@ -44,6 +45,7 @@ from the Files window, or with `&`. Outside it, `displayd` refuses
 val window : ?display:t -> ?title:string -> int -> int -> window
 val damage : ?x:int -> ?y:int -> ?w:int -> ?h:int -> window -> unit
 val next_event : ?timeout:float -> window -> event
+val poll : window -> event
 val set_title : window -> string -> unit
 val move : window -> int -> int -> unit
 val destroy : window -> unit
@@ -67,7 +69,10 @@ it again; `damage ~x ~y ~w ~h w`, a part. The screen is 1024 by 768.
 
 `timeout` is 0 by default: wait forever. `displayd` checks the timeouts
 every 100 ms, so a `Tick` comes between `timeout` and `timeout + 0.1`
-seconds after the call; and only if no other event came first.
+seconds after the call; and only if no other event came first. `poll w`
+does not wait: the next event if one is queued, `Tick` at once if none.
+It is meant for a program that animates and reads the keys between
+frames.
 
 The example of `Display`'s interface, made whole: a blue window that
 draws a yellow dot where the left button is pressed, and ends on `q` or
@@ -394,7 +399,83 @@ and ends with status 2.
 
 *Figure 20-1. Life in a window, with the glider gun.*
 
-## 20.6 Known limits
+## 20.6 OCaml's Graphics library
+
+Many OCaml programs draw with `Graphics`, the portable library that
+came with OCaml until 4.09 and is now the `graphics` package. MyNOS has
+its own `graphics.cma` (`graphics/`). It has the same interface, written
+again in OCaml on top of `Display` and `Gfx`, so those programs compile
+unchanged. In the container:
+
+```
+$ ocamlc -use-prims /mynos/mynos-runtime/primitives -I /mynos/mynos-lib/ocaml \
+         -I /mynos/graphics mynos.cma graphics.cma -o circles.byte circles.ml
+```
+
+and inside MyNOS, where `graphics.cma` is on the RAM disk:
+
+```
+mynos:/disk$ ocamlc -use-prims /primitives mynos.cma graphics.cma -o circles.byte circles.ml
+```
+
+The example draws a circle where the mouse is clicked
+(`examples/20/circles.ml`):
+
+```ocaml
+open Graphics
+
+let () =
+  open_graph " 400x300";
+  set_window_title "Circles";
+  moveto 10 10;
+  draw_string "click to draw, q to quit";
+  let rec loop () =
+    let s = wait_next_event [ Button_down; Key_pressed ] in
+    if s.keypressed && s.key = 'q' then close_graph ()
+    else begin
+      if s.button then begin
+        set_color (rgb (Random.int 256) (Random.int 256) (Random.int 256));
+        fill_circle s.mouse_x s.mouse_y (10 + Random.int 30)
+      end;
+      loop ()
+    end in
+  loop ()
+```
+
+`Graphics` counts y upwards from the bottom left corner, `Gfx`
+downwards from the top left; the module turns one into the other.
+2048-ml, a game written for `Graphics` in 2014, compiles unchanged and
+plays in a window of the session.
+
+**How it draws.** Everything is drawn into a buffer of the program's
+own, which X11's version calls the backing store. What changed is copied
+to the window's pixels and sent to `displayd` as one `damage` of the
+rectangle that holds all the changes. That happens:
+
+- at most 20 ms after the drawing, while the program keeps drawing;
+- whenever the program reads the mouse or the keys;
+- at `synchronize`.
+
+A program that plots a pixel at a time thus makes one request every
+20 ms, not one per pixel. `auto_synchronize false` keeps the drawing in
+the buffer until `synchronize`, for animation without flicker, as with
+X11.
+
+**Input.** The functions that do not wait (`key_pressed`, `mouse_pos`,
+`button_down`, `wait_next_event [Poll]`) use `Display.poll` (20.2).
+
+**Differences from X11:**
+
+- one font: `set_font` and `set_text_size` do nothing, and `text_size`
+  counts cells of 8 × 16;
+- `sound` is silent;
+- keys that are not characters (arrows, function keys) are not reported;
+  characters come as Latin-1, as with X11;
+- the close box ends the program with status 0;
+- `resize_window` makes the window again, keeping its content as it
+  fits.
+
+## 20.7 Known limits
 
 - One screen size (1024 × 768 × 32) and one font (Terminus 8 × 16);
   windows cannot be resized, and their size is their content's.

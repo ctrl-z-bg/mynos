@@ -533,7 +533,7 @@ and composes the desktop, the windows and the pointer. Protocol
   `damage`; displayd copies the rectangle to the screen.
 - *Events wait in a queue* per window (64 at most); `next_event` on an
   empty queue keeps its channel until an event comes, or answers `tick`
-  after `timeout_ms`.
+  after `timeout_ms`; with a negative `timeout_ms`, at once.
 - *Input*: the PS/2 mouse (IRQ 12), with QEMU's vmmouse when present;
   keys from the console service, read in raw mode during the session.
 - *The text console survives*: the picture starts 256 KB into the card's

@@ -60,7 +60,7 @@ module Protocol = struct
         "The window's next event: keys (UTF-8, VT100 sequences for the others), the \
          mouse in the window (buttons: 1 left, 2 right, 4 middle), close, focus, the \
          wheel over it (its notches, positive towards the user: down); tick when none \
-         came within timeout_ms (0: wait forever). Waits."
+         came within timeout_ms (0: wait forever; negative: do not wait). Waits."
         event_args event_codec;
       request 5 "destroy" "Close a window." window_f Wire.unit;
       request 6 "set_title" "A window's title." title_args Wire.unit;
@@ -156,6 +156,8 @@ let damage ?(x = 0) ?(y = 0) ?w ?h win =
 
 let next_event ?(timeout = 0.) win =
   call win.display (Next_event (win.id, int_of_float (timeout *. 1000.)))
+
+let poll win = call win.display (Next_event (win.id, -1))
 
 let set_title win t = call win.display (Set_title (win.id, t))
 let move win x y = call win.display (Move (win.id, x, y))
