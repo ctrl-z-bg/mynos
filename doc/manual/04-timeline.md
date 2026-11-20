@@ -22,21 +22,23 @@ Ferrini.
 | 2001-09-05 | The project is registered on SourceForge, after a long planning (the date on its SourceForge page). |
 | 2002-01-08 | The first news on SourceForge: the kernel's memory management is under development, paging already works, the code will soon be on CVS. |
 | 2002-02-02 | The first commit, by Cesare Zavattari: a floppy boot loader in assembly and the first files of the kernel. |
-| 2002-03 | Tommaso Schiavinotto adds a target to build a boot floppy. |
+| 2002-07-05 | Tommaso Schiavinotto gives the kernel GRUB's boot information (multiboot): the memory, and the modules loaded with the kernel. It is how the kernel finds its first programs and the RAM disk today. |
 | 2002-10-03 | Allocation on first use: pages are given to a process when it first touches them. |
 | 2002-10-08 | The web site opens (its visitor counter starts that day), with the page *Why MyNOS?* (chapter 2). |
-| 2002-10-11 | `fork`, in a simple form, without copy-on-write. |
+| 2002-10-11 | `fork`, by Alessandro Tommasi: the child gets its own copy of its parent's pages, page directory and page tables, not yet copy-on-write. |
 | 2002-10-22 | "ocaml virtual machine ran on mynos kernel!": OCaml's virtual machine, compiled against dietlibc, runs as a process on MyNOS's kernel, executing a simple bytecode program. |
-| 2002-11-04 | "Static ELF format supported!": the kernel loads static ELF modules, and the OCaml virtual machine has been tested on it. |
+| 2002-11-04 | "Static ELF format supported!": Tommaso Schiavinotto's ELF loader. The kernel loads static ELF programs, and the OCaml virtual machine has been tested on it. Every program of today, services and `ocamlrun` alike, still starts through it. |
+| 2002-11-06 | "About to go alpha: roadmap": IPC first, even simple-minded, then the services (file system, memory, POSIX compatibility, an OCaml server). The order the project followed, then and in 2026. |
 | 2002-11-09 | "IPC implemented: MyNOS reaches Alpha state!", after a long night's work: send and receive, synchronous or not. |
 | 2002-11-20 | IPC buffers are checked. |
-| 2002-11-26 | "MyNOS! has Semaphores!", and a first management of process queues. |
+| 2002-11-26 | "MyNOS! has Semaphores!": Tommaso Schiavinotto's semaphores, and a first management of process queues, with their system calls in the library. |
 | 2003-04-07 | The serial driver, a process like the keyboard's; services register with the kernel; a message received from the serial port. |
 | 2003 | A private test: messages sent over a serial cable between a PC running MyNOS and a Sinclair ZX Spectrum (4.3). |
 | 2003-07-30 | The task switch moves from the processor's hardware mechanism to software; `fork` reworked, and `sched()`. |
 | 2003-08-18 | Threads: every thread belongs to its process, with the same pid. |
 | 2003-11-07 | Copy-on-write. |
-| 2004-09-01 | The kernel's IPC redesigned from scratch: ports and channels, long messages moved by copy-on-write, the IPC of today (appendix C). |
+| 2004-07-29 | Alessandro Tommasi extends the record of each process's free address space (`lmemtrack`, appendix B): its copy for `fork`, and the areas taken at a given place (the program, the stacks, the RAM disk). The new IPC finds room there for the long messages it maps. |
+| 2004-09-01 | The kernel's IPC redesigned from scratch by Cesare Zavattari: ports and channels, long messages moved by copy-on-write, the IPC of today (appendix C). |
 | 2004-12 | The last commits of the period. |
 | 2005, 2008 | A few more, in February 2005 and November 2008 (tagged `legacy-2008`). |
 
