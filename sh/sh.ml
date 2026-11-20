@@ -494,7 +494,8 @@ let ask_context () =
      ifconfig, ping HOST [COUNT], host NAME (DNS). Programs: fetch [-i] [-o \
      FILE] [-H 'Name: value'] [-d DATA] URL (HTTP and HTTPS); llm QUESTION \
      (a language model); trace COMMAND; edit FILE and kilo FILE (editors); \
-     ocamlc; ocaml (the OCaml toplevel).";
+     pkg list|info|install|remove|update (packages: demos and programs from \
+     the web, installed in /disk/bin); ocamlc; ocaml (the OCaml toplevel).";
     "Files: / is the RAM disk (read-only), /tmp is in memory, /disk is the \
      FAT disk (kept across reboots). Paths in a directory are up to 63 \
      characters.";

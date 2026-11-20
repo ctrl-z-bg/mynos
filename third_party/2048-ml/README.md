@@ -9,11 +9,14 @@ OCaml by Philip Xu, written in 2014 for OCaml's `Graphics` library. BSD
 and Gentoo ebuild are left out.
 
 In MyNOS it is a demo of `graphics.cma` (`graphics/`): a program written
-for X11's `Graphics` that compiles without changes. This Makefile builds
-`2048.byte` against MyNOS's primitives, in the dev container
-(`tools/build-all.sh`); it goes on the RAM disk.
+for X11's `Graphics` that compiles without changes. It is the package
+`2048` (`packages/2048/spec`, built by `tools/pkg-build.sh`; the
+packages' repository is ctrl-z-bg/mynos-packages). The game has a
+module `Gui` of its own, as `mynos.cma` does, so it is compiled inside
+`src`, where its own interface is found first.
 
-Usage in MyNOS, in a terminal of the graphical session: `/2048.byte`.
+Usage in MyNOS: `pkg install 2048`, then `2048` in a terminal of the
+graphical session.
 The keys are h, j, k, l (left, down, up, right), r starts again, q quits;
 the arrows are not reported by `Graphics` on MyNOS. The game also prints
 the board as text in the terminal (its `Tui` module).

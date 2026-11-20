@@ -265,7 +265,53 @@ models' keys, is not served, nor listed.
 > waking `netd`'s thread before the answer goes back. The fourth lesson
 > of the Tour (chapter 11) replays exactly this, with words at each step.
 
-## 9.8 When something does not work
+## 9.8 Packages — `pkg`
+
+New demos and programs come as packages, from a repository on the web:
+`ctrl-z-bg/mynos-packages` on GitHub. `pkg` lists them, installs them on
+`/disk` and removes them:
+
+```
+mynos:/$ pkg list
+pkg: 2 packages in the index (https://raw.githubusercontent.com/ctrl-z-bg/mynos-packages/main/index.json)
+2048       1.0                   2048, the sliding tile game, in a window (2048-ml by Philip Xu, 2014): h j k l slide the tiles, q quits
+tree       1.0                   A tree in the wind: a fractal tree under a night sky, written by the agent inside MyNOS (manual 20.6); the mouse sets the wind, q quits
+mynos:/$ pkg install 2048
+pkg: 2048 1.0: downloading 440320 bytes
+pkg: 2048 1.0 installed (its bytecode): 2048
+```
+
+The program goes to `/disk/bin`, which is on `sh`'s `PATH`: from a
+Terminal window of the graphical session, `2048` starts the game. The
+package's files stay in `/disk/pkg/2048`. Both programs above draw in a
+window, so they need the session (chapter 10).
+
+| Command | What it does |
+|---|---|
+| `pkg list` | the packages of the index; `installed` beside those on `/disk` |
+| `pkg info NAME` | description, version, licence, size, the MyNOS it was built on, whether installed |
+| `pkg install NAME...` | download, check, install (again, if it is installed) |
+| `pkg install -s NAME...` | the same, compiled from its sources |
+| `pkg remove NAME...` | remove the program and its files |
+| `pkg update` | read the index again |
+
+The first command reads the index (`index.json`) and keeps a copy in
+`/disk/pkg/index.json`; `pkg update` reads it again, to see new
+packages and versions. A package is a `tar` archive with its program as
+OCaml bytecode, its sources and its licence. `pkg install` checks the
+archive's size and its BLAKE2b hash against the index's before it opens
+it. Then it looks at the bytecode: if this MyNOS can run it (the same
+format of bytecode, and every primitive it calls in the runtime), the
+bytecode is installed; if not, `pkg` compiles the sources with `ocamlc`,
+which takes some seconds more and gives the same program, made for this
+MyNOS. The last word of the line says which happened.
+
+The index can come from elsewhere: `MYNOS_PKG_URL` names another
+repository with the same files, for instance one served from your
+computer (`MYNOS_PKG_URL=http://10.0.2.2:8000/ pkg list`). Appendix H.9
+tells how packages are built and published.
+
+## 9.9 When something does not work
 
 | You see | What it means |
 |---|---|
@@ -276,3 +322,5 @@ models' keys, is not served, nor listed.
 | `fetch: timeout` | the server did not answer within 30 seconds |
 | `fetch: TLS: bad certificate: ...` | the server's certificate is not signed by a trusted authority, or names another host (9.6) |
 | `run-demo.sh: port 8080 is busy, no web server forwarding` | another program on your computer uses 8080: choose another with `HTTP=PORT` |
+| `pkg: NAME: no such package` | the index does not have it: `pkg list` shows what it has, `pkg update` reads it again |
+| `pkg: ...: its BLAKE2b hash is not the index's` | the archive is not the one the index describes: nothing was installed; try again later, or `pkg update` |

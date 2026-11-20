@@ -3,8 +3,8 @@
 MyNOS is built on a Linux host, inside a container, and run in QEMU. This
 appendix describes the toolchain (H.1–H.3), the build (H.4), the two
 disks a running system uses (H.5), the scripts that boot it (H.6), the
-test suite (H.7), the screenshots (H.8), debugging (H.9), and the rules
-the project follows when it changes (H.10). Every script named here is in
+test suite (H.7), the screenshots (H.8), the packages (H.9), debugging
+(H.10), and the rules the project follows when it changes (H.11). Every script named here is in
 `tools/`, and every one starts with a comment that says how to use it.
 
 ## H.1 One toolchain: the `dev` container
@@ -134,9 +134,10 @@ error stops it. In order, it builds:
 10. the network: `netd`, `httpd`, `trace`, `fetch`, `llmd`, `llm`,
     `agent`;
 11. the graphics: `displayd`, `gui` (the session and its windows),
-    `graphics` (OCaml's `Graphics`) and the game 2048-ml (`third_party`);
-12. `tests/net`, `shell` (the OCaml toplevel), and last `system`: the
-    system RAM disk and the disk image (H.5).
+    `graphics` (OCaml's `Graphics`);
+12. `tests/net`, `shell` (the OCaml toplevel), `pkg`, and `system`: the
+    system RAM disk and the disk image (H.5); last the manual's examples
+    and the packages (H.9).
 
 Most steps are `make`, and so incremental; the small OCaml tests are
 compiled again every time. `clean-all.sh` calls `make clean` in the same directories, and removes
@@ -168,8 +169,8 @@ journal, "Bug 3".)
 `system/Makefile` makes the system RAM disk, `system/ramdisk.dsk`, from
 156 files today: `init.byte` and `init.rc`; `ocamlrun`,
 `consoled`, `netd`, `displayd` and `kilo`, stripped of their debugging
-information; the OCaml programs and services; the game 2048-ml; fonts,
-logo and certificates; and what is needed to compile OCaml inside MyNOS: the
+information; the OCaml programs and services; fonts, logo and
+certificates; and what is needed to compile OCaml inside MyNOS: the
 bytecode compiler `ocamlc.byte`, the standard library's `.cmi` files and
 `stdlib.cma`, `unix.cma`, `threads.cma`, `str.cma`, `nums.cma`,
 `graphics.cma`, `mynos.cma` and the interfaces of
@@ -307,7 +308,7 @@ minutes for the whole run; one after the other, the boots took 10 to 11
 | b | the `Mynos` library; files read through the standard library; the kernel stress test; `init` spawning about twenty-five programs; the console, typed on the keyboard and on COM2 |
 | c | the system without COM2 (as QEMU's window starts it), then `shutdown -r`; four boots in a row through `shutdown -r` |
 | d | the graphical session: windows, the mouse, the terminal, the agent window, Recordings, System, Files, the tour, `shutdown` |
-| e | the network, against servers on the host; then the "seventh boot": the system RAM disk driven through the keyboard (the toplevel, `sh`, the editors, `trace`, the agent, `kill`, a killed service restarted, threads compiled inside MyNOS, `fatfs`'s cache) |
+| e | the network, against servers on the host; then the "seventh boot": the system RAM disk driven through the keyboard (the toplevel, `sh`, the editors, `trace`, the agent, `kill`, a killed service restarted, threads compiled inside MyNOS, packages installed from the host, `fatfs`'s cache) |
 
 **How a boot is observed.** MyNOS has no test harness inside it; the
 script watches it from outside, in several ways:
@@ -382,7 +383,49 @@ saves three PNG images: `shell` (the text console after `free` and
 `ps`), `welcome` (the graphical session as it starts) and `system` (the
 System window). `tools/ppm2png.py` converts QEMU's PPM screens.
 
-## H.9 Debugging
+## H.9 Packages
+
+The packages `pkg` installs (chapter 9, 9.8) are described in the main
+repository and published in another, `ctrl-z-bg/mynos-packages`, which
+holds only what `pkg` downloads:
+
+```
+  index.json                      the packages: name, version, description,
+                                  licence, archive, size, BLAKE2b-256 hash,
+                                  the MyNOS they were built on
+  packages/NAME-VERSION.tar       one archive per package and version
+```
+
+Each package is a directory of `packages/` in the main repository with a
+file `spec`, shell assignments read by `tools/pkg-build.sh`:
+
+```
+NAME=tree
+VERSION=1.0
+DESCRIPTION='A tree in the wind: ...'
+LICENSE=GPL-2.0-or-later
+LIBRARIES=graphics                    unix, threads, str, num, graphics
+SRC=doc/manual/examples/20            where the sources are
+SOURCES=tree.ml                       in the order to compile them
+EXTRA=                                more files: a licence, a README
+```
+
+`tools/pkg-build.sh OUTDIR`, in the container, compiles each package
+against the tree's runtime and libraries, as `pkg -s` would inside
+MyNOS (in the sources' directory, with `-noautolink mynos.cma` and the
+libraries named), and writes `OUTDIR/index.json` and the archives. An
+archive holds `package.json` (the spec's fields, the program's name and
+the MyNOS version), the bytecode, `src/` and the extra files; it is made
+the same way each time (names sorted, owner and date 0), so an unchanged
+package keeps its hash. `tools/build-all.sh` builds them into
+`tmp/packages`, which the test suite serves to MyNOS from the host
+(`tools/net-peer.py files`).
+
+To publish: build, copy `tmp/packages` over a clone of
+`mynos-packages`, commit and push. A package whose sources changed gets
+a new `VERSION`, so that `pkg list` shows the installed one as older.
+
+## H.10 Debugging
 
 The kernel is built with `-g` and without optimization, so a debugger
 sees its source as written:
@@ -423,7 +466,7 @@ Above the kernel, the event recorder (appendix G) is the first tool:
 `trace COMMAND` shows which process asked which for what, and how long
 each step took.
 
-## H.10 How the project works
+## H.11 How the project works
 
 - **`doc/STATUS.md`** describes the architecture and the current state.
   A change that alters the state (something builds, runs or breaks, a
@@ -441,7 +484,7 @@ each step took.
   (`mynos-6yr`) instead of keeping lists of things to do.
 - **Before a commit**: `tools/build-all.sh`, then `tools/run-tests.sh`.
 
-## H.11 Known limits
+## H.12 Known limits
 
 - No ready-made image: trying MyNOS means building it. A bootable ISO,
   a disk image and a run script are mynos-sc9.

@@ -620,6 +620,8 @@ if [ -f system/ramdisk.dsk ]; then
         rm -f tests/fat/run-utf8.txt
     fi
     tools/net-peer.py llm 47090 & llm7_pid=$!
+    # the packages' repository (tools/pkg-build.sh), served by the host
+    tools/net-peer.py files 47101 tmp/packages & files7_pid=$!
     NET=1 HTTP=47180 DISK=$([ -f tests/fat/run-shell.img ] && echo tests/fat/run-shell.img) \
     MEM=256 tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
@@ -760,6 +762,18 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     # MyNOS reaches its own address (lwIP's loopback), and httpd refuses
     # the .env files from inside too
     tools/type-keys.py "$tmp/mon7" 'fetch -i http://10.0.2.15/llm.env\n'; sleep 4
+    # packages (mynos-vcd), from the host's copy of their repository: 2048
+    # installed as its bytecode, the tree compiled from its sources (-s);
+    # both found on PATH (the tree has no session to open its window in),
+    # 2048 removed
+    tools/type-keys.py "$tmp/mon7" 'MYNOS_PKG_URL=http://10.0.2.2:47101; pkg list\n'
+    waitfor "A tree in the wind" 30
+    tools/type-keys.py "$tmp/mon7" 'pkg install 2048\n'
+    waitfor "pkg: 2048 1.0 installed" 60
+    tools/type-keys.py "$tmp/mon7" 'pkg install -s tree\n'
+    waitfor "pkg: tree 1.0 installed" 180
+    tools/type-keys.py "$tmp/mon7" 'which tree; tree; echo tree-$?\n'; sleep 8
+    tools/type-keys.py "$tmp/mon7" 'pkg remove 2048; ls /disk/bin\n'; sleep 4
     # Ctrl-C on a program waiting for a line: the next line is sh's, not
     # swallowed by the program it ended (mynos-5dd)
     tools/type-keys.py "$tmp/mon7" '/disk/stdio-test\n'; sleep 4
@@ -800,7 +814,7 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     printf '\021' >> "$tmp/com2-7.in"; sleep 2
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null || true
     wait $qemu || true
-    kill $llm7_pid $peer7 2>/dev/null || true
+    kill $llm7_pid $files7_pid $peer7 2>/dev/null || true
     cat "$log7" >> "$part"
     if [ -f tests/fat/run-shell.img ]; then
         tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/.history \
@@ -1013,6 +1027,11 @@ if [ -f system/ramdisk.dsk ]; then
     expect "after-ctrlc"                               # Ctrl-C swallows nothing
     expect "server: MyNOS httpd"                       # our own address...
     expect "404 Not Found"                             # ... and no llm.env
+    expect "pkg: 2048 1.0 installed (its bytecode): 2048"   # packages
+    expect "pkg: tree 1.0 installed (compiled from its sources): tree"
+    expect "/disk/bin/tree.byte"
+    expect "tree-2"                                    # ran: no session
+    expect "pkg: 2048 removed"
     if [ -n "$httpd_private" ]; then
         echo "ok    httpd: serves /disk, not its .env files"
     else

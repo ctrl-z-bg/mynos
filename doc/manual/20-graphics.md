@@ -446,9 +446,10 @@ let () =
 downwards from the top left; the module turns one into the other.
 
 2048-ml, a game written for `Graphics` by Philip Xu in 2014
-(`third_party/2048-ml`), compiles unchanged and is on the RAM disk:
-`/2048.byte` in a Terminal window of the session. The keys h, j, k and l
-slide the tiles left, down, up and right, r starts again, q quits. The
+(`third_party/2048-ml`), compiles unchanged and is a package:
+`pkg install 2048` (9.8), then `2048` in a Terminal window of the
+session. The keys h, j, k and l slide the tiles left, down, up and
+right, r starts again, q quits. The
 game has a module `Gui` of its own, as `mynos.cma` does; it compiles
 because `ocamlc` looks for an interface in the current directory first,
 and links because nothing in it uses MyNOS's `Gui`.
@@ -635,7 +636,8 @@ $ /disk/tree.byte &
 ```
 
 In the toplevel, `compile "/disk/tree.ml";;` adds `graphics.cma` by
-itself.
+itself. It is also a package: `pkg install tree` (9.8) installs it, and
+`tree` runs it.
 
 ## 20.7 Known limits
 

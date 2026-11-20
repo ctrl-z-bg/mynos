@@ -11,7 +11,9 @@
 #                                    str and Num's C stubs)
 #   third_party/num/nums.cma         the Num library
 #   graphics/graphics.cma            OCaml's Graphics, on Display and Gfx
-#   third_party/2048-ml/2048.byte    a game written for Graphics (a demo)
+#   pkg/pkg.byte                     the package manager
+#   tmp/packages                     the packages (packages/*/spec), as the
+#                                    packages' repository holds them
 #   tests/hello/hello.byte           OCaml test program
 #   tests/effects/effects.byte       effect handlers test
 #   tests/domains/domains.byte       domains test: threads, futexes
@@ -88,9 +90,10 @@ make -C agent
 make -C services/display
 make -C gui
 make -C graphics
-make -C third_party/2048-ml
 make -C tests/net
 make -C shell
+make -C pkg
 make -C system
 tools/build-examples.sh
+tools/pkg-build.sh tmp/packages
 '

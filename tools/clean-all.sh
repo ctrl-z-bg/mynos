@@ -43,7 +43,7 @@ make -C agent clean
 make -C services/display clean
 make -C gui clean
 make -C graphics clean
-make -C third_party/2048-ml clean
+make -C pkg clean
 make -C shell clean
 make -C system clean
 ' >/dev/null

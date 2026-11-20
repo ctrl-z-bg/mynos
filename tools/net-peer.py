@@ -18,6 +18,9 @@
                                  and Chat Completions (POST
                                  /v1/chat/completions), with their headers
                                  and request shapes checked
+  net-peer.py files PORT DIR     the files of DIR over HTTP (GET), as the
+                                 packages' repository on GitHub serves
+                                 them to pkg (until killed)
 """
 import json
 import socket
@@ -322,6 +325,18 @@ def llm(port):
                 pass
 
 
+def files(port, root):
+    import functools
+    import http.server
+
+    class Quiet(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+    handler = functools.partial(Quiet, directory=root)
+    http.server.ThreadingHTTPServer(("127.0.0.1", port), handler).serve_forever()
+
+
 if __name__ == "__main__":
     if sys.argv[1] == "echo":
         echo(int(sys.argv[2]))
@@ -329,6 +344,8 @@ if __name__ == "__main__":
         udpecho(int(sys.argv[2]))
     elif sys.argv[1] == "llm":
         llm(int(sys.argv[2]))
+    elif sys.argv[1] == "files":
+        files(int(sys.argv[2]), sys.argv[3])
     elif sys.argv[1] == "https":
         https(int(sys.argv[2]), sys.argv[3], sys.argv[4])
     else:

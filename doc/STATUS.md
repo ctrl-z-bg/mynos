@@ -40,8 +40,10 @@ talking through IPC.
 | `system/` | The system RAM disk: `init`, `init.rc`, services, the shell, interfaces, programs |
 | `editor/` | `edit`, the text editor, in OCaml on Notty |
 | `sh/` | `sh`, a bash-like command shell, in OCaml |
+| `pkg/` | `pkg`, the package manager (`doc/decisions/packages.md`) |
+| `packages/` | The packages' descriptions (`NAME/spec`), built by `tools/pkg-build.sh` and published in ctrl-z-bg/mynos-packages |
 | `graphics/` | OCaml's `Graphics` library (the `graphics` package's interface) in OCaml on `Display` and `Gfx`, and its test |
-| `third_party/` | kilo (C editor), Notty and uutf (OCaml terminal UI), Num (OCaml big numbers), 2048-ml (a game for `Graphics`, a demo on the RAM disk), lwIP (TCP/IP), mbedTLS (TLS), Mozilla's certificate authorities, with their licenses and MyNOS changes |
+| `third_party/` | kilo (C editor), Notty and uutf (OCaml terminal UI), Num (OCaml big numbers), 2048-ml (a game for `Graphics`, the package `2048`), lwIP (TCP/IP), mbedTLS (TLS), Mozilla's certificate authorities, with their licenses and MyNOS changes |
 | `mynos.mk` | Toolchain variables for user-space programs (`MYNOS_CC`, `MYNOS_LDFLAGS`) |
 
 #### mynos-core — the microkernel
@@ -185,6 +187,17 @@ All services are linked statically against `libmynos` and placed at
   (`httpd/httpd.ml`, OCaml) serves `/disk` over HTTP with 8 worker domains
   (idle connections time out after 10 s), and
   `tools/run-demo.sh` forwards the host's port 8080 to it.
+- **Packages** (2026-11-20, `doc/decisions/packages.md`, mynos-vcd):
+  `pkg` (`pkg/pkg.ml`, on the RAM disk) lists, installs, removes the
+  packages of the repository ctrl-z-bg/mynos-packages (`index.json`,
+  ustar archives, from raw.githubusercontent.com; `MYNOS_PKG_URL` names
+  another). An archive's size and BLAKE2b-256 are checked; its bytecode
+  is installed in `/disk/bin` when its magic number and primitives are
+  this runtime's, otherwise its sources are compiled by `ocamlc` inside
+  MyNOS (`-s` forces it). The packages are described in `packages/` and
+  built by `tools/pkg-build.sh` (into `tmp/packages` by
+  `tools/build-all.sh`). First packages: `2048`, `tree`. Tested in the
+  seventh boot against the host's copy (`tools/net-peer.py files`).
 - **Language models** (2026, `doc/decisions/llm.md`, mynos-wsd): `llmd`
   (`services/llm/llmd.ml`, OCaml, no privilege) serves "llm/1" (module
   `Llm`: `Profiles`, `Chat` with tools; `Llm.ask`) with 4 worker domains.
@@ -217,8 +230,7 @@ All services are linked statically against `libmynos` and placed at
   (immediate mode: labels, buttons, text fields, lists, scroll boxes;
   `Gfx.with_clip`; the mouse wheel), or with OCaml's `Graphics`
   (`graphics/graphics.cma`, mynos-0rn: programs written for it compile
-  unchanged; 2048-ml, `third_party/2048-ml`, is on the RAM disk as
-  `/2048.byte`). `gui` starts a
+  unchanged; 2048-ml, `third_party/2048-ml`, is the package `2048`). `gui` starts a
   session (welcome, clock, the service explorer, which makes a form for
   any request of any typed service from its description, and terminal
   windows: `sh` in a VT100 emulator, its console a service of the window,
@@ -1278,3 +1290,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   156 files). The agent's tree in the wind is the manual's second
   Graphics example (`examples/20/tree.ml`, 20.6). `tools/clean-all.sh`
   now cleans `graphics`, `third_party/num` and `third_party/2048-ml`.
+- **2026-11-20** — Packages: `pkg` (mynos-vcd, `doc/decisions/packages.md`)
+  and the repository ctrl-z-bg/mynos-packages, with `2048` and `tree`.
+  Hybrid packages: bytecode, installed when this runtime can run it
+  (magic number, primitives), and sources, compiled inside MyNOS
+  otherwise. 2048 left the RAM disk (its Makefile too: the package is
+  built by `tools/pkg-build.sh`). Seventh boot: 2048 installed as
+  bytecode, the tree compiled from its sources, 2048 removed. Manual
+  9.8, 13 (PKG), H.9.

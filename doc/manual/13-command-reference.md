@@ -763,6 +763,47 @@ reply from 10.0.2.2: time 0 ms
 
 ---
 
+### PKG
+
+**Purpose** Installs packages: demos and programs from the web.
+
+**Syntax**
+
+```
+pkg list
+pkg info NAME
+pkg install [-s] NAME...
+pkg remove NAME...
+pkg update
+```
+
+**Type** Program (`/pkg.byte`).
+
+**Description** Reads the index of the packages' repository
+(`ctrl-z-bg/mynos-packages` on GitHub, or the one `MYNOS_PKG_URL`
+names) and keeps a copy in `/disk/pkg/index.json`; `update` reads it
+again. `install` downloads a package's archive, checks its size and
+BLAKE2b hash against the index, unpacks it in `/disk/pkg/NAME` and puts
+its program in `/disk/bin`, on `PATH`: the bytecode it holds if this
+MyNOS can run it, otherwise (or with `-s`) the program compiled from its
+sources by `ocamlc`. `remove` deletes both. `list` marks the installed
+packages, with their version when it is older than the index's. Status 0
+on success, 1 on an error (`pkg: REASON`), 2 for a bad command line.
+
+**Examples**
+
+```
+pkg list
+pkg install 2048
+pkg info tree
+MYNOS_PKG_URL=http://10.0.2.2:8000/ pkg install -s tree
+pkg remove 2048
+```
+
+**See also** FETCH, WHICH; chapter 9, 9.8; appendix H, H.9.
+
+---
+
 ### PS
 
 **Purpose** Lists the processes.

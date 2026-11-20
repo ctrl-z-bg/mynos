@@ -2510,3 +2510,27 @@ did.
 library's common names (`Gui`, `Json`, `Http`) can collide with a
 program's own; the current directory wins, then the first `-I`.
 
+## 2026-11-20 — Packages, and what a bytecode program depends on
+
+**Context.** New demos should reach MyNOS without a new RAM disk: a small
+package manager, `pkg`, with an index and archives in a repository of
+their own (`doc/decisions/packages.md`).
+
+**The question.** When can a `.byte` built on the host today run on a
+MyNOS built later? It depends on three things: the bytecode's format
+(the magic number at its end, which changes with OCaml), the primitives
+it calls (the `PRIM` section lists them by name, and the runtime looks
+each up by name when it loads the program: new primitives break
+nothing, a missing one stops it) and the copy of `mynos.cma` linked into
+it, which speaks the services' protocols (versioned by name). The
+MyNOS version string says none of this: it changes at every commit.
+
+**Decision.** `pkg` reads the program's trailer (the section table at
+its end: name, length, then the count and the magic number) and checks
+the first two directly; the third is the protocols' names. When the
+check fails the package's sources are compiled by the `ocamlc` of the
+RAM disk, so every package carries them.
+
+**Lesson.** Ask the artefact, not its label: the bytecode file says what
+it needs, a version number only says when it was made.
+

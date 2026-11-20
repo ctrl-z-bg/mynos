@@ -102,6 +102,7 @@ disk), then `/`, the RAM disk. It tries the name as it is, then with
 | `hello` | a small test program |
 | `trace` | the event recorder (chapter 11) |
 | `fetch URL` | HTTP and HTTPS (chapter 9) |
+| `pkg` | packages: demos and programs from the web, installed in `/disk/bin` (chapter 9) |
 | `llm`, `agent` | language models (chapter 12) |
 | `gui` | the graphical session (chapter 10) |
 | `shutdown [-r]` | turn the machine off, or restart it |
