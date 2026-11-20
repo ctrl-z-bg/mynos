@@ -196,7 +196,7 @@ All services are linked statically against `libmynos` and placed at
   this runtime's, otherwise its sources are compiled by `ocamlc` inside
   MyNOS (`-s` forces it). The packages are described in `packages/` and
   built by `tools/pkg-build.sh` (into `tmp/packages` by
-  `tools/build-all.sh`). First packages: `2048`, `tree`. Tested in the
+  `tools/build-all.sh`). First packages: `2048`, `windtree`. Tested in the
   seventh boot against the host's copy (`tools/net-peer.py files`).
 - **Language models** (2026, `doc/decisions/llm.md`, mynos-wsd): `llmd`
   (`services/llm/llmd.ml`, OCaml, no privilege) serves "llm/1" (module
@@ -1291,10 +1291,21 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   Graphics example (`examples/20/tree.ml`, 20.6). `tools/clean-all.sh`
   now cleans `graphics`, `third_party/num` and `third_party/2048-ml`.
 - **2026-11-20** — Packages: `pkg` (mynos-vcd, `doc/decisions/packages.md`)
-  and the repository ctrl-z-bg/mynos-packages, with `2048` and `tree`.
+  and the repository ctrl-z-bg/mynos-packages, with `2048` and `tree` (renamed `windtree` the same day: `tree`
+  is Unix's command for directory trees).
   Hybrid packages: bytecode, installed when this runtime can run it
   (magic number, primitives), and sources, compiled inside MyNOS
   otherwise. 2048 left the RAM disk (its Makefile too: the package is
   built by `tools/pkg-build.sh`). Seventh boot: 2048 installed as
   bytecode, the tree compiled from its sources, 2048 removed. Manual
   9.8, 13 (PKG), H.9.
+- **2026-11-20** — The package `tree` renamed `windtree`; `pkg list -i`
+  lists the installed packages only, from `/disk` (no network), with
+  the index's newer version if the cached index has one.
+- **2026-11-20** — Manual 4 (timeline): Tommaso Schiavinotto's and
+  Alessandro Tommasi's work cited for what it was, from the git history
+  and SourceForge's news: multiboot, the ELF loader and the semaphores
+  (Tommaso); `fork`, `lmemtrack`'s copy and forced areas, the ZX
+  Spectrum (Alessandro); the first commit, the IPC of 2004, the ZX
+  Spectrum (Cesare). Each is named three times. The row on a Makefile
+  target is gone.

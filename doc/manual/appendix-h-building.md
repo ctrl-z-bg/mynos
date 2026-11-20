@@ -400,7 +400,7 @@ Each package is a directory of `packages/` in the main repository with a
 file `spec`, shell assignments read by `tools/pkg-build.sh`:
 
 ```
-NAME=tree
+NAME=windtree
 VERSION=1.0
 DESCRIPTION='A tree in the wind: ...'
 LICENSE=GPL-2.0-or-later
@@ -421,8 +421,10 @@ package keeps its hash. `tools/build-all.sh` builds them into
 `tmp/packages`, which the test suite serves to MyNOS from the host
 (`tools/net-peer.py files`).
 
-To publish: build, copy `tmp/packages` over a clone of
-`mynos-packages`, commit and push. A package whose sources changed gets
+To publish: build, make a clone of `mynos-packages` hold what
+`tmp/packages` holds (`rsync -a --delete --exclude .git --exclude
+README.md tmp/packages/ CLONE/`, so that a package removed or renamed
+goes too), commit and push. A package whose sources changed gets
 a new `VERSION`, so that `pkg list` shows the installed one as older.
 
 ## H.10 Debugging

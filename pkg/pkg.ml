@@ -1,6 +1,7 @@
 (* pkg: MyNOS's package manager (mynos-vcd, doc/decisions/packages.md).
 
      pkg list                  the packages of the index, and which are installed
+     pkg list -i               the installed packages only (without the network)
      pkg info NAME             a package's description, version, licence, size
      pkg install [-s] NAME...  download, check, install in /disk/pkg/NAME;
                                the program goes to /disk/bin, on sh's PATH
@@ -268,6 +269,20 @@ let list () =
       Printf.printf "%-10s %-8s %-12s %s\n" e.name e.version mark e.description)
     (index ())
 
+(* the packages installed, from /disk/pkg alone; the index, if a copy is
+   there, tells which have a newer version *)
+let list_installed () =
+  let index = try entries (read index_file) with Fail _ | Sys_error _ -> [] in
+  let names = try List.sort compare (Array.to_list (Sys.readdir root)) with Sys_error _ -> [] in
+  let shown = List.filter_map (fun name ->
+      Option.map (fun (v, how) ->
+          let newer = match List.find_opt (fun e -> e.name = name) index with
+            | Some e when e.version <> v -> Printf.sprintf " (the index has %s)" e.version
+            | _ -> "" in
+          Printf.printf "%-10s %-8s %s%s
+" name v how newer) (installed name)) names in
+  if shown = [] then print_endline "pkg: no package is installed"
+
 let info name =
   let e = find name in
   Printf.printf "%s %s\n%s\nlicence: %s\narchive: %s, %d bytes\nbuilt on MyNOS %s\n"
@@ -277,7 +292,7 @@ let info name =
   | None -> print_endline "not installed"
 
 let usage () =
-  prerr_endline "usage: pkg list | info NAME | install [-s] NAME... | remove NAME... | update";
+  prerr_endline "usage: pkg list [-i] | info NAME | install [-s] NAME... | remove NAME... | update";
   exit 2
 
 let () =
@@ -285,6 +300,7 @@ let () =
   try
     match List.tl (Array.to_list Sys.argv) with
     | [ "list" ] -> list ()
+    | [ "list"; "-i" ] -> list_installed ()
     | [ "info"; name ] -> info name
     | "install" :: "-s" :: names -> each (install ~source:true) names
     | "install" :: names -> each (install ~source:false) names

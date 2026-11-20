@@ -770,7 +770,7 @@ reply from 10.0.2.2: time 0 ms
 **Syntax**
 
 ```
-pkg list
+pkg list [-i]
 pkg info NAME
 pkg install [-s] NAME...
 pkg remove NAME...
@@ -787,7 +787,9 @@ BLAKE2b hash against the index, unpacks it in `/disk/pkg/NAME` and puts
 its program in `/disk/bin`, on `PATH`: the bytecode it holds if this
 MyNOS can run it, otherwise (or with `-s`) the program compiled from its
 sources by `ocamlc`. `remove` deletes both. `list` marks the installed
-packages, with their version when it is older than the index's. Status 0
+packages, with their version when it is older than the index's;
+`list -i` lists the installed packages only, from `/disk`, without the
+network. Status 0
 on success, 1 on an error (`pkg: REASON`), 2 for a bad command line.
 
 **Examples**
@@ -795,8 +797,9 @@ on success, 1 on an error (`pkg: REASON`), 2 for a bad command line.
 ```
 pkg list
 pkg install 2048
-pkg info tree
-MYNOS_PKG_URL=http://10.0.2.2:8000/ pkg install -s tree
+pkg list -i
+pkg info windtree
+MYNOS_PKG_URL=http://10.0.2.2:8000/ pkg install -s windtree
 pkg remove 2048
 ```
 

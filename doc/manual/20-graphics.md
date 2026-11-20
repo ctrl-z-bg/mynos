@@ -636,8 +636,8 @@ $ /disk/tree.byte &
 ```
 
 In the toplevel, `compile "/disk/tree.ml";;` adds `graphics.cma` by
-itself. It is also a package: `pkg install tree` (9.8) installs it, and
-`tree` runs it.
+itself. It is also a package: `pkg install windtree` (9.8) installs it,
+and `windtree` runs it.
 
 ## 20.7 Known limits
 

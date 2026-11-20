@@ -17,7 +17,10 @@ set -eu
 out=${1:?usage: tools/pkg-build.sh OUTDIR}
 cd "$(dirname "$0")/.."
 root=$(pwd)
+# OUTDIR/packages holds only the archives of the specs: a package removed
+# or renamed leaves no archive behind
 mkdir -p "$out/packages"
+rm -f "$out"/packages/*.tar
 out=$(cd "$out" && pwd)
 mynos=$(cat VERSION 2>/dev/null || echo unknown)
 stage=$root/tmp/pkg-stage

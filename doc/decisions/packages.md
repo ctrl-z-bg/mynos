@@ -62,4 +62,6 @@ versions and packages as archives, on GitHub.
 ## The first packages
 
 `2048` (2048-ml, `third_party/2048-ml`, BSD; it left the RAM disk) and
-`tree` (the agent's tree in the wind, the manual's example of 20.6, GPL).
+`windtree` (the agent's tree in the wind, the manual's example of 20.6,
+GPL; first called `tree`, renamed the same day: `tree` is Unix's
+command for directory trees).

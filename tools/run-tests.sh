@@ -763,16 +763,16 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     # the .env files from inside too
     tools/type-keys.py "$tmp/mon7" 'fetch -i http://10.0.2.15/llm.env\n'; sleep 4
     # packages (mynos-vcd), from the host's copy of their repository: 2048
-    # installed as its bytecode, the tree compiled from its sources (-s);
-    # both found on PATH (the tree has no session to open its window in),
+    # installed as its bytecode, windtree compiled from its sources (-s);
+    # both found on PATH (windtree has no session to open its window in),
     # 2048 removed
     tools/type-keys.py "$tmp/mon7" 'MYNOS_PKG_URL=http://10.0.2.2:47101; pkg list\n'
     waitfor "A tree in the wind" 30
     tools/type-keys.py "$tmp/mon7" 'pkg install 2048\n'
     waitfor "pkg: 2048 1.0 installed" 60
-    tools/type-keys.py "$tmp/mon7" 'pkg install -s tree\n'
-    waitfor "pkg: tree 1.0 installed" 180
-    tools/type-keys.py "$tmp/mon7" 'which tree; tree; echo tree-$?\n'; sleep 8
+    tools/type-keys.py "$tmp/mon7" 'pkg install -s windtree\n'
+    waitfor "pkg: windtree 1.0 installed" 180
+    tools/type-keys.py "$tmp/mon7" 'which windtree; windtree; echo windtree-$?; pkg list -i\n'; sleep 8
     tools/type-keys.py "$tmp/mon7" 'pkg remove 2048; ls /disk/bin\n'; sleep 4
     # Ctrl-C on a program waiting for a line: the next line is sh's, not
     # swallowed by the program it ended (mynos-5dd)
@@ -1028,9 +1028,10 @@ if [ -f system/ramdisk.dsk ]; then
     expect "server: MyNOS httpd"                       # our own address...
     expect "404 Not Found"                             # ... and no llm.env
     expect "pkg: 2048 1.0 installed (its bytecode): 2048"   # packages
-    expect "pkg: tree 1.0 installed (compiled from its sources): tree"
-    expect "/disk/bin/tree.byte"
-    expect "tree-2"                                    # ran: no session
+    expect "pkg: windtree 1.0 installed (compiled from its sources): windtree"
+    expect "/disk/bin/windtree.byte"
+    expect "windtree-2"                                # ran: no session
+    expect "windtree   1.0      compiled from its sources"   # pkg list -i
     expect "pkg: 2048 removed"
     if [ -n "$httpd_private" ]; then
         echo "ok    httpd: serves /disk, not its .env files"

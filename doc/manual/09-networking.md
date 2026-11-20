@@ -275,7 +275,7 @@ New demos and programs come as packages, from a repository on the web:
 mynos:/$ pkg list
 pkg: 2 packages in the index (https://raw.githubusercontent.com/ctrl-z-bg/mynos-packages/main/index.json)
 2048       1.0                   2048, the sliding tile game, in a window (2048-ml by Philip Xu, 2014): h j k l slide the tiles, q quits
-tree       1.0                   A tree in the wind: a fractal tree under a night sky, written by the agent inside MyNOS (manual 20.6); the mouse sets the wind, q quits
+windtree   1.0                   A tree in the wind: a fractal tree under a night sky, written by the agent inside MyNOS (manual 20.6); the mouse sets the wind, q quits
 mynos:/$ pkg install 2048
 pkg: 2048 1.0: downloading 440320 bytes
 pkg: 2048 1.0 installed (its bytecode): 2048
@@ -289,6 +289,7 @@ window, so they need the session (chapter 10).
 | Command | What it does |
 |---|---|
 | `pkg list` | the packages of the index; `installed` beside those on `/disk` |
+| `pkg list -i` | only the installed packages, with their version and how they were installed; it reads `/disk` alone, without the network |
 | `pkg info NAME` | description, version, licence, size, the MyNOS it was built on, whether installed |
 | `pkg install NAME...` | download, check, install (again, if it is installed) |
 | `pkg install -s NAME...` | the same, compiled from its sources |
