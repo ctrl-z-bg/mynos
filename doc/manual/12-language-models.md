@@ -227,7 +227,7 @@ more.
 | `write_file` | writes (or replaces) a file | yes |
 | `list_directory` | a directory's entries, with sizes | no |
 | `ocaml_signature` | a module's interface, as the toplevel shows it (`Net`, `Gui`, `List`...) | no |
-| `run_ocaml` | compiles an OCaml program against MyNOS's libraries; if it type-checks, runs it | yes, before running |
+| `run_ocaml` | compiles an OCaml program against MyNOS's libraries (with `Unix`, `Thread`, `Str`, `Num`, `Graphics` when it names them, as `compile` does: 8.8); if it type-checks, runs it | yes, before running |
 | `build_ocaml` | compiles a program into a `.byte` file, without running it (a window, a service) | yes |
 
 Each `run_command` starts a new `sh`: a `cd` does not carry over to the

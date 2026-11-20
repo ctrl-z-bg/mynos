@@ -36,7 +36,9 @@ val run : string -> string list -> Mynos.status
 
 val compile : ?output:string -> string -> Mynos.status
 (** [compile "/disk/prog.ml"] compiles a program into [/disk/prog.byte]
-    (or [output]) with ocamlc, inside MyNOS; it may use module {!Mynos}. *)
+    (or [output]) with ocamlc, inside MyNOS; it may use module {!Mynos},
+    and [Unix], [Thread], [Str], [Num], [Graphics], linked when it names
+    them ({!Agent.ocamlc_libraries}). *)
 
 val edit : string -> unit
 (** Edit a file, full screen: Ctrl-S saves, Ctrl-Q quits, Ctrl-F finds,

@@ -36,8 +36,9 @@ let own_tools = [
   { name = "run_ocaml";
     description = "Compile an OCaml 5 program with ocamlc, against MyNOS's libraries \
                    (Mynos: processes, IPC, files; Net: the network; Http; Json; Llm: \
-                   language models; Ipc, Wire, Tools: typed services; and the \
-                   standard library). If it does not type-check, the compiler's \
+                   language models; Ipc, Wire, Tools: typed services; the \
+                   standard library; and, linked when the program names them, \
+                   Unix, Thread, Str, Num and Big_int, Graphics). If it does not type-check, the compiler's \
                    errors come back and nothing runs. If it does, the user confirms, \
                    then it runs: its exit status and output come back. Prefer it to \
                    run_command for anything a typed interface does better. It waits \
@@ -46,7 +47,8 @@ let own_tools = [
     schema = schema [ "code", "the program: an OCaml compilation unit (let () = ...)" ] };
   { name = "build_ocaml";
     description = "Compile an OCaml 5 program, against MyNOS's libraries as run_ocaml \
-                   does (also Gfx, Display, Gui: windows), into a program file, \
+                   does (also Gfx, Display, Gui: windows; or OCaml's Graphics), \
+                   into a program file, \
                    without running it; its source is kept beside it (.ml). The \
                    compiler's errors come back if it does not type-check. For \
                    programs that keep running: start a window or a service with \
@@ -59,7 +61,7 @@ let own_tools = [
     description = "The signature of an OCaml module of MyNOS or of the standard \
                    library (its types and functions), as the toplevel shows it: \
                    Mynos, Net, Http, Json, Llm, Ipc, Wire, Tools, Block, Gfx, \
-                   Display, Gui, List...";
+                   Display, Gui, Graphics, Str, Num, List...";
     schema = schema [ "module", "the module's name, such as Net" ] };
   { name = "read_file"; description = "The contents of a file.";
     schema = schema [ "path", "the file's path" ] };
@@ -135,6 +137,32 @@ let ocaml_signature m =
         if String.starts_with ~prefix:"# " l then String.sub l 2 (String.length l - 2) else l)
         lines))
 
+(* the libraries a program names, for ocamlc inside MyNOS, beside
+   mynos.cma: unix, threads and str are always linked once given (their
+   units are "force link"), so only those the source mentions *)
+let ocamlc_libraries code =
+  let ident c = match c with
+    | 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '_' | '\'' -> true | _ -> false in
+  let n = String.length code in
+  let mentions m =
+    let k = String.length m in
+    let rec from i =
+      i + k <= n
+      && ((String.sub code i k = m
+           && (i = 0 || not (ident code.[i - 1]))
+           && (i + k = n || not (ident code.[i + k])))
+          || from (i + 1)) in
+    from 0 in
+  let any = List.exists mentions in
+  let threads = any [ "Thread"; "Event" ] in
+  "-noautolink" :: "mynos.cma"
+  :: List.concat [
+    (if threads || any [ "Unix"; "UnixLabels" ] then [ "unix.cma" ] else []);
+    (if threads then [ "threads.cma" ] else []);
+    (if mentions "Str" then [ "str.cma" ] else []);
+    (if any [ "Num"; "Big_int"; "Ratio"; "Nat"; "Arith_status" ] then [ "nums.cma" ] else []);
+    (if mentions "Graphics" then [ "graphics.cma" ] else []) ]
+
 (* an OCaml program: compiled (the type checker's word first), then run if
    the user agrees: (result, is an error) *)
 let run_ocaml ~emit ~confirm code =
@@ -148,8 +176,8 @@ let run_ocaml ~emit ~confirm code =
   Fun.protect ~finally:cleanup (fun () ->
       emit (Action (Printf.sprintf "compile (%d lines of OCaml)"
                       (List.length (String.split_on_char '\n' code))));
-      match capture [ "/ocamlc.byte"; "-use-prims"; "/primitives"; "mynos.cma";
-                      "-o"; exe; src ] with
+      match capture ([ "/ocamlc.byte"; "-use-prims"; "/primitives" ]
+                     @ ocamlc_libraries code @ [ "-o"; exe; src ]) with
       | 0, warnings ->
         let lines = String.split_on_char '\n' code in
         let shown = List.filteri (fun i _ -> i < 12) lines in
@@ -177,8 +205,8 @@ let build_ocaml ~emit ~confirm code output =
     else begin
       Out_channel.with_open_bin src (fun oc -> output_string oc code);
       emit (Action (Printf.sprintf "compile %s" src));
-      let result = capture [ "/ocamlc.byte"; "-use-prims"; "/primitives"; "mynos.cma";
-                             "-o"; output; src ] in
+      let result = capture ([ "/ocamlc.byte"; "-use-prims"; "/primitives" ]
+                            @ ocamlc_libraries code @ [ "-o"; output; src ]) in
       List.iter (fun f -> try Sys.remove f with Sys_error _ -> ())
         [ base ^ ".cmi"; base ^ ".cmo" ];
       match result with

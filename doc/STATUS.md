@@ -1265,3 +1265,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `graphics.cma` on the RAM disk; its test in the graphical session's
   boot; 2048-ml compiled unchanged and played. Manual 20.6. Closed
   mynos-0rn.
+- **2026-11-20** — Compiling inside MyNOS links the libraries a program
+  names: the toplevel's `compile` and the agent's `run_ocaml` and
+  `build_ocaml` add `unix.cma`, `threads.cma`, `str.cma`, `nums.cma`,
+  `graphics.cma` when the source mentions their modules
+  (`Agent.ocamlc_libraries`). Found by the agent, which wrote a
+  Graphics program and had to call `ocamlc` by hand. Checked in the
+  seventh boot.

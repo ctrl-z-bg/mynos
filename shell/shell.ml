@@ -79,8 +79,11 @@ let compile ?output src =
     match output with
     | Some o -> o
     | None -> Filename.remove_extension src ^ ".byte" in
-  (* the runtime's primitives include MyNOS's: programs may use Mynos *)
-  run "ocamlc.byte" [ "-use-prims"; "/primitives"; "mynos.cma"; "-o"; out; src ]
+  (* the runtime's primitives include MyNOS's: programs may use Mynos, and
+     the libraries whose modules they name *)
+  let code = try In_channel.with_open_bin src In_channel.input_all with Sys_error _ -> "" in
+  run "ocamlc.byte"
+    ([ "-use-prims"; "/primitives" ] @ Agent.ocamlc_libraries code @ [ "-o"; out; src ])
 
 let edit file = ignore (run "edit.byte" [ file ])
 

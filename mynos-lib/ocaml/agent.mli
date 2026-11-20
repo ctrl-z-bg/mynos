@@ -37,6 +37,14 @@ val run : t -> emit:(event -> unit) -> confirm:(string -> answer) -> string -> i
     0 once the model answered, 1 if it stopped (an error, a refusal, too
     many calls). *)
 
+val ocamlc_libraries : string -> string list
+(** The arguments that give ocamlc, inside MyNOS, the libraries a
+    program's source names: [-noautolink], [mynos.cma], then [unix.cma],
+    [threads.cma], [str.cma], [nums.cma], [graphics.cma] when it mentions
+    their modules ([Unix], [Thread], [Str], [Num] or [Big_int],
+    [Graphics]). The run_ocaml and build_ocaml tools and {!Shell.compile}
+    use it. *)
+
 val tokens : t -> int * int
 (** In and out, since the session started. *)
 

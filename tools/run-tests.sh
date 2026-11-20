@@ -650,6 +650,8 @@ if [ -f system/ramdisk.dsk ]; then
                   'Sys.mkdir "/disk/src" 0o755; cd "/disk/src";;\n' \
                   'write "w.ml" "let () = print_endline (Sys.getcwd ())";;\n' \
                   'ignore (compile "w.ml"); run "w.byte" [];;\n' \
+                  'write "sz.ml" "let () = print_endline (Str.global_replace (Str.regexp (String.make 1 (Char.chr 97))) (String.make 1 (Char.chr 122)) (String.make 5 (Char.chr 97)))";;\n' \
+                  'ignore (compile "sz.ml"); run "sz.byte" [];;\n' \
                   'run "kilo" ["/disk/k.txt"];;\n' 'typed in kilo' '{ctrl-s}' '{ctrl-q}' \
                   'edit "/disk/e.txt";;\n' '' 'second\n{up}first {ctrl-k}{ctrl-u}{ctrl-u}' '{ctrl-s}' '{ctrl-q}' \
                   'sh ();;\n' 'cd /disk; echo from sh > s.txt; X=4; echo "v$X" >> s.txt; cat s.txt | cat\n' \
@@ -1061,6 +1063,11 @@ if [ -f system/ramdisk.dsk ]; then
         echo "ok    cd: a program compiled and run in /disk/src"
     else
         echo "FAIL  cd: a program compiled and run in /disk/src"; fail=1
+    fi
+    if grep -aqx 'zzzzz' "$log7"; then
+        echo "ok    compile links Str when the program names it"
+    else
+        echo "FAIL  compile links Str when the program names it"; fail=1
     fi
     if grep -aqx 'AAA' "$log7"; then
         echo "ok    a program compiled by ocamlc inside MyNOS runs"

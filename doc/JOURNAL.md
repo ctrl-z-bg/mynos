@@ -2463,3 +2463,28 @@ a Graphics program compiled by `ocamlc` inside MyNOS.
 service's timer decides how long zero is. A poll is a different request,
 even when it looks like a small timeout.
 
+## 2026-11-20 — The agent could not link Graphics
+
+**Symptom.** Asked for a test program, the agent inside MyNOS wrote a
+fractal tree in the wind with `Graphics`. Its `build_ocaml` tool failed:
+"No implementation provided" for `Graphics`. The agent then ran `ocamlc`
+itself through `sh`, adding `graphics.cma`, and the program worked. It
+said so in its answer.
+
+**Cause.** The three places that compile inside MyNOS linked
+`mynos.cma` only: the toplevel's `compile`, and the agent's `run_ocaml`
+and `build_ocaml`. `graphics.cma` was on the RAM disk, but nothing asked
+for it.
+
+**Fix.** Linking every library always was not possible: `unix.cma`,
+`threads.cma` and `str.cma` are "force link", so every program would
+carry them, and start the threads library. Instead
+`Agent.ocamlc_libraries` reads the source and adds each library whose
+modules it names (`Unix`, `Thread`, `Str`, `Num`, `Graphics`). A
+comment naming one costs only a larger program. The tools' descriptions
+now list those modules.
+
+**Lesson.** A library installed is not a library available: the paths
+that build programs must know of it too. The agent found the gap and
+worked around it, and its report is how we learned of it.
+

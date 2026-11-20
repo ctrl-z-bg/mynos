@@ -252,7 +252,16 @@ standard library. MyNOS runs them on one processor, in turn.
 
 The toplevel has the same tools as functions. `compile` calls `ocamlc`
 with `-use-prims /primitives mynos.cma`, so programs compiled this way
-may use MyNOS; the result goes next to the source:
+may use MyNOS. It also links each of these libraries whose modules the
+source names:
+
+- `unix.cma`, for `Unix`;
+- `threads.cma`, for `Thread` and `Event`;
+- `str.cma`, for `Str`;
+- `nums.cma`, for `Num` and `Big_int`;
+- `graphics.cma`, for `Graphics` (20.6).
+
+The result goes next to the source:
 
 ```
   # write "/disk/aaa.ml" "let () = print_endline (String.make 3 'A')";;
@@ -266,8 +275,7 @@ may use MyNOS; the result goes next to the source:
 
 `compile ~output:"/disk/bin/x.byte" "/disk/a.ml"` chooses the program's
 name. A failed compilation prints the compiler's message and returns
-`Mynos.Exited 2`. For a program with threads, call `ocamlc` through
-`sh` as in 8.7.
+`Mynos.Exited 2`.
 
 ## 8.9 The whole cycle
 
