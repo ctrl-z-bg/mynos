@@ -309,7 +309,9 @@ MyNOS. The last word of the line says which happened.
 
 The index can come from elsewhere: `MYNOS_PKG_URL` names another
 repository with the same files, for instance one served from your
-computer (`MYNOS_PKG_URL=http://10.0.2.2:8000/ pkg list`). Appendix H.9
+computer (`MYNOS_PKG_URL=http://10.0.2.2:8000/ pkg list`); the file
+`/disk/pkg/url`, one line, does the same for every program, the
+graphical session's Packages window too (chapter 10, 10.14). Appendix H.9
 tells how packages are built and published.
 
 ## 9.9 When something does not work

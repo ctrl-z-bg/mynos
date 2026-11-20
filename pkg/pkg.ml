@@ -13,25 +13,13 @@
    MYNOS_PKG_URL names another. A package holds its program as bytecode
    and its sources: the bytecode is installed when this MyNOS can run it
    (the same bytecode format, every primitive it needs in the runtime);
-   otherwise, or with -s, the sources are compiled here by ocamlc. *)
+   otherwise, or with -s, the sources are compiled here by ocamlc. The
+   index and the installed packages are read by module Pkgdb, which the
+   graphical session's Packages window shares. *)
 
-let default_url = "https://raw.githubusercontent.com/ctrl-z-bg/mynos-packages/main/"
-let root = "/disk/pkg"
-let bin = "/disk/bin"
-let index_file = root ^ "/index.json"
-
-exception Fail of string
-let fail fmt = Printf.ksprintf (fun s -> raise (Fail s)) fmt
-
-let base () =
-  match Sys.getenv_opt "MYNOS_PKG_URL" with
-  | Some u when u <> "" -> if String.ends_with ~suffix:"/" u then u else u ^ "/"
-  | _ -> default_url
+open Pkgdb
 
 (* {1 Files} *)
-
-let read path = In_channel.with_open_bin path In_channel.input_all
-let write path s = Out_channel.with_open_bin path (fun oc -> output_string oc s)
 
 let rec mkdir_p d =
   if not (Sys.file_exists d) then begin
@@ -53,31 +41,6 @@ let download url =
   | r -> fail "%s: %d %s" url r.Http.status r.reason
   | exception Http.Error m -> fail "%s: %s" url m
 
-(* {1 The index} *)
-
-type entry = {
-  name : string;
-  version : string;
-  description : string;
-  license : string;
-  archive : string;       (* its path, from the repository's root *)
-  size : int;
-  hash : string;          (* BLAKE2b-256 of the archive, in hexadecimal *)
-  mynos : string;         (* the MyNOS its bytecode was built on *)
-}
-
-let entries text =
-  try
-    let open Json in
-    let v = of_string text in
-    if member "format" v |> to_int <> 1 then fail "index: a format this pkg does not know";
-    member "packages" v |> to_list |> List.map (fun p ->
-        let s k = member k p |> to_string_value in
-        { name = s "name"; version = s "version"; description = s "description";
-          license = s "license"; archive = s "archive"; size = member "size" p |> to_int;
-          hash = s "blake2b-256"; mynos = s "mynos" })
-  with Json.Error m -> fail "index: %s" m
-
 let update () =
   let url = base () ^ "index.json" in
   let text = download url in
@@ -94,13 +57,6 @@ let find name =
   match List.find_opt (fun e -> e.name = name) (index ()) with
   | Some e -> e
   | None -> fail "%s: no such package (pkg update reads the index again)" name
-
-(* the installed version, and how it was installed *)
-let installed name =
-  match String.split_on_char '\n' (read (Printf.sprintf "%s/%s/installed" root name)) with
-  | version :: how :: _ -> Some (version, how)
-  | _ -> None
-  | exception Sys_error _ -> None
 
 (* {1 Archives: tar (ustar)} *)
 
@@ -272,16 +228,15 @@ let list () =
 (* the packages installed, from /disk/pkg alone; the index, if a copy is
    there, tells which have a newer version *)
 let list_installed () =
-  let index = try entries (read index_file) with Fail _ | Sys_error _ -> [] in
-  let names = try List.sort compare (Array.to_list (Sys.readdir root)) with Sys_error _ -> [] in
-  let shown = List.filter_map (fun name ->
-      Option.map (fun (v, how) ->
+  let index = cached_index () in
+  let names = installed_names () in
+  List.iter (fun name ->
+      Option.iter (fun (v, how) ->
           let newer = match List.find_opt (fun e -> e.name = name) index with
             | Some e when e.version <> v -> Printf.sprintf " (the index has %s)" e.version
             | _ -> "" in
-          Printf.printf "%-10s %-8s %s%s
-" name v how newer) (installed name)) names in
-  if shown = [] then print_endline "pkg: no package is installed"
+          Printf.printf "%-10s %-8s %s%s\n" name v how newer) (installed name)) names;
+  if names = [] then print_endline "pkg: no package is installed"
 
 let info name =
   let e = find name in

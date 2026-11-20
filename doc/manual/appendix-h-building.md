@@ -167,7 +167,7 @@ once copied from the services', and it was built as a MyNOS program:
 journal, "Bug 3".)
 
 `system/Makefile` makes the system RAM disk, `system/ramdisk.dsk`, from
-156 files today: `init.byte` and `init.rc`; `ocamlrun`,
+157 files today: `init.byte` and `init.rc`; `ocamlrun`,
 `consoled`, `netd`, `displayd` and `kilo`, stripped of their debugging
 information; the OCaml programs and services; fonts, logo and
 certificates; and what is needed to compile OCaml inside MyNOS: the

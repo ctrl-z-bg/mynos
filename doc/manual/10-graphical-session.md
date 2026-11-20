@@ -70,8 +70,9 @@ Click **MyNOS**, top left. The menu opens:
 | Files | the file manager (10.9) |
 | Tour | lessons on how an operating system works (10.13, chapter 11) |
 | Log | the kernel's log, its messages and the services', followed as it grows (`log -f` in a window) |
-| Exit | ends the session: back to the text console (10.15) |
-| Shut down | turns the machine off (10.15) |
+| Packages | the packages: demos and programs to install from the web (10.14) |
+| Exit | ends the session: back to the text console (10.16) |
+| Shut down | turns the machine off (10.16) |
 
 Click an item to start it; a click anywhere else closes the menu. Each
 item starts a new program, so choosing Clock twice gives two clocks.
@@ -284,7 +285,34 @@ The menu's **Tour** lists lessons on how an operating system works, each
 a command recorded and replayed in the System window with words at each
 step. Chapter 11, 11.6.
 
-## 10.14 Graphical programs outside the session
+## 10.14 Packages
+
+The menu's **Packages** shows the packages of chapter 9 (9.8): demos and
+programs that are not on the RAM disk, to install from the web. The list
+on the left has every package of the index, `installed` beside those on
+your disk (`newer` when the index has a newer version). On the right,
+the chosen one: its description, licence, size, the MyNOS it was built
+on, and whether it is installed, with buttons:
+
+| Button | What it does |
+|---|---|
+| Install | downloads, checks and installs it (`pkg install NAME`) |
+| Upgrade | the same, when the index has a newer version |
+| Run | starts the installed program, in a window of its own |
+| Remove | uninstalls it (`pkg remove NAME`) |
+| Update index | reads the index again (`pkg update`) |
+
+The window does not do the work itself: each button runs `pkg`, the
+command of chapter 9, as a process of its own, and shows its output
+under the buttons as it comes. The window keeps answering meanwhile, and
+the result is the same as at `sh`: the programs go to `/disk/bin`, where
+a Terminal finds them by name. The first time, when there is no copy of
+the index on the disk yet, the window reads it by itself.
+
+To use another repository, write its address in the file
+`/disk/pkg/url` (one line): the window and `pkg` both read it.
+
+## 10.15 Graphical programs outside the session
 
 A graphical program started from the text console, where there is no
 session, says so and ends (exit status 2):
@@ -309,7 +337,7 @@ with `&` from `sh`.
 > drawing itself is visible: the Recordings window, with "GUI: shown",
 > lists every frame a window sends.
 
-## 10.15 Step 5: leaving the session
+## 10.16 Step 5: leaving the session
 
 - **Exit**, in the MyNOS menu, closes every window and returns to the
   text console, as it was when you typed `gui`. `gui` then prints `gui:

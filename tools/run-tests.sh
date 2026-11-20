@@ -31,7 +31,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private edit_utf8 log_shown"
+results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private edit_utf8 log_shown"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -316,7 +316,7 @@ sec_gui() {
 # the graphical session (doc/decisions/gui.md): displayd, windows of
 # programs, the mouse, back to text mode. QEMU's monitor moves the mouse
 # relatively: vmmouse (absolute) is off, the PS/2 mouse is used
-gui_ok= powered_off= gui_hangup= files_ok=
+gui_ok= powered_off= gui_hangup= files_ok= pkgwin_ok=
 if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     : > "$tmp/logg"
     # the agent window's model: the fake provider, as in the seventh boot,
@@ -326,10 +326,13 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
         cp tests/fat/fat16.img "$gdisk"
         # its own port (the seventh boot, at the same time, has 47090)
         sed 's/:47090/:47091/' tests/net/llm-test.env > tests/fat/run-gui.env
-        tools/in-container.sh dev sh -c "mcopy -i $gdisk tests/fat/run-gui.env ::/llm.env && mcopy -i $gdisk tests/greeter/old-boot.trc ::/old-boot.trc && mcopy -i $gdisk tests/greeter/greeter.byte ::/greeter.byte && mcopy -i $gdisk graphics/gtest.byte ::/gtest.byte"
-        rm -f tests/fat/run-gui.env
+        # the packages' repository: the host's copy (tools/pkg-build.sh)
+        printf 'http://10.0.2.2:47102/\n' > tests/fat/run-gui.url
+        tools/in-container.sh dev sh -c "mcopy -i $gdisk tests/fat/run-gui.env ::/llm.env && mcopy -i $gdisk tests/greeter/old-boot.trc ::/old-boot.trc && mcopy -i $gdisk tests/greeter/greeter.byte ::/greeter.byte && mcopy -i $gdisk graphics/gtest.byte ::/gtest.byte && mmd -i $gdisk ::/pkg && mcopy -i $gdisk tests/fat/run-gui.url ::/pkg/url"
+        rm -f tests/fat/run-gui.env tests/fat/run-gui.url
     fi
     tools/net-peer.py llm 47091 & llmg_pid=$!
+    tools/net-peer.py files 47102 tmp/packages & filesg_pid=$!
     NET=1 DISK=$gdisk MEM=256 tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
@@ -440,11 +443,17 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     # closes its window
     click 20 10; sleep 1; click 40 39; sleep 10
     tools/type-keys.py "$tmp/mon-g" '/disk/gtest.byte\n'; sleep 12
-    click 20 10; sleep 1; click 30 281; sleep 4    # the MyNOS menu, Exit
+    # the Packages window (pkg/packages_window.ml), the menu's eleventh
+    # item: with no index on the disk it reads one, through pkg, from the
+    # repository /disk/pkg/url names (the host's copy)
+    click 20 10; sleep 1; click 40 259; sleep 15
+    mon "screendump $tmp/gui22.ppm"
+    click 20 10; sleep 1; click 30 303; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt; ls /disk\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too
     tools/type-keys.py "$tmp/mon-g" 'ps\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g" 'cat /disk/pkg/index.json\n'; sleep 3
     # turning the machine off: init does it, QEMU ends by itself
     tools/type-keys.py "$tmp/mon-g" 'shutdown\n'
     i=0
@@ -455,7 +464,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
         powered_off=yes
     fi
     wait $qemu || true
-    kill $llmg_pid 2>/dev/null; wait $llmg_pid 2>/dev/null || true
+    kill $llmg_pid $filesg_pid 2>/dev/null; wait $llmg_pid $filesg_pid 2>/dev/null || true
     [ -n "${SHOTS:-}" ] && cp "$tmp"/gui*.ppm "$SHOTS"/   # SHOTS=DIR keeps the screens
     python3 - "$tmp/logg" <<'PY' && gui_hangup=yes
 import re, sys
@@ -472,6 +481,7 @@ assert s.count("agentwin-ok") >= 2, "aw.txt copied to /disk by Files"
 assert "newdir" in s, "a folder made by Files"
 assert "ctrlc-137" in s, "Ctrl-C in the terminal window"
 PY
+    grep -aq '"name": "windtree"' "$tmp/logg" && pkgwin_ok=yes
     cat "$tmp/logg" >> "$part"
     python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
               "$tmp"/gui6.ppm "$tmp"/gui7.ppm "$tmp"/gui8.ppm "$tmp"/gui9.ppm \
@@ -1127,6 +1137,11 @@ PY
         echo "ok    files: a file copied between services, a folder made; Ctrl-C in a terminal"
     else
         echo "FAIL  files: a file copied between services, a folder made; Ctrl-C in a terminal"; fail=1
+    fi
+    if [ -n "$pkgwin_ok" ]; then
+        echo "ok    gui: the Packages window read the index through pkg"
+    else
+        echo "FAIL  gui: the Packages window read the index through pkg"; fail=1
     fi
     if [ -n "$gui_hangup" ]; then
         echo "ok    gui: a terminal closed ends its sh (a hang-up)"

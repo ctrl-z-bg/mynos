@@ -40,7 +40,7 @@ talking through IPC.
 | `system/` | The system RAM disk: `init`, `init.rc`, services, the shell, interfaces, programs |
 | `editor/` | `edit`, the text editor, in OCaml on Notty |
 | `sh/` | `sh`, a bash-like command shell, in OCaml |
-| `pkg/` | `pkg`, the package manager (`doc/decisions/packages.md`) |
+| `pkg/` | `pkg`, the package manager, and the graphical session's Packages window (`doc/decisions/packages.md`) |
 | `packages/` | The packages' descriptions (`NAME/spec`), built by `tools/pkg-build.sh` and published in ctrl-z-bg/mynos-packages |
 | `graphics/` | OCaml's `Graphics` library (the `graphics` package's interface) in OCaml on `Display` and `Gfx`, and its test |
 | `third_party/` | kilo (C editor), Notty and uutf (OCaml terminal UI), Num (OCaml big numbers), 2048-ml (a game for `Graphics`, the package `2048`), lwIP (TCP/IP), mbedTLS (TLS), Mozilla's certificate authorities, with their licenses and MyNOS changes |
@@ -197,7 +197,10 @@ All services are linked statically against `libmynos` and placed at
   MyNOS (`-s` forces it). The packages are described in `packages/` and
   built by `tools/pkg-build.sh` (into `tmp/packages` by
   `tools/build-all.sh`). First packages: `2048`, `windtree`. Tested in the
-  seventh boot against the host's copy (`tools/net-peer.py files`).
+  seventh boot against the host's copy (`tools/net-peer.py files`). The
+  graphical session's Packages window (`pkg/packages_window.ml`, in the
+  MyNOS menu) lists them and runs `pkg` for Install, Remove, Update;
+  `/disk/pkg/url` names another repository for both.
 - **Language models** (2026, `doc/decisions/llm.md`, mynos-wsd): `llmd`
   (`services/llm/llmd.ml`, OCaml, no privilege) serves "llm/1" (module
   `Llm`: `Profiles`, `Chat` with tools; `Llm.ask`) with 4 worker domains.
@@ -1309,3 +1312,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   Spectrum (Alessandro); the first commit, the IPC of 2004, the ZX
   Spectrum (Cesare). Each is named three times. The row on a Makefile
   target is gone.
+- **2026-11-20** — The Packages window (`packages.byte`, the MyNOS menu's
+  Packages): the index's packages, the installed ones marked, Install,
+  Upgrade, Run, Remove, Update index; each runs `pkg` as a process,
+  its output shown as it comes. `pkg`'s reading of the index and of the
+  installed packages moved to module `Pkgdb`, shared by both.
+  `/disk/pkg/url` names the repository for every program. Tested in the
+  graphical session (lane d): the window reads the index from the
+  host's copy. It reads the installed packages at its start and after
+  each job only: read at every frame, they were open when `pkg remove`
+  came, and fatfs does not remove an open file (JOURNAL, "A window that
+  read too often"). Manual 10.3, 10.14 (new), 13 (PACKAGES).

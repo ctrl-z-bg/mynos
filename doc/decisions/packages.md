@@ -47,6 +47,15 @@ versions and packages as archives, on GitHub.
    as `mynos.cma` does; `ocamlc` finds an interface in the current
    directory before the `-I` directories.
 
+8. **A window for the graphical session** (`packages.byte`, in the
+   MyNOS menu): it reads the index and the installed packages itself
+   (module `Pkgdb`, shared with `pkg`) and runs `pkg` as a process for
+   every change, its output in a file of `/tmp` that it shows as it
+   grows. One implementation of installing, and a window that keeps
+   answering while a package downloads or compiles. The repository can
+   also be named in `/disk/pkg/url`, since a program started from the
+   menu has no shell to set `MYNOS_PKG_URL` in.
+
 ## Rejected
 
 - *Packages in the main repository*: the history would keep every

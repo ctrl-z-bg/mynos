@@ -62,7 +62,7 @@ click() { to "$1" "$2"; mon "mouse_button 1"; mon "mouse_button 0"; }
 keys() { tools/type-keys.py "$w/mon" "$1"; }
 # the MyNOS menu's items, from displayd.c: 22 pixels each, from y = 28
 # 0 Terminal, 1 Welcome, 2 Clock, 3 Services, 4 Agent, 5 Recordings,
-# 6 System, 7 Files, 8 Tour, 9 Log
+# 6 System, 7 Files, 8 Tour, 9 Log, 10 Packages
 menu() { click 20 10; sleep 1; click 40 $((28 + $1 * 22 + 11)); }
 shot() { mon "screendump $w/$1.ppm"; sleep 1
          python3 tools/ppm2png.py "$w/$1.ppm" "$out/$1.png"; echo "$out/$1.png"; }

@@ -739,6 +739,23 @@ ocamlc -use-prims /primitives mynos.cma -o p.byte p.ml
 
 ---
 
+### PACKAGES
+
+**Purpose** The packages, in a window.
+
+**Syntax** `packages`
+
+**Type** Program (`/packages.byte`), graphical.
+
+**Description** Opens the Packages window: the packages of the index,
+the installed ones marked; for the one chosen, its description and
+Install, Upgrade, Run, Remove; Update index. Each button runs `pkg` and
+shows its output.
+
+**See also** PKG, GUI; chapter 10, 10.14.
+
+---
+
 ### PING
 
 **Purpose** Checks that a machine answers.
@@ -780,8 +797,8 @@ pkg update
 **Type** Program (`/pkg.byte`).
 
 **Description** Reads the index of the packages' repository
-(`ctrl-z-bg/mynos-packages` on GitHub, or the one `MYNOS_PKG_URL`
-names) and keeps a copy in `/disk/pkg/index.json`; `update` reads it
+(`ctrl-z-bg/mynos-packages` on GitHub, or the one `MYNOS_PKG_URL`, or
+else the first line of `/disk/pkg/url`, names) and keeps a copy in `/disk/pkg/index.json`; `update` reads it
 again. `install` downloads a package's archive, checks its size and
 BLAKE2b hash against the index, unpacks it in `/disk/pkg/NAME` and puts
 its program in `/disk/bin`, on `PATH`: the bytecode it holds if this
@@ -803,7 +820,8 @@ MYNOS_PKG_URL=http://10.0.2.2:8000/ pkg install -s windtree
 pkg remove 2048
 ```
 
-**See also** FETCH, WHICH; chapter 9, 9.8; appendix H, H.9.
+**See also** FETCH, PACKAGES, WHICH; chapter 9, 9.8; chapter 10, 10.14;
+appendix H, H.9.
 
 ---
 

@@ -2534,3 +2534,26 @@ RAM disk, so every package carries them.
 **Lesson.** Ask the artefact, not its label: the bytecode file says what
 it needs, a version number only says when it was made.
 
+## 2026-11-20 — A window that read too often
+
+**Symptom.** In the Packages window, Remove failed on `windtree`:
+"pkg: /disk/pkg/windtree/installed: Permission denied". The same
+`pkg remove` from `sh` worked, in the tests and by hand.
+
+**Diagnosis.** `fatfs` answers `denied` to a `Remove` of a file that is
+open (`is_open`, a FAT file has no link count to outlive its name). The
+window drew its list and the chosen package at every frame, four times a
+second and at every event, and each drawing opened and read
+`/disk/pkg/NAME/installed` for every package. `pkg`, a process of its
+own, removed the same files meanwhile: now and then it met one the
+window had open.
+
+**Fix.** The window reads the installed packages once at the start and
+once at the end of each job of `pkg`, into its state; it draws from that.
+While `pkg` works, the window touches only `pkg`'s output in `/tmp`.
+
+**Lesson.** An immediate-mode window redraws often, so whatever it reads
+while drawing it reads all the time. On a file system where an open file
+cannot be removed, polling a file is holding it: read the state when it
+changes, not when you draw it.
+
