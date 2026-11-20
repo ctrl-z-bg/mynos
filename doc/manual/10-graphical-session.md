@@ -140,7 +140,9 @@ programs such as `edit` run in it too.
   an agent started, for example) keeps running.
 
 A graphical program started from a terminal (`/clock.byte`, or your own
-with `&`) opens its window in the session.
+with `&`) opens its window in the session. `/2048.byte` is a game,
+2048-ml, written for OCaml's `Graphics` (20.6): h, j, k and l slide the
+tiles, q quits.
 
 ![Figure 10-4. A Terminal window: `ls /disk`, then the OCaml toplevel](../screenshots/terminal.png)
 

@@ -50,7 +50,7 @@ FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo n
 	$(STDLIB)/threads/thread.cmi $(STDLIB)/threads/event.cmi \
 	$(STDLIB)/str/str.cma $(STDLIB)/str/str.cmi \
 	../third_party/num/nums.cma $(NUM_CMI) \
-	../graphics/graphics.cma ../graphics/graphics.cmi \
+	../graphics/graphics.cma ../graphics/graphics.cmi ../third_party/2048-ml/2048.byte \
 	ocamlc.byte ../mynos-runtime/primitives \
 	../mynos-lib/ocaml/mynos.cma ../mynos-lib/ocaml/block.cmi ../mynos-lib/ocaml/fs.cmi \
 	../mynos-lib/ocaml/console.cmi ../mynos-lib/ocaml/registry.cmi \

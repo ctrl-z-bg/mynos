@@ -2488,3 +2488,25 @@ now list those modules.
 that build programs must know of it too. The agent found the gap and
 worked around it, and its report is how we learned of it.
 
+## 2026-11-20 — Two modules named Gui
+
+**Symptom.** 2048-ml, built by a Makefile from `third_party/2048-ml` with
+`-I src`, failed: "The implementation src/gui.ml does not match the
+interface", and the interface it quoted was MyNOS's `Gui`, from
+`mynos-lib/ocaml`. Built from inside `src`, the same files compiled.
+
+**Cause.** The game has a module `Gui` of its own, and so has
+`mynos.cma`. To check `gui.ml`, `ocamlc` looks for `gui.cmi` on its load
+path: the current directory first, then the `-I` directories in the
+order given. With `-I src` after `-I mynos-lib/ocaml`, the library's
+`gui.cmi` was found first. Linking is no problem: a module of a `.cma` is
+linked only if something uses it, and `graphics.cma` does not use
+MyNOS's `Gui`.
+
+**Fix.** The Makefile compiles inside `src`, as the earlier manual build
+did.
+
+**Lesson.** OCaml's modules share one flat namespace per program. A
+library's common names (`Gui`, `Json`, `Http`) can collide with a
+program's own; the current directory wins, then the first `-I`.
+

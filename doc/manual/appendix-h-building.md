@@ -120,7 +120,8 @@ error stops it. In order, it builds:
 2. libmynos (`mynos-lib`);
 3. the C services of `services/`: memrofs and its `createDisk` tool,
    keyboardd, seriald, the registry, consoled;
-4. the OCaml runtime (`mynos-runtime`: `ocamlrun` and `primitives`);
+4. the OCaml runtime (`mynos-runtime`: `ocamlrun` and `primitives`),
+   and Num (`third_party/num`);
 5. the C tests (`tests/abi`, `tests/stress`);
 6. the OCaml library (`mynos-lib/ocaml`: `mynos.cma`, with `Tracer`,
    `Gui` and the protocol modules);
@@ -132,7 +133,8 @@ error stops it. In order, it builds:
    `tests/storage`, `tests/fat` (with its FAT16 and FAT32 images);
 10. the network: `netd`, `httpd`, `trace`, `fetch`, `llmd`, `llm`,
     `agent`;
-11. the graphics: `displayd`, `gui` (the session and its windows);
+11. the graphics: `displayd`, `gui` (the session and its windows),
+    `graphics` (OCaml's `Graphics`) and the game 2048-ml (`third_party`);
 12. `tests/net`, `shell` (the OCaml toplevel), and last `system`: the
     system RAM disk and the disk image (H.5).
 
@@ -164,10 +166,10 @@ once copied from the services', and it was built as a MyNOS program:
 journal, "Bug 3".)
 
 `system/Makefile` makes the system RAM disk, `system/ramdisk.dsk`, from
-155 files today: `init.byte` and `init.rc`; `ocamlrun`,
+156 files today: `init.byte` and `init.rc`; `ocamlrun`,
 `consoled`, `netd`, `displayd` and `kilo`, stripped of their debugging
-information; the OCaml programs and services; fonts, logo and
-certificates; and what is needed to compile OCaml inside MyNOS: the
+information; the OCaml programs and services; the game 2048-ml; fonts,
+logo and certificates; and what is needed to compile OCaml inside MyNOS: the
 bytecode compiler `ocamlc.byte`, the standard library's `.cmi` files and
 `stdlib.cma`, `unix.cma`, `threads.cma`, `str.cma`, `nums.cma`,
 `graphics.cma`, `mynos.cma` and the interfaces of

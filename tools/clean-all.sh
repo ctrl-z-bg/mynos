@@ -13,6 +13,7 @@ make -C mynos-lib clean
 make -C services clean
 make -C services/fs/memrofs/tool clean
 make -C mynos-runtime clean
+make -C third_party/num clean
 make -C tests/abi clean
 make -C tests/fpu clean
 make -C tests/stdio clean
@@ -41,6 +42,8 @@ make -C llm clean
 make -C agent clean
 make -C services/display clean
 make -C gui clean
+make -C graphics clean
+make -C third_party/2048-ml clean
 make -C shell clean
 make -C system clean
 ' >/dev/null

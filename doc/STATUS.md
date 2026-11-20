@@ -41,7 +41,7 @@ talking through IPC.
 | `editor/` | `edit`, the text editor, in OCaml on Notty |
 | `sh/` | `sh`, a bash-like command shell, in OCaml |
 | `graphics/` | OCaml's `Graphics` library (the `graphics` package's interface) in OCaml on `Display` and `Gfx`, and its test |
-| `third_party/` | kilo (C editor), Notty and uutf (OCaml terminal UI), Num (OCaml big numbers), lwIP (TCP/IP), mbedTLS (TLS), Mozilla's certificate authorities, with their licenses and MyNOS changes |
+| `third_party/` | kilo (C editor), Notty and uutf (OCaml terminal UI), Num (OCaml big numbers), 2048-ml (a game for `Graphics`, a demo on the RAM disk), lwIP (TCP/IP), mbedTLS (TLS), Mozilla's certificate authorities, with their licenses and MyNOS changes |
 | `mynos.mk` | Toolchain variables for user-space programs (`MYNOS_CC`, `MYNOS_LDFLAGS`) |
 
 #### mynos-core — the microkernel
@@ -217,7 +217,8 @@ All services are linked statically against `libmynos` and placed at
   (immediate mode: labels, buttons, text fields, lists, scroll boxes;
   `Gfx.with_clip`; the mouse wheel), or with OCaml's `Graphics`
   (`graphics/graphics.cma`, mynos-0rn: programs written for it compile
-  unchanged; 2048-ml runs). `gui` starts a
+  unchanged; 2048-ml, `third_party/2048-ml`, is on the RAM disk as
+  `/2048.byte`). `gui` starts a
   session (welcome, clock, the service explorer, which makes a form for
   any request of any typed service from its description, and terminal
   windows: `sh` in a VT100 emulator, its console a service of the window,
@@ -1272,3 +1273,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   (`Agent.ocamlc_libraries`). Found by the agent, which wrote a
   Graphics program and had to call `ocamlc` by hand. Checked in the
   seventh boot.
+- **2026-11-20** — 2048-ml (Philip Xu, BSD) in `third_party/2048-ml`,
+  built against `graphics.cma` and put on the RAM disk (`/2048.byte`,
+  156 files). The agent's tree in the wind is the manual's second
+  Graphics example (`examples/20/tree.ml`, 20.6). `tools/clean-all.sh`
+  now cleans `graphics`, `third_party/num` and `third_party/2048-ml`.

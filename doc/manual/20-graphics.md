@@ -444,8 +444,14 @@ let () =
 
 `Graphics` counts y upwards from the bottom left corner, `Gfx`
 downwards from the top left; the module turns one into the other.
-2048-ml, a game written for `Graphics` in 2014, compiles unchanged and
-plays in a window of the session.
+
+2048-ml, a game written for `Graphics` by Philip Xu in 2014
+(`third_party/2048-ml`), compiles unchanged and is on the RAM disk:
+`/2048.byte` in a Terminal window of the session. The keys h, j, k and l
+slide the tiles left, down, up and right, r starts again, q quits. The
+game has a module `Gui` of its own, as `mynos.cma` does; it compiles
+because `ocamlc` looks for an interface in the current directory first,
+and links because nothing in it uses MyNOS's `Gui`.
 
 **How it draws.** Everything is drawn into a buffer of the program's
 own, which X11's version calls the backing store. What changed is copied
@@ -474,6 +480,162 @@ X11.
 - the close box ends the program with status 0;
 - `resize_window` makes the window again, keeping its content as it
   fits.
+
+**A tree in the wind.** The program below began as `/disk/albero.ml` on
+a development disk, written inside MyNOS on 2026-11-20 by the agent,
+asked for "a test program for Graphics". The agent's first build failed:
+its `build_ocaml` tool linked only `mynos.cma`, so `ocamlc` found no
+implementation of `Graphics`. The agent called `ocamlc` itself with
+`graphics.cma`, and said why in its answer; since then `build_ocaml`,
+`run_ocaml` and the toplevel's `compile` link the libraries a program
+names (8.8). Here its labels are translated into English, its comments
+completed, and two long lines broken (`examples/20/tree.ml`).
+
+A fractal tree grows from a hill under a night sky. Each branch splits
+in two, nine levels deep; the wind bends the thin branches more than the
+thick ones, and comes from the mouse's distance from the middle of the
+window, plus two gusts. Leaves now and then come off and fall. The
+keys + and - change the depth, a and z the angle between branches, space
+turns the leaves to autumn, q quits. Every frame is drawn whole with
+`auto_synchronize false` and shown by `synchronize`, so the picture does
+not flicker.
+
+```ocaml
+(* A tree in the wind: a fractal tree under a night sky, drawn with
+   Graphics. The mouse sets the wind, leaves fall from the branches. *)
+
+open Graphics
+
+let w = 640 and h = 480
+let pi = 4.0 *. atan 1.0
+
+(* fixed stars: position and phase of their twinkle *)
+let stars =
+  Array.init 80 (fun _ ->
+    (Random.int w, 150 + Random.int (h - 150), Random.int 100))
+
+(* falling leaves *)
+type leaf = { mutable x : float; mutable y : float;
+              mutable vx : float; mutable vy : float; c : color }
+let leaves : leaf list ref = ref []
+
+let depth = ref 9            (* levels of branches *)
+let spread = ref 0.45        (* angle between two branches, in radians *)
+let t = ref 0.0              (* time, for the wind and the stars *)
+let autumn = ref false
+
+let leaf_colour lvl =
+  if !autumn then rgb (200 + Random.int 55) (60 + Random.int 120) 20
+  else rgb (30 + 10 * lvl) (140 + Random.int 100) (40 + Random.int 40)
+
+(* a branch from (x, y), [len] long, at angle [ang]; at level 0, a leaf,
+   which now and then comes off *)
+let rec branch x y len ang lvl wind =
+  if lvl = 0 then begin
+    set_color (leaf_colour 0);
+    fill_circle (int_of_float x) (int_of_float y) 3;
+    if Random.int 600 = 0 && List.length !leaves < 120 then
+      leaves := { x; y; vx = 0.; vy = 0.; c = leaf_colour 0 } :: !leaves
+  end else begin
+    (* the thinner the branch, the more the wind bends it *)
+    let sway = wind *. float (!depth - lvl + 1) *. 0.04 in
+    let a = ang +. sway in
+    let x2 = x +. len *. cos a and y2 = y +. len *. sin a in
+    let g = 60 + 15 * (!depth - lvl) in
+    set_color (rgb (90 + (!depth - lvl) * 8) (min 255 g) 30);
+    set_line_width (max 1 lvl);
+    moveto (int_of_float x) (int_of_float y);
+    lineto (int_of_float x2) (int_of_float y2);
+    branch x2 y2 (len *. 0.72) (a +. !spread) (lvl - 1) wind;
+    branch x2 y2 (len *. 0.72) (a -. !spread *. 0.85) (lvl - 1) wind
+  end
+
+let draw_scene () =
+  (* the sky, in bands *)
+  for i = 0 to 15 do
+    let k = i * 255 / 15 in
+    set_color (rgb (10 + k / 8) (10 + k / 6) (40 + k / 3));
+    fill_rect 0 (h - (i + 1) * (h / 16)) w (h / 16 + 1)
+  done;
+  (* twinkling stars *)
+  Array.iter (fun (x, y, p) ->
+    let b = 150 + int_of_float (100. *. sin (!t *. 3. +. float p)) in
+    let b = max 0 (min 255 b) in
+    set_color (rgb b b b); plot x y) stars;
+  (* the moon: a disc, and a dark one over it *)
+  set_color (rgb 250 240 200); fill_circle 540 400 32;
+  set_color (rgb 25 30 75); fill_circle 528 408 28;
+  (* hills *)
+  set_color (rgb 20 60 30);
+  fill_poly (Array.init 33 (fun i ->
+    if i = 32 then (0, 0) else if i = 31 then (w, 0)
+    else let x = i * w / 30 in
+      (x, 60 + int_of_float (15. *. sin (float x /. 60.)))));
+  ()
+
+(* move the leaves, draw them; keep those still above the ground *)
+let update_leaves wind =
+  leaves := List.filter (fun l ->
+    l.vy <- l.vy -. 0.08;
+    l.vx <- l.vx *. 0.95 +. wind *. 0.3
+            +. 0.4 *. sin (!t *. 4. +. l.y /. 20.);
+    l.x <- l.x +. l.vx; l.y <- l.y +. max l.vy (-2.0);
+    set_color l.c;
+    fill_ellipse (int_of_float l.x) (int_of_float l.y) 4 2;
+    l.y > 50. && l.x > -10. && l.x < float w +. 10.) !leaves
+
+let hud () =
+  set_color white;
+  moveto 10 (h - 20);
+  draw_string
+    (Printf.sprintf "Fractal tree - depth %d  spread %.2f  leaves %d"
+       !depth !spread (List.length !leaves));
+  moveto 10 (h - 36);
+  draw_string "Mouse: wind   +/- depth   a/z spread   space: autumn   q: quit"
+
+let () =
+  Random.self_init ();
+  open_graph (Printf.sprintf " %dx%d" w h);
+  set_window_title "A tree in the wind";
+  auto_synchronize false;          (* each frame drawn whole, then shown *)
+  let running = ref true in
+  while !running do
+    t := !t +. 0.05;
+    (* the wind: the mouse's distance from the middle, and two gusts *)
+    let (mx, _) = mouse_pos () in
+    let user_wind = (float mx -. float w /. 2.) /. float w in
+    let wind = user_wind +. 0.15 *. sin !t +. 0.05 *. sin (!t *. 2.7) in
+    draw_scene ();
+    branch (float w /. 2.) 60. 95. (pi /. 2.) !depth wind;
+    set_line_width 1;
+    update_leaves wind;
+    hud ();
+    synchronize ();
+    while key_pressed () do
+      match read_key () with
+      | 'q' | '\027' -> running := false
+      | '+' | '=' -> depth := min 12 (!depth + 1)
+      | '-' -> depth := max 1 (!depth - 1)
+      | 'a' -> spread := min 1.5 (!spread +. 0.05)
+      | 'z' -> spread := max 0.05 (!spread -. 0.05)
+      | ' ' -> autumn := not !autumn
+      | _ -> ()
+    done;
+    Mynos.sleep 0.03
+  done;
+  close_graph ()
+```
+
+**Running it.** Compile it on the build machine, or in MyNOS, from a
+Terminal window of the session:
+
+```
+$ ocamlc -use-prims /primitives mynos.cma graphics.cma -o /disk/tree.byte /disk/tree.ml
+$ /disk/tree.byte &
+```
+
+In the toplevel, `compile "/disk/tree.ml";;` adds `graphics.cma` by
+itself.
 
 ## 20.7 Known limits
 

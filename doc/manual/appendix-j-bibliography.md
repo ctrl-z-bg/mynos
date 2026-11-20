@@ -116,3 +116,5 @@ Each comes with its licence in `third_party/`.
 - Notty and uutf, the OCaml terminal libraries under the editor `edit`.
 - kilo, the small C editor.
 - Terminus, the bitmap font of the graphical session.
+- Num, OCaml's numbers of any size (INRIA): github.com/ocaml/num.
+- 2048-ml, the game, by Philip Xu: github.com/pyx/2048-ml.

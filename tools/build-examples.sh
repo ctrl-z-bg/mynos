@@ -13,7 +13,7 @@ for f in doc/manual/examples/*/*.ml; do
     extra=
     case "$name" in
         othreads|keys) extra="-I +unix -I +threads unix.cma threads.cma -noautolink" ;;
-        circles) extra="-I graphics graphics.cma" ;;
+        circles|tree) extra="-I graphics graphics.cma" ;;
     esac
     ocamlc -use-prims $prims -I mynos-lib/ocaml -I "$(dirname "$f")" mynos.cma $extra \
         -o "$out/$name.byte" "$f"
