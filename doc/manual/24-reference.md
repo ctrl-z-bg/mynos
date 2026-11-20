@@ -298,6 +298,7 @@ type _ request =
   | Remove : string -> unit request           | Mkdir : string -> unit request
   | Rmdir : string -> unit request            | Rename : string * string -> unit request
 val o_write : int   val o_creat : int   val o_trunc : int   val o_append : int
+val o_excl : int
 val io_max : int
 val ok : int  val not_found : int  val too_many : int  val denied : int
 val not_open : int  val invalid : int  val read_only : int  val no_space : int

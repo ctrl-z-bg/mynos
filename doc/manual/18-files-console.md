@@ -32,7 +32,7 @@ Every file service answers the same ten requests (`mynos-lib/ocaml/fs.mli`,
 
 | Case | Request (`Fs`) | Reply |
 |---|---|---|
-| 0 | `Open (path, flags)`; flags `o_write`, `o_creat`, `o_trunc`, `o_append` (0: read) | a descriptor of the service |
+| 0 | `Open (path, flags)`; flags `o_write`, `o_creat`, `o_trunc`, `o_append`, `o_excl` (0: read) | a descriptor of the service |
 | 1 | `Close fd` | `unit` |
 | 2 | `Read (fd, max)`, at most `io_max` = 16384 bytes | the bytes; `""` at the end |
 | 3 | `Write (fd, data)`, at most 16384 bytes | bytes written |

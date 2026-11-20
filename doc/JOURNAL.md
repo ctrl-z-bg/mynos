@@ -2393,3 +2393,39 @@ and only two of them are read at boot. Writes stay in v86's memory.
 **Lesson.** An emulator that implements real hardware well needs no port:
 the ISO built for QEMU ran as it was, and so did every driver.
 
+## 2026-11-20 — What of OCaml's distribution runs, measured
+
+**Symptom.** None at first: the question was which OCaml programs could
+run on MyNOS. Reading the runtime's primitive list says what links, not
+what works, so a probe called about 80 functions inside MyNOS (on a
+fresh disk, with tmpfs and fatfs). Three results were wrong without
+failing: `Sys.time ()` was 9.2e18, `Unix.getuid ()` was -38, and opening
+an existing file with `O_CREAT | O_EXCL` succeeded.
+
+**Diagnosis and causes.**
+- `Sys.time` calls `getrusage`, and OCaml does not check its result. The
+  kernel answered `-ENOSYS`, and the structure stayed as the stack had
+  it. `times`, the fallback, was no better: a counter that grew by 10 at
+  each call. The kernel kept no CPU time at all.
+- `getuid` cannot fail on Linux, so musl returns the system call's
+  result as it is: `-ENOSYS` became uid -38.
+- fs/1 had no flag for `O_EXCL`: `libmynos` dropped it, and the services
+  opened the existing file. `Filename.temp_file` relies on it, so two
+  programs could get the same temporary file.
+
+**Fix.**
+- Each process descriptor counts the timer ticks that find it running
+  (`cpuTicks`, in `pit_handler`). `getrusage`, `times` and the
+  CPU-time clocks report it.
+- The uid and gid calls answer 0.
+- fs/1 has `o_excl`, and tmpfs and fatfs fail with `exists`.
+- `Str` and `Num` were added to the runtime. `Str`'s stub is part of
+  the distribution, kept by the container in a layer of its own. `Num`
+  is vendored, compiled with its portable C digits.
+- `tests/libs` checks all of these.
+
+**Lesson.** A missing system call that returns an error is honest. The
+dangerous ones are the calls whose callers cannot imagine them failing,
+`getrusage` and `getuid`: their error becomes a value. When adding a
+Linux layer, list the calls that "never fail" first.
+

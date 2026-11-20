@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-18
+Last updated: 2026-11-20
 
 ---
 
@@ -40,7 +40,7 @@ talking through IPC.
 | `system/` | The system RAM disk: `init`, `init.rc`, services, the shell, interfaces, programs |
 | `editor/` | `edit`, the text editor, in OCaml on Notty |
 | `sh/` | `sh`, a bash-like command shell, in OCaml |
-| `third_party/` | kilo (C editor), Notty and uutf (OCaml terminal UI), lwIP (TCP/IP), mbedTLS (TLS), Mozilla's certificate authorities, with their licenses and MyNOS changes |
+| `third_party/` | kilo (C editor), Notty and uutf (OCaml terminal UI), Num (OCaml big numbers), lwIP (TCP/IP), mbedTLS (TLS), Mozilla's certificate authorities, with their licenses and MyNOS changes |
 | `mynos.mk` | Toolchain variables for user-space programs (`MYNOS_CC`, `MYNOS_LDFLAGS`) |
 
 #### mynos-core — the microkernel
@@ -314,7 +314,9 @@ and `Mynos.wait`. Bytecode is compiled with `ocamlc` 5.5.2.
 Effect handlers and domains work (`tests/effects`, `tests/domains`, and
 `Domain.spawn` in the shell), and so do OCaml's threads (`Thread`,
 `Mutex`, `Condition`, `Event`: the systhreads and unix stubs are in the
-runtime, mynos-09i).
+runtime, mynos-09i). So are `Str`'s stubs (mynos-rld) and those of `Num`
+(`third_party/num`, version 1.6, mynos-yux); `str.cma` and `nums.cma`
+are on the RAM disk for `ocamlc` inside MyNOS.
 Decision and evidence: `doc/decisions/ocaml-runtime.md`.
 
 ### Boot flow
@@ -1242,4 +1244,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   Life). `tools/screenshots.sh` makes all 15 on a clean disk (no longer
   system/disk.img), the agent's only with llm.env. Agent window: tabs
   drawn as a glyph (mynos-1cz).
-
+- **2026-11-20** — OCaml's libraries measured inside MyNOS (a probe of
+  about 80 functions): the standard library, files, threads, domains and
+  Dynlink work; `Unix` without pipes, `dup`, `select`, sockets or
+  `create_process`. Added `Str` (its stubs kept by the dev container)
+  and `Num` (`third_party/num`) to the runtime and the RAM disk. Fixed
+  `Sys.time` (the kernel counts each process's CPU ticks: `getrusage`,
+  `times`, the CPU-time clocks), `getuid` and friends (0), and `O_EXCL`
+  (fs/1's `o_excl`, in tmpfs and fatfs). New boot in `run-tests.sh`:
+  `tests/libs`. Closed mynos-rld, mynos-yux, mynos-0xy, mynos-469,
+  mynos-0r1.

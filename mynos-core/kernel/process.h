@@ -93,6 +93,9 @@ typedef struct {
   char name[16];
   uint32_t privileges;        /* MYNOS_PRIV_* */
   uint32_t bytecode;          /* started as ocamlrun: an OCaml program */
+  /* CPU time: the timer ticks that found this process running (getrusage,
+     times, the CPU-time clocks) */
+  uint32_t cpuTicks;
 } process_descriptor_t;
 
 extern process_descriptor_t * processTable[];

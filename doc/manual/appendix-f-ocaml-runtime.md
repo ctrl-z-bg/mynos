@@ -223,6 +223,19 @@ system calls MyNOS lacks (`execve`, `pipe`, sockets, `select`) fail with
 `Unix_error (ENOSYS, …)`. The network is reached through module `Net`
 instead.
 
+Two more libraries come the same way:
+
+- **`Str`**, regular expressions. It is part of the distribution: its
+  stub, `otherlibs/str/strstubs.c`, is kept by the container too. It is
+  used with `-I +str -noautolink str.cma`.
+- **`Num`**, numbers of any size: `Num`, `Big_int` and `Ratio`. It left
+  the distribution in 2017, so its sources (version 1.6) are in
+  `third_party/num`. Its stubs are compiled with the portable C digits,
+  not its i386 assembly. That directory's Makefile builds `nums.cma`
+  against MyNOS's primitives, and programs use it with
+  `-I …/third_party/num nums.cma`. That `nums.cma` names no shared
+  library, so it needs no `-noautolink`.
+
 ## F.7 Domains, threads and effects
 
 OCaml 5 offers three kinds of concurrency. All three run on MyNOS, and
@@ -308,7 +321,7 @@ bytecode program. `system/Makefile` puts on the RAM disk, all in its root
   3.6 MB), unchanged;
 - the standard library: every `.cmi`, `stdlib.cma`, `std_exit.cmo`, and
   `runtime-launch-info`;
-- `unix.cma`, `threads.cma` and their interfaces;
+- `unix.cma`, `threads.cma`, `str.cma`, `nums.cma` and their interfaces;
 - `mynos.cma`, the `.cmi` of its modules, and `primitives`.
 
 Typing `ocamlc` at `sh` finds `/ocamlc.byte` through `PATH` and runs it on

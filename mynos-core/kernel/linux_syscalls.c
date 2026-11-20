@@ -31,6 +31,7 @@
 #include "sched.h"
 #include "sem.h"
 #include "time.h"
+#include "pit.h"
 #include "random.h"
 #include "softtaskswitch.h"
 
@@ -48,11 +49,40 @@ struct tms {
    no page fault stops it) */
 #define USER(P, N) do { if (!__mem_userArea((P), (N))) return -14; } while (0)
 
-void _linux_syscall_times(struct tms *buf) {
-  static uint32_t tm = 0;
-  if (!__mem_userArea(buf, sizeof(struct tms))) return;
-  tm += 10;
-  buf->tms_utime = buf->tms_stime = tm;
+/* times (43): the process's CPU time, all of it counted as user time, in
+   ticks (Linux's USER_HZ is 100, the PIT's frequency); the children's is
+   not kept. Returns the ticks since boot. */
+int _linux_syscall_times(struct tms *buf) {
+  if (buf) {
+    USER(buf, sizeof *buf);
+    buf->tms_utime = processTable[currProcess]->cpuTicks;
+    buf->tms_stime = buf->tms_cutime = buf->tms_cstime = 0;
+  }
+  return timerTicks;
+}
+
+/* getrusage (77): the same CPU time; RUSAGE_CHILDREN (-1) gets zero, and
+   the other fields (memory, faults, switches) are zero */
+struct rusage32 {
+  int32_t ru_utime_sec, ru_utime_usec, ru_stime_sec, ru_stime_usec;
+  int32_t ru_other[14];
+};
+int _linux_syscall_getrusage(int who, struct rusage32 * ru) {
+  uint32_t t, i;
+  USER(ru, sizeof *ru);
+  if (who != 0 && who != -1 && who != 1) return -22;   /* EINVAL */
+  t = who == -1 ? 0 : processTable[currProcess]->cpuTicks;
+  ru->ru_utime_sec = t / PIT_FREQ;
+  ru->ru_utime_usec = (t % PIT_FREQ) * (1000000 / PIT_FREQ);
+  ru->ru_stime_sec = ru->ru_stime_usec = 0;
+  for (i = 0; i < 14; i++) ru->ru_other[i] = 0;
+  return 0;
+}
+
+/* getuid, getgid, geteuid, getegid and their 32-bit variants: MyNOS has
+   no users (doc/decisions/identity-and-permissions.md); everyone is 0 */
+int _linux_syscall_getuid() {
+  return 0;
 }
 
 void _linux_syscalls_trap_TRAP();
@@ -161,6 +191,24 @@ __asm__ (".pushsection .text\n" \
 	 "   je .linux_ioctl\n"\
 	 "   cmpl $114, %eax\n"\
 	 "   je .linux_wait4\n"\
+	 "   cmpl $77, %eax\n"\
+	 "   je .linux_getrusage\n"\
+	 "   cmpl $24, %eax\n"\
+	 "   je .linux_getuid\n"\
+	 "   cmpl $47, %eax\n"\
+	 "   je .linux_getuid\n"\
+	 "   cmpl $49, %eax\n"\
+	 "   je .linux_getuid\n"\
+	 "   cmpl $50, %eax\n"\
+	 "   je .linux_getuid\n"\
+	 "   cmpl $199, %eax\n"\
+	 "   je .linux_getuid\n"\
+	 "   cmpl $200, %eax\n"\
+	 "   je .linux_getuid\n"\
+	 "   cmpl $201, %eax\n"\
+	 "   je .linux_getuid\n"\
+	 "   cmpl $202, %eax\n"\
+	 "   je .linux_getuid\n"\
 	 "   pushl %eax\n"\
 	 "   call _linux_syscall_NOTIMPLEMENTED\n"\
 	 "   addl $4, %esp\n"\
@@ -298,6 +346,12 @@ __asm__ (".pushsection .text\n" \
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_wait4:\n"\
 	 "   call _linux_syscall_wait4\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_getrusage:\n"\
+	 "   call _linux_syscall_getrusage\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_getuid:\n"\
+	 "   call _linux_syscall_getuid\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".exit_linux_syscall:\n"\
 	 "   popl %ebx\n"\
@@ -936,6 +990,7 @@ int _linux_syscall_fork() {
 	kstrlen(processTable[PSLOT(new_pid)]->name));
   processTable[PSLOT(new_pid)]->isAlive = 1;
   processTable[PSLOT(new_pid)]->exitStatus = 0;
+  processTable[PSLOT(new_pid)]->cpuTicks = 0;
   processTable[PSLOT(new_pid)]->reaped = 0;
   processTable[PSLOT(new_pid)]->childSem = __OS_sem_allocateSemaphore(0);
   processTable[PSLOT(new_pid)]->deadThreads = NULL;   /* the parent's are its own */

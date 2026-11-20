@@ -7,7 +7,9 @@
 #   mynos-core/kernel/kernel.elf     the kernel
 #   mynos-lib/lib/libmynos.a         user-space library
 #   services/...                     registry, keyboardd, seriald, memrofsd
-#   mynos-runtime/ocamlrun           the OCaml 5.5 runtime
+#   mynos-runtime/ocamlrun           the OCaml 5.5 runtime (with unix, threads,
+#                                    str and Num's C stubs)
+#   third_party/num/nums.cma         the Num library
 #   tests/hello/hello.byte           OCaml test program
 #   tests/effects/effects.byte       effect handlers test
 #   tests/domains/domains.byte       domains test: threads, futexes
@@ -24,6 +26,7 @@
 #   tests/fpu/fpu                    the FPU state of each thread
 #   tests/stdio/stdio                C stdio over libmynos
 #   tests/stress/stress, ramdisk.dsk kernel stress test
+#   tests/libs/ramdisk.dsk           Str, Num and the calls they need, on tmpfs
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 #   fetch/fetch.byte                 HTTP and HTTPS from the command line
 #   log/log.byte                     the kernel's log
@@ -42,6 +45,7 @@ make -C mynos-core/kernel
 make -C mynos-lib
 make -C services
 make -C mynos-runtime
+make -C third_party/num
 make -C tests/abi
 make -C tests/fpu
 make -C tests/stdio
@@ -66,6 +70,7 @@ make -C editor
 make -C sh
 make -C init
 make -C services/tmpfs
+make -C tests/libs
 make -C services/ata
 make -C services/fatfs
 make -C tests/storage

@@ -39,6 +39,9 @@ let () =
   Out_channel.with_open_gen [ Open_append; Open_wronly ] 0 "/disk/new.ml"
     (fun oc -> output_string oc "let more = 1\n");
   ok &&& check "append" (read "/disk/new.ml" = "let answer = 42\nlet more = 1\n");
+  ok &&& check "O_EXCL: an existing file is not created again"
+    (fails (fun () -> open_out_gen [ Open_creat; Open_excl; Open_wronly ] 0o644 "/disk/new.ml")
+     && read "/disk/new.ml" = "let answer = 42\nlet more = 1\n");
   let big = String.init 70_000 (fun i -> Char.chr (i * 7 mod 256)) in
   write "/disk/big.dat" big;
   ok &&& check "write 70 KB and read it back" (read "/disk/big.dat" = big);

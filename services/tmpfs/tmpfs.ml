@@ -49,6 +49,8 @@ let do_open me name flags =
   if not (valid_name name) then Fs.fail (if name = "" then Fs.is_dir else Fs.invalid);
   let file =
     match Hashtbl.find_opt files name with
+    | Some _ when flags land Fs.o_creat <> 0 && flags land Fs.o_excl <> 0 ->
+      Fs.fail Fs.exists
     | Some f ->
       if writable && flags land Fs.o_trunc <> 0 then f.size <- 0;
       Some f

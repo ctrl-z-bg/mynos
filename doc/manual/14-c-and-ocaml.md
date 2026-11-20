@@ -204,11 +204,17 @@ $ ocamlc -use-prims /mynos/mynos-runtime/primitives -I /mynos/mynos-lib/ocaml \
 `Unix` alone (for `Unix.read` on a descriptor, `Unix.sleepf`,
 `Unix.gettimeofday`) takes `-I +unix -noautolink unix.cma`. Domains,
 `Mutex`, `Condition`, `Atomic` and effects are in the standard library.
+Two other libraries have their C parts in the runtime too (appendix
+F.6):
+
+- `Str`, regular expressions: `-I +str -noautolink str.cma`;
+- `Num`, numbers of any size: `-I /mynos/third_party/num nums.cma`.
 
 ## 14.5 Compiling inside MyNOS
 
 The compiler is on the RAM disk, with the standard library, `unix.cma`,
-`threads.cma`, `mynos.cma` and its interfaces, and `primitives`, all at
+`threads.cma`, `str.cma`, `nums.cma`, `mynos.cma` and its interfaces, and
+`primitives`, all at
 the root (appendix F.9). At `sh`:
 
 ```

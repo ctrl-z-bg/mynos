@@ -14,6 +14,7 @@
 (* ---- protocol: flags and errors as in Fs ---- *)
 
 let o_write = 1 and o_creat = 2 and o_trunc = 4 and o_append = 8
+and o_excl = 16
 
 let ok = 0 and not_found = 1 and too_many = 2 and denied = 3
 and not_open = 4 and invalid = 5 and no_space = 7 and is_dir = 8
@@ -519,6 +520,8 @@ let do_open r name =
   let f =
     match find l last with
     | Some e when e.attr land attr_dir <> 0 -> raise (Status is_dir)
+    | Some _ when r.(3) land o_creat <> 0 && r.(3) land o_excl <> 0 ->
+      raise (Status exists)
     | Some e ->
       let f = { client = r.(1); ddir = d; dslot = e.slot; dfirst = e.first;
                 dsize = e.size; pos = 0; dchain = (-1, -1, [||]); writable;

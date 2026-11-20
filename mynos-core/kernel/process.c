@@ -476,6 +476,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 #endif
 
   desc->exitStatus = 0;
+  desc->cpuTicks = 0;
   desc->reaped = 0;
   desc->childSem = __OS_sem_allocateSemaphore(0);
   desc->deadThreads = NULL;

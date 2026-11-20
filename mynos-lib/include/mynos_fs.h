@@ -63,6 +63,7 @@
 #define FS_O_CREAT   2   /* create it if missing */
 #define FS_O_TRUNC   4   /* empty it */
 #define FS_O_APPEND  8   /* every write at the end */
+#define FS_O_EXCL   16   /* with FS_O_CREAT: fail (exists) if it is there */
 
 /* errors: an Error reply's message starts with the name */
 #define FS_OK         0

@@ -30,6 +30,8 @@ val o_write : int
 val o_creat : int
 val o_trunc : int
 val o_append : int
+val o_excl : int
+(** With [o_creat]: the open fails ([exists]) if the file is there. *)
 
 val io_max : int
 (** The largest Read or Write: 16384. *)

@@ -17,12 +17,15 @@
 /* Linux clock ids */
 #define CLOCK_REALTIME  0
 #define CLOCK_MONOTONIC 1
+#define CLOCK_PROCESS_CPUTIME_ID 2
+#define CLOCK_THREAD_CPUTIME_ID  3
 
 /* read the CMOS real-time clock (call once at boot) */
 void time_init();
 
-/* current time of a clock: CLOCK_REALTIME (since 1970) or any other id
-   (monotonic, since boot) */
+/* current time of a clock: CLOCK_REALTIME (since 1970), the CPU-time
+   clocks (the current process's CPU time; a thread's is its process's), or
+   any other id (monotonic, since boot) */
 void time_now(uint32_t clock, uint32_t * sec, uint32_t * nsec);
 
 /* ticks needed to wait at least sec + nsec */

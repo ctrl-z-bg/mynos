@@ -5,8 +5,8 @@
 # OCaml 5.5.2 (doc/decisions/ocaml-runtime.md):
 #   /opt/ocaml-5.5.2            the compiler (bytecode only), to compile programs
 #   /opt/ocaml-runtime-musl     the upstream bytecode runtime built with musl,
-#                               and the C sources of the unix and threads
-#                               libraries (mynos-runtime builds them)
+#                               and the C sources of the unix, threads and
+#                               str libraries (mynos-runtime builds them)
 #                               (libcamlrun.a, prims.o) linked into MyNOS's
 #                               ocamlrun by mynos-runtime/Makefile, plus what
 #                               is needed to add primitives: the primitives
@@ -58,6 +58,9 @@ RUN mkdir /tmp/musl && cd /tmp/musl \
  && cp -r otherlibs/unix otherlibs/systhreads /opt/ocaml-runtime-musl/otherlibs/ \
  && cp Makefile.config /opt/ocaml-runtime-musl/ \
  && echo "${OCAML_VERSION}" > /opt/ocaml-runtime-musl/VERSION
+# the C sources of str too (mynos-rld): a layer of its own, so that the
+# runtime above is not built again
+RUN cp -r /tmp/musl/otherlibs/str /opt/ocaml-runtime-musl/otherlibs/
 
 # --- Stage 3: the toolchain --------------------------------------------------
 FROM docker.io/library/debian:trixie-slim

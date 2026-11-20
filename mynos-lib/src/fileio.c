@@ -680,6 +680,7 @@ int open(const char * path, int flags, ...)
   if (flags & O_CREAT)  f |= FS_O_CREAT;
   if (flags & O_TRUNC)  f |= FS_O_TRUNC;
   if (flags & O_APPEND) f |= FS_O_APPEND;
+  if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL)) f |= FS_O_EXCL;
   fs_start(&w, FS_OPEN);
   wire_put_cstring(&w, name);
   wire_put_int(&w, f);

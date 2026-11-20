@@ -25,6 +25,7 @@
 #include "video.h"
 #include "kutils.h"
 #include "sched.h"
+#include "process.h"
 
 void init_pit(int freq, unsigned char channel) {
   unsigned int temp;
@@ -53,6 +54,10 @@ __asm__ (".pushsection .text\n" \
 uint32_t timerTicks = 0;
 void pit_handler() {
   timerTicks++;
+  /* the CPU time of the process this tick found running (not the idle
+     process, slot 0) */
+  if (currProcess && processTable[currProcess])
+    processTable[currProcess]->cpuTicks++;
   random_event(0);
 
   outportb(0x20, 0x20);

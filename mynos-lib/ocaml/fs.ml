@@ -13,6 +13,7 @@ type _ request =
   | Rename : string * string -> unit request
 
 let o_write = 1 and o_creat = 2 and o_trunc = 4 and o_append = 8
+and o_excl = 16
 let io_max = 16384
 
 let ok = 0 and not_found = 1 and too_many = 2 and denied = 3 and not_open = 4

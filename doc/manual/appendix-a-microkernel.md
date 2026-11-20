@@ -131,6 +131,7 @@ threads. The kernel describes it with a `process_descriptor_t`
   ├── lmemmap                           its free linear space (appendix B)
   ├── portList, channelList             its IPC objects (appendix C)
   ├── exitStatus, reaped, childSem      for the parent's wait
+  ├── cpuTicks                          its CPU time, in ticks (appendix D.3)
   └── deadThreads, nextZombie, …        for its end (A.9)
 ```
 

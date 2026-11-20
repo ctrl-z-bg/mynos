@@ -51,6 +51,7 @@ tests/net/ocamlrun
 tests/net/cacert.pem
 tests/storage/ocamlrun
 tests/fat/ocamlrun
+tests/libs/ocamlrun
 tests/fat/content/
 *.img
 system/ocamlc.byte

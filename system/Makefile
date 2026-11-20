@@ -27,6 +27,10 @@ displayd: ../services/display/displayd
 ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2/bin/ocamlc.byte)
 	cp $< $@
 
+# the Num library (mynos-yux): its interfaces
+NUM_CMI = $(addprefix ../third_party/num/, num.cmi big_int.cmi nat.cmi ratio.cmi \
+	arith_status.cmi arith_flags.cmi int_misc.cmi)
+
 FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo netd displayd ../httpd/httpd.byte \
 	../gui/gui.byte ../gui/welcome.byte ../gui/clock.byte ../gui/services.byte ../gui/terminal.byte \
 	../gui/agent_window.byte ../gui/recordings.byte ../gui/system.byte ../gui/files.byte \
@@ -44,6 +48,8 @@ FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo n
 	$(STDLIB)/stdlib.cma $(STDLIB)/std_exit.cmo $(STDLIB)/runtime-launch-info \
 	$(STDLIB)/unix/unix.cma $(STDLIB)/unix/unix.cmi $(STDLIB)/threads/threads.cma \
 	$(STDLIB)/threads/thread.cmi $(STDLIB)/threads/event.cmi \
+	$(STDLIB)/str/str.cma $(STDLIB)/str/str.cmi \
+	../third_party/num/nums.cma $(NUM_CMI) \
 	ocamlc.byte ../mynos-runtime/primitives \
 	../mynos-lib/ocaml/mynos.cma ../mynos-lib/ocaml/block.cmi ../mynos-lib/ocaml/fs.cmi \
 	../mynos-lib/ocaml/console.cmi ../mynos-lib/ocaml/registry.cmi \

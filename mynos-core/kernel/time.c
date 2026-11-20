@@ -108,6 +108,8 @@ void time_init() {
 
 void time_now(uint32_t clock, uint32_t * sec, uint32_t * nsec) {
   uint32_t t = timerTicks;
+  if (clock == CLOCK_PROCESS_CPUTIME_ID || clock == CLOCK_THREAD_CPUTIME_ID)
+    t = processTable[currProcess]->cpuTicks;
   *sec = t / PIT_FREQ + (clock == CLOCK_REALTIME ? boot_epoch : 0);
   *nsec = (t % PIT_FREQ) * NSEC_PER_TICK;
 }

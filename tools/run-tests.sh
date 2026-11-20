@@ -170,6 +170,18 @@ if [ -f tests/files/ramdisk.dsk ]; then
 fi
 }
 
+sec_libs() {
+# Str and Num, the CPU time, the user id, O_EXCL on tmpfs: init.byte from
+# the RAM disk starts tmpfs and checks them
+if [ -f tests/libs/ramdisk.dsk ]; then
+    MEM=64 timeout "${WAIT:-15}" tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        tests/libs/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$tmp/logl" || true
+    cat "$tmp/logl" >> "$part"
+fi
+}
+
 sec_stress() {
 # the kernel stress test (C): processes, IPC, timers,
 # semaphores, invalid arguments and pointers, memory coming back
@@ -840,7 +852,7 @@ for lane in ${LANES:-a b c d e}; do
         : > "$part"
         case $lane in
             a) sec_first || true; sec_effects || true; sec_storage || true; sec_fat || true; sec_domains || true; sec_threads || true; sec_fpu || true ;;
-            b) sec_mlib || true; sec_files || true; sec_stress || true; sec_spawn || true; sec_console || true ;;
+            b) sec_mlib || true; sec_files || true; sec_libs || true; sec_stress || true; sec_spawn || true; sec_console || true ;;
             c) sec_nocom2 || true; sec_reboots || true ;;
             d) sec_gui || true ;;
             e) sec_net || true; sec_seventh || true ;;
@@ -924,6 +936,9 @@ if [ -f tests/storage/ramdisk.dsk ]; then
 fi
 if [ -f tests/mynos-ocaml/mynos_test.byte ]; then
     expect "mynos-ocaml: all checks passed"
+fi
+if [ -f tests/libs/ramdisk.dsk ]; then
+    expect "libs: all checks passed"
 fi
 if [ -f tests/files/ramdisk.dsk ]; then
     expect "files: all checks passed"
