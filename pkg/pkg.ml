@@ -219,13 +219,17 @@ let rec install ~source ?(chain = []) name =
         compile (Filename.concat dir "src") p.sources m.libraries target;
         `Compiled
       end) m.progs in
-  (* each command: a script that runs the program (Util's name, below) *)
-  (match m.progs with
-   | p :: _ -> List.iter (fun c ->
-       if Filename.basename c <> c then fail "%s: a bad command name" name;
-       write (Filename.concat bin c) (Printf.sprintf "#!%s\n" (Filename.concat bin p.file)))
-       m.commands
-   | [] -> ());
+  (* each command: a script that runs the program (which tells the
+     commands apart by the script's name), or, in a package of data, the
+     window it runs (a story and its interpreter) *)
+  let interpreter = match m.progs, m.run with
+    | p :: _, _ -> Some (Filename.concat bin p.file)
+    | [], prog :: args -> Some (String.concat " " (Filename.concat bin prog :: args))
+    | [], [] -> None in
+  Option.iter (fun line ->
+      List.iter (fun c ->
+          if Filename.basename c <> c then fail "%s: a bad command name" name;
+          write (Filename.concat bin c) (Printf.sprintf "#!%s\n" line)) m.commands) interpreter;
   let how =
     if m.progs = [] then "data"
     else if List.for_all (( = ) `Bytecode) hows then "its bytecode"

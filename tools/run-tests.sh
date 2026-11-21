@@ -626,7 +626,7 @@ if [ -f system/ramdisk.dsk ]; then
     # of characters the screen's font lacks (doc/decisions/console.md)
     if [ -f tests/fat/run-shell.img ]; then
         printf '\303\210 cos\303\254: \342\202\2545\n' > tests/fat/run-utf8.txt
-        tools/in-container.sh dev sh -c "mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/llm.env && mcopy -i tests/fat/run-shell.img tests/fat/run-utf8.txt ::/utf8.txt && mcopy -i tests/fat/run-shell.img tests/greeter/greeter.byte ::/greeter.byte && mcopy -i tests/fat/run-shell.img tests/stdio/stdio ::/stdio-test"
+        tools/in-container.sh dev sh -c "mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/llm.env && mcopy -i tests/fat/run-shell.img tests/fat/run-utf8.txt ::/utf8.txt && mcopy -i tests/fat/run-shell.img tests/greeter/greeter.byte ::/greeter.byte && mcopy -i tests/fat/run-shell.img tests/stdio/stdio ::/stdio-test && mcopy -i tests/fat/run-shell.img tests/zmachine/czech.z5 ::/czech.z5"
         rm -f tests/fat/run-utf8.txt
     fi
     tools/net-peer.py llm 47090 & llm7_pid=$!
@@ -791,6 +791,10 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     waitfor "pkg: calc 1.0 installed" 90
     tools/type-keys.py "$tmp/mon7" "echo zeta > /tmp/s; echo alpha >> /tmp/s; sort /tmp/s | head -n 1 | grep -n alpha; calc '2^100' '1/3 + 1/6'\n"; sleep 8
     tools/type-keys.py "$tmp/mon7" "echo '#!/sh.byte' > /disk/bin/hi; echo 'echo script-\$1' >> /disk/bin/hi; hi ran\n"; sleep 4
+    # the Z-machine interpreter, in the terminal (no session), against
+    # Czech's tests (tests/zmachine)
+    tools/type-keys.py "$tmp/mon7" 'pkg install zmachine; echo | zmachine /disk/czech.z5 > /tmp/cz.txt; grep Failed /tmp/cz.txt\n'
+    waitfor "Passed: 406, Failed: 0" 120
     # Ctrl-C on a program waiting for a line: the next line is sh's, not
     # swallowed by the program it ended (mynos-5dd)
     tools/type-keys.py "$tmp/mon7" '/disk/stdio-test\n'; sleep 4
@@ -1055,6 +1059,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "1267650600228229401496703205376"          # calc
     expect "1/2 = 0.5"
     expect "script-ran"                               # #!/sh.byte
+    expect "Passed: 406, Failed: 0"                   # zmachine, Czech
     if [ -n "$httpd_private" ]; then
         echo "ok    httpd: serves /disk, not its .env files"
     else

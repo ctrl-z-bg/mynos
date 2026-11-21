@@ -1,0 +1,8 @@
+# The package view (tools/pkg-build.sh)
+NAME=view
+VERSION=1.0
+DESCRIPTION='An image viewer, in a window: PNG, BMP, PPM, PGM, PBM; zoom, and the other images of the folder'
+LICENSE=GPL-2.0-or-later
+SRC=packages/view
+SOURCES='image.ml inflate.ml png.ml pnm.ml view.ml'
+RUN=view

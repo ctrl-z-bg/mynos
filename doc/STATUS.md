@@ -201,7 +201,10 @@ All services are linked statically against `libmynos` and placed at
   which `sh` runs); `pkg search`, `pkg upgrade`. Packages: `2048`,
   `windtree`, `utils` (grep, wc, head, tail, sort, uniq, find, du,
   hexdump, tree), `calc` (exact numbers, on Num), and games in a window:
-  `mines`, `blocks`, `snake`, `sudoku`, `life`, `solitaire` (mynos-vws).
+  `mines`, `blocks`, `snake`, `sudoku`, `life`, `solitaire`; `view` (PNG,
+  BMP, Netpbm) and `paint` (saves PNG, with a small deflate of their
+  own); `zmachine`, an interpreter of Infocom's and Inform's stories
+  (versions 1 to 5, 7, 8: Czech's and Praxix's tests pass) (mynos-vws).
   Tested in the seventh boot against the host's copy (`tools/net-peer.py
   files`). The graphical session's Packages window
   (`pkg/packages_window.ml`, in the MyNOS menu) lists them and runs `pkg`
@@ -1355,3 +1358,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `blocks`, `snake`, `sudoku`, `life` (the manual's, with patterns and
   RLE files), `solitaire`. Seventh boot: `utils` and `calc` installed, a
   pipe through `sort`, `head` and `grep`, `calc`, a `#!/sh.byte` script.
+- **2026-11-21** — More packages (mynos-vws): `zmachine`, a Z-machine
+  interpreter in OCaml (`Zvm`: runs until it needs a line, a key or a
+  file name; a window in the graphical session, the terminal outside
+  it); Czech's 406 tests and all of Praxix's pass, Zork I to III play.
+  `view` (PNG with an inflater of its own, interlaced and with palettes
+  too, BMP, PPM/PGM/PBM) and `paint` (pencil, brush, shapes, fill;
+  saves PNG, compressed by a small deflate). A package of data can have
+  commands: scripts that run the window it names (`#!zmachine STORY`). A
+  package's sources may be another's (`paint` uses `view`'s). Seventh
+  boot: `zmachine` installed, Czech run (`tests/zmachine`).

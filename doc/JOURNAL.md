@@ -2656,3 +2656,45 @@ diamond.
 **Lesson.** A replacement glyph that is itself a plausible character
 hides the miss; test the characters a program needs, not the string
 that holds them.
+
+## 2026-11-21 — Thirty-one bits for a thirty-two bit checksum
+
+**Symptom.** The PNG reader of `view` did not compile in the dev
+container: "Integer literal exceeds the range of representable integers
+of type int", on CRC-32's polynomial, `0xEDB88320`.
+
+**Cause.** MyNOS is a 32-bit system: OCaml's `int` has 31 bits there.
+CRC-32 and Adler-32 need 32, as do BMP's signed sizes. `Int32` has them,
+but each value is boxed: a CRC over a 1 MB picture allocated millions of
+them, and saving a drawing took seconds.
+
+**Fix.** CRC-32 kept as two halves of 16 bits (a table of pairs),
+Adler-32 as its two sums, written byte by byte; `Int32` only where a
+value is read once (BMP's header).
+
+**Lesson.** Code that is right on the 64-bit host can be wrong on the
+target, and a checksum is where it shows first; on MyNOS, any
+arithmetic modulo 2^32 needs a plan.
+
+## 2026-11-21 — Clicks lost behind a slow frame
+
+**Symptom.** In the first `paint`, a test that clicked a tool, a colour
+and then drew, quickly, got nothing from most of the clicks: the
+strokes came out with the pencil, in black.
+
+**Diagnosis.** Each frame copied the canvas into the window a pixel at a
+time, in OCaml: some 400,000 pixels, a second or more in QEMU. Events
+wait in `displayd`'s queue for the window, 64 at most, and when it is
+full a new mouse event is dropped (a key pushes the oldest out). The
+test's clicks came faster than the frames; most likely the queue
+filled, and the presses and releases were the events that were lost.
+
+**Fix.** The canvas is a `Gfx.t` of its own, drawn by the C primitives
+and copied into the window by `Gfx.blit`; a shape being drawn is drawn
+on the window only, inside a clip. `view` keeps the image scaled for the
+window, and scales it again only when the image, the zoom or the place
+change. Clicks are answered at once.
+
+**Lesson.** In an immediate-mode toolkit, every frame pays for all that
+is drawn; what does not change must be drawn once and copied. A slow
+frame does not only look slow: what the user does meanwhile can be lost.

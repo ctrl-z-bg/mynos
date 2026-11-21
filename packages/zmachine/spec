@@ -1,0 +1,10 @@
+# The package zmachine (tools/pkg-build.sh): the interpreter of Infocom's
+# stories; the stories are packages of data that need it (zork1...)
+NAME=zmachine
+VERSION=1.0
+DESCRIPTION='A Z-machine interpreter: the interactive fiction of Infocom and of Inform (.z3, .z5, .z8), in a window or in the terminal'
+LICENSE=GPL-2.0-or-later
+SRC=packages/zmachine
+SOURCES='zvm.ml term.ml zmachine.ml'
+RUN=zmachine
+DOC=packages/zmachine/README.md

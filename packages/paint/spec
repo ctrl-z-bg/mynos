@@ -1,0 +1,8 @@
+# The package paint (tools/pkg-build.sh): its image modules are view's
+NAME=paint
+VERSION=1.0
+DESCRIPTION='Drawing with the mouse, in a window: pencil, brush, shapes, fill; pictures saved as PNG, opened from PNG, BMP, PPM'
+LICENSE=GPL-2.0-or-later
+SRC=packages/paint
+SOURCES='../view/image.ml ../view/inflate.ml ../view/png.ml ../view/pnm.ml paint.ml'
+RUN=paint
