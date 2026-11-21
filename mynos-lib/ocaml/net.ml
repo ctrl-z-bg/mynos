@@ -54,7 +54,9 @@ module Protocol = struct
         Wire.(pair address (field "timeout_ms" int)) Wire.int;
       request ~safe:true 2 "resolve" "A host name's IPv4 address (DNS)."
         Wire.(field "name" string) Wire.string;
-      request 3 "connect" "A TCP connection to an address and port: its socket."
+      request 3 "connect"
+        "A TCP connection to an address and port: its socket; \"timeout\" \
+         after 20 s without one."
         Wire.(pair address port) Wire.int;
       request 4 "listen" "Listen on a TCP port: a listening socket."
         port Wire.int;
@@ -76,7 +78,8 @@ module Protocol = struct
       request 10 "connect_tls"
         "A TCP connection with TLS to a host (a name, or an address) and \
          port, the server's certificate checked: its socket. send and recv \
-         then carry the clear bytes."
+         then carry the clear bytes. \"timeout\" after 20 s without the \
+         connection and its handshake."
         Wire.(pair (field "host" string) port) Wire.int;
       request 11 "udp_bind" "A UDP socket on a port (0: any)." port Wire.int;
       request 12 "send_to" "Send one UDP datagram: its size."

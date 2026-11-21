@@ -144,8 +144,8 @@ A program whose name ends in `.byte` runs as `ocamlrun PROGRAM ...`.
   if it lived less than a second, so that one failing at once cannot take
   the processor;
 - a `start` or `driver` service that ends with exit code 0 decided to
-  (httpd without a network, netd without a card, ata without a disk) and
-  is left alone;
+  (httpd without a network, netd without a card, ata and fatfs without a
+  disk, displayd without the Bochs VGA) and is left alone;
 - one that ends otherwise (crashed, killed, a non-zero code) is started
   again after 0.3 s, unless it was already restarted five times in the
   last sixty seconds; then `init` logs that it gives up, for good.
@@ -329,7 +329,8 @@ sectors.
 The FAT file system of the disk (`services/fatfs/fatfs.ml`, OCaml, no
 privilege), mounted at `/disk`. Protocol **fs/1**; it reads and writes
 sectors through `ata0`, which it waits for at start (100 attempts, 0.1 s
-apart).
+apart). If none comes there is no disk: fatfs logs it and ends with
+code 0, and there is no `/disk`.
 
 - *FAT16 and FAT32* as `mkfs.fat` makes them, 512-byte sectors only;
   directories, 8.3 names with Windows NT's lower-case flags, VFAT long
@@ -459,7 +460,8 @@ function call rather than a message. Protocol **net/1**
   interrupt (both are pthreads).
 - *Requests that wait keep their channel*: `recv`, `accept`, `connect`,
   `ping`, `resolve`, `recv_from` are answered by the lwIP callback that
-  ends the wait, or fail with `timeout` after `set_timeout`.
+  ends the wait, or fail with `timeout` after `set_timeout`; `connect`
+  and `connect_tls` (its handshake included) after 20 s.
 - *An address first.* DHCP; after 5 s without an answer, QEMU's user
   network (10.0.2.15/24, gateway 10.0.2.2, DNS 10.0.2.3). Requests wait
   in the queue until there is an address.
@@ -478,7 +480,9 @@ serves `/disk` on port 80 by default, HTTP/1.0, `GET` only (a path with
 `..` gets `403`). Its main domain `accept`s; 8 worker domains serve the
 connections, each with a 10 s `set_timeout`, so that an idle browser
 connection does not hold the others. Without a network service it ends
-with code 0.
+with code 0. When `netd` ends and `init` starts it again, the listening
+socket is gone: after three failed `accept`s in a row `httpd` listens
+again, on the new `netd`.
 
 ## E.13 llmd: language models
 
@@ -510,8 +514,10 @@ worker domains answer them with `Llm.answer`.
 registered as `display`. It waits in text mode until a client starts the
 graphical session, then sets QEMU's VGA to 1024 × 768 × 32 through the
 Bochs extension (BGA), maps its frame buffer (`mapPhysical`, call 28),
-and composes the desktop, the windows and the pointer. Protocol
-**display/1** (`mynos-lib/ocaml/display.ml`):
+and composes the desktop, the windows and the pointer. A machine
+without the Bochs extension has no graphical session: displayd logs it at
+boot and ends with code 0. Protocol **display/1**
+(`mynos-lib/ocaml/display.ml`):
 
 | Case | Request | Arguments | Reply |
 |---|---|---|---|

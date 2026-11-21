@@ -69,7 +69,8 @@ let do_open me name flags =
 
 let do_read d max =
   let n = Stdlib.max 0 (min (min max Fs.io_max) (d.file.size - d.pos)) in
-  let s = Bytes.sub_string d.file.data d.pos n in
+  (* past the end (a seek there): nothing, as on a disk, not an exception *)
+  let s = if n = 0 then "" else Bytes.sub_string d.file.data d.pos n in
   d.pos <- d.pos + n;
   s
 

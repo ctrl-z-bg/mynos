@@ -75,7 +75,7 @@ them:
 | `host not found` | `Resolve`, or a TLS or HTTP host name, unknown to DNS |
 | `connection refused` | `Connect` to a port where nobody listens |
 | `connection reset` | the other side reset an open connection |
-| `timeout` | a `Recv`, `Accept` or `Recv_from` longer than `Set_timeout`; a `Ping` without answer |
+| `timeout` | a `Recv`, `Accept` or `Recv_from` longer than `Set_timeout`; a `Ping` without answer; a `Connect` or `Connect_tls` after 20 s |
 | `not your socket`, `not a socket` | a socket of another process, or none |
 | `TLS: ...` | the handshake or the certificate failed (19.7) |
 
@@ -119,8 +119,10 @@ match Net.call n (Net.Recv (s, 4096)) with
 | exception Ipc.Remote_error (_, "timeout") -> (* five seconds of silence *)
 ```
 
-`Ping` carries its own timeout. `Connect` has none of its own: it takes
-as long as TCP needs to succeed or give up.
+`Ping` carries its own timeout. `Connect` and `Connect_tls` (with its
+handshake) have a fixed one: 20 seconds without a connection and they
+fail with `timeout` (lwIP alone would give up after some 27 seconds,
+with `connection aborted`).
 
 ## 19.5 A complete example: a TCP echo server
 

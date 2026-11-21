@@ -57,7 +57,7 @@ let wrap cols text =
           done;
           if Buffer.length cur > 0 then Buffer.add_char cur ' ';
           Buffer.add_string cur !w)
-        (String.split_on_char ' ' line);
+        (String.split_on_char ' ' (Gfx.expand_tabs line));
       flush ();
       List.rev !out)
     (String.split_on_char '\n' text)

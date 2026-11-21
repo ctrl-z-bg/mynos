@@ -45,7 +45,15 @@ let rec device tries =
   | exception Mynos.Error _ when tries > 0 ->
     Mynos.sleep 0.1; device (tries - 1)
 
-let dev = device 100
+(* no block service after 10 s: no disk (ata found none, or is not there).
+   Ending with 0 says so to init, which then does not start fatfs again
+   five times (mynos-f2d) *)
+let dev =
+  match device 100 with
+  | d -> d
+  | exception Mynos.Error _ ->
+    Mynos.log "fatfs: no disk (no block service): no /disk\n";
+    exit 0
 
 let boot = Bytes.of_string (Block.read dev 0 1)
 let bps = u16 boot 11

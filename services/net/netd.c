@@ -74,6 +74,10 @@
 #define MAXSOCK     64
 #define MAXBACKLOG  8
 #define MAXRECV     16384
+/* a Connect or Connect_tls (the handshake included) that waits longer
+   fails with "timeout": lwIP gives up on a SYN by itself only after
+   some 27 s, with "connection aborted" (mynos-8t3) */
+#define CONNECT_TIMEOUT 20000
 #define MAXPING     8
 #define MAXDGRAMS   32        /* datagrams kept per UDP socket */
 #define MAXDGRAM    8192      /* bytes in a datagram sent */
@@ -604,6 +608,7 @@ static void do_connect(int ch, const char * host, long long port) {
   s->state = S_CONNECTING;
   s->rx_kind = W_CONNECT;
   s->rx_ch = ch;
+  s->rx_deadline = sys_now() + CONNECT_TIMEOUT;
   ip_addr_copy(s->peer, addr);
   s->peer_port = (u16_t)port;
   setup_pcb(s->pcb, id);
@@ -690,6 +695,9 @@ static void tls_start(struct sock * s, const ip_addr_t * addr) {
 static void on_tls_resolved(const char * name, const ip_addr_t * addr, void * arg) {
   struct sock * s = &socks[IDX(arg)];
   (void)name;
+  /* the connection timed out while the name was being resolved: the
+     socket was kept for this callback, which frees it */
+  if (s->rx_kind != W_CONNECT) { s->state = S_FREE; return; }
   if (addr) tls_start(s, addr);
   else { s->state = S_FREE; reply_error(s->rx_ch, "host not found"); }
 }
@@ -710,6 +718,7 @@ static void do_connect_tls(int ch, const char * host, long long port) {
   s->state = S_CONNECTING;
   s->rx_kind = W_CONNECT;
   s->rx_ch = ch;
+  s->rx_deadline = sys_now() + CONNECT_TIMEOUT;
   s->tls = 1;
   s->peer_port = (u16_t)port;
   strcpy(s->host, host);
@@ -799,6 +808,20 @@ static void socket_timeouts(void) {
   int i;
   for (i = 0; i < MAXSOCK; i++) {
     struct sock * s = &socks[i];
+    if (s->state == S_CONNECTING && s->rx_kind == W_CONNECT && s->rx_ch >= 0 &&
+        (s32_t)(sys_now() - s->rx_deadline) >= 0) {
+      reply_error(s->rx_ch, "timeout");
+      s->rx_ch = -1;
+      s->rx_kind = W_NONE;
+      /* connecting, or in the TLS handshake: given up; still resolving the
+         name (TLS): on_tls_resolved frees the socket when DNS answers */
+      if (s->pcb) {
+        altcp_abort(s->pcb);                  /* on_err: the pcb is gone */
+        s->pcb = NULL;
+        s->state = S_FREE;
+      }
+      continue;
+    }
     if (s->state != S_FREE && s->rx_ch >= 0 &&
         (s->rx_kind == W_RECV || s->rx_kind == W_ACCEPT ||
          s->rx_kind == W_RECVFROM) && s->rx_deadline &&
@@ -963,7 +986,8 @@ static const wire_request_doc requests[] = {
     "Ping an address (IPv4, dotted): the round trip time in ms." },
   { 1, "resolve", "name:S", "S", "A host name's IPv4 address (DNS)." },
   { 0, "connect", "(address:S,port:I)", "I",
-    "A TCP connection to an address and port: its socket." },
+    "A TCP connection to an address and port: its socket; \"timeout\" "
+    "after 20 s without one." },
   { 0, "listen", "port:I", "I", "Listen on a TCP port: a listening socket." },
   { 0, "accept", "socket:I", "(socket:I,address:S,port:I)",
     "Wait for a connection on a listening socket: its socket, and the "
@@ -980,7 +1004,8 @@ static const wire_request_doc requests[] = {
   { 0, "connect_tls", "(host:S,port:I)", "I",
     "A TCP connection with TLS to a host (a name, or an address) and port, "
     "the server's certificate checked: its socket. send and recv then "
-    "carry the clear bytes." },
+    "carry the clear bytes. \"timeout\" after 20 s without the "
+    "connection and its handshake." },
   { 0, "udp_bind", "port:I", "I", "A UDP socket on a port (0: any)." },
   { 0, "send_to", "((socket:I,address:S),(port:I,data:S))", "I",
     "Send one UDP datagram: its size." },

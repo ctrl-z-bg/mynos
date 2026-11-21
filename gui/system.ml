@@ -81,7 +81,7 @@ let devices = [|
     drivers = [ "consoled"; "keyboardd" ]; irqs = [ 1 ] };
   { d_name = "Mouse"; d_what = "PS/2 mouse (and vmmouse): IRQ 12, read by displayd";
     drivers = [ "displayd" ]; irqs = [ 12 ] };
-  { d_name = "Serial"; d_what = "COM1, the kernel's log; COM2, a terminal (IRQ 3, consoled)";
+  { d_name = "Serial"; d_what = "COM2: the kernel's log, and a terminal (IRQ 3, consoled); COM1: seriald (IRQ 4)";
     drivers = [ "consoled"; "seriald" ]; irqs = [ 3; 4 ] };
   { d_name = "Disk"; d_what = "ATA disk: its blocks, read and written by ata (polled)";
     drivers = [ "ata" ]; irqs = [ 14; 15 ] };

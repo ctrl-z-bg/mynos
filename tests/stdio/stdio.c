@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 static int failures = 0;
 
@@ -65,6 +66,12 @@ int main(void)
   /* isatty follows the shell's redirections: 1 on the console, 0 in a
      file */
   printf("stdio: isatty(1) %d\n", isatty(1));
+  {
+    /* and fstat agrees (mynos-1ev): a character device, or a file */
+    struct stat st;
+    check("fstat(1): the console, or the file",
+          fstat(1, &st) == 0 && (isatty(1) ? S_ISCHR(st.st_mode) : S_ISREG(st.st_mode)));
+  }
 
   /* standard input: the console, or what the shell redirected */
   printf("stdio: type a line\n");

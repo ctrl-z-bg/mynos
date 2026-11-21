@@ -80,6 +80,10 @@ let () =
     (match float_of_string_opt secs with
      | Some s when s > 0. -> system file s
      | _ -> usage ())
+  | [ "-o"; file; "-s"; secs ] ->                (* the options in either order *)
+    (match float_of_string_opt secs with
+     | Some s when s > 0. -> system file s
+     | _ -> usage ())
   | "-o" :: file :: (_ :: _ as command) -> run file command
   | (c :: _ as command) when c <> "-o" && c <> "-s" -> run "/tmp/last.trace" command
   | _ -> usage ()

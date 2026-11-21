@@ -73,7 +73,9 @@ authors' direction. The first days, in outline (each line is detailed in
 | 2026-11-16 | The 2008 system built again and running in QEMU, first with a period toolchain, then with a modern one (gcc 14, musl). The OCaml runtime replaced by OCaml 5.5's, unmodified. The console, files over the RAM disk, `spawn`, the OCaml toplevel as a shell, `init` in OCaml, `tmpfs`, Linux threads and OCaml domains, the ATA disk driver and the FAT file system in OCaml, `ocamlc` inside MyNOS, the editor `edit`, the shell `sh`. |
 | 2026-11-17 | Typed IPC, and protocols that describe themselves. The network (lwIP, an NE2000 driver, TLS) and a web server. The event recorder. Identities with generations, and the `io` privilege. Language models: `llm`, `ask`, the agent. The graphical session, with terminal windows. |
 | 2026-11-18 | The agent and recordings windows, the System window, `kill`, the Tour, services restarted by `init`, files, registry and console over typed IPC (every service typed), OCaml threads. The period toolchain retired. The manual's appendices, and the kernel bugs they found: the FPU state, write protection, unchecked pointers. |
-| 2026-11-19 | C's stdio over the file services, one recording at a time, the manual's user's and programmer's guides, and the bugs they found. |
+| 2026-11-19 | C's stdio over the file services, one recording at a time, the log inside MyNOS, UTF-8 in the editor. A bootable ISO, the first release, and MyNOS in the browser. The manual's user's and programmer's guides, and the bugs they found. |
+| 2026-11-20 | What of OCaml's distribution runs, measured: Str and Num added to the runtime, `Sys.time`, `getuid` and `O_EXCL` fixed. OCaml's `Graphics`, written again on the toolkit. Packages: `pkg`, its repository on GitHub, and the Packages window; 2048 and the agent's tree in the wind as the first packages. |
+| 2026-11-21 | Small fixes before the printed manual: connections bounded in time, `httpd` after a restart of the network, services that end cleanly without their hardware. |
 
 The work followed the plan of 2002 (chapter 2.2) and kept its code
 where it worked: the kernel of 2002–2004 is still the kernel. What was
@@ -85,6 +87,6 @@ added was decided step by step, by the authors, in the notes of
 > The design of 2002 needed no correction to be finished in 2026: a
 > microkernel, services as processes, OCaml's virtual machine as one of
 > them, and a higher level of abstraction through the language. What
-> changed is the cost of doing it: four days of work, directed by the
+> changed is the cost of doing it: a few days of work, directed by the
 > people who had the ideas, and done with an AI agent that read their
 > code of 2002 as carefully as its own.

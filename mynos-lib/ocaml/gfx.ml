@@ -45,9 +45,29 @@ let create width height = { pixels = alloc width height; width; height }
 let char_w = 8
 let char_h = 16
 
-let text ?(bold = false) ?(max = max_int / 2) g x y s colour = text_raw g x y s colour bold max
+(* a tab, to the next multiple of 8 cells from the string's start (the
+   font has no glyph for it: it showed as a diamond, mynos-1cz) *)
+let expand_tabs s =
+  if not (String.contains s '\t') then s
+  else begin
+    let b = Buffer.create (String.length s + 16) and col = ref 0 in
+    String.iter (fun c ->
+        if c = '\t' then begin
+          let n = 8 - !col mod 8 in
+          Buffer.add_string b (String.make n ' '); col := !col + n
+        end else begin
+          Buffer.add_char b c;
+          if Char.code c land 0xC0 <> 0x80 then incr col
+        end) s;
+    Buffer.contents b
+  end
 
-let cells s = String.fold_left (fun n c -> if Char.code c land 0xC0 = 0x80 then n else n + 1) 0 s
+let text ?(bold = false) ?(max = max_int / 2) g x y s colour =
+  text_raw g x y (expand_tabs s) colour bold max
+
+let cells s =
+  String.fold_left (fun n c -> if Char.code c land 0xC0 = 0x80 then n else n + 1) 0
+    (expand_tabs s)
 
 let rect g x y w h c =
   fill g x y w 1 c; fill g x (y + h - 1) w 1 c;

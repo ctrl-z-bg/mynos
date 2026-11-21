@@ -28,7 +28,8 @@ val request :
   ?net:Net.t -> ?meth:string -> ?headers:(string * string) list ->
   ?body:string -> ?timeout:int -> string -> response
 (** [request url]: [meth] is ["GET"] by default, or ["POST"] with a
-    [body]. [timeout] (ms, default 30000) bounds each wait for the server.
+    [body]. [timeout] (ms, default 30000) bounds each wait for the server;
+    the connection, with its TLS handshake, waits at most 20 s (netd).
     [Host], [User-Agent], [Content-Length] and [Connection] are added
     unless given in [headers]. *)
 

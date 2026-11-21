@@ -62,4 +62,8 @@ let () =
      Unix.close fd; Sys.file_exists "/tmp/new");
   ok &&& check "Filename.temp_file: two different files"
     (let a = Filename.temp_file "t" "" and b = Filename.temp_file "t" "" in a <> b);
+  (* tmpfs: reading after a seek past the end gives nothing (mynos-f2d) *)
+  ok &&& check "tmpfs: a read past the end is empty"
+    (In_channel.with_open_bin "/tmp/here" (fun ic ->
+         In_channel.seek ic 10L; In_channel.input_all ic = ""));
   print_endline (if !ok then "libs: all checks passed" else "libs: FAIL")

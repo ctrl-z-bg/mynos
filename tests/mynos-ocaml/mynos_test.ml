@@ -182,7 +182,9 @@ let () =
      Gfx.get g 12 12 = 0xFF0000 && Gfx.get g 15 15 = 0x102030
      && Gfx.get g 1 1 = 0x00FF00 && Gfx.get g 2 2 = 0x102030
      && Gfx.get g 30 31 = 0x0000FF && Gfx.get g 42 4 = 0xFF0000
-     && Gfx.get g 64 0 = -1 && Gfx.cells "caff\xc3\xa8" = 5);
+     && Gfx.get g 64 0 = -1 && Gfx.cells "caff\xc3\xa8" = 5
+     (* a tab: to the next multiple of 8 cells (mynos-1cz) *)
+     && Gfx.cells "1\tone" = 11 && Gfx.expand_tabs "\xc3\xa8\tx" = "\xc3\xa8       x");
   ok &&& check "gfx: drawing within a clip, nested"
     (let g = Gfx.create 40 40 in
      Gfx.fill g 0 0 40 40 0;

@@ -7,9 +7,9 @@
 #   a  the first boots: bytecode, effects, the ATA disk, FAT, domains
 #   b  the library, files, the kernel stress test, spawning, the console
 #   c  without COM2, and restarting again and again
-#   d  the graphical session
+#   d  the graphical session (its windows, Graphics, the Packages window)
 #   e  the network, then the whole system driven by the keyboard (the
-#      seventh boot: the shell, the toplevel, the agent, kill...)
+#      seventh boot: the shell, the toplevel, the agent, kill, packages...)
 # Environment: WAIT seconds to let the system run (default 10); SHOTS a
 # directory where the graphical session's screens are kept; LANES the
 # lanes to run (default "a b c d e": the checks of the others then fail);

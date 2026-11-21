@@ -28,10 +28,15 @@ val fill : t -> int -> int -> int -> int -> int -> unit
 
 val text : ?bold:bool -> ?max:int -> t -> int -> int -> string -> int -> int
 (** [text g x y s colour]: [s] with its top left at [(x, y)], at most
-    [max] cells: the cells written. *)
+    [max] cells: the cells written. A tab goes to the next multiple of 8
+    cells from the start of [s]. *)
 
 val cells : string -> int
-(** The cells of a UTF-8 string (its characters). *)
+(** The cells of a UTF-8 string (its characters, a tab as {!text} draws
+    it). *)
+
+val expand_tabs : string -> string
+(** [s], each tab replaced by the spaces {!text} would leave for it. *)
 
 val line : t -> int -> int -> int -> int -> int -> unit
 (** [line g x0 y0 x1 y1 colour]. *)

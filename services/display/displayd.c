@@ -1223,7 +1223,7 @@ int main(void)
 
   if (bga_get(0) < 0xB0C0 || bga_get(0) > 0xB0CF || !(lfb = find_lfb())) {
     mynos_log("displayd: no Bochs VGA (QEMU's standard VGA): no graphics\n");
-    return 1;
+    return 0;                 /* by choice: init does not start it again */
   }
   base = mynos_mapPhysical(lfb, (FB_SKIP + W * H * 4) / 4096);
   back = malloc(W * H * 4);

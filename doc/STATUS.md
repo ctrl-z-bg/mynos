@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-20
+Last updated: 2026-11-21
 
 ---
 
@@ -1323,3 +1323,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   each job only: read at every frame, they were open when `pkg remove`
   came, and fatfs does not remove an open file (JOURNAL, "A window that
   read too often"). Manual 10.3, 10.14 (new), 13 (PACKAGES).
+- **2026-11-21** — Small fixes before the printed manual: a tab drawn as
+  a diamond (`Gfx.text` and `Gfx.cells` expand tabs, the agent window
+  wraps them; mynos-1cz); `connect` and `connect_tls` fail with
+  "timeout" after 20 s, the TLS handshake included (netd; mynos-8t3);
+  `fstat` on the console is a character device, not the program's
+  bytecode module (libmynos; mynos-1ev); after `netd` comes back,
+  `httpd` listens again instead of asking a dead socket for ever;
+  `displayd` without the Bochs VGA and `fatfs` without a disk end with 0,
+  so `init` does not start them five times; a `tmpfs` read after a seek
+  past the end is empty (mynos-f2d); `trace -o FILE -s N`, the System
+  window's serial ports (mynos-uoq). Manual 19.4, appendix E.

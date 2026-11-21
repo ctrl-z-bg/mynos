@@ -874,6 +874,15 @@ int fstat(int fd, struct stat * st)
   fd = std_fd(fd);
   slot = file_slot(fd);
   memset(st, 0, sizeof(*st));
+  if (slot < 0 && fd >= 0 && fd <= 2) {
+    /* the console: a terminal, a character device (the kernel's fstat64
+       would describe the program's own bytecode module: mynos-1ev) */
+    st->st_mode = S_IFCHR | 0620;
+    st->st_nlink = 1;
+    st->st_blksize = 1024;
+    st->st_rdev = 0x0400;                /* as Linux's /dev/tty0, 4:0 */
+    return 0;
+  }
   if (slot < 0) {
     struct kstat64 k;
     long ret = sys3(197 /* fstat64 */, fd, (long)&k, 0);

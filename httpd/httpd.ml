@@ -126,30 +126,53 @@ let queue = Queue.create ()
 let lock = Mutex.create ()
 let nonempty = Condition.create ()
 
-let worker n () =
+(* each connection comes with the network service it was accepted from:
+   after netd restarts, the next ones come from the new one *)
+let worker () =
   while true do
     Mutex.lock lock;
     while Queue.is_empty queue do Condition.wait nonempty lock done;
-    let s, peer = Queue.pop queue in
+    let n, s, peer = Queue.pop queue in
     Mutex.unlock lock;
     serve n s peer
   done
 
-let () =
+let listen () =
   match Net.connect () with
-  | exception Mynos.Error _ -> log "no network service"
+  | exception Mynos.Error _ -> Error "no network service"
   | n ->
     match Net.call n (Net.Listen port) with
-    | exception Ipc.Remote_error (_, m) -> log "port %d: %s" port m
-    | l ->
-      log "serving %s on port %d, %d connections at a time" root port workers;
-      for _ = 1 to workers do ignore (Domain.spawn (worker n)) done;
-      while true do
-        match Net.call n (Net.Accept l) with
-        | exception Ipc.Remote_error (_, m) -> log "accept: %s" m
-        | s, peer, _ ->
-          Mutex.lock lock;
-          Queue.push (s, peer) queue;
-          Condition.signal nonempty;
-          Mutex.unlock lock
-      done
+    | l -> Ok (n, l)
+    | exception Ipc.Remote_error (_, m) -> Error (Printf.sprintf "port %d: %s" port m)
+
+(* accept, and queue for the workers. Errors in a row mean that the
+   listening socket is gone (netd ended, and init started it again: its
+   sockets are new): listen again, on the new netd, instead of asking the
+   dead socket for ever (mynos-f2d) *)
+let rec accept n l errors =
+  match Net.call n (Net.Accept l) with
+  | s, peer, _ ->
+    Mutex.lock lock;
+    Queue.push (n, s, peer) queue;
+    Condition.signal nonempty;
+    Mutex.unlock lock;
+    accept n l 0
+  | exception e when errors < 3 ->
+    log "accept: %s" (match e with Ipc.Remote_error (_, m) -> m | e -> Printexc.to_string e);
+    accept n l (errors + 1)
+  | exception _ ->
+    log "the listening socket is gone: listening again";
+    relisten ()
+and relisten () =
+  Mynos.sleep 1.0;
+  match listen () with
+  | Ok (n, l) -> log "serving %s on port %d again" root port; accept n l 0
+  | Error _ -> relisten ()
+
+let () =
+  match listen () with
+  | Error m -> log "%s" m
+  | Ok (n, l) ->
+    log "serving %s on port %d, %d connections at a time" root port workers;
+    for _ = 1 to workers do ignore (Domain.spawn worker) done;
+    accept n l 0

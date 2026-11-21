@@ -2557,3 +2557,41 @@ while drawing it reads all the time. On a file system where an open file
 cannot be removed, polling a file is holding it: read the state when it
 changes, not when you draw it.
 
+## 2026-11-21 — A listener that outlived its network
+
+**Symptom.** Found reading the code for appendix E, not seen: if `netd`
+ended and `init` started it again, `httpd` would log `accept: ...` in a
+loop for ever and never serve again.
+
+**Cause.** `httpd`'s socket was `netd`'s: a number in the old process's
+table. The new `netd` knew nothing of it, so every `Accept` failed at
+once, and `httpd` simply tried again.
+
+**Fix.** Three failures in a row mean the socket is gone: `httpd` connects
+to the network service again and listens anew; each connection now
+travels to the workers with the service it came from.
+
+**Lesson.** A handle given by a service lives as long as that service,
+not as long as its name. A client of a service that `init` can restart
+must be ready to find its handles void, and to start again from the
+name.
+
+## 2026-11-21 — Connecting has no Set_timeout
+
+**Symptom.** `Http`'s `~timeout` bounds each wait for the server, but a
+`fetch` to an address that does not answer took about 27 s and ended with
+"connection aborted"; a TLS server that accepts and then says nothing
+could hold a `fetch`, `pkg`, or the agent, for ever.
+
+**Cause.** `Set_timeout` applies to a socket's `Recv` and `Accept`; there
+is no socket before `Connect` answers. lwIP gives up on an unanswered SYN
+by itself, after its retries; the TLS handshake had no bound at all.
+
+**Fix.** `netd` gives `Connect` and `Connect_tls` a deadline of 20 s,
+DNS and handshake included, and answers "timeout". A name still being
+resolved at the deadline keeps its socket until DNS answers, so that the
+callback never lands in a socket that was handed out again.
+
+**Lesson.** A timeout on "each wait" leaves out the waits that happen
+before there is anything to set it on.
+
