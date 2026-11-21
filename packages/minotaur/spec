@@ -1,0 +1,8 @@
+# The package minotaur (tools/pkg-build.sh): an original text adventure
+NAME=minotaur
+VERSION=1.0
+DESCRIPTION='Minotaur, a text adventure inside MyNOS: you are a message sent to read a file; the registry, the disk, its interrupt, and the Minotaur who keeps the ports'
+LICENSE=GPL-2.0-or-later
+SRC=packages/minotaur
+SOURCES=minotaur.ml
+DOC=packages/minotaur/README.md

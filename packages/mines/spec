@@ -6,3 +6,4 @@ LICENSE=GPL-2.0-or-later
 SRC=packages/mines
 SOURCES=mines.ml
 RUN=mines
+DOC=packages/mines/README.md

@@ -410,6 +410,13 @@ SOURCES=tree.ml                       in the order to compile them
 EXTRA=                                more files: a licence, a README
 ```
 
+Other fields, when a package needs them: `COMMANDS` (several commands
+of one program, installed as scripts that run it), `DEPENDS` (packages
+installed first), `RUN` (the window the Packages window starts), `DOC`
+(its documentation). A package without `SOURCES` is data (a story, a
+game's ROM), played by the package it depends on. The comment at the top
+of `tools/pkg-build.sh` describes them all.
+
 `tools/pkg-build.sh OUTDIR`, in the container, compiles each package
 against the tree's runtime and libraries, as `pkg -s` would inside
 MyNOS (in the sources' directory, with `-noautolink mynos.cma` and the

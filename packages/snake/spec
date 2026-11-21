@@ -6,3 +6,4 @@ LICENSE=GPL-2.0-or-later
 SRC=packages/snake
 SOURCES=snake.ml
 RUN=snake
+DOC=packages/snake/README.md

@@ -283,8 +283,15 @@ pkg: 2048 1.0 installed (its bytecode): 2048
 
 The program goes to `/disk/bin`, which is on `sh`'s `PATH`: from a
 Terminal window of the graphical session, `2048` starts the game. The
-package's files stay in `/disk/pkg/2048`. Both programs above draw in a
-window, so they need the session (chapter 10).
+package's files stay in `/disk/pkg/2048`. Some packages are commands for
+the terminal (`utils` brings `grep`, `sort`, `head` and others), some
+need another package, which `pkg` installs first (a story needs the
+interpreter that plays it). This manual is a package too: after `pkg
+install manual`, `man pkg` prints this command's entry of chapter 13.
+
+The list grows after this book: the packages, with their documentation
+up to date, are described on the repository's page,
+https://github.com/ctrl-z-bg/mynos-packages.
 
 | Command | What it does |
 |---|---|
@@ -294,7 +301,9 @@ window, so they need the session (chapter 10).
 | `pkg install NAME...` | download, check, install (again, if it is installed) |
 | `pkg install -s NAME...` | the same, compiled from its sources |
 | `pkg remove NAME...` | remove the program and its files |
+| `pkg search WORD` | the packages whose name or description has the word |
 | `pkg update` | read the index again |
+| `pkg upgrade` | read it, and install the newer versions of the installed packages |
 
 The first command reads the index (`index.json`) and keeps a copy in
 `/disk/pkg/index.json`; `pkg update` reads it again, to see new

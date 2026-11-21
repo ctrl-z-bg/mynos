@@ -18,10 +18,14 @@
 # documentation (a file, kept as README.md); EXTRA, other files (its
 # licence, data).
 #
+# OUTDIR/docs/NAME.md is a package's DOC, for the repository's page.
+#
 # A package's archive holds package.json (name, version, programs, the
 # sources of each in the order to compile them, libraries, depends, run,
 # doc), the programs as bytecode, built against this tree's runtime and
-# libraries, their sources in src/, the documentation, the extra files. The archives are made the same way each time
+# libraries, their sources in src/, the documentation, the extra files.
+# "program" and "sources" repeat the first program's, for the pkg of
+# 2026-11-20, which knew no other fields. The archives are made the same way each time
 # (names sorted, owner 0, date 0), so a package that did not change keeps
 # its hash.
 set -eu
@@ -30,8 +34,8 @@ cd "$(dirname "$0")/.."
 root=$(pwd)
 # OUTDIR/packages holds only the archives of the specs: a package removed
 # or renamed leaves no archive behind
-mkdir -p "$out/packages"
-rm -f "$out"/packages/*.tar
+mkdir -p "$out/packages" "$out/docs"
+rm -f "$out"/packages/*.tar "$out"/docs/*.md
 out=$(cd "$out" && pwd)
 mynos=$(cat VERSION 2>/dev/null || echo unknown)
 stage=$root/tmp/pkg-stage
@@ -53,7 +57,9 @@ for spec in packages/*/spec; do
     for f in $SOURCES; do cp "$SRC/$f" "$d/src/"; done
     names_only=$(for f in $SOURCES; do basename "$f"; done | tr '\n' ' ')
     for f in $EXTRA; do cp -r "$f" "$d/"; done
-    [ -n "$DOC" ] && cp "$DOC" "$d/README.md"
+    # its documentation: in the archive, and beside the index (the
+    # repository's page links it)
+    [ -n "$DOC" ] && cp "$DOC" "$d/README.md" && cp "$DOC" "$out/docs/$NAME.md"
     [ -z "$SOURCES" ] && rmdir "$d/src"
     # the programs: NAME:SOURCES... (one, today)
     progs=
@@ -91,7 +97,7 @@ for spec in packages/*/spec; do
   "license": "$(json "$LICENSE")",
   "programs": [
 $pjson
-  ],
+  ],$( [ -n "$SOURCES" ] && printf '\n  "program": "%s.byte",\n  "sources": [%s],' "$(json "$NAME")" "$(jlist "$names_only")" )
   "libraries": [$(jlist "$LIBRARIES")],
   "commands": [$(jlist "$COMMANDS")],
   "depends": [$(jlist "$DEPENDS")],

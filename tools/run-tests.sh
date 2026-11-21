@@ -799,6 +799,8 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     # entry of a command, from the package manual
     tools/type-keys.py "$tmp/mon7" 'pkg install scheme manual; echo "(display (expt 3 50))" > /tmp/a.scm; scheme /tmp/a.scm; echo; man pkg | head -n 3\n'
     waitfor "Installs packages: demos" 120
+    tools/type-keys.py "$tmp/mon7" 'pkg install minotaur; echo help | minotaur\n'
+    waitfor "Directions: north, south" 60
     # Ctrl-C on a program waiting for a line: the next line is sh's, not
     # swallowed by the program it ended (mynos-5dd)
     tools/type-keys.py "$tmp/mon7" '/disk/stdio-test\n'; sleep 4
@@ -1066,6 +1068,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "Passed: 406, Failed: 0"                   # zmachine, Czech
     expect "717897987691852588770249"                 # scheme
     expect "Purpose Installs packages: demos"         # man
+    expect "Directions: north, south"                 # minotaur
     if [ -n "$httpd_private" ]; then
         echo "ok    httpd: serves /disk, not its .env files"
     else

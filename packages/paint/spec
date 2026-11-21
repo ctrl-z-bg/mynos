@@ -6,3 +6,4 @@ LICENSE=GPL-2.0-or-later
 SRC=packages/paint
 SOURCES='../view/image.ml ../view/inflate.ml ../view/png.ml ../view/pnm.ml paint.ml'
 RUN=paint
+DOC=packages/paint/README.md

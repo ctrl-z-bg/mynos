@@ -6,3 +6,4 @@ LICENSE=GPL-2.0-or-later
 SRC=packages/life
 SOURCES=life.ml
 RUN=life
+DOC=packages/life/README.md

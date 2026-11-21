@@ -8,3 +8,4 @@ SRC=packages/wiki
 SOURCES=wiki.ml
 RUN=wiki
 EXTRA=packages/wiki/tool.json
+DOC=packages/wiki/README.md

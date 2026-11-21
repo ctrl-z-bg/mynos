@@ -6,3 +6,4 @@ LICENSE=GPL-2.0-or-later
 SRC=packages/solitaire
 SOURCES=solitaire.ml
 RUN=solitaire
+DOC=packages/solitaire/README.md

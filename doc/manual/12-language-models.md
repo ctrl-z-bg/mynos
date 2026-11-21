@@ -234,6 +234,11 @@ Each `run_command` starts a new `sh`: a `cd` does not carry over to the
 next one. A program that keeps running (a window, a service) is built
 with `build_ocaml` and started with `run_command "PROGRAM &"`.
 
+**The packages' tools.** An installed package can add a tool of its own
+(chapter 9, 9.8): `wiki` gives `wikipedia`, the beginning of an article;
+`calc` gives `calculate`, exact arithmetic. Both change nothing, so the
+agent uses them without asking.
+
 **The services' requests.** With `-s`, every request of the services
 named becomes a tool, called `SERVICE_REQUEST` (`net_resolve`,
 `llm_chat`...), built from the service's own description of its protocol

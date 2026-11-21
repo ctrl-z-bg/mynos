@@ -2720,3 +2720,30 @@ buffer by themselves. Thirty-odd lines changed outside the ports
 language change reaches into it: OCS put Scheme's mutable strings in
 OCaml's string type, and the change of 2017 reached every primitive on
 strings. Old OCaml code ports well once that one decision is redone.
+
+## 2026-11-21 — Ten ticks a second, for everyone
+
+**Symptom.** The Game Boy emulator, whose benchmark ran 357 frames a
+second inside MyNOS under KVM, showed 9 in its window; emulating and
+drawing a frame took under 10 ms.
+
+**Diagnosis.** The window asked `Gui.run` for a tick every 1/60 s, and
+got one about every 110 ms. `Display.next_event`'s timeout is kept by
+`displayd`, whose timer thread woke every 100 ms to look at the
+deadlines.
+
+**Cause.** A period chosen for the clock in the bar (and for noticing
+windows of dead programs) also bounded every window's ticks. Nobody saw
+it: the first animations ticked at 0.1 s; `snake` and `blocks`, asking
+for 0.02 and 0.03, quietly got 0.1.
+
+**Fix.** The timer sleeps 10 ms (the kernel's resolution) for two
+seconds after any window asks for a timeout under 100 ms, else 100 ms
+as before. The Game Boy runs the frames due by the clock (a tick of
+1/60 s comes every 20 ms at that resolution), drawing only the last:
+60 frames a second.
+
+**Lesson.** A timeout is only as fine as the clock that checks it; a
+service that keeps deadlines for others must check them as often as
+the shortest one asks, and an animation that seems slow should be
+timed before its drawing is suspected.

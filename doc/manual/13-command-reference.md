@@ -788,10 +788,12 @@ reply from 10.0.2.2: time 0 ms
 
 ```
 pkg list [-i]
+pkg search WORD
 pkg info NAME
 pkg install [-s] NAME...
 pkg remove NAME...
 pkg update
+pkg upgrade
 ```
 
 **Type** Program (`/pkg.byte`).
@@ -803,7 +805,10 @@ again. `install` downloads a package's archive, checks its size and
 BLAKE2b hash against the index, unpacks it in `/disk/pkg/NAME` and puts
 its program in `/disk/bin`, on `PATH`: the bytecode it holds if this
 MyNOS can run it, otherwise (or with `-s`) the program compiled from its
-sources by `ocamlc`. `remove` deletes both. `list` marks the installed
+sources by `ocamlc`; the packages it needs come first, and its commands
+(scripts of one line, `#!PROGRAM`) go beside it. `remove` deletes them.
+`upgrade` reads the index and installs the newer versions; `search`
+looks in names and descriptions. `list` marks the installed
 packages, with their version when it is older than the index's;
 `list -i` lists the installed packages only, from `/disk`, without the
 network. Status 0

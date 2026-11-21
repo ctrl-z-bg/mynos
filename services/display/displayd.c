@@ -300,6 +300,10 @@ struct window {
 };
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+/* the last time a window asked to wait less than the timer's period: the
+   timer then checks every 10 ms (the kernel's resolution), for 2 s */
+static long fast_until = 0;
 static struct window win[MAXWIN];
 static int order[MAXWIN], norder = 0;  /* bottom to top */
 static int next_id = 1;
@@ -967,6 +971,9 @@ static void * keys_thread(void * arg)
 
 /* ---- the timer: ticks, the clock, windows of programs that ended ---- */
 
+/* Every 100 ms; every 10 ms while a window waits for shorter ticks (an
+   animation, a game): checked every 100 ms, a tick of 1/60 s came 10
+   times a second at most. */
 static void * timer_thread(void * arg)
 {
   int last_second = -1;
@@ -974,7 +981,7 @@ static void * timer_thread(void * arg)
   for (;;) {
     int i;
     long now;
-    mynos_sleep(100000);
+    mynos_sleep(now_ms() < fast_until ? 10000 : 100000);
     pthread_mutex_lock(&lock);
     now = now_ms();
     for (i = 0; i < MAXWIN; i++) {
@@ -1162,6 +1169,7 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     } else {
       w->waiting = ch;
       w->deadline = timeout > 0 ? now_ms() + timeout : 0;
+      if (timeout > 0 && timeout < 100) fast_until = now_ms() + 2000;
     }
     break;
   }

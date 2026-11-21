@@ -23,7 +23,8 @@ plays in the terminal.
 `/disk/STORY.sav`. `undo` works in the games that offer it (version 5
 and later).
 
-Stories as packages: `zork1`, `zork2`, `zork3` (MIT licence, from
-Microsoft's release of 2025). Other free stories are on the IF Archive
-(https://www.ifarchive.org/indexes/if-archive/games/zcode/): copy one to
-`/disk` and give its name to `zmachine`.
+Free stories are on the IF Archive
+(https://www.ifarchive.org/indexes/if-archive/games/zcode/); Infocom's
+Zork I, II and III are under the MIT licence since 2025, their story
+files in Microsoft's repositories (https://github.com/historicalsource/zork1,
+`COMPILED/zork1.z3`). Copy one to `/disk` and give its name to `zmachine`.

@@ -6,3 +6,4 @@ LICENSE=GPL-2.0-or-later
 SRC=packages/view
 SOURCES='image.ml inflate.ml png.ml pnm.ml view.ml'
 RUN=view
+DOC=packages/view/README.md

@@ -292,13 +292,14 @@ programs that are not on the RAM disk, to install from the web. The list
 on the left has every package of the index, `installed` beside those on
 your disk (`newer` when the index has a newer version). On the right,
 the chosen one: its description, licence, size, the MyNOS it was built
-on, and whether it is installed, with buttons:
+on, the packages it needs and the commands it brings, and whether it is
+installed, with buttons:
 
 | Button | What it does |
 |---|---|
 | Install | downloads, checks and installs it (`pkg install NAME`) |
 | Upgrade | the same, when the index has a newer version |
-| Run | starts the installed program, in a window of its own |
+| Run | starts the installed program, in a window of its own (only for packages that open one) |
 | Remove | uninstalls it (`pkg remove NAME`) |
 | Update index | reads the index again (`pkg update`) |
 

@@ -6,3 +6,4 @@ LICENSE=GPL-2.0-or-later
 SRC=packages/blocks
 SOURCES=blocks.ml
 RUN=blocks
+DOC=packages/blocks/README.md

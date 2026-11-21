@@ -9,3 +9,4 @@ SOURCES='md.ml manual.ml'
 COMMANDS=man
 RUN=manual
 EXTRA="$(ls doc/manual/[0-9]*.md doc/manual/appendix-*.md | tr '\n' ' ')"
+DOC=packages/manual/README.md

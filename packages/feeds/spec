@@ -7,3 +7,4 @@ LIBRARIES=threads
 SRC=packages/feeds
 SOURCES='xml.ml feeds.ml'
 RUN=feeds
+DOC=packages/feeds/README.md

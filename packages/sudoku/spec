@@ -6,3 +6,4 @@ LICENSE=GPL-2.0-or-later
 SRC=packages/sudoku
 SOURCES=sudoku.ml
 RUN=sudoku
+DOC=packages/sudoku/README.md

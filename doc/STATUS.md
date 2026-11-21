@@ -207,7 +207,10 @@ All services are linked statically against `libmynos` and placed at
   (versions 1 to 5, 7, 8: Czech's and Praxix's tests pass); `wiki`
   (Wikipedia, in a window or the terminal), `feeds` (RSS and Atom),
   `manual` (the manual's chapters, `man NAME`, a window to read them),
-  `scheme` (OCS, R5RS, `third_party/ocs`). A package may give the agent
+  `scheme` (OCS, R5RS, `third_party/ocs`), `camlboy` (CAMLBOY, a Game
+  Boy emulator in OCaml, `third_party/camlboy`: 60 frames a second under
+  KVM) with `tobutobugirl`, `minotaur` (an original text adventure
+  inside MyNOS). A package may give the agent
   a tool (`tool.json`: `wikipedia`, `calculate`) (mynos-vws).
   Tested in the seventh boot against the host's copy (`tools/net-peer.py
   files`). The graphical session's Packages window
@@ -1384,3 +1387,22 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `Gui.scroll_to`. Lua-ML was looked at and left out: it is Lua 2.5
   (1996), not the Lua of today. Seventh boot: a Scheme file run, `man
   pkg`.
+- **2026-11-21** — `displayd`'s timer checked the windows' deadlines
+  every 100 ms, so no window got more than 10 ticks a second (`snake`,
+  `blocks` and every animation were capped there); it now checks every
+  10 ms for 2 s after a window asks for a shorter one. Packages `camlboy`
+  (CAMLBOY by linoscope, MIT, its library unchanged; a window of MyNOS's,
+  frames run by the clock, keys held for a moment after each press since
+  windows get no key release), `tobutobugirl` (Tangram Games' Game Boy
+  game, MIT and CC BY 4.0), `minotaur` (a text adventure of ours: a
+  message crossing the registry, fatfs, ata and its interrupt, past the
+  Minotaur who keeps the ports). CAMLBOY's benchmark inside MyNOS: 357
+  frames a second under KVM, 18 without. Seventh boot: `minotaur`.
+- **2026-11-21** — Each package has its documentation (`DOC`), which
+  `pkg-build.sh` also writes to `OUTDIR/docs/NAME.md` for the packages'
+  repository, whose page lists them all; `package.json` repeats
+  `program` and `sources` for the `pkg` of 2026-11-20. Manual: 9.8 (a
+  package's commands and needs, `pkg search`, `pkg upgrade`, the manual
+  as a package, the repository's page for what comes after the book),
+  10.14, 12 (the packages' tools), 13 (PKG), H.9 (the spec's other
+  fields): a paragraph or a row each.
