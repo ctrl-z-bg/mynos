@@ -775,7 +775,7 @@ caller's. `load`: `Failure "FILE: not a MyNOS recording"`, `Sys_error`.
 ```ocaml
 type event =
   | Key of string | Mouse of { x : int; y : int; buttons : int }
-  | Close | Tick | Focus of bool | Wheel of int
+  | Close | Tick | Focus of bool | Wheel of int | Key_up of string
 type _ request =
   | Info : (int * int) request
   | Create : string * int * int -> int request
@@ -874,7 +874,8 @@ type ui = { window : Display.window; g : Gfx.t;
             mutable mx : int; mutable my : int; mutable buttons : int;
             mutable clicked : bool; mutable press : int * int;
             mutable keys : string list; mutable focused : bool;
-            mutable tick : bool; mutable field : int; mutable wheel : int }
+            mutable tick : bool; mutable field : int; mutable wheel : int;
+            mutable released : string list; mutable held : string list }
 val background : int  val foreground : int  val muted : int
 val accent : int      val panel_colour : int
 val label : ?colour:int -> ?bold:bool -> ui -> int -> int -> string -> unit

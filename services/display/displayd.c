@@ -28,7 +28,8 @@
  *
  * Input: the PS/2 mouse (IRQ 12), with QEMU's vmmouse for absolute
  * coordinates when it is there (no pointer capture); keys from the console
- * service, read in raw mode while the session lasts.
+ * service, read in raw mode while the session lasts, with their releases
+ * (CONSOLE_RELEASES): a key event for each key, a key_up for each release.
  *
  * Threads: requests (listener), the mouse, the keys, a timer (ticks, the
  * clock, windows of programs that ended); one lock for the state.
@@ -279,11 +280,11 @@ static int text(int x, int y, const char * s, int max, unsigned int c, int bold)
 
 /* ---- windows, events ---- */
 
-enum { EV_KEY, EV_MOUSE, EV_CLOSE, EV_TICK, EV_FOCUS, EV_WHEEL };
+enum { EV_KEY, EV_MOUSE, EV_CLOSE, EV_TICK, EV_FOCUS, EV_WHEEL, EV_KEY_UP };
 
 struct event {
   int kind;
-  char text[32];                       /* EV_KEY */
+  char text[32];                       /* EV_KEY, EV_KEY_UP */
   int x, y, buttons;                   /* EV_MOUSE; x: EV_FOCUS's bool */
 };
 
@@ -592,7 +593,7 @@ static void reply_event(int ch, const struct event * e)
   wire_reply_ok(&w);
   wire_put_int(&w, e->kind);
   switch (e->kind) {
-  case EV_KEY: wire_put_cstring(&w, e->text); break;
+  case EV_KEY: case EV_KEY_UP: wire_put_cstring(&w, e->text); break;
   case EV_MOUSE:
     wire_put_int(&w, e->x);
     wire_put_int(&w, e->y);
@@ -939,10 +940,57 @@ static void * mouse_thread(void * arg)
 
 /* ---- the keys: the console, raw, while the session lasts ---- */
 
+/* the length of the key at s (n bytes left): a UTF-8 character, a
+   control character, or a sequence (ESC [ parameters final, ESC O x); a
+   read ends with a whole key (consoled queues each at once) */
+static int key_length(const unsigned char * s, int n)
+{
+  int i;
+  if (s[0] == 0x1B) {
+    if (n >= 3 && s[1] == 'O') return 3;
+    if (n < 3 || s[1] != '[') return 1;               /* Escape */
+    for (i = 2; i < n && s[i] >= 0x20 && s[i] <= 0x3F; i++) ;
+    return i < n ? i + 1 : n;                          /* to the final byte */
+  }
+  i = s[0] >= 0xF0 ? 4 : s[0] >= 0xE0 ? 3 : s[0] >= 0xC0 ? 2 : 1;
+  return i < n ? i : n;
+}
+
+static int utf8_put(unsigned int u, char * out)
+{
+  if (u < 0x80) { out[0] = u; return 1; }
+  if (u < 0x800) { out[0] = 0xC0 | (u >> 6); out[1] = 0x80 | (u & 0x3F); return 2; }
+  if (u < 0x10000) {
+    out[0] = 0xE0 | (u >> 12); out[1] = 0x80 | ((u >> 6) & 0x3F);
+    out[2] = 0x80 | (u & 0x3F); return 3;
+  }
+  out[0] = 0xF0 | (u >> 18); out[1] = 0x80 | ((u >> 12) & 0x3F);
+  out[2] = 0x80 | ((u >> 6) & 0x3F); out[3] = 0x80 | (u & 0x3F); return 4;
+}
+
+/* a release (ESC [ n ; 1:3 final, CONSOLE_RELEASES): the text its key's
+   press sent, into text; 0 if the key is not a release */
+static int release_text(const unsigned char * s, int n, char * text)
+{
+  unsigned int num = 0;
+  int i = 2;
+  char final = s[n - 1];
+  if (n < 8 || s[0] != 0x1B || s[1] != '[' || memcmp(s + n - 5, ";1:3", 4)) return 0;
+  for (; i < n - 5; i++) {
+    if (s[i] < '0' || s[i] > '9') return 0;
+    num = num * 10 + (s[i] - '0');
+  }
+  if (final == 'u') text[utf8_put(num, text)] = 0;
+  else if (final == '~') snprintf(text, 32, "\033[%u~", num);
+  else if (final >= 'A' && final <= 'H') snprintf(text, 32, "\033[%c", final);
+  else return 0;
+  return 1;
+}
+
 static void * keys_thread(void * arg)
 {
   struct termios saved, t;
-  char buf[32];
+  unsigned char buf[256];
   (void)arg;
   tcgetattr(0, &saved);
   t = saved;
@@ -952,19 +1000,26 @@ static void * keys_thread(void * arg)
   t.c_cc[VMIN] = 0;
   t.c_cc[VTIME] = 1;                               /* 0.1 s: then look again */
   tcsetattr(0, TCSANOW, &t);
+  mynos_consoleKeyReleases(1);
   for (;;) {
-    int n = read(0, buf, sizeof buf - 1);
+    int n = read(0, buf, sizeof buf), i = 0;
     pthread_mutex_lock(&lock);
     if (!active) { pthread_mutex_unlock(&lock); break; }
-    if (n > 0 && focus >= 0) {
+    while (n > 0 && i < n && focus >= 0) {
       struct event e;
+      int len = key_length(buf + i, n - i);
       memset(&e, 0, sizeof e);
-      e.kind = EV_KEY;
-      memcpy(e.text, buf, n);
+      if (release_text(buf + i, len, e.text)) e.kind = EV_KEY_UP;
+      else {
+        e.kind = EV_KEY;
+        memcpy(e.text, buf + i, len < (int)sizeof e.text ? len : (int)sizeof e.text - 1);
+      }
       post(&win[focus], &e);
+      i += len;
     }
     pthread_mutex_unlock(&lock);
   }
+  mynos_consoleKeyReleases(0);
   saved.c_lflag |= ICANON | ECHO;
   tcsetattr(0, TCSANOW, &saved);
   return NULL;
@@ -1022,8 +1077,10 @@ static const wire_request_doc requests[] = {
   { 0, "damage", "((window:I,x:I,y:I),(width:I,height:I))", "U",
     "A part of the window's pixels changed: it is shown again." },
   { 0, "next_event", "(window:I,timeout_ms:I)",
-    "V(0:key=S,1:mouse=(x:I,y:I,buttons:I),2:close=U,3:tick=U,4:focus=B,5:wheel=I)",
-    "The window's next event: keys (UTF-8, VT100 sequences for the others), the "
+    "V(0:key=S,1:mouse=(x:I,y:I,buttons:I),2:close=U,3:tick=U,4:focus=B,5:wheel=I,"
+    "6:key_up=S)",
+    "The window's next event: keys (UTF-8, VT100 sequences for the others) and their "
+    "releases (key_up: the same text), the "
     "mouse in the window (buttons: 1 left, 2 right, 4 middle), close, focus, the "
     "wheel over it (its notches, positive towards the user: down); tick when none "
     "came within timeout_ms (0: wait forever; negative: do not wait). Waits." },

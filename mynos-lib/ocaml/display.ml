@@ -8,6 +8,7 @@ type event =
   | Tick
   | Focus of bool
   | Wheel of int
+  | Key_up of string
 
 type _ request =
   | Info : (int * int) request
@@ -39,7 +40,8 @@ let event_codec =
       case ~name:"close" 2 unit (fun () -> Close) (function Close -> Some () | _ -> None);
       case ~name:"tick" 3 unit (fun () -> Tick) (function Tick -> Some () | _ -> None);
       case ~name:"focus" 4 bool (fun b -> Focus b) (function Focus b -> Some b | _ -> None);
-      case ~name:"wheel" 5 int (fun n -> Wheel n) (function Wheel n -> Some n | _ -> None) ])
+      case ~name:"wheel" 5 int (fun n -> Wheel n) (function Wheel n -> Some n | _ -> None);
+      case ~name:"key_up" 6 string (fun s -> Key_up s) (function Key_up s -> Some s | _ -> None) ])
 
 module Protocol = struct
   let id = "display/1"
@@ -57,7 +59,8 @@ module Protocol = struct
       request 3 "damage" "A part of the window's pixels changed: it is shown again."
         damage_args Wire.unit;
       request 4 "next_event"
-        "The window's next event: keys (UTF-8, VT100 sequences for the others), the \
+        "The window's next event: keys (UTF-8, VT100 sequences for the others) and \
+         their releases (key_up: the same text), the \
          mouse in the window (buttons: 1 left, 2 right, 4 middle), close, focus, the \
          wheel over it (its notches, positive towards the user: down); tick when none \
          came within timeout_ms (0: wait forever; negative: do not wait). Waits."

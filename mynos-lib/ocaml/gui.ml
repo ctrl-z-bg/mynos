@@ -13,6 +13,8 @@ type ui = {
   mutable tick : bool;
   mutable field : int;
   mutable wheel : int;
+  mutable released : string list;
+  mutable held : string list;
 }
 
 let background = 0xF4F6F8
@@ -175,7 +177,7 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
       prerr_endline "no display service (displayd)"; exit 2 in
   let ui = { window; g = window.Display.pixels; mx = -1; my = -1; buttons = 0;
              clicked = false; press = (-1, -1); keys = []; focused = true; tick = false;
-             field = -1; wheel = 0 } in
+             field = -1; wheel = 0; released = []; held = [] } in
   (* the window may be gone already (the session ended: displayd closed
      every window), so its end is quiet *)
   let destroy () = try Display.destroy window with Ipc.Remote_error _ | Mynos.Error _ -> () in
@@ -199,7 +201,7 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
          frame: what was drawn before it shows the old one (a list's old
          selection), so the frame is drawn once more at once *)
       let changed = ui.clicked || ui.keys <> [] in
-      ui.clicked <- false; ui.keys <- []; ui.tick <- false; ui.wheel <- 0;
+      ui.clicked <- false; ui.keys <- []; ui.tick <- false; ui.wheel <- 0; ui.released <- [];
       if changed then loop state else
       let timeout = if tick > 0. then max 0.001 (!next_tick -. Mynos.uptime ()) else tick in
       (match Display.next_event ~timeout window with
@@ -209,10 +211,22 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
          if buttons land 1 = 0 && ui.buttons land 1 <> 0 then ui.clicked <- true;
          ui.mx <- x; ui.my <- y; ui.buttons <- buttons;
          loop state
-       | Display.Key k -> ui.keys <- [ k ]; loop state
+       | Display.Key k ->
+         ui.keys <- [ k ];
+         if not (List.mem k ui.held) then ui.held <- ui.held @ [ k ];
+         loop state
+       | Display.Key_up k ->
+         ui.released <- [ k ];
+         ui.held <- List.filter (( <> ) k) ui.held;
+         loop state
        | Display.Tick ->
          ui.tick <- true; next_tick := Mynos.uptime () +. tick; loop state
-       | Display.Focus f -> ui.focused <- f; loop state
+       | Display.Focus f ->
+         (* the keys held go with the focus: their releases come to
+            another window *)
+         ui.focused <- f;
+         if not f then begin ui.released <- ui.held; ui.held <- [] end;
+         loop state
        | Display.Wheel n -> ui.wheel <- n; loop state
        | exception Ipc.Remote_error _ -> ()) in
   loop state

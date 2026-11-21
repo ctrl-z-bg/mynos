@@ -25,7 +25,8 @@ module Protocol = struct
         Wire.(field "max" int) Wire.string;
       request 1 "mode"
         "The input mode: 1 line editing, 2 echo, 4 Ctrl-C is a key (not an \
-         interrupt); vmin and vtime as termios VMIN and VTIME (raw mode)."
+         interrupt), 8 key releases too (raw mode: ESC [ code ; 1:3 u, or the key's \
+         own final); vmin and vtime as termios VMIN and VTIME (raw mode)."
         mode_args Wire.unit;
       request 2 "keymap" "The keyboard layout: 0 us, 1 it (-1: unchanged); the one in use."
         Wire.(field "layout" int) Wire.int;

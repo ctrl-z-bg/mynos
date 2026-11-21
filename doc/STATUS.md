@@ -1433,3 +1433,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   FACTOR boxes and chapter 2's page of 2002) as boxes with a bar,
   ~~struck~~ text, rules ("---"), and leaves pictures out; they came out
   as raw marks.
+- **2026-11-21** — Key releases (mynos-ap3): consoled's raw mode with
+  `CONSOLE_RELEASES` (bit 8) follows each key with its release (kitty's
+  form, `ESC [ code ; 1:3 u`); displayd asks for it, splits the input
+  into one event per key and sends `Key_up`; `Gui` has `released` and
+  `held` (cleared when the focus goes). camlboy presses and releases the
+  Game Boy's buttons as keys are held: Right held and a jump no longer
+  stops Mario. Test: `tests/keys` in the graphical session (two keys held
+  at once, then released). All packages rebuilt (their bytecode holds
+  `Display`).

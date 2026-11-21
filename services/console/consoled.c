@@ -22,7 +22,10 @@
  * raw input, key by key, as termios does: libmynos turns tcsetattr into
  * it. In raw mode Enter is \r, Backspace DEL, the arrows and the editing
  * keys VT100 sequences (ESC [ A...); the raw mode belongs to the process
- * that set it, and a read from another process ends it.
+ * that set it, and a read from another process ends it. With
+ * CONSOLE_RELEASES (raw mode, displayd) a key's release follows it, as a
+ * sequence of kitty's keyboard protocol: the graphical session's windows
+ * know which keys are held.
  *
  * History: the last HIST_MAX lines typed are kept in memory; Up and Down
  * (or Ctrl-P and Ctrl-N) bring them back for editing, as in a Unix shell.
@@ -92,6 +95,7 @@ static int pending_len = 0;
 /* the input mode (CONSOLE_MODE) */
 static int canon = 1, echo = 1, vmin = 1, vtime = 0, mode_owner = 0;
 static int isig = 1;          /* Ctrl-C ends the foreground program */
+static int releases = 0;      /* raw mode: key releases too (CONSOLE_RELEASES) */
 static int foreground = 0;    /* the program a shell waits for (CONSOLE_FOREGROUND) */
 
 /* keys beyond ASCII (keymap_translate: scan code << 8) */
@@ -402,6 +406,81 @@ static void raw_key(unsigned int c)
   if (echo && b >= ' ' && b < 0x7F) raw_write(&b, 1);
 }
 
+/* ---- key releases (CONSOLE_RELEASES), queued under input_lock ---- */
+
+/* ESC [ num ; 1:3 final, without the C library (the keyboard thread) */
+static void queue_release(unsigned int num, char final)
+{
+  char s[24], digits[12];
+  int n = 0, d = 0;
+  s[n++] = '\033';
+  s[n++] = '[';
+  do { digits[d++] = '0' + num % 10; num /= 10; } while (num > 0);
+  while (d > 0) s[n++] = digits[--d];
+  memcpy(s + n, ";1:3", 4);
+  n += 4;
+  s[n++] = final;
+  queue_input(s, n, 0);
+}
+
+/* the release of a key whose press was c (as raw_key got it) */
+static void release_key(unsigned int c)
+{
+  if (canon || !releases) return;
+  switch (c) {
+  case KEY_UP:     queue_release(1, 'A'); return;
+  case KEY_DOWN:   queue_release(1, 'B'); return;
+  case KEY_RIGHT:  queue_release(1, 'C'); return;
+  case KEY_LEFT:   queue_release(1, 'D'); return;
+  case KEY_HOME:   queue_release(1, 'H'); return;
+  case KEY_END:    queue_release(1, 'F'); return;
+  case KEY_PGUP:   queue_release(5, '~'); return;
+  case KEY_PGDN:   queue_release(6, '~'); return;
+  case KEY_INSERT: queue_release(2, '~'); return;
+  case KEY_DELETE: queue_release(3, '~'); return;
+  }
+  if (c & UNI) queue_release(c & ~UNI, 'u');
+  else if (c <= 0xFF)
+    queue_release(c == '\n' ? '\r' : c == 0x08 ? 0x7F : c, 'u');
+}
+
+/* the serial port's keys in raw mode come as bytes: a key is whole at
+   the end of a character (UTF-8) or of a sequence (ESC [ ... final),
+   and a terminal sends no releases: each key is released at once */
+static void serial_release(unsigned char b)
+{
+  static char seq[16];
+  static int seq_len = 0, utf_left = 0;
+  static unsigned int code = 0;
+  if (canon || !releases) { seq_len = utf_left = 0; return; }
+  if (seq_len > 0) {
+    if (seq_len < (int)sizeof seq) seq[seq_len++] = b;
+    if (seq_len == 2 && b != '[') {              /* ESC and a key: Alt */
+      seq_len = 0;
+      return;
+    }
+    if (seq_len > 2 && b >= 0x40 && b <= 0x7E) { /* the final byte */
+      int num = 0, i;
+      for (i = 2; i < seq_len - 1 && seq[i] >= '0' && seq[i] <= '9'; i++)
+        num = num * 10 + seq[i] - '0';
+      if (b == '~') queue_release(num, '~');
+      else if (seq_len == 3 && b >= 'A' && b <= 'H') queue_release(1, b);
+      seq_len = 0;
+    }
+    return;
+  }
+  if (utf_left > 0) {
+    code = (code << 6) | (b & 0x3F);
+    if (--utf_left == 0) queue_release(code, 'u');
+    return;
+  }
+  if (b == 0x1B) { seq[0] = b; seq_len = 1; }
+  else if ((b & 0xE0) == 0xC0) { code = b & 0x1F; utf_left = 1; }
+  else if ((b & 0xF0) == 0xE0) { code = b & 0x0F; utf_left = 2; }
+  else if ((b & 0xF8) == 0xF0) { code = b & 0x07; utf_left = 3; }
+  else if (b < 0x80) queue_release(b, 'u');
+}
+
 static void key_typed(unsigned int c)
 {
   if (!canon) {
@@ -485,12 +564,17 @@ static int child_of(int pid, int parent)
   return 0;
 }
 
+/* what each key's press sent, by scan code (grey keys apart), for its
+   release (keyboard thread only) */
+static unsigned int pressed[2][128];
+
 static void * keyboard_thread(void * arg)
 {
   int irq = (int)arg;
   int extended = 0;
   while (1) {
     unsigned int key, c = 0;
+    int ext;
     mynos_P(irq);
     key = inportb(0x60);
     if (key == 0xE0) {                 /* prefix of the grey keys */
@@ -517,8 +601,20 @@ static void * keyboard_thread(void * arg)
       c = c >= 0x80 ? (UNI | c) : c;
     else
       c = keymap_translate(key);
+    ext = extended;
     extended = 0;
     outportb(0x20, 0x20);
+    /* a key let go: its release, if its press sent something */
+    if (key & 0x80) {
+      unsigned int was = pressed[ext][key & 0x7F];
+      pressed[ext][key & 0x7F] = 0;
+      if (was) {
+        mynos_P(input_lock);
+        release_key(was);
+        mynos_V(input_lock);
+      }
+      continue;
+    }
     /* Shift + Page Up / Page Down: the scrollback, in every mode */
     if ((c == KEY_PGUP || c == KEY_PGDN) && (control_keys & CK_SHIFT)) {
       mynos_P(input_lock);
@@ -527,8 +623,18 @@ static void * keyboard_thread(void * arg)
       mynos_V(input_lock);
       continue;
     }
-    if (c != 0)
+    if (c != 0) {
+      /* held, the key repeats; if it now sends something else (Shift
+         pressed meanwhile), what it sent before is released */
+      unsigned int was = pressed[ext][key];
+      if (was && was != c) {
+        mynos_P(input_lock);
+        release_key(was);
+        mynos_V(input_lock);
+      }
+      pressed[ext][key] = c;
       input(c);
+    }
   }
   return NULL;
 }
@@ -567,6 +673,7 @@ static void * serial_thread(void * arg)
 	mynos_P(input_lock);
 	queue_input(&ch, 1, 0);
 	if (echo && (b >= ' ' && b != 0x7F)) raw_write(&ch, 1);
+	serial_release(b);
 	mynos_V(input_lock);
 	continue;
       }
@@ -658,7 +765,8 @@ static const wire_request_doc requests[] = {
     "Up to max bytes of input: a line in line mode, keys in raw mode; \"\" at the "
     "end of the input (Ctrl-D, a hang-up) or when VTIME passes." },
   { 0, "mode", "(mode:I,vmin:I,vtime:I)", "U",
-    "The input mode: 1 line editing, 2 echo, 4 Ctrl-C is a key (not an interrupt); "
+    "The input mode: 1 line editing, 2 echo, 4 Ctrl-C is a key (not an interrupt), "
+    "8 key releases too (raw mode: ESC [ code ; 1:3 u, or the key's own final); "
     "vmin and vtime as termios VMIN and VTIME (raw mode)." },
   { 0, "keymap", "layout:I", "I",
     "The keyboard layout: 0 us, 1 it (-1: unchanged); the one in use." },
@@ -764,6 +872,7 @@ int main()
       int len = a1 < 0 ? 0 : a1 > (long long)sizeof(buf) ? (int)sizeof(buf) : (int)a1;
       if (!canon && caller != mode_owner) {
         canon = echo = 1;        /* its program is gone (or did not restore) */
+        releases = 0;
         vmin = 1;
         vtime = 0;
         isig = 1;
@@ -796,6 +905,7 @@ int main()
       canon = (a1 & CONSOLE_CANON) != 0;
       echo = (a1 & CONSOLE_ECHO) != 0;
       isig = !(a1 & CONSOLE_NOSIG);
+      releases = !canon && (a1 & CONSOLE_RELEASES) != 0;
       vmin = a2;
       vtime = a3;
       mode_owner = caller;

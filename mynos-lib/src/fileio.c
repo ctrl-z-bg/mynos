@@ -249,6 +249,9 @@ static void tio_init(void)
   tio.c_cc[VINTR] = 3;
 }
 
+/* key releases asked for (mynos_consoleKeyReleases): raw mode only */
+static int key_releases = 0;
+
 /* set the console's mode: line editing and echo, Ctrl-C an interrupt or a
    character, and for raw reads VMIN and VTIME; -1 without a console */
 static int console_mode(int canon, int echo, int isig, int vmin, int vtime)
@@ -257,7 +260,8 @@ static int console_mode(int canon, int echo, int isig, int vmin, int vtime)
   if (service_port(console_name(), &console_cache) < 0) return -1;
   console_start(&w, CONSOLE_MODE);
   wire_put_int(&w, (canon ? CONSOLE_CANON : 0) | (echo ? CONSOLE_ECHO : 0)
-               | (isig ? 0 : CONSOLE_NOSIG));
+               | (isig ? 0 : CONSOLE_NOSIG)
+               | (!canon && key_releases ? CONSOLE_RELEASES : 0));
   wire_put_int(&w, vmin);
   wire_put_int(&w, vtime);
   if (console_simple(console_cache.port, &w) < 0) return -1;
@@ -282,6 +286,16 @@ int mynos_consoleModeSig(int canon, int echo, int isig, int vmin, int vtime)
 int mynos_consoleMode(int canon, int echo, int vmin, int vtime)
 {
   return mynos_consoleModeSig(canon, echo, -1, vmin, vtime);
+}
+
+/* key releases on or off, in the mode the console has now (they come in
+   raw mode only: CONSOLE_RELEASES) */
+int mynos_consoleKeyReleases(int on)
+{
+  tio_init();
+  key_releases = on != 0;
+  return console_mode((tio.c_lflag & ICANON) != 0, (tio.c_lflag & ECHO) != 0,
+                      (tio.c_lflag & ISIG) != 0, tio.c_cc[VMIN], tio.c_cc[VTIME]);
 }
 
 /* the program the caller waits for: Ctrl-C ends it (0: none) */

@@ -45,6 +45,13 @@
 #define CONSOLE_ECHO  2  /* typed characters are shown */
 #define CONSOLE_NOSIG 4  /* Ctrl-C is a character, not an interrupt (termios
                             without ISIG: editors) */
+#define CONSOLE_RELEASES 8 /* raw mode: key releases too, after the keys,
+                            as kitty's keyboard protocol reports them:
+                            ESC [ code ; 1:3 u for a character (code: the
+                            Unicode code point its press sent: 13 Enter,
+                            127 Backspace, 27 Escape), ESC [ 1 ; 1:3 A..D,
+                            H, F for the arrows, Home, End, ESC [ n ; 1:3 ~
+                            for the keys sent as ESC [ n ~ (displayd) */
 
 /* the screen (the kernel's terminal, VT100-like) */
 #define CONSOLE_ROWS 25

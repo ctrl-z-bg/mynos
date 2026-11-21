@@ -24,6 +24,7 @@ type event =
   | Tick                     (** no event within the timeout *)
   | Focus of bool
   | Wheel of int             (** the wheel over the window: notches, positive down *)
+  | Key_up of string         (** a key let go: the text of its [Key] *)
 
 type _ request =
   | Info : (int * int) request

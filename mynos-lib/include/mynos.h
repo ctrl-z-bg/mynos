@@ -131,6 +131,10 @@ int mynos_consoleForeground(int pid);
    unchanged (-1) */
 int mynos_consoleModeSig(int canon, int echo, int isig, int vmin, int vtime);
 
+/* key releases in raw mode (1) or not (0), reported after the keys as
+   CONSOLE_RELEASES says (mynos_console.h): displayd */
+int mynos_consoleKeyReleases(int on);
+
 /* LOG */
 /* write a line (printf format) to the kernel log: the serial log port, not
    the screen, once the system has started. For services' messages. */

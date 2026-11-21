@@ -25,6 +25,9 @@ type ui = {
   mutable tick : bool;            (** this frame is a timer's *)
   mutable field : int;            (** the text field that has the keys (-1: none) *)
   mutable wheel : int;            (** the wheel's notches in this frame (positive: down) *)
+  mutable released : string list; (** let go in this frame, as they were typed *)
+  mutable held : string list;     (** the keys held down now (games): typed, not yet
+                                      let go; none while the window has not the focus *)
 }
 
 (** Colours *)

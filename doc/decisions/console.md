@@ -86,6 +86,14 @@ driver sends SIGINT to the foreground program:
   in a Terminal window ended `gui`, the program the text console's sh
   waited for).
 - At sh's own prompt, Ctrl-C clears the line.
+- Key releases (2026-11-21, mynos-ap3): in raw mode with
+  `CONSOLE_RELEASES`, consoled follows each key with its release, as
+  kitty's keyboard protocol reports one (`ESC [ code ; 1:3 u`, or the
+  key's own final for the arrows and the editing keys). consoled keeps
+  what each scan code's press sent, so the release names the same text;
+  a terminal on the serial port sends no releases, so its keys are
+  released at once. displayd asks for them and turns them into `key_up`
+  events: games know which keys are held, several at once.
 
 ## Not now
 

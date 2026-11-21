@@ -62,6 +62,7 @@ it again; `damage ~x ~y ~w ~h w`, a part. The screen is 1024 by 768.
 |---|---|
 | `Key s` | a key, to the window that has the focus: UTF-8 text, or a VT100 sequence (`"\027[A"` for ↑), `"\r"` for Enter, `"\127"` for Backspace |
 | `Mouse { x; y; buttons }` | the pointer moved or a button changed, in window coordinates; `buttons`: 1 left, 2 right, 4 middle |
+| `Key_up s` | the key whose `Key s` came was let go (several may be held at once) |
 | `Wheel n` | the wheel over the window: `n` notches, positive downwards |
 | `Focus b` | the window got (`true`) or lost the focus |
 | `Close` | its close box was clicked, or the session ended |
@@ -172,6 +173,7 @@ The `ui` record is what the frame knows about input:
 | `mx`, `my`, `buttons` | the pointer, in the window, and its buttons |
 | `clicked`, `press` | the left button was released in this frame; where it was pressed |
 | `keys` | the keys of this frame (one per event) |
+| `released`, `held` | the keys let go in this frame; those held down now (games) |
 | `wheel` | the wheel's notches in this frame |
 | `tick` | this frame is the timer's |
 | `focused` | the window has the focus |

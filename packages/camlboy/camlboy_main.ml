@@ -8,9 +8,9 @@
    the machine is fast enough: on a PC or under KVM; in QEMU without KVM,
    at about a third of it.
 
-   MyNOS's windows get keys, not their release: a key counts as held for
-   a moment after each press, longer after the first (the keyboard's
-   repeat starts after half a second). *)
+   A button is down while one of its keys is held (Gui's held keys: the
+   window gets the keys' releases), several at once: Right held, X
+   jumps, and Mario goes on running. *)
 
 let gb_w = 160 and gb_h = 144 and scale = 3
 let width = gb_w * scale and height = gb_h * scale + 24
@@ -30,7 +30,7 @@ let () =
   let gb = C.create_with_rom ~rom_bytes ~print_serial_port:false in
   let screen = Gfx.create width (gb_h * scale) in
   let row = Gfx.create width 1 in
-  let held = Hashtbl.create 8 in             (* key -> held until *)
+  let down = ref [] in                       (* the buttons down *)
   let paused = ref false in
   let frames = ref 0 and since = ref (Mynos.uptime ()) and fps = ref 0. in
   let keys = [ "\027[A", Joypad.Up; "\027[B", Joypad.Down; "\027[D", Joypad.Left;
@@ -62,19 +62,16 @@ let () =
   Gui.run ~title:("Game Boy: " ^ Filename.basename rom) ~tick:(1. /. 60.) width height ()
     (fun ui () ->
        let now = Mynos.uptime () in
-       List.iter (fun k ->
-           match List.assoc_opt k keys with
-           | Some b ->
-             let repeat = match Hashtbl.find_opt held b with Some t -> t > now | None -> false in
-             if not repeat then C.press gb b;
-             Hashtbl.replace held b (now +. if repeat then 0.15 else 0.55)
-           | None ->
-             match k with
-             | "\027" -> raise Gui.Quit
-             | "p" | "P" ->
-               paused := not !paused; start := now; done_frames := 0
-             | _ -> ()) ui.Gui.keys;
-       Hashtbl.filter_map_inplace (fun b t -> if t <= now then (C.release gb b; None) else Some t) held;
+       List.iter (function
+           | "\027" -> raise Gui.Quit
+           | "p" | "P" -> paused := not !paused; start := now; done_frames := 0
+           | _ -> ()) ui.Gui.keys;
+       (* the buttons of the keys held: pressed, and released, as they change *)
+       let now_down = List.sort_uniq compare
+           (List.filter_map (fun k -> List.assoc_opt k keys) ui.Gui.held) in
+       List.iter (fun b -> if not (List.mem b !down) then C.press gb b) now_down;
+       List.iter (fun b -> if not (List.mem b now_down) then C.release gb b) !down;
+       down := now_down;
        if ui.Gui.tick && not !paused then begin
          let due = int_of_float ((now -. !start) *. 60.) - !done_frames in
          let n = max 1 (min 4 due) in

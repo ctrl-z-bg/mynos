@@ -393,7 +393,7 @@ its own. Both serve **console/1** (`mynos-lib/ocaml/console.ml`,
 | Case | Request | Arguments | Reply |
 |---|---|---|---|
 | 0 | `read` | `max:I` | `S`: a line (line mode) or keys (raw); `""` at the end of input or when VTIME passes |
-| 1 | `mode` | `(mode:I,vmin:I,vtime:I)`; bits: 1 line editing, 2 echo, 4 Ctrl-C is a key | `U` |
+| 1 | `mode` | `(mode:I,vmin:I,vtime:I)`; bits: 1 line editing, 2 echo, 4 Ctrl-C is a key, 8 key releases (raw mode) | `U` |
 | 2 | `keymap` | `layout:I`: 0 us, 1 it, −1 unchanged | `I`: the layout in use |
 | 3 | `write` | `data:S` | `U` |
 | 4 | `foreground` | `pid:I`: the program the caller waits for, 0 none | `U` |
@@ -525,7 +525,7 @@ boot and ends with code 0. Protocol **display/1**
 | 1 | `create` | `(title:S,width:I,height:I)` | `I`: a window |
 | 2 | `attach` | `window:I`, then a shared message of pixels | `U` |
 | 3 | `damage` | `((window:I,x:I,y:I),(width:I,height:I))` | `U` |
-| 4 | `next_event` | `(window:I,timeout_ms:I)` | `V(0:key=S,1:mouse=(x:I,y:I,buttons:I),2:close=U,3:tick=U,4:focus=B,5:wheel=I)` |
+| 4 | `next_event` | `(window:I,timeout_ms:I)` | `V(0:key=S,1:mouse=(x:I,y:I,buttons:I),2:close=U,3:tick=U,4:focus=B,5:wheel=I,6:key_up=S)` |
 | 5 | `destroy` | `window:I` | `U` |
 | 6 | `set_title` | `(window:I,title:S)` | `U` |
 | 7 | `start` | `U` | `U`: the session begins |

@@ -328,7 +328,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
         sed 's/:47090/:47091/' tests/net/llm-test.env > tests/fat/run-gui.env
         # the packages' repository: the host's copy (tools/pkg-build.sh)
         printf 'http://10.0.2.2:47102/\n' > tests/fat/run-gui.url
-        tools/in-container.sh dev sh -c "mcopy -i $gdisk tests/fat/run-gui.env ::/llm.env && mcopy -i $gdisk tests/greeter/old-boot.trc ::/old-boot.trc && mcopy -i $gdisk tests/greeter/greeter.byte ::/greeter.byte && mcopy -i $gdisk graphics/gtest.byte ::/gtest.byte && mmd -i $gdisk ::/pkg && mcopy -i $gdisk tests/fat/run-gui.url ::/pkg/url"
+        tools/in-container.sh dev sh -c "mcopy -i $gdisk tests/fat/run-gui.env ::/llm.env && mcopy -i $gdisk tests/greeter/old-boot.trc ::/old-boot.trc && mcopy -i $gdisk tests/greeter/greeter.byte ::/greeter.byte && mcopy -i $gdisk graphics/gtest.byte ::/gtest.byte && mcopy -i $gdisk tests/keys/keys.byte ::/keys.byte && mmd -i $gdisk ::/pkg && mcopy -i $gdisk tests/fat/run-gui.url ::/pkg/url"
         rm -f tests/fat/run-gui.env tests/fat/run-gui.url
     fi
     tools/net-peer.py llm 47091 & llmg_pid=$!
@@ -443,6 +443,11 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     # closes its window
     click 20 10; sleep 1; click 40 39; sleep 10
     tools/type-keys.py "$tmp/mon-g" '/disk/gtest.byte\n'; sleep 12
+    # key releases (mynos-ap3): a window (tests/keys) gets Right and X held
+    # at once, then their releases, then q, which ends it
+    tools/type-keys.py "$tmp/mon-g" '/disk/keys.byte\n'; sleep 6
+    mon "sendkey right-x 400"; sleep 1
+    mon "sendkey q"; sleep 2
     # the Packages window (pkg/packages_window.ml), the menu's eleventh
     # item: with no index on the disk it reads one, through pkg, from the
     # repository /disk/pkg/url names (the host's copy)
@@ -1180,6 +1185,10 @@ PY
     fi
     expect "gui: displayd describes display/1 as display.ml does"
     expect "graphics: all checks passed"
+    expect "keys: down x, held ESC[C x"                # two keys held at once
+    expect "keys: up x, held ESC[C"
+    expect "keys: up ESC[C, held"
+    expect "keys: up q, held"
     if [ -n "$files_ok" ]; then
         echo "ok    files: a file copied between services, a folder made; Ctrl-C in a terminal"
     else

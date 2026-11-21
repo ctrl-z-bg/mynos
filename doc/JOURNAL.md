@@ -2776,3 +2776,31 @@ same file inside MyNOS (fatfs, mynos-ipg).
 **Lesson.** Before deciding what a server may do, ask who can reach it;
 here the network itself said it, at no cost. And a page in the user's
 own browser is a client too.
+
+## 2026-11-21 — Mario stops when he jumps
+
+**Symptom.** In a Game Boy game, holding Right and pressing the jump key
+made Mario jump and then stand still, Right still held.
+
+**Diagnosis.** MyNOS's windows got keys, never their release; camlboy
+counted a key as held for 0.15 s after each press, kept alive by the
+keyboard's repeat. A PS/2 keyboard repeats only the last key pressed:
+the jump stopped Right's repeat, and 0.15 s later camlboy let Right go.
+
+**Cause.** The releases existed (each key's scan code with bit 7 set)
+and consoled read them, but used them only for Shift, Ctrl and Alt: its
+protocol had line editing and raw keys, and a raw key was text.
+
+**Fix.** A mode bit, `CONSOLE_RELEASES`: in raw mode consoled follows a
+key's release with a sequence in the form of kitty's keyboard protocol
+(`ESC [ code ; 1:3 u`, the arrows' own finals), naming the text the
+press sent (consoled remembers it by scan code; Shift may change
+meanwhile). displayd asks for it, cuts its input into keys (a read could
+carry several, given to a window as one) and sends `Key_up`; `Gui` keeps
+the keys held, and forgets them with the focus. camlboy reads the held
+keys. A terminal on the serial port sends no releases: its keys are
+released at once, so nothing stays held for ever.
+
+**Lesson.** A workaround built on a device's habit (the repeat) breaks
+where the habit has an exception; the information was there one layer
+down, thrown away by a protocol that had no word for it.
