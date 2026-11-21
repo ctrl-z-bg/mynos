@@ -1334,3 +1334,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   so `init` does not start them five times; a `tmpfs` read after a seek
   past the end is empty (mynos-f2d); `trace -o FILE -s N`, the System
   window's serial ports (mynos-uoq). Manual 19.4, appendix E.
+- **2026-11-21** — Manual figures 12-1 and 12-2 taken again: the agent
+  window's lines no longer show a tab as a diamond. The other figures
+  differ only in clock and timing; all are to be taken again at the
+  release, for the version they show.
