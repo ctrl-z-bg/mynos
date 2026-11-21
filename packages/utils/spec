@@ -1,0 +1,12 @@
+# The package utils (tools/pkg-build.sh): the text and file commands that
+# sh does not have, in one program; each command a script of one line
+# that runs it (#!/disk/bin/utils.byte)
+NAME=utils
+VERSION=1.0
+DESCRIPTION='Commands for text and files: grep, wc, head, tail, sort, uniq, find, du, hexdump, tree'
+LICENSE=GPL-2.0-or-later
+LIBRARIES=str
+SRC=packages/utils
+SOURCES='util.ml grep.ml wc.ml head.ml tail.ml sort.ml uniq.ml find.ml du.ml hexdump.ml tree.ml utils.ml'
+COMMANDS='grep wc head tail sort uniq find du hexdump tree'
+DOC=packages/utils/README.md

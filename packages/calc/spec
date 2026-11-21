@@ -1,0 +1,9 @@
+# The package calc (tools/pkg-build.sh): a calculator of exact numbers
+NAME=calc
+VERSION=1.0
+DESCRIPTION='A calculator of exact numbers: integers without limit (2^200, 50!), fractions (1/3 + 1/6 = 1/2), factors, decimals to any length'
+LICENSE=GPL-2.0-or-later
+LIBRARIES=num
+SRC=packages/calc
+SOURCES=calc.ml
+DOC=packages/calc/README.md

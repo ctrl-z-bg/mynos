@@ -1,0 +1,8 @@
+# The package snake (tools/pkg-build.sh)
+NAME=snake
+VERSION=1.0
+DESCRIPTION='Snake, in a window: eat the apples, grow, and do not bite yourself or the walls; the arrows turn'
+LICENSE=GPL-2.0-or-later
+SRC=packages/snake
+SOURCES=snake.ml
+RUN=snake

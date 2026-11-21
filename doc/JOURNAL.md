@@ -2595,3 +2595,64 @@ callback never lands in a socket that was handed out again.
 **Lesson.** A timeout on "each wait" leaves out the waits that happen
 before there is anything to set it on.
 
+
+## 2026-11-21 — Ten commands weigh as much as one
+
+**Symptom.** The package `utils`, ten small commands each its own
+program, made an archive of 3.4 MB: each program about 330 KB, for a
+few dozen lines of OCaml.
+
+**Diagnosis.** A program that prints "hello" is 140 KB of bytecode;
+one that uses `Printf` is 265 KB. Almost all of it is OCaml's standard
+library, linked into each program: the runtime of OCaml 5 starts with
+domains, effects and their friends, and `Printf` brings
+`CamlinternalFormat`.
+
+**Fix.** One program, `utils.byte`, holds the ten commands; `pkg`
+installs each command as a script of one line, `#!/disk/bin/utils.byte`,
+and `sh` learned to run such files (the program, then the script's path,
+then its arguments; the program finds the command in the script's
+name). The archive is 400 KB. The first try ran nothing: OCaml's
+bytecode executables begin with a `#!` line of their own, naming the
+host's `ocamlrun`, so a program is now looked at as bytecode before it
+is looked at as a script.
+
+**Lesson.** In a system where every program carries its own library,
+the size of a program is the size of the library; share the program,
+and let the names be cheap. And a file format can wear another's
+first line.
+
+## 2026-11-21 — A click that closed the file picker went through
+
+**Symptom.** In `life`, a pattern chosen in the file picker with a
+double click was placed at once where the picker had been, before the
+user had clicked on the board.
+
+**Cause.** The picker makes Gui's widgets ignore the pointer while it
+is open, but the board is not a widget: the program reads `clicked` and
+the pointer itself. The picker was drawn (and answered) first, closed,
+and in the same frame the board saw the click that had closed it.
+
+**Fix.** The board asks `Gui.hovered`, which knows about the picker, and
+the picker is drawn last, after the board has read the pointer: in the
+frame where it closes, it is still open for the board.
+
+**Lesson.** A modal panel is modal only for those who ask whether it is
+open. Code that reads the pointer itself must go through the same
+question, and in the same order, as the widgets.
+
+## 2026-11-21 — Three suits of diamonds
+
+**Symptom.** The first `solitaire` dealt cards whose suits were all
+diamonds.
+
+**Cause.** The screen's font, Terminus, has the diamond (it is in the
+VGA's code page) but not the spade, heart or club; `Gfx.text` draws a
+missing character as its replacement, which happens to look like a
+diamond.
+
+**Fix.** The suits are drawn as small bitmaps of 9 by 9.
+
+**Lesson.** A replacement glyph that is itself a plausible character
+hides the miss; test the characters a program needs, not the string
+that holds them.

@@ -11,8 +11,9 @@
    echo, cat, ls, cp, mv, rm, mkdir, rmdir, touch, export, unset, env,
    which, source (.), free, clear, help, exit; ask REQUEST (a language
    model proposes a command, run once confirmed). Other commands are searched
-   in PATH (also as NAME.byte): bytecode runs on ocamlrun. "ocaml" is the
-   OCaml toplevel.
+   in PATH (also as NAME.byte): bytecode runs on ocamlrun; a file whose
+   first line is "#!PROGRAM ARGS" runs as PROGRAM ARGS FILE, its arguments
+   after. "ocaml" is the OCaml toplevel.
 
    A program's standard input and output are redirected through its
    environment (MYNOS_STDIN, MYNOS_STDOUT), which libmynos applies: MyNOS
@@ -271,10 +272,27 @@ let is_bytecode file =
   | s -> String.starts_with ~prefix:"Caml1999X" s
   | exception _ -> false
 
-(* a command: a ".byte" file, or a program (ELF or bytecode) without a dot;
-   the RAM disk's other files (primitives, runtime-launch-info) are not *)
+(* a script: its first line, "#!PROGRAM ARGS", names the program that
+   runs it, given ARGS, the script's path and the script's arguments
+   (#!/sh.byte: a script of sh's). OCaml's bytecode starts with a "#!"
+   line too, and is not one *)
+let interpreter file =
+  if is_bytecode file then None else
+  match In_channel.with_open_bin file (fun ic ->
+      if In_channel.length ic < 3L then None else In_channel.input_line ic) with
+  | Some l when String.starts_with ~prefix:"#!" l ->
+    (match List.filter (( <> ) "")
+             (String.split_on_char ' ' (String.trim (String.sub l 2 (String.length l - 2)))) with
+     | p :: args -> Some (p, args)
+     | [] -> None)
+  | _ | exception _ -> None
+
+(* a command: a ".byte" file, or a program (ELF or bytecode) or a script
+   without a dot; the RAM disk's other files (primitives,
+   runtime-launch-info) are not *)
 let is_command f =
-  is_file f && (Filename.check_suffix f ".byte" || is_elf f || is_bytecode f)
+  is_file f && (Filename.check_suffix f ".byte" || is_elf f || is_bytecode f
+                || interpreter f <> None)
 
 (* the file of a command, or None *)
 let which name =
@@ -324,7 +342,15 @@ let reap_jobs () =
          | exception Mynos.Error _ -> ());
         false) !jobs
 
-let run_program ?(background = false) file args c =
+let rec run_program ?(background = false) file args c =
+  match interpreter file with
+  | Some (p, pargs) ->
+    (match (if String.contains p '/' then (if is_file p then Some p else None) else which p) with
+     | Some prog when interpreter prog = None ->
+       run_program ~background prog (pargs @ file :: args) c
+     | Some prog -> error "%s: its program %s is a script too" file prog; 126
+     | None -> error "%s: no program %s" file p; 127)
+  | None ->
   let env = environment c in
   let prog, argv =
     if is_elf file then (file, file :: args)

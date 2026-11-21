@@ -56,6 +56,19 @@ versions and packages as archives, on GitHub.
    also be named in `/disk/pkg/url`, since a program started from the
    menu has no shell to set `MYNOS_PKG_URL` in.
 
+9. **Grown with the applications** (2026-11-21, mynos-vws): a package
+   may name the packages it **needs** (`depends`, in the index and in
+   `package.json`: installed first, in the index's version), may have no
+   program (**data**, as a game's story file), and may be **several
+   commands** of one program: `pkg` writes each command in `/disk/bin` as
+   a script of one line, `#!/disk/bin/PROGRAM.byte`, which `sh` runs
+   (each program carries OCaml's library: ten programs would weigh ten
+   times). `run` names the window the Packages window starts (none for
+   commands of the terminal); `doc`, a file of the package, its
+   documentation. `pkg search` and `pkg upgrade`. The index keeps
+   `"format": 1`: the new fields are optional, and an older `pkg`
+   ignores them.
+
 ## Rejected
 
 - *Packages in the main repository*: the history would keep every
@@ -64,6 +77,7 @@ versions and packages as archives, on GitHub.
   the packages already published.
 - *Sources only*: a large program would take long to install in QEMU,
   and a package would need the compiler to be installed at all.
+- *Commands as copies of one program*: 3.4 MB on the disk for `utils`.
 - *A version range of MyNOS in the index*: the version changes at every
   commit; what decides is the bytecode's format and primitives, checked
   on the program itself.

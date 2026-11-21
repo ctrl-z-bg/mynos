@@ -784,6 +784,13 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     waitfor "pkg: windtree 1.0 installed" 180
     tools/type-keys.py "$tmp/mon7" 'which windtree; windtree; echo windtree-$?; pkg list -i\n'; sleep 8
     tools/type-keys.py "$tmp/mon7" 'pkg remove 2048; ls /disk/bin\n'; sleep 4
+    # a package of several commands, scripts that run its program (utils:
+    # "#!/disk/bin/utils.byte"), and one on Num (calc); a script of sh's
+    # run by its name
+    tools/type-keys.py "$tmp/mon7" 'pkg install utils calc\n'
+    waitfor "pkg: calc 1.0 installed" 90
+    tools/type-keys.py "$tmp/mon7" "echo zeta > /tmp/s; echo alpha >> /tmp/s; sort /tmp/s | head -n 1 | grep -n alpha; calc '2^100' '1/3 + 1/6'\n"; sleep 8
+    tools/type-keys.py "$tmp/mon7" "echo '#!/sh.byte' > /disk/bin/hi; echo 'echo script-\$1' >> /disk/bin/hi; hi ran\n"; sleep 4
     # Ctrl-C on a program waiting for a line: the next line is sh's, not
     # swallowed by the program it ended (mynos-5dd)
     tools/type-keys.py "$tmp/mon7" '/disk/stdio-test\n'; sleep 4
@@ -1043,6 +1050,11 @@ if [ -f system/ramdisk.dsk ]; then
     expect "windtree-2"                                # ran: no session
     expect "windtree   1.0      compiled from its sources"   # pkg list -i
     expect "pkg: 2048 removed"
+    expect "pkg: utils 1.0 installed (its bytecode): grep wc head tail sort uniq find du hexdump tree"
+    expect "1:alpha"                                  # sort | head | grep
+    expect "1267650600228229401496703205376"          # calc
+    expect "1/2 = 0.5"
+    expect "script-ran"                               # #!/sh.byte
     if [ -n "$httpd_private" ]; then
         echo "ok    httpd: serves /disk, not its .env files"
     else

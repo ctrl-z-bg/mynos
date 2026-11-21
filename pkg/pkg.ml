@@ -2,11 +2,14 @@
 
      pkg list                  the packages of the index, and which are installed
      pkg list -i               the installed packages only (without the network)
+     pkg search WORD           the packages whose name or description has WORD
      pkg info NAME             a package's description, version, licence, size
-     pkg install [-s] NAME...  download, check, install in /disk/pkg/NAME;
-                               the program goes to /disk/bin, on sh's PATH
+     pkg install [-s] NAME...  download, check, install in /disk/pkg/NAME, with
+                               the packages it needs; its programs go to
+                               /disk/bin, on sh's PATH
      pkg remove NAME...        uninstall
      pkg update                read the index again
+     pkg upgrade               read it, install the newer versions it has
 
    The index (index.json) and the packages (tar archives) are files of a
    repository on the web, by default ctrl-z-bg/mynos-packages on GitHub;
@@ -169,8 +172,25 @@ let compile dir sources libs target =
 
 (* {1 The commands} *)
 
-let install ~source name =
+(* an installed package's files in /disk/bin *)
+let remove_programs m =
+  List.iter (fun f ->
+      let f = Filename.concat bin f in
+      if Sys.file_exists f then Sys.remove f)
+    (List.map (fun p -> p.file) m.progs @ m.commands)
+
+(* [name] and the packages it needs, not yet installed in the index's
+   version, those it needs first *)
+let rec install ~source ?(chain = []) name =
+  if List.mem name chain then
+    fail "%s: the packages need each other (%s)" name (String.concat ", " (List.rev chain));
   let e = find name in
+  List.iter (fun d ->
+      match installed d with
+      | Some (v, _) when v = (find d).version -> ()
+      | _ ->
+        Printf.printf "pkg: %s needs %s\n%!" name d;
+        install ~source ~chain:(name :: chain) d) e.depends;
   Printf.printf "pkg: %s %s: downloading %d bytes\n%!" e.name e.version e.size;
   let data = download (base () ^ e.archive) in
   if String.length data <> e.size then
@@ -178,43 +198,78 @@ let install ~source name =
   if Digest.BLAKE256.(to_hex (string data)) <> e.hash then
     fail "%s: its BLAKE2b hash is not the index's" e.archive;
   let dir = Filename.concat root name in
+  (* an older version: its programs go, the new one may have others *)
+  Option.iter remove_programs (manifest name);
   if Sys.file_exists dir then rm_rf dir;
   mkdir_p dir;
   untar data dir;
-  let man = try Json.of_string (read (Filename.concat dir "package.json"))
+  let m = try manifest_of (read (Filename.concat dir "package.json"))
     with Json.Error m | Failure m -> fail "%s: package.json: %s" name m in
-  let field k = Json.(member k man |> to_string_value) in
-  let strings k = Json.(member k man |> to_list |> List.map to_string_value) in
-  let program = field "program" in
-  if Filename.basename program <> program then fail "%s: a bad program name" name;
-  mkdir_p bin;
-  let target = Filename.concat bin program in
-  let bytecode = Filename.concat dir program in
+  if m.progs <> [] then mkdir_p bin;
+  let hows = List.map (fun p ->
+      if Filename.basename p.file <> p.file then fail "%s: a bad program name" name;
+      let target = Filename.concat bin p.file in
+      let bytecode = Filename.concat dir p.file in
+      if not source && Sys.file_exists bytecode && compatible bytecode then begin
+        write target (read bytecode);
+        `Bytecode
+      end else begin
+        Printf.printf "pkg: %s: compiling %s\n%!" (Filename.remove_extension p.file)
+          (String.concat " " p.sources);
+        compile (Filename.concat dir "src") p.sources m.libraries target;
+        `Compiled
+      end) m.progs in
+  (* each command: a script that runs the program (Util's name, below) *)
+  (match m.progs with
+   | p :: _ -> List.iter (fun c ->
+       if Filename.basename c <> c then fail "%s: a bad command name" name;
+       write (Filename.concat bin c) (Printf.sprintf "#!%s\n" (Filename.concat bin p.file)))
+       m.commands
+   | [] -> ());
   let how =
-    if not source && Sys.file_exists bytecode && compatible bytecode then begin
-      write target (read bytecode);
-      "its bytecode"
-    end else begin
-      let sources = strings "sources" in
-      Printf.printf "pkg: %s: compiling %s\n%!" name (String.concat " " sources);
-      compile (Filename.concat dir "src") sources (strings "libraries") target;
-      "compiled from its sources"
-    end in
+    if m.progs = [] then "data"
+    else if List.for_all (( = ) `Bytecode) hows then "its bytecode"
+    else if List.for_all (( = ) `Compiled) hows then "compiled from its sources"
+    else "bytecode and sources" in
   write (Filename.concat dir "installed") (e.version ^ "\n" ^ how ^ "\n");
-  Printf.printf "pkg: %s %s installed (%s): %s\n%!" name e.version how
-    (Filename.remove_extension program)
+  Printf.printf "pkg: %s %s installed (%s)%s\n%!" name e.version how
+    (match m.commands, m.progs with
+     | [], [] -> ""
+     | [], ps -> ": " ^ String.concat " " (List.map (fun p -> Filename.remove_extension p.file) ps)
+     | cs, _ -> ": " ^ String.concat " " cs)
 
 let remove name =
   let dir = Filename.concat root name in
   if not (Sys.file_exists (Filename.concat dir "installed")) then fail "%s: not installed" name;
-  (match Json.(member "program" (of_string (read (Filename.concat dir "package.json")))
-               |> to_string_value) with
-   | program ->
-     let target = Filename.concat bin program in
-     if Sys.file_exists target then Sys.remove target
-   | exception (Json.Error _ | Sys_error _) -> ());
+  (match needed_by name with
+   | [] -> ()
+   | ns -> Printf.printf "pkg: %s was needed by %s\n%!" name (String.concat ", " ns));
+  Option.iter remove_programs (manifest name);
   rm_rf dir;
   Printf.printf "pkg: %s removed\n%!" name
+
+(* the index read again, then every installed package it has a newer
+   version of *)
+let upgrade () =
+  update ();
+  let index = index () in
+  let old = List.filter_map (fun n ->
+      match installed n, List.find_opt (fun e -> e.name = n) index with
+      | Some (v, _), Some e when v <> e.version -> Some n
+      | _ -> None) (installed_names ()) in
+  if old = [] then print_endline "pkg: every installed package is the index's version"
+  else List.iter (fun n -> install ~source:false n) old
+
+let search word =
+  let w = String.lowercase_ascii word in
+  let has s =
+    let s = String.lowercase_ascii s in
+    let n = String.length w in
+    let rec go i = i + n <= String.length s && (String.sub s i n = w || go (i + 1)) in
+    go 0 in
+  match List.filter (fun e -> has e.name || has e.description) (index ()) with
+  | [] -> Printf.printf "pkg: no package about %s\n" word
+  | es -> List.iter (fun e -> Printf.printf "%-10s %-8s %s\n" e.name e.version e.description) es
 
 let list () =
   List.iter (fun e ->
@@ -242,12 +297,17 @@ let info name =
   let e = find name in
   Printf.printf "%s %s\n%s\nlicence: %s\narchive: %s, %d bytes\nbuilt on MyNOS %s\n"
     e.name e.version e.description e.license e.archive e.size e.mynos;
+  if e.programs <> [] then Printf.printf "commands: %s\n" (String.concat " " e.programs);
+  if e.depends <> [] then Printf.printf "needs: %s\n" (String.concat " " e.depends);
   match installed name with
-  | Some (v, how) -> Printf.printf "installed: %s (%s)\n" v how
+  | Some (v, how) ->
+    Printf.printf "installed: %s (%s)\n" v how;
+    Option.iter (fun m -> Option.iter (fun d ->
+        Printf.printf "documentation: %s/%s/%s\n" root name d) m.doc) (manifest name)
   | None -> print_endline "not installed"
 
 let usage () =
-  prerr_endline "usage: pkg list [-i] | info NAME | install [-s] NAME... | remove NAME... | update";
+  prerr_endline "usage: pkg list [-i] | search WORD | info NAME | install [-s] NAME... | remove NAME... | update | upgrade";
   exit 2
 
 let () =
@@ -261,6 +321,8 @@ let () =
     | "install" :: names -> each (install ~source:false) names
     | "remove" :: names -> each remove names
     | [ "update" ] -> update ()
+    | [ "upgrade" ] -> upgrade ()
+    | [ "search"; word ] -> search word
     | _ -> usage ()
   with
   | Fail m | Sys_error m -> prerr_endline ("pkg: " ^ m); exit 1

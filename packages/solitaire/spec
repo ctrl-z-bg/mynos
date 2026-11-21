@@ -1,0 +1,8 @@
+# The package solitaire (tools/pkg-build.sh)
+NAME=solitaire
+VERSION=1.0
+DESCRIPTION='Klondike patience, in a window: drag the cards, or click one and it goes where it can; Undo, and Auto for the end'
+LICENSE=GPL-2.0-or-later
+SRC=packages/solitaire
+SOURCES=solitaire.ml
+RUN=solitaire

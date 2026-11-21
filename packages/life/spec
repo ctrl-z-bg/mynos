@@ -1,0 +1,8 @@
+# The package life (tools/pkg-build.sh)
+NAME=life
+VERSION=1.0
+DESCRIPTION="Conway's Game of Life, in a window: famous patterns to place, drawing with the mouse, patterns read and saved in RLE"
+LICENSE=GPL-2.0-or-later
+SRC=packages/life
+SOURCES=life.ml
+RUN=life

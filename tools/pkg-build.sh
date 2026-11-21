@@ -7,10 +7,21 @@
 # Usage: tools/pkg-build.sh OUTDIR     (in the dev container:
 #        tools/build-all.sh builds them into tmp/packages)
 #
-# A package's archive holds package.json (name, version, program,
-# sources in the order to compile them, libraries), the program as
-# bytecode, built against this tree's runtime and libraries, its sources
-# in src/, and its licence. The archives are made the same way each time
+# A spec (shell assignments) names: NAME, VERSION, DESCRIPTION, LICENSE;
+# LIBRARIES (graphics unix threads str num); SRC, the directory of the
+# sources, and SOURCES, in the order to compile them: its program,
+# NAME.byte (without SOURCES: a package of data); COMMANDS, if the
+# program is several commands: pkg makes each a script that runs the
+# program, which tells them apart by the script's name (package utils);
+# DEPENDS, the packages it needs; RUN,
+# the window the Packages window starts, and its arguments; DOC, its
+# documentation (a file, kept as README.md); EXTRA, other files (its
+# licence, data).
+#
+# A package's archive holds package.json (name, version, programs, the
+# sources of each in the order to compile them, libraries, depends, run,
+# doc), the programs as bytecode, built against this tree's runtime and
+# libraries, their sources in src/, the documentation, the extra files. The archives are made the same way each time
 # (names sorted, owner 0, date 0), so a package that did not change keeps
 # its hash.
 set -eu
@@ -34,11 +45,19 @@ jlist() {
 entries=
 for spec in packages/*/spec; do
     NAME= VERSION= DESCRIPTION= LICENSE= LIBRARIES= SRC= SOURCES= EXTRA=
+    COMMANDS= DEPENDS= RUN= DOC=
     . "./$spec"
     d=$stage/$NAME
     rm -rf "$d"; mkdir -p "$d/src"
+    # a source may be another package's (../view/png.ml): kept by its name
     for f in $SOURCES; do cp "$SRC/$f" "$d/src/"; done
-    for f in $EXTRA; do cp "$f" "$d/"; done
+    names_only=$(for f in $SOURCES; do basename "$f"; done | tr '\n' ' ')
+    for f in $EXTRA; do cp -r "$f" "$d/"; done
+    [ -n "$DOC" ] && cp "$DOC" "$d/README.md"
+    [ -z "$SOURCES" ] && rmdir "$d/src"
+    # the programs: NAME:SOURCES... (one, today)
+    progs=
+    [ -n "$SOURCES" ] && progs="$NAME:$(echo $names_only | tr ' ' ,)"
     incs= cmas=
     for l in $LIBRARIES; do
         case $l in
@@ -51,19 +70,32 @@ for spec in packages/*/spec; do
         esac
     done
     # in src, as pkg compiles them: the package's modules come first
-    (cd "$d/src" &&
-     ocamlc -use-prims "$root/mynos-runtime/primitives" -I "$root/mynos-lib/ocaml" \
-         $incs -noautolink mynos.cma $cmas -o "../$NAME.byte" $SOURCES &&
-     rm -f ./*.cm[io])
+    pjson= names=
+    for ps in $progs; do
+        p=${ps%%:*} srcs=$(echo "${ps#*:}" | tr , ' ')
+        (cd "$d/src" &&
+         ocamlc -use-prims "$root/mynos-runtime/primitives" -I "$root/mynos-lib/ocaml" \
+             $incs -noautolink mynos.cma $cmas -o "../$p.byte" $srcs &&
+         rm -f ./*.cm[io])
+        pjson=${pjson:+$pjson,
+}"    {\"program\": \"$(json "$p").byte\", \"sources\": [$(jlist "$srcs")]}"
+        names="$names $p"
+    done
+    run=
+    [ -n "$RUN" ] && run=$(set -- $RUN; first=$1; shift; jlist "$first.byte $*")
     cat > "$d/package.json" <<JSON
 {
   "name": "$(json "$NAME")",
   "version": "$(json "$VERSION")",
   "description": "$(json "$DESCRIPTION")",
   "license": "$(json "$LICENSE")",
-  "program": "$(json "$NAME").byte",
-  "sources": [$(jlist "$SOURCES")],
+  "programs": [
+$pjson
+  ],
   "libraries": [$(jlist "$LIBRARIES")],
+  "commands": [$(jlist "$COMMANDS")],
+  "depends": [$(jlist "$DEPENDS")],
+  "run": [$run],$( [ -n "$DOC" ] && printf '\n  "doc": "README.md",' )
   "mynos": "$(json "$mynos")"
 }
 JSON
@@ -72,9 +104,10 @@ JSON
         --mtime=@0 -cf "$out/$tar" -C "$d" .
     size=$(wc -c < "$out/$tar" | tr -d ' ')
     hash=$(b2sum -l 256 "$out/$tar" | cut -d' ' -f1)
-    entry=$(printf '    {"name": "%s", "version": "%s", "description": "%s",\n     "license": "%s", "archive": "%s", "size": %s,\n     "blake2b-256": "%s", "mynos": "%s"}' \
+    entry=$(printf '    {"name": "%s", "version": "%s", "description": "%s",\n     "license": "%s", "archive": "%s", "size": %s,\n     "blake2b-256": "%s", "mynos": "%s",\n     "depends": [%s], "programs": [%s]}' \
         "$(json "$NAME")" "$(json "$VERSION")" "$(json "$DESCRIPTION")" \
-        "$(json "$LICENSE")" "$tar" "$size" "$hash" "$(json "$mynos")")
+        "$(json "$LICENSE")" "$tar" "$size" "$hash" "$(json "$mynos")" \
+        "$(jlist "$DEPENDS")" "$(jlist "${COMMANDS:-$names}")")
     entries=${entries:+$entries,
 }$entry
     echo "pkg-build: $tar, $size bytes"

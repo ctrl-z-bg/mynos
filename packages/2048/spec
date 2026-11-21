@@ -9,3 +9,4 @@ SRC=third_party/2048-ml/src
 SOURCES='grid.mli ui.mli grid.ml board.mli game.mli gui.mli input.mli tui.mli
   board.ml game.ml gui.ml input.ml tui.ml ui.ml main.ml'
 EXTRA='third_party/2048-ml/LICENSE third_party/2048-ml/README.md'
+RUN=2048

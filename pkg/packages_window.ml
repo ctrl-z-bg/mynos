@@ -84,11 +84,6 @@ let poll st =
        st.verdict <- Some (ok, j.what ^ (if ok then ": done." else ": it failed, see above."));
        reload st)
 
-let program name =
-  try Json.(member "program" (of_string (read (Printf.sprintf "%s/%s/package.json" root name)))
-            |> to_string_value)
-  with _ -> name ^ ".byte"
-
 (* the right side: the selected package, what can be done with it *)
 let details ui st x =
   let w = width - x - 12 in
@@ -109,19 +104,25 @@ let details ui st x =
     (* the description takes up to four lines; below it, the same places
        for every package *)
     let y = 128 in
-    (match e with
-     | None ->
-       ignore (Gui.paragraph ~colour:Gui.muted ui x 40 w
-                 "Installed, but no longer in the index.")
-     | Some e ->
-       ignore (Gui.paragraph ui x 40 w e.description);
-       List.iteri (fun i (k, v) ->
-           Gui.label ~colour:Gui.muted ui x (y + i * 18) k;
-           Gui.label ui (x + 96) (y + i * 18) v)
-         [ "Licence", e.license;
-           "Size", Gui.size_text e.size;
-           "Built on", "MyNOS " ^ e.mynos ]);
-    let y = y + 3 * 18 + 6 in
+    let rows = match e with
+      | None ->
+        ignore (Gui.paragraph ~colour:Gui.muted ui x 40 w
+                  "Installed, but no longer in the index.");
+        []
+      | Some e ->
+        ignore (Gui.paragraph ui x 40 w e.description);
+        [ "Licence", e.license;
+          "Size", Gui.size_text e.size;
+          "Built on", "MyNOS " ^ e.mynos ]
+        @ (if e.depends = [] then [] else [ "Needs", String.concat ", " e.depends ])
+        @ (match e.programs with
+            | [] -> []
+            | ps -> [ "Commands", String.concat " " ps ]) in
+    List.iteri (fun i (k, v) ->
+        Gui.label ~colour:Gui.muted ui x (y + i * 18) k;
+        ignore (Gfx.text ~max:((w - 96) / Gfx.char_w) ui.Gui.g (x + 96) (y + i * 18) v
+                  Gui.foreground)) rows;
+    let y = y + max 3 (List.length rows) * 18 + 6 in
     let status, newer = match inst, e with
       | None, _ -> "not installed", false
       | Some (v, how), Some e when v <> e.version ->
@@ -130,18 +131,25 @@ let details ui st x =
     Gui.label ~colour:Gui.muted ui x y "Installed";
     Gui.label ui (x + 96) y status;
     let y = y + 30 in
+    let run = match inst with
+      | Some _ -> (match manifest name with Some m -> m.run | None -> [])
+      | None -> [] in
     let buttons =
       (match inst, e with
        | None, Some _ -> [ "Install", `Install ]
        | Some _, Some _ when newer -> [ "Upgrade", `Install ]
        | _ -> [])
-      @ (if inst <> None then [ "Run", `Run; "Remove", `Remove ] else []) in
+      @ (if run <> [] then [ "Run", `Run ] else [])
+      @ (if inst <> None then [ "Remove", `Remove ] else []) in
     List.iteri (fun i (label, act) ->
         if Gui.button ui (x + i * 104) y 96 label && not busy then
           match act with
           | `Install -> start st ("Installing " ^ name) [ "install"; name ]
           | `Remove -> start st ("Removing " ^ name) [ "remove"; name ]
-          | `Run -> Gui.spawn (Filename.concat bin (program name)))
+          | `Run ->
+            (match run with
+             | p :: args -> Gui.spawn ~args (Filename.concat bin p)
+             | [] -> ()))
       buttons;
     y + 40
 

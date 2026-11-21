@@ -1,0 +1,8 @@
+# The package mines (tools/pkg-build.sh)
+NAME=mines
+VERSION=1.0
+DESCRIPTION='Mines, in a window: open the squares of a field without stepping on a mine; the numbers tell how many are around'
+LICENSE=GPL-2.0-or-later
+SRC=packages/mines
+SOURCES=mines.ml
+RUN=mines

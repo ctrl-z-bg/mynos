@@ -35,7 +35,15 @@ type entry = {
   size : int;
   hash : string;          (* BLAKE2b-256 of the archive, in hexadecimal *)
   mynos : string;         (* the MyNOS its bytecode was built on *)
+  depends : string list;  (* the packages it needs, installed first *)
+  programs : string list; (* its commands; none: a package of data *)
 }
+
+(* an optional list of strings: [] when the field is not there *)
+let strings k v =
+  match Json.member k v with
+  | Json.Null -> []
+  | l -> Json.(to_list l |> List.map to_string_value)
 
 let entries text =
   try
@@ -46,7 +54,8 @@ let entries text =
         let s k = member k p |> to_string_value in
         { name = s "name"; version = s "version"; description = s "description";
           license = s "license"; archive = s "archive"; size = member "size" p |> to_int;
-          hash = s "blake2b-256"; mynos = s "mynos" })
+          hash = s "blake2b-256"; mynos = s "mynos";
+          depends = strings "depends" p; programs = strings "programs" p })
   with Json.Error m -> fail "index: %s" m
 
 (* the installed version, and how it was installed *)
@@ -65,3 +74,47 @@ let installed_names () =
   (try Array.to_list (Sys.readdir root) with Sys_error _ -> [])
   |> List.filter (fun n -> installed n <> None)
   |> List.sort compare
+
+(* {1 An installed package's package.json} *)
+
+type program = { file : string; sources : string list }
+
+type manifest = {
+  progs : program list;        (* in /disk/bin *)
+  commands : string list;      (* scripts in /disk/bin that run the program *)
+  libraries : string list;
+  needs : string list;         (* "depends" *)
+  run : string list;           (* the window to start, and its arguments *)
+  doc : string option;         (* a file of the package: its documentation *)
+}
+
+(* "programs", or (the first packages) one "program" and its "sources" *)
+let manifest_of text =
+  let open Json in
+  let v = of_string text in
+  let programs =
+    match member "programs" v with
+    | Null ->
+      (match member "program" v with
+       | Null -> []
+       | p -> [ { file = to_string_value p; sources = strings "sources" v } ])
+    | l -> List.map (fun p -> { file = member "program" p |> to_string_value;
+                                sources = strings "sources" p }) (to_list l) in
+  let run = match member "run" v with
+    | Null -> (match programs with
+        | [ p ] when member "programs" v = Null -> [ p.file ]   (* the first packages: windows *)
+        | _ -> [])
+    | String s -> [ s ]
+    | l -> List.map to_string_value (to_list l) in
+  { progs = programs; commands = strings "commands" v; libraries = strings "libraries" v; needs = strings "depends" v; run;
+    doc = (match member "doc" v with Null -> None | d -> Some (to_string_value d)) }
+
+let manifest name =
+  try Some (manifest_of (read (Printf.sprintf "%s/%s/package.json" root name)))
+  with Sys_error _ | Json.Error _ -> None
+
+(* the installed packages that need [name] *)
+let needed_by name =
+  List.filter (fun n ->
+      match manifest n with Some m -> List.mem name m.needs | None -> false)
+    (installed_names ())

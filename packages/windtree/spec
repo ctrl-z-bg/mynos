@@ -7,3 +7,4 @@ LIBRARIES=graphics
 SRC=doc/manual/examples/20
 SOURCES=tree.ml
 EXTRA=
+RUN=windtree

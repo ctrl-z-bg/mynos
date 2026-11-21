@@ -1,0 +1,8 @@
+# The package blocks (tools/pkg-build.sh)
+NAME=blocks
+VERSION=1.0
+DESCRIPTION='Falling blocks, in a window: fill a row and it goes; arrows move and turn the piece, Space drops it'
+LICENSE=GPL-2.0-or-later
+SRC=packages/blocks
+SOURCES=blocks.ml
+RUN=blocks

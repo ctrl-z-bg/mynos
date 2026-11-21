@@ -196,11 +196,17 @@ All services are linked statically against `libmynos` and placed at
   this runtime's, otherwise its sources are compiled by `ocamlc` inside
   MyNOS (`-s` forces it). The packages are described in `packages/` and
   built by `tools/pkg-build.sh` (into `tmp/packages` by
-  `tools/build-all.sh`). First packages: `2048`, `windtree`. Tested in the
-  seventh boot against the host's copy (`tools/net-peer.py files`). The
-  graphical session's Packages window (`pkg/packages_window.ml`, in the
-  MyNOS menu) lists them and runs `pkg` for Install, Remove, Update;
-  `/disk/pkg/url` names another repository for both.
+  `tools/build-all.sh`). A package may need others (installed first), be
+  data only, or be several commands of one program (scripts `#!PROGRAM`,
+  which `sh` runs); `pkg search`, `pkg upgrade`. Packages: `2048`,
+  `windtree`, `utils` (grep, wc, head, tail, sort, uniq, find, du,
+  hexdump, tree), `calc` (exact numbers, on Num), and games in a window:
+  `mines`, `blocks`, `snake`, `sudoku`, `life`, `solitaire` (mynos-vws).
+  Tested in the seventh boot against the host's copy (`tools/net-peer.py
+  files`). The graphical session's Packages window
+  (`pkg/packages_window.ml`, in the MyNOS menu) lists them and runs `pkg`
+  for Install, Remove, Update; `/disk/pkg/url` names another repository
+  for both.
 - **Language models** (2026, `doc/decisions/llm.md`, mynos-wsd): `llmd`
   (`services/llm/llmd.ml`, OCaml, no privilege) serves "llm/1" (module
   `Llm`: `Profiles`, `Chat` with tools; `Llm.ask`) with 4 worker domains.
@@ -1338,3 +1344,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   window's lines no longer show a tab as a diamond. The other figures
   differ only in clock and timing; all are to be taken again at the
   release, for the version they show.
+- **2026-11-21** — Applications as packages (mynos-vws, from
+  `tmp/ocaml-apps-ideas.md`). `pkg`: dependencies (installed first), data
+  packages, a package's commands as scripts of one line that run its
+  program, the window to run from Packages (`run`), its documentation
+  (`doc`), `pkg search`, `pkg upgrade`; the Packages window shows the
+  commands and what a package needs, and Run only for windows. `sh` runs
+  a file whose first line is `#!PROGRAM ARGS` (OCaml's bytecode, which
+  starts with one too, excepted). New packages: `utils`, `calc`, `mines`,
+  `blocks`, `snake`, `sudoku`, `life` (the manual's, with patterns and
+  RLE files), `solitaire`. Seventh boot: `utils` and `calc` installed, a
+  pipe through `sort`, `head` and `grep`, `calc`, a `#!/sh.byte` script.
