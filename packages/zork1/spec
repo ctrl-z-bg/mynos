@@ -1,0 +1,9 @@
+# The package zork1 (tools/pkg-build.sh): a story, played by zmachine
+NAME=zork1
+VERSION=1.0
+DESCRIPTION='Zork I: The Great Underground Empire (Infocom, 1980; release 119), the story file, played by zmachine; type zork1'
+LICENSE=MIT
+DEPENDS=zmachine
+COMMANDS=zork1
+RUN='zmachine /disk/pkg/zork1/zork1.z3'
+EXTRA='third_party/zork/zork1.z3 third_party/zork/LICENSE'

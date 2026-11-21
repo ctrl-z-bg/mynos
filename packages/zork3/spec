@@ -1,0 +1,9 @@
+# The package zork3 (tools/pkg-build.sh): a story, played by zmachine
+NAME=zork3
+VERSION=1.0
+DESCRIPTION='Zork III: The Dungeon Master (Infocom, 1982; release 25), the story file, played by zmachine; type zork3'
+LICENSE=MIT
+DEPENDS=zmachine
+COMMANDS=zork3
+RUN='zmachine /disk/pkg/zork3/zork3.z3'
+EXTRA='third_party/zork/zork3.z3 third_party/zork/LICENSE'

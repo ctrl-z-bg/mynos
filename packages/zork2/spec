@@ -1,0 +1,9 @@
+# The package zork2 (tools/pkg-build.sh): a story, played by zmachine
+NAME=zork2
+VERSION=1.0
+DESCRIPTION='Zork II: The Wizard of Frobozz (Infocom, 1981; release 63), the story file, played by zmachine; type zork2'
+LICENSE=MIT
+DEPENDS=zmachine
+COMMANDS=zork2
+RUN='zmachine /disk/pkg/zork2/zork2.z3'
+EXTRA='third_party/zork/zork2.z3 third_party/zork/LICENSE'

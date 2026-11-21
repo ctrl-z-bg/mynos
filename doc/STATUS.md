@@ -209,7 +209,8 @@ All services are linked statically against `libmynos` and placed at
   `manual` (the manual's chapters, `man NAME`, a window to read them),
   `scheme` (OCS, R5RS, `third_party/ocs`), `camlboy` (CAMLBOY, a Game
   Boy emulator in OCaml, `third_party/camlboy`: 60 frames a second under
-  KVM) with `tobutobugirl`, `minotaur` (an original text adventure
+  KVM) with `tobutobugirl`, `zork1`, `zork2`, `zork3` (Infocom's story
+  files, MIT since 2025, `third_party/zork`), `minotaur` (an original text adventure
   inside MyNOS). A package may give the agent
   a tool (`tool.json`: `wikipedia`, `calculate`) (mynos-vws).
   Tested in the seventh boot against the host's copy (`tools/net-peer.py
@@ -1406,3 +1407,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   as a package, the repository's page for what comes after the book),
   10.14, 12 (the packages' tools), 13 (PKG), H.9 (the spec's other
   fields): a paragraph or a row each.
+- **2026-11-21** — Packages `zork1`, `zork2`, `zork3` (mynos-vws): the
+  story files Microsoft published under the MIT licence in 2025
+  (`third_party/zork`, unchanged), packages of data that need
+  `zmachine`. Installed from the host's copy and played in QEMU (the
+  first moves of each). Published to ctrl-z-bg/mynos-packages, with the
+  `zmachine` page that names them.
