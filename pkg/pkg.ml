@@ -30,11 +30,19 @@ let rec mkdir_p d =
     Sys.mkdir d 0o755
   end
 
+(* fatfs does not remove a file that is open: one another program reads
+   at that moment (the Applications window, its package.json) is tried
+   again, for a second *)
+let remove_file f =
+  let rec go n =
+    try Sys.remove f with Sys_error _ when n > 0 -> Mynos.sleep 0.1; go (n - 1) in
+  go 10
+
 let rec rm_rf p =
   if Sys.is_directory p then begin
     Array.iter (fun n -> rm_rf (Filename.concat p n)) (Sys.readdir p);
     Sys.rmdir p
-  end else Sys.remove p
+  end else remove_file p
 
 (* {1 The network} *)
 
@@ -176,7 +184,7 @@ let compile dir sources libs target =
 let remove_programs m =
   List.iter (fun f ->
       let f = Filename.concat bin f in
-      if Sys.file_exists f then Sys.remove f)
+      if Sys.file_exists f then remove_file f)
     (List.map (fun p -> p.file) m.progs @ m.commands)
 
 (* [name] and the packages it needs, not yet installed in the index's

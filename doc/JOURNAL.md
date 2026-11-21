@@ -2838,3 +2838,28 @@ cost of the kernel giving a driver memory with known physical addresses.
 **Lesson.** Measure with one cause switched off at a time: here a QEMU
 option took the flushes away without touching the code, and a missing
 KVM did the same for the port, and each answer moved the suspicion.
+
+## 2026-11-22 — The bug the comment warned about
+
+**Symptom.** Remove, in the Packages window, on camlboy: "pkg:
+/disk/pkg/camlboy/package.json: Permission denied". Not every time.
+
+**Diagnosis.** fatfs refuses to remove a file that is open. The window
+draws four frames a second, and since the Run button was limited to the
+packages that open a window (2026-11-21), each frame read the selected
+package's `package.json`; when `pkg remove` reached that file while a
+frame had it open, the remove failed.
+
+**Cause.** The same race had been met and fixed before: a comment on the
+window's state says why the installed packages are read only at the
+start and after each job. The new read went into the drawing code,
+three screens below the comment.
+
+**Fix.** The packages' windows (`run`) are read with the installed list,
+at the same moments. `pkg` tries again, for a second, a file it cannot
+remove, since the Applications window still reads `package.json` when it
+gets the focus.
+
+**Lesson.** A frame function runs four times a second: whatever it reads
+from the disk, it holds open four times a second. Keep the reads where
+the comment about them is.

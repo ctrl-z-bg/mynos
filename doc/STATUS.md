@@ -1455,3 +1455,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   left is KVM's: `rep outsw` costs a trip to QEMU per word (64 writes of
   32 sectors: 1.3 s under KVM, 0.09 s without; reads are fast in both).
   32-bit PIO or DMA would be next: not done.
+- **2026-11-22** — The Packages window's Remove failed now and then
+  ("package.json: Permission denied"): the window read the selected
+  package's `package.json` at every frame (for Run), and fatfs does not
+  remove an open file. It reads it with the installed list, at the start
+  and after each job; `pkg` tries a file it cannot remove again for a
+  second (the Applications window may be reading it).

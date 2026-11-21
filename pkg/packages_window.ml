@@ -19,6 +19,9 @@ type state = {
        fatfs does not remove a file that is open, so reading the
        packages' files at every frame made pkg remove fail when the
        window had one open at that moment *)
+  mutable runs : (string * string list) list;
+    (* an installed package's window (package.json's run): read with
+       [installed], for the same reason *)
   mutable selected : string;        (* a package's name *)
   mutable job : job option;
   mutable output : string list;     (* the last job's lines *)
@@ -28,7 +31,9 @@ type state = {
 let reload st =
   st.index <- cached_index ();
   st.installed <- List.filter_map (fun n -> Option.map (fun i -> (n, i)) (installed n))
-      (installed_names ())
+      (installed_names ());
+  st.runs <- List.map (fun (n, _) ->
+      (n, match manifest n with Some m -> m.run | None -> [])) st.installed
 
 (* the rows: the index's packages, then the installed ones it lacks *)
 let rows st =
@@ -131,9 +136,7 @@ let details ui st x =
     Gui.label ~colour:Gui.muted ui x y "Installed";
     Gui.label ui (x + 96) y status;
     let y = y + 30 in
-    let run = match inst with
-      | Some _ -> (match manifest name with Some m -> m.run | None -> [])
-      | None -> [] in
+    let run = Option.value (List.assoc_opt name st.runs) ~default:[] in
     let buttons =
       (match inst, e with
        | None, Some _ -> [ "Install", `Install ]
@@ -154,7 +157,7 @@ let details ui st x =
     y + 40
 
 let () =
-  let st = { index = []; installed = []; selected = ""; job = None; output = [];
+  let st = { index = []; installed = []; runs = []; selected = ""; job = None; output = [];
              verdict = None } in
   reload st;
   if not (Sys.file_exists index_file) then start st "Reading the index" [ "update" ];
