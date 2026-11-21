@@ -69,6 +69,14 @@ versions and packages as archives, on GitHub.
    `"format": 1`: the new fields are optional, and an older `pkg`
    ignores them.
 
+10. **Tools for the agent** (2026-11-21): a package may hold `tool.json`,
+    a tool for MyNOS's agent: its name, description and parameters, and
+    a command whose words take the arguments (`{title}`), run as a line
+    of `sh` with each word quoted. The agent reads the installed ones
+    when its session starts; a tool marked `safe` (it changes nothing)
+    runs without asking. `wiki` gives `wikipedia`, `calc` gives
+    `calculate`. No new protocol: a tool is a command.
+
 ## Rejected
 
 - *Packages in the main repository*: the history would keep every

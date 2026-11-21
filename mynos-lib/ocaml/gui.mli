@@ -58,6 +58,10 @@ val scroll : ?colour:int -> ui -> int -> int -> int -> int -> int -> (int -> int
     [id] tells a window's boxes apart. *)
 
 val scroll_to_end : ui -> int -> unit
+
+val scroll_to : ui -> int -> int -> unit
+(** [scroll_to ui id offset]: the box [id] scrolled so that its content's
+    pixel [offset] is at its top, at the next frame (a line found). *)
 (** The box [id], scrolled to its end at the next frame (a log, a
     conversation). *)
 

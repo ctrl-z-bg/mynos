@@ -204,7 +204,11 @@ All services are linked statically against `libmynos` and placed at
   `mines`, `blocks`, `snake`, `sudoku`, `life`, `solitaire`; `view` (PNG,
   BMP, Netpbm) and `paint` (saves PNG, with a small deflate of their
   own); `zmachine`, an interpreter of Infocom's and Inform's stories
-  (versions 1 to 5, 7, 8: Czech's and Praxix's tests pass) (mynos-vws).
+  (versions 1 to 5, 7, 8: Czech's and Praxix's tests pass); `wiki`
+  (Wikipedia, in a window or the terminal), `feeds` (RSS and Atom),
+  `manual` (the manual's chapters, `man NAME`, a window to read them),
+  `scheme` (OCS, R5RS, `third_party/ocs`). A package may give the agent
+  a tool (`tool.json`: `wikipedia`, `calculate`) (mynos-vws).
   Tested in the seventh boot against the host's copy (`tools/net-peer.py
   files`). The graphical session's Packages window
   (`pkg/packages_window.ml`, in the MyNOS menu) lists them and runs `pkg`
@@ -1368,3 +1372,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   commands: scripts that run the window it names (`#!zmachine STORY`). A
   package's sources may be another's (`paint` uses `view`'s). Seventh
   boot: `zmachine` installed, Czech run (`tests/zmachine`).
+- **2026-11-21** — Packages `wiki` (Wikipedia's API, in a thread so the
+  window keeps answering), `feeds` (RSS and Atom, a small XML reader of
+  their own; `/disk/feeds.txt`), `manual` (the chapters of
+  `doc/manual`; `man pkg`, `man Gui`, `man -k`, `man 13`, a screenful at
+  a time on the console; a window with the chapters and a search),
+  `scheme` (OCS 1.0.3, changed for OCaml 5: Scheme strings as `bytes`,
+  ports on channels, `(exit)`; `third_party/ocs/MYNOS.md`). The agent
+  reads the tools of the installed packages (`/disk/pkg/*/tool.json`):
+  tried with a model, it used `calculate` and `wikipedia` unasked.
+  `Gui.scroll_to`. Lua-ML was looked at and left out: it is Lua 2.5
+  (1996), not the Lua of today. Seventh boot: a Scheme file run, `man
+  pkg`.

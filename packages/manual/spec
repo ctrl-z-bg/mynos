@@ -1,0 +1,11 @@
+# The package manual (tools/pkg-build.sh): the MyNOS Reference Manual's
+# chapters (doc/manual), read by man and by a window
+NAME=manual
+VERSION=1.0
+DESCRIPTION='The MyNOS Reference Manual, inside MyNOS: man pkg, man Gui (the entries of chapters 13 and 24), man -k WORD, and a window to read it all'
+LICENSE=GPL-2.0-or-later
+SRC=packages/manual
+SOURCES='md.ml manual.ml'
+COMMANDS=man
+RUN=manual
+EXTRA="$(ls doc/manual/[0-9]*.md doc/manual/appendix-*.md | tr '\n' ' ')"

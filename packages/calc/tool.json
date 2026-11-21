@@ -1,0 +1,9 @@
+{
+  "name": "calculate",
+  "description": "Exact arithmetic: integers without limit, fractions, factorials (50!), powers (2^200), gcd, lcm, factor(n), C(n,k), fib(n), isprime(n); sqrt, sin, ln, pi as approximations. One expression, its result.",
+  "parameters": {
+    "expression": "one expression, such as 2^64 - 1 or factor(1001)"
+  },
+  "command": [ "calc", "{expression}" ],
+  "safe": true
+}

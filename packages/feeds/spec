@@ -1,0 +1,9 @@
+# The package feeds (tools/pkg-build.sh)
+NAME=feeds
+VERSION=1.0
+DESCRIPTION='A reader of news feeds (RSS, Atom), in a window: the feeds of /disk/feeds.txt and their items; feeds URL lists one in the terminal'
+LICENSE=GPL-2.0-or-later
+LIBRARIES=threads
+SRC=packages/feeds
+SOURCES='xml.ml feeds.ml'
+RUN=feeds

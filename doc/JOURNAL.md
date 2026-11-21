@@ -2698,3 +2698,25 @@ change. Clicks are answered at once.
 **Lesson.** In an immediate-mode toolkit, every frame pays for all that
 is drawn; what does not change must be drawn once and copied. A slow
 frame does not only look slow: what the user does meanwhile can be lost.
+
+## 2026-11-21 — A Scheme from 2004 meets immutable strings
+
+**Symptom.** OCS, a Scheme in OCaml of 2003-2004, did not compile with
+OCaml 5: "strings are immutable, there is no assignment syntax for
+them", in its ports and in `string-set!`.
+
+**Cause.** OCaml's strings became immutable in 4.06 (2017); OCS keeps
+Scheme's strings, which are mutable, as OCaml strings, and its ports'
+buffers too. Its ports also read and write Unix file descriptors, with
+`Unix.select` for `char-ready?`, which MyNOS's console does not have.
+
+**Fix.** Scheme strings are `bytes` (`Sstring of bytes`), converted at
+the few places where they meet OCaml's strings (printing, file names,
+symbols, numbers); ports are written again on OCaml's channels, which
+buffer by themselves. Thirty-odd lines changed outside the ports
+(`third_party/ocs/mynos.patch`).
+
+**Lesson.** The type a program chose for its data decides how far a
+language change reaches into it: OCS put Scheme's mutable strings in
+OCaml's string type, and the change of 2017 reached every primitive on
+strings. Old OCaml code ports well once that one decision is redone.

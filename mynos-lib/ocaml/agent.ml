@@ -230,8 +230,65 @@ let list_directory path =
         | len -> Printf.sprintf "%s\t%Ld bytes" n len
         | exception Sys_error _ -> n) names)
 
+(* ---- the tools of installed packages ---- *)
+
+(* /disk/pkg/NAME/tool.json: {"name", "description", "parameters": {NAME:
+   DESCRIPTION...}, "command": [WORD...] where "{NAME}" is replaced by an
+   argument, "safe": true if it changes nothing (run without asking) *)
+type package_tool = { ptool : Llm.tool; command : string list; safe : bool }
+
+let package_tools ?(warn = prerr_endline) () =
+  let root = "/disk/pkg" in
+  (try Array.to_list (Sys.readdir root) with Sys_error _ -> [])
+  |> List.sort compare
+  |> List.filter_map (fun pkg ->
+      let f = Filename.concat (Filename.concat root pkg) "tool.json" in
+      if not (Sys.file_exists f && Sys.file_exists (Filename.concat (Filename.concat root pkg) "installed"))
+      then None
+      else
+        match Json.of_string (In_channel.with_open_bin f In_channel.input_all) with
+        | j ->
+          (try
+             let str k = Json.(member k j |> to_string_value) in
+             let params = match Json.member "parameters" j with
+               | Json.Object l -> List.map (fun (k, v) -> (k, Json.to_string_value v)) l
+               | _ -> [] in
+             Some { ptool = { Llm.name = str "name"; description = str "description";
+                              schema = schema params };
+                    command = Json.(member "command" j |> to_list |> List.map to_string_value);
+                    safe = (match Json.member "safe" j with Json.Bool b -> b | _ -> false) }
+           with Json.Error m | Failure m -> warn (Printf.sprintf "package %s: tool.json: %s" pkg m); None)
+        | exception (Json.Error m | Sys_error m) ->
+          warn (Printf.sprintf "package %s: tool.json: %s" pkg m); None)
+
+(* a word for sh, in single quotes *)
+let quote w = "'" ^ String.concat "'\\''" (String.split_on_char '\'' w) ^ "'"
+
+(* every [pat] in [s], replaced by [by] *)
+let replace_all s pat by =
+  let b = Buffer.create (String.length s) and n = String.length pat in
+  let i = ref 0 in
+  while !i < String.length s do
+    if !i + n <= String.length s && String.sub s !i n = pat then (Buffer.add_string b by; i := !i + n)
+    else (Buffer.add_char b s.[!i]; incr i)
+  done;
+  Buffer.contents b
+
+let run_package_tool ~emit ~confirm t input =
+  let params = match Json.(member "properties" (of_string t.ptool.Llm.schema)) with
+    | Json.Object l -> List.map fst l | _ -> [] in
+  let line = String.concat " " (List.map (fun w ->
+      quote (List.fold_left (fun w k -> replace_all w ("{" ^ k ^ "}") (arg input k)) w params))
+      t.command) in
+  if t.safe then begin emit (Action line); (run_command line, false) end
+  else if confirm ("run: " ^ line) then (run_command line, false)
+  else ("The user did not allow this command.", true)
+
 (* a tool call: (result, is an error) *)
-let execute ~emit ~confirm service_tools name input =
+let execute ~emit ~confirm ?(package_tools = []) service_tools name input =
+  match List.find_opt (fun t -> t.ptool.Llm.name = name) package_tools with
+  | Some t -> run_package_tool ~emit ~confirm t input
+  | None ->
   match name with
   | "run_command" ->
     let c = arg input "command" in
@@ -266,8 +323,8 @@ let execute ~emit ~confirm service_tools name input =
         (clip (Tools.call t input), false)
       end else ("The user did not allow this request.", true)
 
-let execute ~emit ~confirm service_tools name input =
-  match execute ~emit ~confirm service_tools name input with
+let execute ~emit ~confirm ?package_tools service_tools name input =
+  match execute ~emit ~confirm ?package_tools service_tools name input with
   | r -> r
   | exception (Failure m | Sys_error m | Invalid_argument m) -> (m, true)
   | exception Ipc.Remote_error (s, m) -> (s ^ ": " ^ m, true)
@@ -329,6 +386,7 @@ type t = {
   profile : string;
   services : string list;
   service_tools : Tools.t list;
+  package_tools : package_tool list;
   tools : Llm.tool list;
   system : string;
   max_turns : int;
@@ -348,9 +406,14 @@ let create ?(profile = "") ?(services = [ "net" ]) ?(max_turns = 20)
       | ts -> ts
       | exception e -> warn (Printf.sprintf "service %s: %s" s (Printexc.to_string e)); [])
       services in
-  { llm; profile; services; service_tools;
-    tools = own_tools @ List.map (fun t -> t.Tools.tool) service_tools;
-    system = system_prompt services; max_turns; trace_file; yes_to_all;
+  let package_tools = package_tools ~warn () in
+  { llm; profile; services; service_tools; package_tools;
+    tools = own_tools @ List.map (fun t -> t.ptool) package_tools
+            @ List.map (fun t -> t.Tools.tool) service_tools;
+    system = system_prompt services
+             ^ (if package_tools = [] then "" else
+                  "\nThe installed packages add these tools: "
+                  ^ String.concat ", " (List.map (fun t -> t.ptool.Llm.name) package_tools) ^ "."); max_turns; trace_file; yes_to_all;
     messages = []; tokens_in = 0; tokens_out = 0 }
 
 let tokens a = (a.tokens_in, a.tokens_out)
@@ -406,7 +469,7 @@ let run a ~emit ~confirm task =
                 let arg = String.map (fun c -> if c < ' ' then ' ' else c) arg in
                 Tracer.mark (name ^ (if arg = "" then "" else ": " ^ arg))
               end;
-              let content, error = execute ~emit ~confirm a.service_tools name input in
+              let content, error = execute ~emit ~confirm ~package_tools:a.package_tools a.service_tools name input in
               drain ();
               emit (Result { text = content; error });
               Llm.Tool_result { id; content; error })

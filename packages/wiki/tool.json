@@ -1,0 +1,10 @@
+{
+  "name": "wikipedia",
+  "description": "The beginning of a Wikipedia article (or, if there is no article of that title, the titles of those about it), in the language given: for facts the user asks about.",
+  "parameters": {
+    "title": "the article's title, or a subject, such as Microkernel",
+    "language": "Wikipedia's language: en, it, de, fr..."
+  },
+  "command": [ "wiki", "-l", "{language}", "{title}" ],
+  "safe": true
+}

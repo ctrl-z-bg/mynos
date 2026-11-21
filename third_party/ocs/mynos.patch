@@ -1,0 +1,667 @@
+diff --git a/src/ocs_char.ml b/src/ocs_char.ml
+index 26434be..815400e 100644
+--- a/src/ocs_char.ml
++++ b/src/ocs_char.ml
+@@ -30,7 +30,7 @@ let char_short_names =
+ ;;
+ 
+ let name_to_char name =
+-  let name = (String.lowercase name)
++  let name = (String.lowercase_ascii name)
+   and ln = Array.length char_long_names
+   and sn = Array.length char_short_names in
+   let rec lloop i =
+@@ -72,7 +72,7 @@ let char_ge = char_cmp (>=);;
+ let char_ci_cmp op c1 c2 =
+   match (c1, c2) with
+     (Schar c1, Schar c2) ->
+-      if op (Char.lowercase c1) (Char.lowercase c2) then Strue else Sfalse
++      if op (Char.lowercase_ascii c1) (Char.lowercase_ascii c2) then Strue else Sfalse
+   | _ -> raise (Error "args not characters")
+ ;;
+ 
+@@ -119,11 +119,11 @@ let integer_char =
+ ;;
+ 
+ let char_upcase =
+-  char_unop (fun c -> Schar (Char.uppercase c))
++  char_unop (fun c -> Schar (Char.uppercase_ascii c))
+ ;;
+ 
+ let char_downcase =
+-  char_unop (fun c -> Schar (Char.lowercase c))
++  char_unop (fun c -> Schar (Char.lowercase_ascii c))
+ ;;
+ 
+ let init e =
+diff --git a/src/ocs_io.ml b/src/ocs_io.ml
+index 06fc612..94b2a57 100644
+--- a/src/ocs_io.ml
++++ b/src/ocs_io.ml
+@@ -129,13 +129,13 @@ let is_output =
+ 
+ let open_input_file =
+   function
+-    Sstring s -> Sport (Ocs_port.open_input_port s)
++    Sstring s -> Sport (Ocs_port.open_input_port (Bytes.to_string s))
+   | _ -> raise (Error "expected string as input file name")
+ ;;
+ 
+ let open_output_file =
+   function
+-    Sstring s -> Sport (Ocs_port.open_output_port s)
++    Sstring s -> Sport (Ocs_port.open_output_port (Bytes.to_string s))
+   | _ -> raise (Error "expected string as output file name")
+ ;;
+ 
+diff --git a/src/ocs_list.ml b/src/ocs_list.ml
+index 781d948..27e3549 100644
+--- a/src/ocs_list.ml
++++ b/src/ocs_list.ml
+@@ -220,15 +220,15 @@ let list_to_vector =
+ 
+ let list_to_string =
+   function
+-    Snull -> Sstring ""
++    Snull -> Sstring Bytes.empty
+   | Spair _ as l ->
+       let n = safe_length l in
+-      let s = String.create n in
++      let s = Bytes.create n in
+       let rec loop i l =
+ 	if i < n then
+ 	  begin
+ 	    match l with
+-	      Spair { car = Schar c; cdr = t } -> s.[i] <- c; loop (i + 1) t
++	      Spair { car = Schar c; cdr = t } -> Bytes.set s i c; loop (i + 1) t
+ 	    | _ -> raise (Error "list->string: non-characters in list")
+ 	  end
+ 	else
+diff --git a/src/ocs_numstr.ml b/src/ocs_numstr.ml
+index fdf4825..ded8181 100644
+--- a/src/ocs_numstr.ml
++++ b/src/ocs_numstr.ml
+@@ -166,13 +166,10 @@ let parse_flo10 s =
+ 	      skip s; skipd true
+ 	  | _ -> ()
+       end;
+-      let t = String.sub s.s_str sp (s.s_pos - sp) in
+-	for i = 0 to String.length t - 1 do
+-	  match t.[i] with
+-	    '#' -> t.[i] <- '0'
+-	  | 'F' | 'f' | 'D' | 'd' | 'S' | 's' | 'L' | 'l' -> t.[i] <- 'e'
+-	  | _ -> ()
+-	done;
++      let t = String.map (function
++	    '#' -> '0'
++	  | 'F' | 'f' | 'D' | 'd' | 'S' | 's' | 'L' | 'l' -> 'e'
++	  | c -> c) (String.sub s.s_str sp (s.s_pos - sp)) in
+ 	  try
+ 	    Sreal (float_of_string t)
+ 	  with
+@@ -263,10 +260,10 @@ let snum_strtonum av =
+ 	    Sstring s ->
+ 	      begin
+ 		try
+-		  if s = "" then
++		  if Bytes.length s = 0 then
+ 		    Sfalse
+ 		  else
+-		    string_to_num s r
++		    string_to_num (Bytes.to_string s) r
+ 		with
+ 		  _ -> Sfalse
+ 	      end
+@@ -321,18 +318,18 @@ let ichr i =
+ 
+ let string_of_list l =
+   let n = List.length l in
+-  let s = String.create n in
++  let s = Bytes.create n in
+   let rec loop i l =
+     if i < n then
+       begin
+ 	match l with
+-	  c::t -> s.[i] <- c; loop (i + 1) t
++	  c::t -> Bytes.set s i c; loop (i + 1) t
+ 	| _ -> assert false
+       end
+     else
+       ()
+   in
+-    loop 0 l; s
++    loop 0 l; Bytes.to_string s
+ ;;
+ 
+ let itostr base i =
+@@ -381,16 +378,16 @@ let ntostr base =
+ 
+ let rec snum_numtostr =
+   function
+-    [| Sint i |] -> Sstring (string_of_int i)
+-  | [| Sbigint bi |] -> Sstring (string_of_big_int bi)
+-  | [| Srational r |] -> Sstring (string_of_ratio r)
+-  | [| Sreal r |] -> Sstring (string_of_real r)
+-  | [| Scomplex z |] -> Sstring (string_of_complex z)
++    [| Sint i |] -> Sstring (Bytes.of_string (string_of_int i))
++  | [| Sbigint bi |] -> Sstring (Bytes.of_string (string_of_big_int bi))
++  | [| Srational r |] -> Sstring (Bytes.of_string (string_of_ratio r))
++  | [| Sreal r |] -> Sstring (Bytes.of_string (string_of_real r))
++  | [| Scomplex z |] -> Sstring (Bytes.of_string (string_of_complex z))
+   | [| snum; Sint radix |] ->
+       if radix = 10 then
+ 	snum_numtostr [| snum |]
+       else if radix = 2 || radix = 8 || radix = 16 then
+-	Sstring (ntostr radix snum)
++	Sstring (Bytes.of_string (ntostr radix snum))
+       else
+ 	raise (Error "number->string: invalid radix")
+   | _ -> raise (Error "number->string: bad args")
+diff --git a/src/ocs_port.ml b/src/ocs_port.ml
+index 801c519..eb07efa 100644
+--- a/src/ocs_port.ml
++++ b/src/ocs_port.ml
+@@ -1,23 +1,17 @@
+ (* Buffered I/O, Scheme ports.  *)
+ 
+-open Ocs_error
+-
+-(* Ports can either be file descriptors or string buffers.  File
+-   descriptors may be valid for both input and output, but when
+-   switching between the two modes, the file offset may not work
+-   as expected.
++(* MyNOS: ports are OCaml's channels (or a string, for input), not Unix
++   file descriptors: the channels do the buffering, and MyNOS's programs
++   have no descriptors of their own for the console. *)
+ 
+-   For unbuffered or asynchronous I/O, from Scheme or otherwise,
+-   the port can simply be used as a reference to the file
+-   descriptor.  *)
++open Ocs_error
+ 
+ type port = {
+-  mutable p_buf : string;
+-  mutable p_pos : int;
+-  mutable p_wend : int;
+-  mutable p_rend : int;
++  mutable p_in : in_channel option;
++  mutable p_out : out_channel option;
++  p_str : string;                     (* a string input port's text *)
++  mutable p_spos : int;
+   mutable p_ugc : char option;
+-  mutable p_fd : Unix.file_descr option;
+   mutable p_input : bool;
+   mutable p_output : bool;
+   p_close : bool
+@@ -28,99 +22,34 @@ type port_flag =
+   | Pf_output
+   | Pf_close
+ 
+-let mkbuf () =
+-  String.create 1024
+-;;
+-
+-let mkport buf fd inf outf cl =
+-  { p_buf = buf;
+-    p_pos = 0;
+-    p_wend = 0;
+-    p_rend = 0;
+-    p_ugc = None;
+-    p_fd = fd;
+-    p_input = inf;
+-    p_output = outf;
+-    p_close = cl }
+-;;
+-
+-let is_input p =
+-  p.p_input
+-;;
+-
+-let is_output p =
+-  p.p_output
+-;;
+-
+-let wrflush p =
+-  if not p.p_output then
+-    raise (Error "not a valid output port");
+-  match p.p_fd with
+-    Some fd ->
+-      if p.p_wend > 0 && p.p_pos > 0 then
+-	begin
+-	  try
+-	    let n = Unix.write fd p.p_buf 0 p.p_pos in
+-	      if n <> p.p_pos then
+-		raise (Error "write error: incomplete write")
+-	  with
+-	    Unix.Unix_error (e, _, _) ->
+-	      raise (Error ("write error: " ^ Unix.error_message e))
+-	end;
+-      p.p_pos <- 0;
+-      p.p_wend <- String.length p.p_buf
+-  | None ->
+-      if p.p_pos = p.p_wend then
+-	let n = String.length p.p_buf in
+-	let nbuf = String.create (n * 2) in
+-	  String.blit p.p_buf 0 nbuf 0 n;
+-	  p.p_buf <- nbuf;
+-	  p.p_wend <- String.length p.p_buf
+-;;
+-
+-let rdfill p =
+-  if not p.p_input then
+-    raise (Error "not a valid input port");
+-  if p.p_wend > 0 then
+-    wrflush p;
+-  p.p_pos <- 0;
+-  p.p_rend <- 0;
+-  p.p_wend <- 0;
+-  match p.p_fd with
+-    Some fd ->
+-      begin
+-	try
+-	  p.p_rend <- Unix.read fd p.p_buf 0 (String.length p.p_buf)
+-	with
+-	  Unix.Unix_error (e, _, _) ->
+-	    raise (Error ("read error: " ^ Unix.error_message e))
+-      end
+-  | None -> ()
+-;;
++let mkport ?inp ?out ?(str = "") cl =
++  { p_in = inp; p_out = out; p_str = str; p_spos = 0; p_ugc = None;
++    p_input = inp <> None || (inp = None && out = None);
++    p_output = out <> None; p_close = cl }
++
++let is_input p = p.p_input
++let is_output p = p.p_output
+ 
+ let getc p =
+   match p.p_ugc with
+     Some _ as c -> p.p_ugc <- None; c
+   | None ->
+-      if p.p_rend = 0 || p.p_pos >= p.p_rend then rdfill p;
+-      if p.p_rend = 0 then None
+-      else
+-	begin
+-	  assert (p.p_pos < p.p_rend);
+-	  let c = p.p_buf.[p.p_pos] in
+-	    p.p_pos <- p.p_pos + 1;
+-	    Some c
+-	end
+-;;
+-
+-let get_fd p =
+-  p.p_fd
+-;;
++      if not p.p_input then raise (Error "not a valid input port");
++      match p.p_in with
++	Some ic ->
++	  (* what was written first: a prompt *)
++	  flush stdout;
++	  (try Some (input_char ic) with End_of_file -> None)
++      | None ->
++	  if p.p_spos < String.length p.p_str then begin
++	    let c = p.p_str.[p.p_spos] in
++	      p.p_spos <- p.p_spos + 1; Some c
++	  end else None
+ 
+ let flush p =
+-  if p.p_wend > 0 then
+-    wrflush p
+-;;
++  match p.p_out with
++    Some oc -> (try Stdlib.flush oc with Sys_error m -> raise (Error ("write error: " ^ m)))
++  | None -> ()
+ 
+ let close p =
+   if p.p_input || p.p_output then
+@@ -128,96 +57,45 @@ let close p =
+       flush p;
+       p.p_input <- false;
+       p.p_output <- false;
+-      match p.p_fd with
+-	Some fd ->
+-	  if p.p_close then Unix.close fd;
+-	  p.p_fd <- None
+-      | None -> ()
++      if p.p_close then begin
++	(match p.p_in with Some ic -> close_in_noerr ic | None -> ());
++	(match p.p_out with Some oc -> close_out_noerr oc | None -> ())
++      end;
++      p.p_in <- None; p.p_out <- None
+     end
+-;;
+ 
+ let ungetc p c =
+   p.p_ugc <- Some c
+-;;
+ 
+ let char_ready p =
+-  if p.p_ugc <> None || p.p_pos < p.p_rend then true
+-  else if not p.p_input then false
+-  else
+-    match p.p_fd with
+-      Some fd ->
+-	let (r, _, _) = Unix.select [ fd ] [] [] 0.0 in
+-	  List.length r > 0
+-    | None -> false
+-;;
++  p.p_ugc <> None || (p.p_in = None && p.p_spos < String.length p.p_str)
++  || (p.p_input && p.p_in <> None)
+ 
+ let putc p c =
+-  if p.p_wend = 0 || p.p_pos >= p.p_wend then
+-    wrflush p;
+-  assert (p.p_pos < p.p_wend);
+-  p.p_buf.[p.p_pos] <- c;
+-  p.p_pos <- p.p_pos + 1
+-;;
++  match p.p_out with
++    Some oc when p.p_output -> output_char oc c
++  | _ -> raise (Error "not a valid output port")
+ 
+ let puts p s =
+-  let n = String.length s in
+-    if n > 0 && p.p_rend - p.p_pos >= n then
+-      begin
+-	String.blit s 0 p.p_buf p.p_pos n;
+-	p.p_pos <- p.p_pos + n
+-      end
+-    else
+-      String.iter (fun c -> putc p c) s
+-;;
+-
+-let fd_port fd flags =
+-  let inf = ref false
+-  and outf = ref false
+-  and clf = ref false in
+-    List.iter (function
+-		Pf_input -> inf := true
+-	      | Pf_output -> outf := true
+-	      | Pf_close -> clf := true) flags;
+-    let p = mkport (mkbuf ()) (Some fd) !inf !outf !clf in
+-      if !clf then Gc.finalise close p;
+-      p
+-;;
+-
+-let input_port ch =
+-  fd_port (Unix.descr_of_in_channel ch) [ Pf_input ]
+-;;
+-
+-let output_port ch =
+-  fd_port (Unix.descr_of_out_channel ch) [ Pf_output ]
+-;;
++  match p.p_out with
++    Some oc when p.p_output -> output_string oc s
++  | _ -> raise (Error "not a valid output port")
++
++let input_port ch = mkport ~inp:ch false
++let output_port ch = mkport ~out:ch false
+ 
+ let open_input_port name =
+   try
+-    let fd = Unix.openfile name [ Unix.O_RDONLY ] 0 in
+-      fd_port fd [ Pf_input; Pf_close ]
++    let p = mkport ~inp:(open_in_bin name) true in
++      Gc.finalise close p; p
+   with
+-    Unix.Unix_error (e, _, _) ->
+-      let err = Unix.error_message e in
+-	raise (Error ("unable to open '" ^ name ^ "' for input: " ^ err))
+-;;
++    Sys_error m -> raise (Error ("unable to open '" ^ name ^ "' for input: " ^ m))
+ 
+ let open_output_port name =
+   try
+-    let fd = Unix.openfile name [ Unix.O_WRONLY; Unix.O_APPEND;
+-				  Unix.O_CREAT; Unix.O_TRUNC ] 0o666 in
+-      fd_port fd [ Pf_output; Pf_close ]
++    let p = mkport ~out:(open_out_bin name) true in
++      Gc.finalise close p; p
+   with
+-    Unix.Unix_error (e, _, _) ->
+-      let err = Unix.error_message e in
+-	raise (Error ("unable to open '" ^ name ^ "' for output: " ^ err))
+-;;
+-
+-let string_input_port s =
+-  let p = mkport s None true false false in
+-    p.p_rend <- String.length s;
+-    p
+-;;
+-
+-let string_output_port () =
+-  mkport (mkbuf ()) None false true false
+-;;
++    Sys_error m -> raise (Error ("unable to open '" ^ name ^ "' for output: " ^ m))
++
++let string_input_port s = mkport ~str:s false
+diff --git a/src/ocs_port.mli b/src/ocs_port.mli
+index 3294e81..2e54800 100644
+--- a/src/ocs_port.mli
++++ b/src/ocs_port.mli
+@@ -7,13 +7,11 @@ type port_flag =
+   | Pf_output
+   | Pf_close
+ 
+-val fd_port : Unix.file_descr -> port_flag list -> port
+ val input_port : in_channel -> port
+ val output_port : out_channel -> port
+ val open_input_port : string -> port
+ val open_output_port : string -> port
+ val string_input_port : string -> port
+-val string_output_port : unit -> port
+ 
+ val is_input : port -> bool
+ val is_output : port -> bool
+@@ -25,8 +23,6 @@ val char_ready : port -> bool
+ val putc : port -> char -> unit
+ val puts : port -> string -> unit
+ 
+-val get_fd : port -> Unix.file_descr option
+-
+ val flush : port -> unit
+ 
+ val close : port -> unit
+diff --git a/src/ocs_prim.ml b/src/ocs_prim.ml
+index 8ec6eec..ac24f8a 100644
+--- a/src/ocs_prim.ml
++++ b/src/ocs_prim.ml
+@@ -74,13 +74,13 @@ let is_symbol =
+ 
+ let symbol_to_string =
+   function
+-    Ssymbol s -> Sstring s
++    Ssymbol s -> Sstring (Bytes.of_string s)
+   | _ -> raise (Error "symbol->string: not a symbol")
+ ;;
+ 
+ let string_to_symbol =
+   function
+-    Sstring s -> get_symbol (String.copy s)
++    Sstring s -> get_symbol (Bytes.to_string s)
+   | _ -> raise (Error "string->symbol: not a string")
+ ;;
+ 
+@@ -206,7 +206,7 @@ let load_file e th name =
+ 
+ let load_prim e th cc =
+   function
+-    [| Sstring name |] -> load_file e th name; cc Sunspec
++    [| Sstring name |] -> load_file e th (Bytes.to_string name); cc Sunspec
+   | _ -> raise (Error "load: invalid name argument")
+ ;;
+ 
+@@ -233,7 +233,17 @@ let interact_env e =
+   fun () -> Sesym (e, Ssymbol "") 
+ ;;
+ 
++(* MyNOS: (exit) and (exit CODE), as R7RS has them *)
++let exit_scheme av =
++  flush stdout;
++  match av with
++    [| Sint n |] -> exit n
++  | [| Sfalse |] -> exit 1
++  | _ -> exit 0
++;;
++
+ let init e =
++  set_pfn e exit_scheme "exit";
+   set_pf1 e logical_not "not";
+   set_pf1 e is_boolean "boolean?";
+   set_pf1 e is_string "string?";
+diff --git a/src/ocs_print.ml b/src/ocs_print.ml
+index e2f5671..821259c 100644
+--- a/src/ocs_print.ml
++++ b/src/ocs_print.ml
+@@ -52,7 +52,7 @@ and print p disp =
+   | Seof -> Ocs_port.puts p "#<eof>"
+   | Strue -> Ocs_port.puts p "#t"
+   | Sfalse -> Ocs_port.puts p "#f"
+-  | Sstring s -> if disp then Ocs_port.puts p s else write_string p s
++  | Sstring s -> if disp then Ocs_port.puts p (Bytes.to_string s) else write_string p (Bytes.to_string s)
+   | Ssymbol s -> Ocs_port.puts p s
+   | Sint i -> Ocs_port.puts p (string_of_int i)
+   | Sreal r -> Ocs_port.puts p (string_of_real r)
+diff --git a/src/ocs_read.ml b/src/ocs_read.ml
+index 5f10beb..28bf544 100644
+--- a/src/ocs_read.ml
++++ b/src/ocs_read.ml
+@@ -24,8 +24,8 @@ let show_token =
+ let rec read_item lex =
+   function
+     Leof -> Seof
+-  | Lident s -> get_symbol (String.lowercase s)
+-  | Lstring s -> Sstring s
++  | Lident s -> get_symbol (String.lowercase_ascii s)
++  | Lstring s -> Sstring (Bytes.of_string s)
+   | Lnumber s | Lbool s | Lchar s -> s
+   | Ltoken '(' -> read_list lex ')'
+   | Ltoken '[' -> read_list lex ']'
+diff --git a/src/ocs_string.ml b/src/ocs_string.ml
+index 2330900..30db7c4 100644
+--- a/src/ocs_string.ml
++++ b/src/ocs_string.ml
+@@ -6,17 +6,17 @@ open Ocs_env
+ 
+ let make_string =
+   function 
+-    [| Sint k |] -> Sstring (String.create k)
+-  | [| Sint k; Schar c |] -> Sstring (String.make k c)
++    [| Sint k |] -> Sstring (Bytes.create k)
++  | [| Sint k; Schar c |] -> Sstring (Bytes.make k c)
+   | _ -> raise (Error "make-string: bad args")
+ ;;
+ 
+ let string_of av =
+   let n = Array.length av in
+-  let s = String.create n in
++  let s = Bytes.create n in
+     for i = 0 to n - 1 do
+       match av.(i) with
+-	Schar c -> s.[i] <- c
++	Schar c -> Bytes.set s i c
+       | _ -> raise (Error "string: bad args")
+     done;
+     Sstring s
+@@ -24,15 +24,15 @@ let string_of av =
+ 
+ let string_length =
+   function
+-    Sstring s -> Sint (String.length s)
++    Sstring s -> Sint (Bytes.length s)
+   | _ -> raise (Error "string-length: not a string")
+ ;;
+ 
+ let string_ref s k =
+   match (s, k) with
+     (Sstring s, Sint k) ->
+-      if k >= 0 && k < String.length s then
+-	Schar s.[k]
++      if k >= 0 && k < Bytes.length s then
++	Schar (Bytes.get s k)
+       else
+ 	raise (Error "string-ref: out of bounds")
+   | _ -> raise (Error "string-ref: bad args")
+@@ -41,9 +41,9 @@ let string_ref s k =
+ let string_set s k c =
+   match (s, k, c) with
+     (Sstring s, Sint k, Schar c) ->
+-      if k >= 0 && k < String.length s then
++      if k >= 0 && k < Bytes.length s then
+ 	begin
+-	  s.[k] <- c; Sunspec
++	  Bytes.set s k c; Sunspec
+ 	end
+       else
+ 	raise (Error "string-set!: out of bounds")
+@@ -65,7 +65,7 @@ let string_ge = string_cmp (>=);;
+ let string_ci_cmp op s1 s2 =
+   match (s1, s2) with
+     (Sstring s1, Sstring s2) ->
+-      if op (String.lowercase s1) (String.lowercase s2) then Strue else Sfalse
++      if op (Bytes.lowercase_ascii s1) (Bytes.lowercase_ascii s2) then Strue else Sfalse
+   | _ -> raise (Error "bad args")
+ ;;
+ 
+@@ -77,7 +77,7 @@ let string_ci_ge = string_ci_cmp (>=);;
+ 
+ let string_append av =
+   Sstring
+-    (Array.fold_left (^) ""
++    (Array.fold_left Bytes.cat Bytes.empty
+       (Array.map (function
+                     Sstring s -> s
+                   | _ -> raise (Error "string-append: bad args")) av))
+@@ -86,9 +86,9 @@ let string_append av =
+ let substring s sp ep =
+   match (s, sp, ep) with
+     (Sstring s, Sint sp, Sint ep) ->
+-      let n = String.length s in
++      let n = Bytes.length s in
+ 	if sp >= 0 && sp <= ep && ep <= n then
+-	  Sstring (String.sub s sp (ep - sp))
++	  Sstring (Bytes.sub s sp (ep - sp))
+ 	else
+ 	  raise (Error "substring: out of bounds")
+   | _ -> raise (Error "substring: bad args")
+@@ -100,23 +100,23 @@ let string_to_list =
+       begin
+ 	let rec loop i r =
+ 	  if i < 0 then r
+-	  else loop (i - 1) (Spair { car = Schar s.[i]; cdr = r })
++	  else loop (i - 1) (Spair { car = Schar (Bytes.get s i); cdr = r })
+ 	in
+-	  loop (String.length s - 1) Snull
++	  loop (Bytes.length s - 1) Snull
+       end
+   | _ -> raise (Error "string->list: not a string")
+ ;;
+ 
+ let string_copy =
+   function
+-    Sstring s -> Sstring (String.copy s)
++    Sstring s -> Sstring (Bytes.copy s)
+   | _ -> raise (Error "string-copy: not a string")
+ ;;
+ 
+ let string_fill s c =
+   match (s, c) with
+     (Sstring s, Schar c) ->
+-      String.fill s 0 (String.length s) c; Sunspec
++      Bytes.fill s 0 (Bytes.length s) c; Sunspec
+   | _ -> raise (Error "string-fill!: bad args")
+ ;;
+ 
+diff --git a/src/ocs_types.mli b/src/ocs_types.mli
+index 4203dff..419aaa7 100644
+--- a/src/ocs_types.mli
++++ b/src/ocs_types.mli
+@@ -20,7 +20,7 @@ type sval =
+   | Sfalse
+ 
+   (* String object.  *)
+-  | Sstring of string
++  | Sstring of bytes
+ 
+   (* Symbol type.  Symbols should not be created directly, but using
+      Ocs_sym.get_symbol, which ensures that they are unique and can be

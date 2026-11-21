@@ -6,7 +6,9 @@
     type-checked by ocamlc against MyNOS's libraries before it runs),
     [ocaml_signature], [read_file], [write_file], [list_directory], and
     every request of the typed services given, from their descriptions
-    (module {!Tools}). What changes things (commands, writes, programs,
+    (module {!Tools}), and the tools of the installed packages
+    ([/disk/pkg/NAME/tool.json]: a command whose words take the tool's
+    arguments, "{NAME}"; run without asking if marked "safe"). What changes things (commands, writes, programs,
     requests not marked safe) is done only once [confirm] agrees. The
     event recorder runs during each task (its file: [trace calls FILE]). *)
 

@@ -121,6 +121,7 @@ let state id = match Hashtbl.find_opt scrolls id with
   | None -> let s = { offset = 0; content = 0; to_end = false } in Hashtbl.add scrolls id s; s
 
 let scroll_to_end _ui id = (state id).to_end <- true
+let scroll_to _ui id offset = let s = state id in s.offset <- max 0 offset; s.to_end <- false
 
 let bar_w = 10
 

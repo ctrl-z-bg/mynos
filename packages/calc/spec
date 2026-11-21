@@ -7,3 +7,4 @@ LIBRARIES=num
 SRC=packages/calc
 SOURCES=calc.ml
 DOC=packages/calc/README.md
+EXTRA=packages/calc/tool.json
