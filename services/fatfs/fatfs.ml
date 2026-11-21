@@ -580,44 +580,63 @@ let read_file f n =
   f.pos <- f.pos + n;
   Bytes.to_string buf
 
+(* data into a file at pos. The chain is the descriptor's (clusters_of),
+   grown at its end: not walked again, nor appended to one cluster at a
+   time, at every write. Clusters that follow each other on the disk are
+   written in one request (Block.write cuts it to max_count sectors); a
+   cluster written in part keeps what was there before *)
 let write_file f data =
   if f.append then f.pos <- f.dsize;
   let n = String.length data in
   if n = 0 then 0
   else begin
     let needed = (f.pos + n + cluster_bytes - 1) / cluster_bytes in
-    let cl = ref (chain f.dfirst) in
-    let old = List.length !cl in
-    while List.length !cl < needed do               (* grow the chain *)
-      let c = alloc_cluster () in
-      (match !cl with
-       | [] -> f.dfirst <- c
-       | l -> set_fat (List.nth l (List.length l - 1)) c);
-      cl := !cl @ [ c ]
-    done;
-    let cl = Array.of_list !cl in
+    let cl = clusters_of f in
+    let old = Array.length cl in
+    let cl =
+      if old >= needed then cl
+      else begin
+        let grown = Array.make needed 0 in
+        Array.blit cl 0 grown 0 old;
+        for i = old to needed - 1 do
+          let c = alloc_cluster () in
+          if i = 0 then f.dfirst <- c else set_fat grown.(i - 1) c;
+          grown.(i) <- c
+        done;
+        f.dchain <- (f.dfirst, !fat_version, grown);
+        grown
+      end in
     (* new clusters before the written range (after a seek past the end)
        hold zeros *)
     for i = old to f.pos / cluster_bytes - 1 do zero_cluster cl.(i) done;
-    let rec go done_ =
-      if done_ < n then begin
-        let p = f.pos + done_ in
-        let idx = p / cluster_bytes and o = p mod cluster_bytes in
-        let k = min (n - done_) (cluster_bytes - o) in
-        let content =
-          if o = 0 && k = cluster_bytes then Bytes.create cluster_bytes
-          else if idx < old then begin
-            (* keep the data before; what was past the end becomes zeros *)
-            let c = read_cluster cl.(idx) in
-            let z = max 0 (f.dsize - idx * cluster_bytes) in
-            if z < cluster_bytes then Bytes.fill c z (cluster_bytes - z) '\000';
-            c
-          end else Bytes.make cluster_bytes '\000' in
-        Bytes.blit_string data done_ content o k;
-        write_cluster cl.(idx) content;
-        go (done_ + k)
-      end in
-    go 0;
+    let last = (f.pos + n - 1) / cluster_bytes in
+    let idx = ref (f.pos / cluster_bytes) in
+    while !idx <= last do
+      (* the run of clusters that follow each other on the disk *)
+      let j = ref !idx in
+      while !j < last && cl.(!j + 1) = cl.(!j) + 1 do incr j done;
+      let count = !j - !idx + 1 in
+      let buf = Bytes.create (count * cluster_bytes) in
+      for k = 0 to count - 1 do
+        let ci = !idx + k in
+        let start = ci * cluster_bytes in
+        let o = max 0 (f.pos - start) and e = min cluster_bytes (f.pos + n - start) in
+        if o > 0 || e < cluster_bytes then begin
+          (* in part: what was there before; past the end, zeros *)
+          let c =
+            if ci < old then begin
+              let c = read_cluster cl.(ci) in
+              let z = max 0 (f.dsize - start) in
+              if z < cluster_bytes then Bytes.fill c z (cluster_bytes - z) '\000';
+              c
+            end else Bytes.make cluster_bytes '\000' in
+          Bytes.blit c 0 buf (k * cluster_bytes) cluster_bytes
+        end;
+        Bytes.blit_string data (start + o - f.pos) buf (k * cluster_bytes + o) (e - o)
+      done;
+      write_sectors (cluster_lba cl.(!idx)) buf;
+      idx := !j + 1
+    done;
     flush_fat ();
     f.pos <- f.pos + n;
     if f.pos > f.dsize then f.dsize <- f.pos;

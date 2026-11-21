@@ -175,7 +175,8 @@ type arg = I | S
 (* the typed protocols the player knows: request names and arguments, and
    the replies' types (mynos-lib/ocaml/block.ml, net.ml, llm.ml) *)
 let protocols = [
-  "block/1", [| "Info", [], [ I ]; "Read", [ I; I ], [ S ]; "Write", [ I; S ], [] |];
+  "block/1", [| "Info", [], [ I ]; "Read", [ I; I ], [ S ]; "Write", [ I; S ], [];
+                "Flush", [], [] |];
   "net/1", [| "Config", [], [ S; S; S; S; S ]; "Ping", [ S; I ], [ I ];
               "Resolve", [ S ], [ S ]; "Connect", [ S; I ], [ I ]; "Listen", [ I ], [ I ];
               "Accept", [ I ], [ I; S; I ]; "Send", [ I; S ], [ I ];

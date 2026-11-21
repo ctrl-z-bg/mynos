@@ -90,7 +90,11 @@ let power_service () =
       let act = match r with Power.Shutdown -> shutdown | Power.Reboot -> reboot in
       log "%s asked by pid %d" (match r with Power.Shutdown -> "shutdown" | Power.Reboot -> "reboot")
         caller.Ipc.pid;
-      ignore (Domain.spawn (fun () -> Mynos.sleep 0.2; act ()));
+      ignore (Domain.spawn (fun () ->
+          Mynos.sleep 0.2;
+          (* the disk's cache, written before the power goes *)
+          (try Block.flush (Block.connect ()) with _ -> ());
+          act ()));
       match r with Power.Shutdown -> () | Power.Reboot -> () }
 
 let () =

@@ -2804,3 +2804,37 @@ released at once, so nothing stays held for ever.
 **Lesson.** A workaround built on a device's habit (the repeat) breaks
 where the habit has an exception; the information was there one layer
 down, thrown away by a protocol that had no word for it.
+
+## 2026-11-21 — A sync for every sector
+
+**Symptom.** Copying 3 MB inside MyNOS took 23 s, under KVM; reading
+the same file took a quarter of a second.
+
+**Diagnosis.** Measured step by step (a program timing writes and reads
+inside MyNOS, and `Block` calls straight to `ata`). With QEMU told to
+ignore flushes (`cache=unsafe`) the copy took a fifth of the time: the
+drive's cache was flushed after every `Block.Write`, and QEMU turns each
+flush into a sync of the image on the host. The disk has 512-byte
+clusters and `fatfs` wrote one cluster per request, plus two FAT copies
+and the directory entry: about 2300 syncs a megabyte. `fatfs` also
+walked the file's whole chain at every write and appended new clusters
+at the end of a list, one at a time.
+
+**Cause.** Choices that were safe and small for the first files on the
+disk (a flush per write, a cluster per write) multiplied with size. And
+one more, which the numbers showed after the first fixes: without
+flushes, a 32-sector write still took 20 ms against 1 ms for a read.
+Without KVM it took 1.4 ms: KVM leaves `rep insw` in one trip to QEMU
+but `rep outsw` costs one per word.
+
+**Fix.** `fatfs` keeps the chain as an array and writes runs of
+neighbouring clusters in one request; `ata` writes 16 sectors a block
+(`WRITE MULTIPLE`) and flushes the cache half a second after the last
+write, from a domain of its own, or when asked (`Block.Flush`, which
+`init` sends before turning the power off). 1 MB: 7.6 s to 1.24 s. The
+KVM part is left: 32-bit PIO would halve it, DMA would remove it, at the
+cost of the kernel giving a driver memory with known physical addresses.
+
+**Lesson.** Measure with one cause switched off at a time: here a QEMU
+option took the flushes away without touching the code, and a missing
+KVM did the same for the port, and each answer moved the suspicion.

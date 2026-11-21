@@ -191,7 +191,8 @@ All services are linked statically against `libmynos` and placed at
   listing (multipart, saved as it arrives, a hidden file renamed when
   whole), from the host QEMU runs on (10.0.2.2 on QEMU's user network)
   or anyone with `httpd -w`; Host and Origin must name the server.
-  Writing to `/disk` goes at about 130 KB/s (fatfs, mynos-ipg).
+  Writing to `/disk` goes at about 800 KB/s under KVM (mynos-ipg: KVM
+  exits for each word of `rep outsw`; reading is 12 MB/s).
 - **Packages** (2026-11-20, `doc/decisions/packages.md`, mynos-vcd):
   `pkg` (`pkg/pkg.ml`, on the RAM disk) lists, installs, removes the
   packages of the repository ctrl-z-bg/mynos-packages (`index.json`,
@@ -1442,3 +1443,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   stops Mario. Test: `tests/keys` in the graphical session (two keys held
   at once, then released). All packages rebuilt (their bytecode holds
   `Display`).
+- **2026-11-21** — Disk writes 6 times faster under KVM (mynos-ipg): a
+  copy of 1 MB inside MyNOS from 7.6 s to 1.24 s, of 3 MB from 23 s to
+  4.5 s. `fatfs` writes the clusters that follow each other in one
+  request and keeps a file's chain as an array (it was walked, and
+  appended to one cluster at a time, at every write); `ata` writes 16
+  sectors a block (`WRITE MULTIPLE`) and flushes the drive's cache half a
+  second after the last write, by a domain, instead of after every
+  write (each flush is a sync of the image on the host); `Block.Flush`
+  (block/1 case 3), which `init` calls before the power goes. What is
+  left is KVM's: `rep outsw` costs a trip to QEMU per word (64 writes of
+  32 sectors: 1.3 s under KVM, 0.09 s without; reads are fast in both).
+  32-bit PIO or DMA would be next: not done.

@@ -312,12 +312,16 @@ The driver of the first ATA disk (`services/ata/ata.ml`, OCaml, a
 | 0 | `info` | `U` | `I`: the number of 512-byte sectors | yes |
 | 1 | `read` | `(lba:I,count:I)`, 1 to 32 sectors | `S`: their bytes | yes |
 | 2 | `write` | `(lba:I,bytes:S)`, whole sectors, up to 32 | `U` | |
+| 3 | `flush` | `U`: the drive's cache to the disk | `U` | |
 
 The disk is the master of the primary channel (ports `0x1F0`–`0x1F7`,
 `0x3F6`), addressed with 28-bit LBA, in PIO mode. The driver turns the
 controller's interrupts off and polls the status register: in PIO it
 copies every word itself anyway. The size comes from `IDENTIFY` (words
-60–61); every write is followed by a cache flush (`0xE7`). Requests
+60–61); writes go 16 sectors to a data block (`WRITE MULTIPLE`) when the
+disk can. The drive's cache is flushed (`0xE7`) half a second after the
+last write, by a domain of the driver, and when `flush` asks: `init`
+does before the power goes. Requests
 outside the disk or of a wrong size are refused before any port is
 touched; a controller error becomes `I/O error: ...` and a line in the
 log. Without a disk, `ata` logs it and ends with code 0. Module `Block`

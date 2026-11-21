@@ -125,7 +125,8 @@ let () =
         if lba < 0 || n < 1 || lba + n > 4 then invalid_arg "out of range";
         Bytes.sub_string disk (lba * 512) (n * 512)
       | Block.Write (lba, s) -> Bytes.blit_string s 0 disk (lba * 512)
-                                  (String.length s) } in
+                                  (String.length s)
+      | Block.Flush -> () } in
   let via r = Block.read_reply (Block.answer h (Block.request_message r)) r in
   ok &&& check "ipc: block requests round trip"
     (via Block.Info = 4
@@ -158,7 +159,7 @@ let () =
              (Block.answer h (Wire.to_string Wire.string "describe")) with
      | Ok d -> d.Ipc.protocol = "block/1" && d.requests = Block.Protocol.requests
                && List.map (fun (r : Ipc.request_doc) -> r.name) d.requests
-                  = [ "info"; "read"; "write" ]
+                  = [ "info"; "read"; "write"; "flush" ]
      | Error _ -> false);
   let via_json shape json =
     let w = Wire.writer () in

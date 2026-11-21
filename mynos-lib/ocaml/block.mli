@@ -24,6 +24,10 @@ type _ request =
   | Write : int * string -> unit request
       (** [Write (lba, bytes)]: a whole number of sectors, at most
           [max_count] *)
+  | Flush : unit request
+      (** the device's cache to its medium: [ata] does it by itself half
+          a second after the last write; [init] asks before the power
+          goes *)
 
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
 
@@ -60,3 +64,6 @@ val answer : ?caller:Ipc.caller -> handler -> string -> string
 
 val request_message : 'a request -> string
 val read_reply : string -> 'a request -> 'a
+
+val flush : t -> unit
+(** {!Flush}. *)

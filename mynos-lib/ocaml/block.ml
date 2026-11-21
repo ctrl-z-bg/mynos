@@ -7,6 +7,7 @@ type _ request =
   | Info : int request
   | Read : int * int -> string request
   | Write : int * string -> unit request
+  | Flush : unit request
 
 let read_args = Wire.(pair (field "lba" int) (field "count" int))
 let write_args = Wire.(pair (field "lba" int) (field "bytes" string))
@@ -22,7 +23,11 @@ module Protocol = struct
         read_args Wire.string;
       request 2 "write"
         "Write bytes (a whole number of sectors, up to 32) from sector lba."
-        write_args Wire.unit ]
+        write_args Wire.unit;
+      request 3 "flush"
+        "Write what the device's cache holds to its medium (the driver also does it \
+         by itself, half a second after the last write)."
+        Wire.unit Wire.unit ]
   type 'a r = 'a request
   type 'a request = 'a r
   type packed = Request : 'a request -> packed
@@ -34,6 +39,7 @@ module Protocol = struct
       Wire.write w Wire.int 1; Wire.write w read_args (lba, count)
     | Write (lba, bytes) ->
       Wire.write w Wire.int 2; Wire.write w write_args (lba, bytes)
+    | Flush -> Wire.write w Wire.int 3
 
   let read_request r =
     match Wire.read r Wire.int with
@@ -42,12 +48,14 @@ module Protocol = struct
       Request (Read (lba, count))
     | 2 -> let lba, bytes = Wire.read r write_args in
       Request (Write (lba, bytes))
+    | 3 -> Request Flush
     | n -> raise (Wire.Error (Printf.sprintf "block: unknown request %d" n))
 
   let reply : type a. a request -> a Wire.t = function
     | Info -> Wire.int
     | Read _ -> Wire.string
     | Write _ -> Wire.unit
+    | Flush -> Wire.unit
 end
 
 module I = Ipc.Make (Protocol)
@@ -94,3 +102,5 @@ let serve = I.serve
 let answer = I.answer
 let request_message = I.request_message
 let read_reply = I.read_reply
+
+let flush d = checked (fun () -> call d Flush)

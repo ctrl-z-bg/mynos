@@ -192,7 +192,7 @@ arguments:
 
 | Protocol | Requests the player names |
 |---|---|
-| `block/1` | `Info`, `Read`, `Write` |
+| `block/1` | `Info`, `Read`, `Write`, `Flush` |
 | `net/1` | `Config`, `Ping`, `Resolve`, `Connect`, `Listen`, `Accept`, `Send`, `Recv`, `Close`, `Set_timeout`, `Connect_tls`, `Udp_bind`, `Send_to`, `Recv_from` |
 | `llm/1` | `Profiles`, `Chat` (its profile only) |
 | `fs/1` | `Open`, `Close`, `Read`, `Write`, `Seek`, `List`, `Remove`, `Mkdir`, `Rmdir`, `Rename` |
