@@ -82,3 +82,8 @@ session at the console.
 The boxes marked **THE MyNOS FACTOR** point to what is characteristic of
 MyNOS: ideas it takes further than most systems, or does in its own way.
 Other systems share some of them; chapter 3 names several.
+
+MyNOS goes on changing after this book. The manual, kept up to date
+with the system, is in MyNOS's repository,
+https://github.com/ctrl-z-bg/mynos/tree/main/doc/manual; the packages,
+with their documentation, are at https://github.com/ctrl-z-bg/mynos-packages.

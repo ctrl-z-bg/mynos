@@ -54,11 +54,22 @@ let contains s w =
 
 (* {1 In the terminal} *)
 
-(* bold on the console; plain into a file or a pipe *)
+(* bold on the console; plain into a file or a pipe. Struck text keeps
+   its marks (the terminals show no strike); a quote's lines begin with a
+   bar, a rule is a line *)
 let ansi (l : Md.line) =
   let plain = Sys.getenv_opt "MYNOS_STDOUT" <> None in
-  String.concat "" (List.map (fun (t, b) ->
-      if b && not plain then "\027[1m" ^ t ^ "\027[0m" else t) l.Md.spans)
+  match l.Md.kind with
+  | Md.Rule -> String.make 40 '-'
+  | kind ->
+    let spans = match kind, l.Md.spans with
+      | Md.Quote, (_, s) :: rest -> ("  | ", s) :: rest
+      | _, spans -> spans in
+    String.concat "" (List.map (fun (t, style) ->
+        match style with
+        | Md.Bold when not plain -> "\027[1m" ^ t ^ "\027[0m"
+        | Md.Struck -> "~~" ^ t ^ "~~"
+        | _ -> t) spans)
 
 (* a screenful at a time, on the console *)
 let page lines =
@@ -174,11 +185,25 @@ let window () =
               if y > -20 && y < height then begin
                 if i = st.found_at then Gfx.fill g side y (width - side - 14) 18 0xFFF3C4;
                 let colour = match l.Md.kind with
-                  | Md.Heading _ -> 0x1F4F7A | Md.Code -> 0x37474F | Md.Table -> 0x37474F | _ -> Gui.foreground in
-                if l.Md.kind = Md.Code then Gfx.fill g (side + 8) y (width - side - 30) 18 0xF2F4F6;
+                  | Md.Heading _ -> 0x1F4F7A | Md.Code | Md.Table -> 0x37474F
+                  | Md.Quote -> 0x2E3B45 | _ -> Gui.foreground in
+                (match l.Md.kind with
+                 | Md.Code -> Gfx.fill g (side + 8) y (width - side - 30) 18 0xF2F4F6
+                 | Md.Quote ->
+                   (* a box with a bar on its left, as the book's *)
+                   Gfx.fill g (side + 8) y (width - side - 30) 18 0xF1F5F9;
+                   Gfx.fill g (side + 8) y 3 18 0x2E5E8E
+                 | Md.Rule -> Gfx.fill g x (y + 8) (width - side - 46) 1 0xC0C8D0
+                 | _ -> ());
                 let cx = ref x in
-                List.iter (fun (t, b) ->
-                    ignore (Gfx.text ~bold:b g !cx y t colour); cx := !cx + Gfx.char_w * Md.cells t)
+                List.iter (fun (t, style) ->
+                    let w = Gfx.char_w * Md.cells t in
+                    (match style with
+                     | Md.Struck ->
+                       ignore (Gfx.text g !cx y t Gui.muted);
+                       Gfx.fill g !cx (y + Gfx.char_h / 2) w 1 Gui.muted
+                     | _ -> ignore (Gfx.text ~bold:(style = Md.Bold) g !cx y t colour));
+                    cx := !cx + w)
                   l.Md.spans
               end) st.lines;
           24 + 18 * List.length st.lines);

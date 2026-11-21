@@ -31,8 +31,9 @@ are static Linux i386 programs, and its OCaml is 5.5 built for that
 target. Today's distributions do not ship such a toolchain for a 64-bit
 host, so the build runs in a container image, `mynos-dev` (Debian
 trixie i386, gcc 14, musl, OCaml 5.5.2; appendix H). QEMU runs on the
-host itself, without KVM: the processor is emulated, which is slower
-than a real one but needs no special permission.
+host itself. On Linux with KVM (`/dev/kvm`, if your user may use it) the
+host's processor runs MyNOS's, and the scripts use it; without KVM the
+processor is emulated, slower but with no special permission.
 
 ## 5.2 A ready-made image
 
@@ -77,6 +78,7 @@ takes the options of `run-demo.sh` (5.5), spelled as options:
 | `--http PORT` | the host port forwarded to the web server (default 8080, if free; 0: none) |
 | `--mem MB` | the memory (default 256) |
 | `--reset-disk` | `/disk` empty again (`disk.img` replaced) |
+| `--no-kvm` | the processor emulated, even with KVM |
 | `-- OPTIONS` | passed to QEMU, e.g. `-- -display none` with `--serial` |
 
 A `llm.env` beside the script is copied into the disk at every start
@@ -243,6 +245,7 @@ VERBOSE=1 tools/run-demo.sh                   kernel messages stay on the screen
 | `NET` | `1` | the network card (NE2000) on QEMU's user network: MyNOS is 10.0.2.15, the host 10.0.2.2. `NET=` (empty) boots without it. |
 | `HTTP` | `8080`, if free | the host port (on 127.0.0.1 only) forwarded to MyNOS's web server |
 | `MEM` | `256` | memory, in MB |
+| `KVM` | `1`, with `/dev/kvm` | the host's processor runs MyNOS's; `KVM=` emulates it |
 | `DISK` | `system/disk.img`, if it exists | the disk image |
 | `VERBOSE` | not set | `verbose` on the kernel's command line |
 | `CPU` | `qemu32,+rdrand,+rdseed` | QEMU's processor model |

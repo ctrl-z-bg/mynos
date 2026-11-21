@@ -1,22 +1,27 @@
 (* Md: the manual's Markdown, as lines to show: headings, paragraphs
-   wrapped, lists, code blocks and tables kept as they are. Inline marks
-   are taken out (`code`, **bold**, *italic*, [links](...)), and what
-   was bold is kept as spans. *)
+   wrapped, lists, code blocks and tables kept as they are, quotes (">")
+   as lines of their own kind, rules ("---"). Inline marks are taken out
+   (`code`, **bold**, *italic*, ~~struck~~, [links](...)), and what was
+   bold or struck is kept as spans. Pictures (![...](...)) are left out:
+   their captions follow them. *)
 
-type kind = Heading of int | Para | Code | Table | Blank
-type line = { kind : kind; spans : (string * bool) list }   (* text, bold *)
+type style = Plain | Bold | Struck
+type kind = Heading of int | Para | Code | Table | Quote | Rule | Blank
+type line = { kind : kind; spans : (string * style) list }
 
 (* the inline marks of a line: its spans *)
 let inline s =
   let n = String.length s in
-  let spans = ref [] and cur = Buffer.create 80 and bold = ref false in
+  let spans = ref [] and cur = Buffer.create 80 and bold = ref false and struck = ref false in
   let flush () =
-    if Buffer.length cur > 0 then spans := (Buffer.contents cur, !bold) :: !spans;
+    if Buffer.length cur > 0 then
+      spans := (Buffer.contents cur, if !struck then Struck else if !bold then Bold else Plain) :: !spans;
     Buffer.clear cur in
   let i = ref 0 in
   while !i < n do
     let c = s.[!i] in
     if c = '*' && !i + 1 < n && s.[!i + 1] = '*' then begin flush (); bold := not !bold; i := !i + 2 end
+    else if c = '~' && !i + 1 < n && s.[!i + 1] = '~' then begin flush (); struck := not !struck; i := !i + 2 end
     else if c = '`' then begin
       (match String.index_from_opt s (!i + 1) '`' with
        | Some j -> Buffer.add_string cur (String.sub s (!i + 1) (j - !i - 1)); i := j + 1
@@ -57,21 +62,22 @@ let wrap width ?(first = "") ?(rest = "") spans =
   let lines = ref [] and line = ref [] and len = ref 0 in
   let start () =
     let ind = if !lines = [] then first else rest in
-    line := [ (ind, false) ]; len := cells ind in
+    line := [ (ind, Plain) ]; len := cells ind in
   start ();
   let fresh () = match !line with [ _ ] -> true | _ -> false in
   List.iter (fun w ->
-      let l = List.fold_left (fun a (t, _) -> a + cells t) 0 w in
+      (* a struck piece may be shown with its marks, ~~ ~~ (in the terminal) *)
+      let l = List.fold_left (fun a (t, st) -> a + cells t + (if st = Struck then 4 else 0)) 0 w in
       if !len + 1 + l > width && not (fresh ()) then begin
         lines := { kind = Para; spans = List.rev !line } :: !lines; start ()
       end;
-      if not (fresh ()) then (line := (" ", false) :: !line; incr len);
+      if not (fresh ()) then (line := (" ", Plain) :: !line; incr len);
       List.iter (fun p -> line := p :: !line) w;
       len := !len + l) words;
   if not (fresh ()) then lines := { kind = Para; spans = List.rev !line } :: !lines;
   List.rev !lines
 
-let render width text =
+let rec render width text =
   let out = ref [] in
   let add l = out := l :: !out in
   let blank () = match !out with { kind = Blank; _ } :: _ | [] -> () | _ -> add { kind = Blank; spans = [] } in
@@ -82,20 +88,43 @@ let render width text =
       Buffer.clear para
     end in
   let in_code = ref false in
+  (* a quote's lines, without their ">": rendered as a text of their own,
+     narrower, when the quote ends *)
+  let quote = Buffer.create 256 in
+  let end_quote () =
+    if Buffer.length quote > 0 then begin
+      end_para (); blank ();
+      List.iter (fun l ->
+          add { kind = Quote; spans = ("    ", Plain) :: (match l.kind with
+              | Blank -> [] | _ -> l.spans) })
+        (render (width - 4) (Buffer.contents quote));
+      Buffer.clear quote; blank ()
+    end in
   List.iter (fun raw ->
       let l = String.trim raw in
+      if not !in_code && l <> "" && l.[0] = '>' then begin
+        end_para ();
+        let rest = String.sub l 1 (String.length l - 1) in
+        let rest = if rest <> "" && rest.[0] = ' ' then String.sub rest 1 (String.length rest - 1) else rest in
+        Buffer.add_string quote rest; Buffer.add_char quote '\n'
+      end else begin
+      end_quote ();
       if String.starts_with ~prefix:"```" l then begin
         end_para ();
         if !in_code then (in_code := false; blank ()) else (blank (); in_code := true)
       end
-      else if !in_code then add { kind = Code; spans = [ ("    " ^ raw, false) ] }
+      else if !in_code then add { kind = Code; spans = [ ("    " ^ raw, Plain) ] }
       else if l = "" then (end_para (); blank ())
+      else if String.length l >= 3 && String.for_all (fun c -> c = '-') l && Buffer.length para = 0 then begin
+        blank (); add { kind = Rule; spans = [] }; blank ()
+      end
+      else if String.starts_with ~prefix:"![" l && l.[String.length l - 1] = ')' then end_para ()
       else if l.[0] = '#' then begin
         end_para (); blank ();
         let level = ref 0 in
         while !level < String.length l && l.[!level] = '#' do incr level done;
         let t = String.trim (String.sub l !level (String.length l - !level)) in
-        add { kind = Heading !level; spans = List.map (fun (s, _) -> (s, true)) (inline t) };
+        add { kind = Heading !level; spans = List.map (fun (s, _) -> (s, Bold)) (inline t) };
         blank ()
       end
       else if l.[0] = '|' then begin
@@ -124,6 +153,9 @@ let render width text =
             para_first := "    "; para_rest := "    " end
         end else Buffer.add_char para ' ';
         Buffer.add_string para l
+      end
       end) (String.split_on_char '\n' text);
+  end_quote ();
   end_para ();
-  List.rev !out
+  (* no blank line at the end ([blank] adds none at the start) *)
+  List.rev (match !out with { kind = Blank; _ } :: rest -> rest | ls -> ls)

@@ -31,7 +31,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private edit_utf8 log_shown"
+results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload edit_utf8 log_shown"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -448,7 +448,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     # repository /disk/pkg/url names (the host's copy)
     click 20 10; sleep 1; click 40 259; sleep 15
     mon "screendump $tmp/gui22.ppm"
-    click 20 10; sleep 1; click 30 303; sleep 4    # the MyNOS menu, Exit
+    click 20 10; sleep 1; click 30 325; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt; ls /disk\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too
@@ -758,6 +758,22 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
        [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:47180/LLM.ENV)" = 404 ]; then
         httpd_private=yes
     fi
+    # httpd receives files from the host (QEMU's 10.0.2.2): PUT, into a
+    # new directory too, and a form of two; not llm.env, not with another
+    # site's Origin; MyNOS reads what came (cat, below)
+    httpd_upload=
+    u=http://127.0.0.1:47180
+    printf 'put-by-the-host\n' > "$tmp/up1.txt"; head -c 200000 /dev/urandom > "$tmp/up2.bin"
+    if curl -s -m 20 -f -T "$tmp/up1.txt" $u/up/a/up1.txt >/dev/null &&
+       [ "$(curl -s -m 20 -o /dev/null -w '%{http_code}' -F file=@"$tmp/up1.txt" -F file=@"$tmp/up2.bin" \
+             -H "Origin: $u" $u/up/)" = 303 ] &&
+       curl -s -m 20 $u/up/up2.bin | cmp -s - "$tmp/up2.bin" &&
+       [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' -T "$tmp/up1.txt" $u/llm.env)" = 404 ] &&
+       [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' -T "$tmp/up1.txt" -H 'Origin: http://example.com' $u/x.txt)" = 403 ] &&
+       curl -s -m 10 $u/up/ | grep -q 'multipart/form-data'; then
+        httpd_upload=yes
+    fi
+    tools/type-keys.py "$tmp/mon7" 'cat /disk/up/a/up1.txt /disk/up/up1.txt\n'; sleep 2
     # the kernel's log, read inside MyNOS (mynos-lfv): its boot messages
     # come back on the console, so the log port sees them twice
     tools/type-keys.py "$tmp/mon7" 'log\n'; sleep 4
@@ -1073,6 +1089,11 @@ if [ -f system/ramdisk.dsk ]; then
         echo "ok    httpd: serves /disk, not its .env files"
     else
         echo "FAIL  httpd: serves /disk, not its .env files"; fail=1
+    fi
+    if [ -n "$httpd_upload" ] && [ "$(grep -ac 'put-by-the-host' "$log7")" -ge 2 ]; then
+        echo "ok    httpd: receives files from the host (PUT, a form)"
+    else
+        echo "FAIL  httpd: receives files from the host (PUT, a form)"; fail=1
     fi
     expect "Hello, reborn again, from MyNOS!"          # by an OCaml client too
     if [ -n "$trace_calls" ]; then

@@ -31,6 +31,7 @@ Options (./run-mynos.sh --help):
                  if QEMU stops at once because the port is taken, use
                  another, or --http 0 for none)
   --mem MB       memory (default 256)
+  --no-kvm       emulate the processor even if KVM is there
   --reset-disk   start /disk again, empty
   -- OPTIONS     passed to QEMU (e.g. -- -display none, with --serial)
 

@@ -2747,3 +2747,32 @@ as before. The Game Boy runs the frames due by the clock (a tick of
 service that keeps deadlines for others must check them as often as
 the shortest one asks, and an animation that seems slow should be
 timed before its drawing is suspected.
+
+## 2026-11-21 — Who may write to /disk
+
+**Symptom.** Bringing a file from the host into MyNOS took two steps: a
+web server started on the host, then `fetch -o` typed inside MyNOS, one
+file at a time.
+
+**Diagnosis.** `httpd` already reached MyNOS from the host's browser and
+`curl`; what it lacked was writing. The question was not how (`PUT`, and
+a form for the browser) but who: on QEMU's user network only the host
+can reach port 80, on a real network with an NE2000 anyone could.
+
+**Cause.** A server that writes is a door; the same program runs in QEMU
+and on a PC, from the same RAM disk, so a flag in `init.rc` could not
+tell them apart, and the kernel's command line does not reach programs.
+
+**Fix.** The connection tells: on QEMU's user network MyNOS is 10.0.2.15,
+the gateway 10.0.2.2, and the host's forwarded connections arrive from
+10.0.2.2; writes are allowed to that peer, to anyone with `httpd -w`.
+The browser is the other way in: a page of any site can post a form to
+`localhost:8080`, so a write must name this server in `Host` (which a
+name pointed at 127.0.0.1 does not) and in `Origin` when there is one.
+A file arrives into a hidden name and replaces the old one only whole.
+Timing it showed the next limit: 3 MB take 28 s, as long as `cp` of the
+same file inside MyNOS (fatfs, mynos-ipg).
+
+**Lesson.** Before deciding what a server may do, ask who can reach it;
+here the network itself said it, at no cost. And a page in the user's
+own browser is a client too.

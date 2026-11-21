@@ -80,6 +80,7 @@ let installed_names () =
 type program = { file : string; sources : string list }
 
 type manifest = {
+  description : string;
   progs : program list;        (* in /disk/bin *)
   commands : string list;      (* scripts in /disk/bin that run the program *)
   libraries : string list;
@@ -106,7 +107,8 @@ let manifest_of text =
         | _ -> [])
     | String s -> [ s ]
     | l -> List.map to_string_value (to_list l) in
-  { progs = programs; commands = strings "commands" v; libraries = strings "libraries" v; needs = strings "depends" v; run;
+  { description = (match member "description" v with Null -> "" | d -> to_string_value d);
+    progs = programs; commands = strings "commands" v; libraries = strings "libraries" v; needs = strings "depends" v; run;
     doc = (match member "doc" v with Null -> None | d -> Some (to_string_value d)) }
 
 let manifest name =

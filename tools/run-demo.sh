@@ -6,7 +6,8 @@
 # driver and fatfs, which mounts system/disk.img at /disk, the network with
 # an NE2000 card on QEMU's user network, httpd) and sh. Type help; "ocaml"
 # opens the OCaml toplevel. NET= (empty) boots without a network card;
-# HTTP=PORT forwards another host port to httpd. llm.env, if there is one
+# HTTP=PORT forwards another host port to httpd. With /dev/kvm usable,
+# KVM runs the processor (KVM= emulates it). llm.env, if there is one
 # (see llm.env.example), is copied into the disk as /disk/llm.env, for llmd.
 # SERIAL=1 makes this terminal a console of MyNOS too (its second serial
 # port: doc/decisions/console.md), with the host's copy and paste,
@@ -44,6 +45,14 @@ if [ -n "$NET" ] && [ -z "${HTTP+set}" ]; then
     if python3 -c 'import socket; socket.socket().bind(("127.0.0.1", 8080))' 2>/dev/null
     then export HTTP=8080; echo "run-demo.sh: http://localhost:8080/ is MyNOS's httpd" >&2
     else echo "run-demo.sh: port 8080 is busy, no web server forwarding" >&2
+    fi
+fi
+# KVM: the host's processor, if /dev/kvm is there and ours
+if [ -z "${KVM+set}" ]; then
+    if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+        export KVM=1; echo "run-demo.sh: KVM on (KVM= to emulate the processor)" >&2
+    else
+        echo "run-demo.sh: no /dev/kvm to use: the processor is emulated (slower)" >&2
     fi
 fi
 [ "${1:-}" = "--" ] && shift

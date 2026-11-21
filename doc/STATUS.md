@@ -186,7 +186,12 @@ All services are linked statically against `libmynos` and placed at
   lwIP's callback replies. `sh` has `ifconfig`, `ping`, `host`; `httpd`
   (`httpd/httpd.ml`, OCaml) serves `/disk` over HTTP with 8 worker domains
   (idle connections time out after 10 s), and
-  `tools/run-demo.sh` forwards the host's port 8080 to it.
+  `tools/run-demo.sh` forwards the host's port 8080 to it. It receives
+  files too (mynos-god): `PUT` (`curl -T`) and an Upload form in each
+  listing (multipart, saved as it arrives, a hidden file renamed when
+  whole), from the host QEMU runs on (10.0.2.2 on QEMU's user network)
+  or anyone with `httpd -w`; Host and Origin must name the server.
+  Writing to `/disk` goes at about 130 KB/s (fatfs, mynos-ipg).
 - **Packages** (2026-11-20, `doc/decisions/packages.md`, mynos-vcd):
   `pkg` (`pkg/pkg.ml`, on the RAM disk) lists, installs, removes the
   packages of the repository ctrl-z-bg/mynos-packages (`index.json`,
@@ -217,7 +222,8 @@ All services are linked statically against `libmynos` and placed at
   files`). The graphical session's Packages window
   (`pkg/packages_window.ml`, in the MyNOS menu) lists them and runs `pkg`
   for Install, Remove, Update; `/disk/pkg/url` names another repository
-  for both.
+  for both. The menu's Applications (`pkg/apps_window.ml`) lists the
+  installed packages that open a window, and starts them (mynos-r33).
 - **Language models** (2026, `doc/decisions/llm.md`, mynos-wsd): `llmd`
   (`services/llm/llmd.ml`, OCaml, no privilege) serves "llm/1" (module
   `Llm`: `Profiles`, `Chat` with tools; `Llm.ask`) with 4 worker domains.
@@ -1413,3 +1419,17 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `zmachine`. Installed from the host's copy and played in QEMU (the
   first moves of each). Published to ctrl-z-bg/mynos-packages, with the
   `zmachine` page that names them.
+- **2026-11-21** — `httpd` receives files from the host (mynos-god):
+  `curl -T FILE http://localhost:8080/PATH`, or the Upload form at the
+  end of each listing; allowed to 10.0.2.2 on QEMU's user network, to
+  anyone with `-w`; Host and Origin checked. Tested in the seventh boot
+  (PUT, a form of two files, llm.env and a foreign Origin refused, the
+  files read back by MyNOS). The menu's Applications (mynos-r33). KVM in
+  the start scripts: `run-demo.sh` sets `KVM=1` when `/dev/kvm` can be
+  used (`run-qemu.sh` adds `-accel kvm`; the tests do not set it), and
+  the release's `run-mynos.sh` uses it unless `--no-kvm`. The manual
+  (1.4) says where the up-to-date manual and the packages' documentation
+  are (mynos-imk). The package `manual` renders quotes (">", the MyNOS
+  FACTOR boxes and chapter 2's page of 2002) as boxes with a bar,
+  ~~struck~~ text, rules ("---"), and leaves pictures out; they came out
+  as raw marks.

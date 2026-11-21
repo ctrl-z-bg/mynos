@@ -229,8 +229,8 @@ To use another port, set `HTTP` (`HTTP=9090 tools/run-demo.sh`); with
 
 What `httpd` does, exactly:
 
-- it answers `GET` only (`400 Bad Request` otherwise), with HTTP/1.0,
-  and closes the connection after each answer;
+- it answers `GET`, and `PUT` and `POST` to receive files (below), with
+  HTTP/1.0, and closes the connection after each answer;
 - a path containing `..` gets `403 Forbidden`; a missing file `404 Not
   Found`; names starting with `.` are left out of listings;
 - the type is guessed from the extension: `.html` and `.htm` are HTML;
@@ -247,11 +247,28 @@ including `/disk/llm.env`, the file that holds your language model keys
 (chapter 12), to anyone who can reach the forwarded port. On your own
 computer that is you; do not forward the port further.
 
+**Files from your computer into MyNOS.** `httpd` also receives files:
+
+```
+$ curl -T notes.txt http://localhost:8080/             (/disk/notes.txt)
+$ curl -T photo.png http://localhost:8080/img/a.png    (/disk/img/a.png)
+```
+
+Missing directories are made, and a file of the same name is replaced
+once the new one has arrived whole. In the browser, each directory's
+listing ends with an **Upload** form, which sends one or more files into
+it. Writing is allowed only to the computer QEMU runs on (in QEMU,
+connections forwarded from it come from 10.0.2.2), and only to requests
+that name MyNOS in `Host` and, if they carry one, in `Origin`, so that
+a page of another site, open in your browser, cannot write to your
+disk. `httpd -w` allows writing to anyone who can reach it: for a real
+network, think first. `.env` files are never written.
+
 Downloading through `httpd` is the way out of MyNOS: a recording
 converted for Perfetto (chapter 11) is written to `/disk` and opened from
 your browser.
 
-`httpd` can serve another directory or port: `httpd [DIR [PORT]]`, for
+`httpd` can serve another directory or port: `httpd [-w] [DIR [PORT]]`, for
 instance `httpd /tmp 8081 &`. A program inside MyNOS can reach MyNOS's
 own address too: `fetch http://10.0.2.15/` asks `httpd` (the packets go
 back in through lwIP's loopback, without the card). `httpd` serves

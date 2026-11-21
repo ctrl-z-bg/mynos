@@ -71,6 +71,7 @@ Click **MyNOS**, top left. The menu opens:
 | Tour | lessons on how an operating system works (10.13, chapter 11) |
 | Log | the kernel's log, its messages and the services', followed as it grows (`log -f` in a window) |
 | Packages | the packages: demos and programs to install from the web (10.14) |
+| Applications | the installed packages that open a window; a click starts one (10.14) |
 | Exit | ends the session: back to the text console (10.16) |
 | Shut down | turns the machine off (10.16) |
 
@@ -312,6 +313,9 @@ the index on the disk yet, the window reads it by itself.
 
 To use another repository, write its address in the file
 `/disk/pkg/url` (one line): the window and `pkg` both read it.
+
+The menu's **Applications** lists the installed packages that open a
+window, each with its description: a click starts it.
 
 ## 10.15 Graphical programs outside the session
 

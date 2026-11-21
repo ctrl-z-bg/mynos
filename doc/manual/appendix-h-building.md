@@ -235,8 +235,8 @@ stop on it). GRUB passes a module's arguments after its file name, so
 (`-kernel`): no GRUB image is needed. Each argument before `--` is a
 module, in order, with its arguments in the same word (`"tests/abi/abi one
 two"`); what follows `--` goes to QEMU. With no module it runs
-`run-demo.sh` instead. It does not ask QEMU for KVM: the processor is
-emulated. Its environment:
+`run-demo.sh` instead. Without `KVM` the processor is emulated, as in the
+tests. Its environment:
 
 | Variable | Default | Effect |
 |---|---|---|
@@ -246,6 +246,7 @@ emulated. Its environment:
 | `NET` | none | an NE2000 card at I/O `0x300`, IRQ 9, on QEMU's user network (MyNOS is 10.0.2.15 by DHCP, the host 10.0.2.2) |
 | `HTTP` | none | with `NET`, this host port (on 127.0.0.1) forwarded to MyNOS's port 80 |
 | `VERBOSE` | none | `verbose` on the kernel's command line: its messages stay on screen |
+| `KVM` | none | `-accel kvm`: the host's processor runs MyNOS's |
 | `KERNEL` | `mynos-core/kernel/kernel.elf` | another kernel |
 | `KERNEL_ONLY` | none | with no module, boot the bare kernel |
 | `SHOT` | none | run headless, wait `WAIT` seconds (3), save the screen as an image (with ImageMagick's `convert`), stop |
@@ -259,6 +260,8 @@ ends. The script sets:
 
 - `MEM=256`, and `DISK=system/disk.img` if the image exists;
 - `NET=1` unless `NET` is set (`NET=` boots without a network card);
+- `KVM=1` if `/dev/kvm` can be used, unless `KVM` is set (`KVM=`
+  emulates the processor);
 - `HTTP=8080` if that host port is free, so that `http://localhost:8080/`
   is MyNOS's `httpd`; `HTTP=PORT` chooses another;
 - with `SERIAL=1`, the host's terminal becomes MyNOS's second serial
