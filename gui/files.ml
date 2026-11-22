@@ -197,7 +197,7 @@ let () =
                match what with
                | `Text lines ->
                  List.iteri (fun i l ->
-                     ignore (Gfx.text ~max:((list_w - 30) / 8) g (list_x + 8) (top + 4 + i * 18)
+                     ignore (Gui.text ~max:((list_w - 30) / 8) ui (list_x + 8) (top + 4 + i * 18)
                                (String.map (fun c -> if c = '\t' || c = '\r' then ' ' else c) l)
                                Gui.foreground)) lines;
                  18 * List.length lines + 8
@@ -277,8 +277,8 @@ let () =
                 else Gui.size_text e.size ^ ": Open shows it")
            | None -> Printf.sprintf "%d entries. Click to choose, again to open."
                        (List.length st.listing) in
-         ignore (Gfx.text ~max:((list_w - 20) / 8) g (list_x + 10) (by + 10) info Gui.foreground);
-         ignore (Gfx.text ~max:((list_w - 20) / 8) g (list_x + 10) (by + 34) st.message Gui.muted));
+         ignore (Gui.text ~max:((list_w - 20) / 8) ui (list_x + 10) (by + 10) info Gui.foreground);
+         ignore (Gui.text ~max:((list_w - 20) / 8) ui (list_x + 10) (by + 34) st.message Gui.muted));
       (* keys, while browsing: Enter opens, Backspace goes up *)
       if st.mode = Browse then
         List.iter (function

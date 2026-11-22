@@ -375,6 +375,12 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     tools/type-keys.py "$tmp/mon-g" '/disk/greeter.byte\n'; sleep 5
     mon "sendkey ctrl-c"; sleep 2
     tools/type-keys.py "$tmp/mon-g" 'echo ctrlc-$? > /tmp/ctrlc.txt\n'; sleep 3
+    # selecting with the mouse (mynos-b3k): a double click on a word of
+    # the cleared screen's first row copies it, a right click pastes it
+    tools/type-keys.py "$tmp/mon-g" 'clear; echo pick-ok\n'; sleep 3
+    to 160 166; mon "mouse_button 1"; mon "mouse_button 0"; mon "mouse_button 1"; mon "mouse_button 0"; sleep 1
+    tools/type-keys.py "$tmp/mon-g" 'echo sel-'; mon "mouse_button 2"; mon "mouse_button 0"; sleep 1
+    tools/type-keys.py "$tmp/mon-g" ' > /tmp/sel.txt\n'; sleep 3
     # the agent window (the menu's fifth item, at 168,182): a task, the
     # confirmation it waits for, Allow (at the bottom of the window)
     click 20 10; sleep 1; click 40 127; sleep 10
@@ -471,7 +477,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     tools/type-keys.py "$tmp/mon-g" 'pkg install studio; studio &\n'; sleep 25
     click 265 91; sleep 20
     click 20 10; sleep 1; click 30 347; sleep 4    # the MyNOS menu, Exit
-    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /disk/untitled.txt; ls /disk /disk/studio\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /tmp/sel.txt /disk/untitled.txt; ls /disk /disk/studio\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too
     tools/type-keys.py "$tmp/mon-g" 'ps\n'; sleep 3
@@ -1279,6 +1285,7 @@ PY
     expect "gui: the graphical session ended"
     expect "text-ok"
     expect "term-ok"
+    expect "sel-pick-ok"                              # a word selected, pasted
     expect "agentwin-ok"        # the agent window: the command allowed by its button ran
     expect "dal-seriale"
     expect "incollata-2"

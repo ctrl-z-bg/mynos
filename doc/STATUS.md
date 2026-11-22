@@ -1547,4 +1547,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   (a clean disk, the package from `tmp/packages`). Studio's README has
   seven, the agent's among them. Studio: a completion list that said
   "reading" for ever is asked again when an interface has been read.
+- **2026-11-22** — Selecting text with the mouse: the Terminal (cells,
+  lines numbered across the scrollback; mynos-b3k) and every Gui window
+  (mynos-anc: what `label`, `paragraph` and the new `Gui.text` draw is
+  registered each frame; a drag or a double click selects, copied on
+  release). Log, agent, Services, Recordings, Tour, Files, System,
+  Studio's panes, manual, wiki, feeds, zmachine draw with `Gui.text`.
+  Test: lane d's double click and right click in a Terminal.
+- **2026-11-22** — Manual: Smalltalk among the systems of chapter 3.2
+  (the liveliness MyNOS gained: messages, self-description, the
+  Services window as an inspector), a note in 17.6, appendix J.
 

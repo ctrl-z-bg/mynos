@@ -122,6 +122,6 @@ let () =
               let lines = wrap (w - 16 - 10) text in
               Gui.scroll ui 2 x (y + 20) w (max 40 (520 - y - 30)) (fun top ->
                   List.iteri (fun i l ->
-                      ignore (Gfx.text g (x + 8) (top + 6 + i * 18) l Gui.foreground)) lines;
+                      ignore (Gui.text ui (x + 8) (top + 6 + i * 18) l Gui.foreground)) lines;
                   12 + 18 * List.length lines)));
         st)

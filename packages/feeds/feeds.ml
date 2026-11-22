@@ -209,11 +209,11 @@ let window () =
              Gui.scroll ~colour:0xFFFFFF ui (5000 + st.sel_item + 1000 * st.item_page) (x + 1) (ty + 1) (w - 2) (height - ty - 10)
                (fun y0 ->
                   let tl = wrap (w - 24) it.title in
-                  List.iteri (fun i l -> ignore (Gfx.text ~bold:true g (x + 10) (y0 + 8 + i * 18) l Gui.foreground)) tl;
+                  List.iteri (fun i l -> ignore (Gui.text ~bold:true ui (x + 10) (y0 + 8 + i * 18) l Gui.foreground)) tl;
                   let y1 = y0 + 8 + 18 * List.length tl in
-                  ignore (Gfx.text g (x + 10) y1 it.date Gui.muted);
-                  ignore (Gfx.text ~max:((w - 24) / Gfx.char_w) g (x + 10) (y1 + 18) it.link 0x1F4F7A);
-                  List.iteri (fun i l -> ignore (Gfx.text g (x + 10) (y1 + 46 + i * 18) l Gui.foreground)) lines;
+                  ignore (Gui.text ui (x + 10) y1 it.date Gui.muted);
+                  ignore (Gui.text ~max:((w - 24) / Gfx.char_w) ui (x + 10) (y1 + 18) it.link 0x1F4F7A);
+                  List.iteri (fun i l -> ignore (Gui.text ui (x + 10) (y1 + 46 + i * 18) l Gui.foreground)) lines;
                   8 + 18 * List.length tl + 46 + 18 * List.length lines + 8)
       );
       st)

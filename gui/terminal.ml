@@ -53,8 +53,10 @@ let history : cell array array = Array.make history_max [||]
 let hist_len = ref 0 and hist_next = ref 0
 let view = ref 0                       (* lines looked back; 0: the screen *)
 let all_dirty = ref true               (* the view moved: everything again *)
+let scrolled = ref 0                   (* lines gone to the scrollback so far *)
 
 let push_history r =
+  incr scrolled;
   history.(!hist_next) <- Array.map (fun x -> { x with c = x.c }) !screen.(r);
   hist_next := (!hist_next + 1) mod history_max;
   if !hist_len < history_max then incr hist_len;
@@ -67,6 +69,44 @@ let history_line k = history.((!hist_next - k + history_max) mod history_max)
 let set_view v =
   let v = max 0 (min !hist_len v) in
   if v <> !view then (view := v; all_dirty := true)
+
+(* ---- the selection, with the mouse: lines by number (the first ever
+   is 0; the screen's top is !scrolled), so that it stays on its text
+   while the screen scrolls; a column is a boundary between cells ---- *)
+
+let line_of id =
+  let k = id - !scrolled in
+  if k >= 0 && k < !rows then !screen.(k)
+  else if k < 0 && - k <= !hist_len then history_line (- k)
+  else [||]
+
+let sel_a : (int * int) option ref = ref None   (* where the drag began *)
+let sel_b = ref (0, 0)                           (* where it is *)
+let sel_shown = ref false
+
+let sel_range () =
+  match !sel_a with
+  | Some a when !sel_shown -> Some (if compare a !sel_b <= 0 then (a, !sel_b) else (!sel_b, a))
+  | _ -> None
+
+let is_selected id c =
+  match sel_range () with
+  | Some (p1, p2) -> compare (id, c) p1 >= 0 && compare (id, c) p2 < 0
+  | None -> false
+
+let selection_text () =
+  match sel_range () with
+  | None -> ""
+  | Some ((i1, c1), (i2, c2)) ->
+    String.concat "\n" (List.init (i2 - i1 + 1) (fun k ->
+        let id = i1 + k in
+        let line = line_of id in
+        let a = if id = i1 then c1 else 0 and b = if id = i2 then c2 else Array.length line in
+        let b = min b (Array.length line) in
+        let s = String.concat "" (List.init (max 0 (b - a)) (fun j -> line.(a + j).c)) in
+        let n = ref (String.length s) in
+        while !n > 0 && s.[!n - 1] = ' ' do decr n done;
+        String.sub s 0 !n))
 
 let scroll_up top n =
   if top = 0 && !alternate = None then
@@ -273,6 +313,8 @@ let draw_row g r =
   let y = margin + r * ch in
   let k = r - !view in                 (* < 0: a line of the scrollback *)
   let line = if k >= 0 then !screen.(k) else history_line (- k) in
+  let id = !scrolled + k in
+  let sel i = is_selected id i in
   let (cr, cc) = if !view = 0 then (!row, !col) else (-1, -1) in
   let c = ref 0 in
   (* a line of the scrollback keeps the width it had: the rest is blank *)
@@ -285,11 +327,13 @@ let draw_row g r =
     let is_cursor i = !cursor_on && r = cr && i = cc in
     let b = Buffer.create 80 in
     while !c < n && line.(!c).fg = a.fg && line.(!c).bg = a.bg && line.(!c).bold = a.bold
+          && sel !c = sel x0
           && not (is_cursor !c) && (not (is_cursor x0) || !c = x0) do
       Buffer.add_string b line.(!c).c; incr c
     done;
     if !c = x0 then (Buffer.add_string b line.(x0).c; incr c);
     let fg = colour a.fg default_fg and bg = colour a.bg default_bg in
+    let bg = if sel x0 then 0x2F5F96 else bg in          (* selected *)
     let fg, bg = if is_cursor x0 && !focused then (bg, 0xE8EEF2) else (fg, bg) in
     Gfx.fill g (margin + x0 * cw) y ((!c - x0) * cw) ch bg;
     if is_cursor x0 && not !focused then Gfx.rect g (margin + x0 * cw) y cw ch 0xE8EEF2;
@@ -481,6 +525,56 @@ let () =
     | Some i -> i.Mynos.alive | None -> false | exception Mynos.Error _ -> false in
   let current () = match !window with Some w -> w | None -> w in
   let right_was = ref false in
+  (* the left button: a drag selects, a double click a word; copied when
+     let go *)
+  let left_was = ref false and dragging = ref false and word = ref false in
+  let press_xy = ref (0, 0) and last_press = ref 0. in
+  let point x y =
+    let r = max 0 (min (!rows - 1) ((y - margin) / ch)) in
+    let c = max 0 (min !cols ((x - margin + cw / 2) / cw)) in
+    (!scrolled + r - !view, c) in
+  let mouse x y buttons =
+    let down = buttons land 1 <> 0 in
+    if down && not !left_was && x < bar_x () then begin
+      let now = Mynos.uptime () and (lx, ly) = !press_xy in
+      let double = now -. !last_press < 0.4 && abs (x - lx) < 5 && abs (y - ly) < 5 in
+      last_press := now; press_xy := (x, y);
+      dragging := false; word := false;
+      if !sel_shown then (sel_shown := false; all_dirty := true);
+      let (id, _) = point x y in
+      if double then begin
+        (* the word under the pointer: what is not a space nor a bracket *)
+        let line = line_of id in
+        let i = max 0 ((x - margin) / cw) in
+        let is_word j = j < Array.length line
+                        && not (List.mem line.(j).c [ " "; "("; ")"; "["; "]"; "{"; "}"; "<"; ">";
+                                                      "\""; "'"; ","; ";"; "`" ]) in
+        if is_word i then begin
+          let a = ref i and b = ref (i + 1) in
+          while !a > 0 && is_word (!a - 1) do decr a done;
+          while is_word !b do incr b done;
+          sel_a := Some (id, !a); sel_b := (id, !b); sel_shown := true; word := true;
+          all_dirty := true;
+          Clipboard.set (selection_text ())
+        end
+      end else begin
+        sel_a := Some (point x y); sel_b := point x y
+      end
+    end else if down && !left_was && not !word && !sel_a <> None then begin
+      let (px, py) = !press_xy in
+      if abs (x - px) >= 4 || abs (y - py) >= 4 then begin
+        (* above or below the grid: the view follows *)
+        if y < margin then set_view (!view + 1)
+        else if y >= height () - margin then set_view (!view - 1);
+        dragging := true; sel_shown := true;
+        sel_b := point x y; all_dirty := true
+      end
+    end else if not down && !left_was && !dragging then begin
+      dragging := false;
+      let s = selection_text () in
+      if s <> "" then Clipboard.set s
+    end;
+    left_was := down in
   let rec loop () =
     match Display.next_event ~timeout:0.1 (current ()) with
     | Display.Close -> ()
@@ -513,6 +607,7 @@ let () =
          set_view (!hist_len - (y - th / 2) * !hist_len / room)
        | _ -> ());
       (match ev with Display.Mouse { buttons; _ } when buttons land 2 = 0 -> right_was := false | _ -> ());
+      (match ev with Display.Mouse { x; y; buttons } -> mouse x y buttons | _ -> ());
       serve_reads ();
       render ();
       Mutex.unlock lock;

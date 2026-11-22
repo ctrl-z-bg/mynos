@@ -47,6 +47,28 @@ interactivity.) MyNOS took a different route: not an OCaml processor,
 but an "abstract machine" made in software, a microkernel in C with
 OCaml's bytecode virtual machine running on it as an ordinary process.
 
+Beside the Lisp machines stood **Smalltalk** (Xerox PARC, from 1972;
+Smalltalk-80, published between 1980 and 1983, by Alan Kay, Dan Ingalls,
+Adele Goldberg and their group). Its system was a world of objects that
+do everything by sending one another messages (Kay pictured them as
+cells, or as computers on a network), and that can be examined and
+changed while it runs: the browser, the inspector and the debugger were
+Smalltalk objects working on the running system, which was saved whole
+as an image. Ingalls put the aim in one sentence: "An operating system
+is a collection of things that don't fit into a language. There
+shouldn't be one." MyNOS's authors cited Lisp, not Smalltalk; but what
+MyNOS became in 2026 resembles it. Its services are processes that talk
+by messages; every protocol describes itself (chapter 17.6); the
+Services window inspects a running service and calls it; the package
+Studio (chapter 10) completes from the running system, and replaces a
+service while its clients find it again by name. The difference is
+where that liveliness lives. Smalltalk's lives in one image and one
+memory, its types checked as it runs. MyNOS's lives between processes
+that the processor isolates, each one statically typed by OCaml, with
+protocols that describe themselves and are decoded as typed messages. A
+change in Smalltalk stays in the image; in MyNOS a service is rebuilt
+and started again.
+
 The idea of an operating system built on a safe language was older than
 MyNOS, and came back while MyNOS was being written.
 

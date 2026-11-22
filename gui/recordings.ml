@@ -316,7 +316,7 @@ let detail ui st r =
   let g = ui.Gui.g in
   Gui.panel ui 8 detail_y (width - 16) (height - detail_y - 8);
   let line k ?(bold = false) ?(colour = Gui.foreground) s =
-    ignore (Gfx.text ~bold ~max:112 g 18 (detail_y + 8 + k * 19) s colour) in
+    ignore (Gui.text ~bold ~max:112 ui 18 (detail_y + 8 + k * 19) s colour) in
   if st.sel >= 0 && st.sel < Array.length st.shown then begin
     let c = st.shown.(st.sel) in
     line 0 ~bold:true (Printf.sprintf "%s \xe2\x86\x92 %s   %s" (Tracer.name r c.client)

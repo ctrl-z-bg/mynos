@@ -3028,3 +3028,25 @@ the list was made.
 **Lesson.** "Is it still busy?" polled from another thread misses the
 moment it stops; a count of completions does not.
 
+## 2026-11-22 — Selecting text in an immediate-mode toolkit
+
+**Problem.** Gui keeps no widget tree: each frame draws text and forgets
+it, so there is nothing to select. Text is drawn by `label`, `paragraph`
+and, in most windows, `Gfx.text` directly, in scroll boxes.
+
+**Decision.** Each frame registers what it draws as pieces (position,
+cells, the clip it was drawn in); `Gfx.text` calls that show content
+became `Gui.text`, which draws and registers. The selection is two
+points on the window (the press, the pointer): a cell is selected when
+one point is after it in reading order and the other not, among the
+pieces drawn in the same clip as the press (a scroll box's lines, not
+the next column's). After the frame, Gui mixes the selection colour
+into the pixels and copies on release. Buttons and list items draw with
+`Gfx.text` and stay clickable, not selectable. The Terminal has cells
+and a scrollback: there the selection is lines and columns, the lines
+numbered from the first that ever scrolled, so that it stays on its
+text while output scrolls.
+
+**Lesson.** An immediate-mode toolkit can still answer "what is under
+the pointer": by remembering, for one frame, what it drew.
+

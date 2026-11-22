@@ -26,8 +26,41 @@ let muted = 0x5F6B76
 let accent = 0x2D6CA2
 let panel_colour = 0xFFFFFF
 
+(* ---- text the mouse can select: what this frame drew, piece by piece ---- *)
+
+type piece = {
+  px : int; py : int;                      (* its first cell's top left *)
+  chars : string array;                    (* a cell each (tabs expanded) *)
+  pclip : (int * int * int * int) option;  (* the clip it was drawn in *)
+}
+
+let pieces : piece list ref = ref []       (* this frame's, last first *)
+
+let utf8_cells s =
+  let s = Gfx.expand_tabs s in
+  let out = ref [] and i = ref 0 and n = String.length s in
+  while !i < n do
+    let j = ref (!i + 1) in
+    while !j < n && Char.code s.[!j] land 0xC0 = 0x80 do incr j done;
+    out := String.sub s !i (!j - !i) :: !out; i := !j
+  done;
+  Array.of_list (List.rev !out)
+
+let selectable ?max x y s =
+  if s <> "" then begin
+    let chars = utf8_cells s in
+    let chars = match max with
+      | Some m when m < Array.length chars -> Array.sub chars 0 (Stdlib.max 0 m)
+      | _ -> chars in
+    pieces := { px = x; py = y; chars; pclip = Gfx.clip () } :: !pieces
+  end
+
+let text ?bold ?max ui x y s colour =
+  selectable ?max x y s;
+  Gfx.text ?bold ?max ui.g x y s colour
+
 let label ?(colour = foreground) ?(bold = false) ui x y s =
-  ignore (Gfx.text ~bold ui.g x y s colour)
+  ignore (text ~bold ui x y s colour)
 
 let paragraph ?(colour = foreground) ui x y width s =
   let per_line = max 1 (width / Gfx.char_w) in
@@ -36,7 +69,7 @@ let paragraph ?(colour = foreground) ui x y width s =
       match acc with
       | l :: rest when Gfx.cells l + 1 + Gfx.cells w <= per_line -> (l ^ " " ^ w) :: rest
       | _ -> w :: acc) [] words) in
-  List.iteri (fun i l -> ignore (Gfx.text ui.g x (y + i * 18) l colour)) lines;
+  List.iteri (fun i l -> ignore (text ui x (y + i * 18) l colour)) lines;
   18 * List.length lines
 
 let panel ?(colour = panel_colour) ui x y w h =
@@ -48,6 +81,162 @@ let panel ?(colour = panel_colour) ui x y w h =
 let modals = ref 0
 let in_modal = ref false
 let blocked () = !modals > 0 && not !in_modal
+
+(* ---- the selection: a drag over the pieces, from the point pressed to
+   the pointer; a double click, a word. Copied to the clipboard when the
+   button is let go, as in a terminal. Kept as points on the window: a
+   cell is selected when one of the two points is after it and the other
+   not, among the pieces drawn in the same clip as the first. ---- *)
+
+type selection = {
+  mutable anchor : (int * int) option;     (* the press, on a piece *)
+  mutable focus : int * int;
+  mutable region : (int * int * int * int) option;
+  mutable dragging : bool;                 (* moved: a selection *)
+  mutable shown : bool;                    (* one to draw (until a press) *)
+  mutable word : bool;                     (* a double click's: fixed *)
+  mutable last_press : float;
+  mutable last_point : int * int;
+  mutable last_buttons : int;
+}
+
+let sel = { anchor = None; focus = (0, 0); region = None; dragging = false; shown = false;
+            word = false; last_press = 0.; last_point = (-100, -100); last_buttons = 0 }
+
+let cw = Gfx.char_w and ch = Gfx.char_h
+
+(* a cell is before a point: on a row above it, or on its row and left *)
+let before p i (x, y) =
+  if p.py + ch <= y then true
+  else if p.py > y then false
+  else p.px + i * cw + cw / 2 < x
+
+let visible p i =
+  match p.pclip with
+  | None -> true
+  | Some (x, y, w, h) ->
+    let cx = p.px + i * cw in
+    cx >= x && cx + cw <= x + w && p.py + ch > y && p.py < y + h
+
+let hit p (x, y) =
+  y >= p.py && y < p.py + ch && x >= p.px && x < p.px + Array.length p.chars * cw
+  && (match p.pclip with
+      | None -> true
+      | Some (cx, cy, w, h) -> x >= cx && x < cx + w && y >= cy && y < cy + h)
+
+let selected p i =
+  match sel.anchor with
+  | Some a when sel.shown && p.pclip = sel.region ->
+    visible p i && before p i a <> before p i sel.focus
+  | _ -> false
+
+(* the selected text: rows top to bottom, pieces on a row left to right *)
+let selection_text ps =
+  let ps = List.sort (fun a b -> compare (a.py, a.px) (b.py, b.px)) ps in
+  let rows = Buffer.create 256 and line = Buffer.create 80 and row_y = ref min_int
+  and line_end = ref 0 and first = ref true in
+  let end_line () =
+    if not !first then begin
+      let l = Buffer.contents line in
+      let n = ref (String.length l) in
+      while !n > 0 && l.[!n - 1] = ' ' do decr n done;
+      Buffer.add_string rows (String.sub l 0 !n); Buffer.add_char rows '\n'
+    end;
+    Buffer.clear line; first := false in
+  List.iter (fun p ->
+      Array.iteri (fun i c ->
+          if selected p i then begin
+            let x = p.px + i * cw in
+            if p.py <> !row_y then begin end_line (); row_y := p.py; line_end := x end;
+            (* a gap between pieces of a row: as spaces *)
+            if x > !line_end then Buffer.add_string line (String.make ((x - !line_end) / cw) ' ');
+            Buffer.add_string line c; line_end := x + cw
+          end) p.chars) ps;
+  end_line ();
+  let s = Buffer.contents rows in            (* each row ends with a newline *)
+  if s = "" then "" else String.sub s 0 (String.length s - 1)
+
+(* the selection colour, mixed into what was drawn *)
+let highlight g x y w h =
+  let x0 = max 0 x and y0 = max 0 y in
+  let x1 = min g.Gfx.width (x + w) and y1 = min g.Gfx.height (y + h) in
+  for yy = y0 to y1 - 1 do
+    for xx = x0 to x1 - 1 do
+      let k = yy * g.Gfx.width + xx in
+      let c = Int32.to_int (Bigarray.Array1.unsafe_get g.Gfx.pixels k) land 0xFFFFFF in
+      Bigarray.Array1.unsafe_set g.Gfx.pixels k (Int32.of_int (Gfx.mix c 0x3D8FE0 0.38))
+    done
+  done
+
+let word_at p i =
+  let is_word c = String.length c > 1 || (match c.[0] with
+      | ' ' | '\t' | '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | ',' | ';' | '"' | '\'' | '`' -> false
+      | _ -> true) in
+  if not (is_word p.chars.(i)) then (i, i + 1)
+  else begin
+    let a = ref i and b = ref (i + 1) in
+    while !a > 0 && is_word p.chars.(!a - 1) do decr a done;
+    while !b < Array.length p.chars && is_word p.chars.(!b) do incr b done;
+    (!a, !b)
+  end
+
+(* after a frame: the mouse's part, then the selection drawn over it *)
+let finish_selection ui ps =
+  let pressed = ui.buttons land 1 <> 0 && sel.last_buttons land 1 = 0 in
+  let released = ui.buttons land 1 = 0 && sel.last_buttons land 1 <> 0 in
+  sel.last_buttons <- ui.buttons;
+  if pressed then begin
+    let now = Mynos.uptime () and (px, py) = ui.press in
+    let (lx, ly) = sel.last_point in
+    let double = now -. sel.last_press < 0.4 && abs (px - lx) < 5 && abs (py - ly) < 5 in
+    sel.last_press <- now; sel.last_point <- (px, py);
+    sel.shown <- false; sel.dragging <- false; sel.word <- false; sel.anchor <- None;
+    match List.find_opt (fun p -> hit p (px, py)) ps with
+    | Some p when not (blocked ()) ->
+      sel.region <- p.pclip;
+      if double then begin
+        let i = min (Array.length p.chars - 1) ((px - p.px) / cw) in
+        let a, b = word_at p i in
+        sel.anchor <- Some (p.px + a * cw, p.py + ch / 2);
+        sel.focus <- (p.px + b * cw, p.py + ch / 2);
+        sel.word <- true; sel.shown <- true;
+        Clipboard.set (selection_text ps)
+      end else begin
+        sel.anchor <- Some (px, py); sel.focus <- (px, py)
+      end
+    | _ -> ()
+  end else if ui.buttons land 1 <> 0 && not sel.word then begin
+    match sel.anchor with
+    | Some (ax, ay) ->
+      if abs (ui.mx - ax) >= 4 || abs (ui.my - ay) >= 4 then begin
+        sel.dragging <- true; sel.shown <- true
+      end;
+      sel.focus <- (ui.mx, ui.my)
+    | None -> ()
+  end;
+  if released && sel.dragging then begin
+    sel.dragging <- false;
+    let s = selection_text ps in
+    if s <> "" then Clipboard.set s
+  end;
+  if sel.shown then
+    List.iter (fun p ->
+        let n = Array.length p.chars in
+        let i = ref 0 in
+        while !i < n do
+          if selected p !i then begin
+            let j = ref !i in
+            while !j < n && selected p !j do incr j done;
+            let x = p.px + !i * cw and w = (!j - !i) * cw in
+            (match p.pclip with
+             | None -> highlight ui.g x p.py w ch
+             | Some (cx, cy, cw', ch') ->
+               let x0 = max x cx and y0 = max p.py cy in
+               let x1 = min (x + w) (cx + cw') and y1 = min (p.py + ch) (cy + ch') in
+               if x1 > x0 && y1 > y0 then highlight ui.g x0 y0 (x1 - x0) (y1 - y0));
+            i := !j
+          end else incr i
+        done) ps
 
 let hovered ui x y w h =
   not (blocked ()) &&
@@ -223,10 +412,12 @@ let run ?(title = "") ?(tick = 0.) ?resizable ?unsaved w h state frame =
       next_tick := Mynos.uptime () +. tick
     end;
     Gfx.fill ui.g 0 0 (width ui) (height ui) background;
+    pieces := [];
     match frame ui state with
     | exception Quit -> destroy ()
     | state when !closing && ask_close () -> destroy ()
     | state ->
+      finish_selection ui !pieces;
       match Display.damage ui.window with
       | exception (Ipc.Remote_error _ | Mynos.Error _) -> ()
       | () ->

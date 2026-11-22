@@ -37,7 +37,7 @@ let () =
             let y = top + 4 + i * line_h in
             if y > -line_h && y < height then begin
               let l = if i < n then Dynarray.get lines i else Buffer.contents partial in
-              ignore (Gfx.text ~max:((width - 40) / Gfx.char_w) g 14 y l 0x1A2228)
+              ignore (Gui.text ~max:((width - 40) / Gfx.char_w) ui 14 y l 0x1A2228)
             end
           done;
           all * line_h + 8);

@@ -616,7 +616,7 @@ let () =
       (* the detail: the selection, or the step *)
       Gui.panel ui 8 detail_y (width - 16) (height - detail_y - 8);
       let line k ?(bold = false) ?(colour = Gui.foreground) s =
-        ignore (Gfx.text ~bold ~max:120 g 18 (detail_y + 8 + k * 19) s colour) in
+        ignore (Gui.text ~bold ~max:120 ui 18 (detail_y + 8 + k * 19) s colour) in
       let name_of pid = match node_of (key_of st pid) with
         | Some n -> Printf.sprintf "%s(%d)" n.name pid
         | None -> (match st.r with Some r -> Tracer.name r pid | None -> string_of_int pid) in

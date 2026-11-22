@@ -92,8 +92,8 @@ let draw ui st =
     let fg = if style.Zvm.bold then bright else foreground in
     if style.Zvm.reverse then begin
       Gfx.fill g x y (Gfx.char_w * length str) Gfx.char_h foreground;
-      ignore (Gfx.text ~bold:style.Zvm.bold g x y str background)
-    end else ignore (Gfx.text ~bold:style.Zvm.bold g x y str fg) in
+      ignore (Gui.text ~bold:style.Zvm.bold ui x y str background)
+    end else ignore (Gui.text ~bold:style.Zvm.bold ui x y str fg) in
   (* the top: version 3's status line, or the upper window *)
   let top_rows =
     match s.Zvm.status with

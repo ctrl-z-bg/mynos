@@ -38,11 +38,28 @@ val muted : int
 val accent : int
 val panel_colour : int
 
+(** {1 Text, which the mouse selects}
+
+    What {!label}, {!paragraph} and {!text} draw, the user can select:
+    dragging over it (within the scroll box where the drag began) or a
+    double click on a word. The selection shows in blue, and is copied to
+    the clipboard (module {!Clipboard}) when the button is let go, as in a
+    Terminal: another program pastes it. A click elsewhere clears it. Text
+    drawn with {!Gfx.text} directly (buttons, list items) is not
+    selectable. *)
+
 val label : ?colour:int -> ?bold:bool -> ui -> int -> int -> string -> unit
 
 val paragraph : ?colour:int -> ui -> int -> int -> int -> string -> int
 (** [paragraph ui x y width text]: the text, wrapped at words to the width
     (pixels): the height used. *)
+
+val text : ?bold:bool -> ?max:int -> ui -> int -> int -> string -> int -> int
+(** [text ui x y s colour]: {!Gfx.text} on the window, selectable. *)
+
+val selectable : ?max:int -> int -> int -> string -> unit
+(** [selectable x y s]: [s], drawn by the program at [(x, y)] its own
+    way (cell by cell, in colours), is selectable as if {!text} drew it. *)
 
 val panel : ?colour:int -> ui -> int -> int -> int -> int -> unit
 

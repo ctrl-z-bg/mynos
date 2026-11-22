@@ -369,6 +369,11 @@ names with that reader in mind. A description is checked by nothing but
 its use; the tests compare the C services' descriptions with the OCaml
 modules' (appendix E.2).
 
+The idea is old: a Smalltalk object can be asked which messages it
+understands, and Smalltalk's inspector shows any object of the running
+system (chapter 3.2). Here the object is a process, possibly written in
+C, and what it understands travels as data, in its description.
+
 ## 17.7 Services that answer later
 
 `serve` answers one request before it takes the next. A request that

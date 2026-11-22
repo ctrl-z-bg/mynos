@@ -145,7 +145,7 @@ let () =
               let y = ref (top + 8) in
               let lines ?(bold = false) colour x text =
                 List.iter (fun l ->
-                    ignore (Gfx.text ~bold g x !y l colour); y := !y + 18) (wrap cols text) in
+                    ignore (Gui.text ~bold ui x !y l colour); y := !y + 18) (wrap cols text) in
               List.iter (fun e ->
                   (match e with
                    | You t ->

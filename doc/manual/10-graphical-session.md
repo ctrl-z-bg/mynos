@@ -102,6 +102,15 @@ Every window has a title bar, with a close box at its right:
   Ctrl-C, Ctrl-X, Ctrl-V in the text boxes and fields; in a Terminal a
   right click pastes. From `sh`, the package `utils`'s `clip` prints it
   or copies (`ls | clip`).
+- **Selecting with the mouse.** In a Terminal, and in the windows that
+  show text (Log, the agent, Services, Recordings, Studio's panes, the
+  manual, Wiki, Feeds, a story of zmachine...), dragging selects, in
+  blue, and a double click selects a word; the selection is copied when
+  the button is let go, as in xterm (Ctrl-C in a Terminal still stops
+  the program). A Terminal's selection stays on its lines while they
+  scroll, and dragging above or below it scrolls the history. Programs
+  get it from `Gui`: what `Gui.label`, `Gui.paragraph` and `Gui.text`
+  draw is selectable.
 - **Unsaved changes.** Text, Paint and Studio ask before their close box
   ends them with changes not saved.
 - **Resizing.** A window that can be resized (Terminal, Files, Packages,

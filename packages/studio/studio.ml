@@ -336,7 +336,7 @@ let draw_popup ui (word, answer, sel) =
     (match List.nth_opt all sel with
      | Some it ->
        let dy = y + 24 + 20 * List.length items + 4 in
-       List.iteri (fun i l -> if i < 2 then ignore (Gfx.text g (x + 8) (dy + i * 18) l Gui.muted))
+       List.iteri (fun i l -> if i < 2 then ignore (Gui.text ui (x + 8) (dy + i * 18) l Gui.muted))
          (wrap ((w - 16) / Gfx.char_w)
             ((if it.request then "request" ^ (if it.safe then " (safe): " else ": ") else "") ^ it.doc))
      | None -> ())
@@ -493,7 +493,7 @@ let () =
          let shown_lines = List.filteri (fun i _ -> i >= n - rows) lines in
          Gfx.fill g 6 box_y (ed_w - 12) (box_h - 26) 0x10151C;
          List.iteri (fun i l ->
-             ignore (Gfx.text ~max:((ed_w - 24) / Gfx.char_w) g 10 (box_y + 2 + i * ch) l 0xD8DEE4))
+             ignore (Gui.text ~max:((ed_w - 24) / Gfx.char_w) ui 10 (box_y + 2 + i * ch) l 0xD8DEE4))
            shown_lines;
          let go = enter 3 in
          us.line <- Gui.text_field ui 3 6 (box_y + box_h - 24) (ed_w - 80) us.line;
@@ -516,7 +516,7 @@ let () =
          else begin
            Gui.scroll ui 8 6 box_y (ed_w - 140) box_h (fun top ->
                List.iteri (fun i (l : Watch.line) ->
-                   ignore (Gfx.text ~bold:l.strong g 10 (top + 2 + i * ch) l.text Gui.foreground))
+                   ignore (Gui.text ~bold:l.strong ui 10 (top + 2 + i * ch) l.text Gui.foreground))
                  !watch_lines;
                4 + ch * List.length !watch_lines);
            if Gui.button ~h:22 ui (ed_w - 128) box_y 122 "Recordings" then
@@ -536,7 +536,7 @@ let () =
             let y = ref (top + 4) in
             let put colour bold s =
               List.iter (fun l ->
-                  ignore (Gfx.text ~bold g (ax + 12) !y l colour); y := !y + 18) (wrap per s) in
+                  ignore (Gui.text ~bold ui (ax + 12) !y l colour); y := !y + 18) (wrap per s) in
             List.iter (function
                 | You s -> put Gui.accent true s; y := !y + 4
                 | Agent_said s -> put Gui.foreground false s; y := !y + 4

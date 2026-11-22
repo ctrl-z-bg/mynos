@@ -67,6 +67,15 @@ bitsavers.org, the Unix Heritage Society and multicians.org.
   whose operating system was its language.
 - D. Weinreb, D. Moon. *Lisp Machine Manual*, fourth edition. MIT
   Artificial Intelligence Laboratory, 1981.
+- A. Goldberg, D. Robson. *Smalltalk-80: The Language and its
+  Implementation*. Addison-Wesley, 1983. A system of objects and
+  messages, its tools written in itself, examined and changed while it
+  runs.
+- D. H. H. Ingalls. "Design Principles Behind Smalltalk". *Byte* 6(8),
+  August 1981. "An operating system is a collection of things that
+  don't fit into a language. There shouldn't be one."
+- A. C. Kay. "The Early History of Smalltalk". *ACM SIGPLAN Notices*
+  28(3), 1993 (HOPL-II). Objects as computers that exchange messages.
 - N. Wirth, J. Gutknecht. *Project Oberon: The Design of an Operating
   System and Compiler*. Addison-Wesley, 1992.
 - B. N. Bershad, S. Savage, P. Pardyak, E. G. Sirer, M. E. Fiuczynski,

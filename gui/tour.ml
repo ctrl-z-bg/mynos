@@ -99,7 +99,7 @@ let () =
         let y = max !y 300 in
         Gui.label ~colour:Gui.muted ui x y "It runs:";
         Gfx.fill g x (y + 20) w 26 0x111820;
-        ignore (Gfx.text ~max:((w - 16) / 8) g (x + 8) (y + 25) ("mynos:/$ " ^ l.command) 0xE8EEF2);
+        ignore (Gui.text ~max:((w - 16) / 8) ui (x + 8) (y + 25) ("mynos:/$ " ^ l.command) 0xE8EEF2);
         if Gui.button ui x (y + 58) 160 (if st.running then "Running..." else "Run and watch")
         && not st.running then run st l;
         ignore (Gui.paragraph ~colour:Gui.muted ui (x + 172) (y + 58) (w - 172)

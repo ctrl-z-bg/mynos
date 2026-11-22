@@ -198,7 +198,7 @@ let window () =
                  if Gui.list_item ui 4 !y (width - 40) ~selected:false t then open_article st t;
                  let lines = wrap (width - 60) snippet in
                  List.iteri (fun i (l, _) ->
-                     if i < 2 then ignore (Gfx.text g 24 (!y + 24 + i * 18) l Gui.muted))
+                     if i < 2 then ignore (Gui.text ui 24 (!y + 24 + i * 18) l Gui.muted))
                    (List.filter (fun (l, _) -> l <> "") lines);
                  y := !y + 66) rs;
              !y - y0)
@@ -219,7 +219,7 @@ let window () =
              List.iteri (fun i (l, heading) ->
                  let y = y0 + 6 + i * 18 in
                  if y > -20 && y < height then
-                   ignore (Gfx.text ~bold:heading g 16 y l (if heading then 0x1F4F7A else Gui.foreground)))
+                   ignore (Gui.text ~bold:heading ui 16 y l (if heading then 0x1F4F7A else Gui.foreground)))
                st.lines;
              12 + 18 * List.length st.lines));
       st)

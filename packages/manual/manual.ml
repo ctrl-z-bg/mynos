@@ -206,9 +206,9 @@ let window () =
                     let w = Gfx.char_w * Md.cells t in
                     (match style with
                      | Md.Struck ->
-                       ignore (Gfx.text g !cx y t Gui.muted);
+                       ignore (Gui.text ui !cx y t Gui.muted);
                        Gfx.fill g !cx (y + Gfx.char_h / 2) w 1 Gui.muted
-                     | _ -> ignore (Gfx.text ~bold:(style = Md.Bold) g !cx y t colour));
+                     | _ -> ignore (Gui.text ~bold:(style = Md.Bold) ui !cx y t colour));
                     cx := !cx + w)
                   l.Md.spans
               end) st.lines;

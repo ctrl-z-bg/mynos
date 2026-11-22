@@ -1,6 +1,6 @@
 # The package wiki (tools/pkg-build.sh)
 NAME=wiki
-VERSION=1.0
+VERSION=1.1
 DESCRIPTION='Wikipedia in a window: search, read, follow the links, in any of its languages; wiki TERM prints an article in the terminal'
 LICENSE=GPL-2.0-or-later
 LIBRARIES='threads str'
