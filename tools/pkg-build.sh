@@ -22,7 +22,11 @@
 # documentation (a file, kept as README.md); EXTRA, other files (its
 # licence, data).
 #
-# OUTDIR/docs/NAME.md is a package's DOC, for the repository's page.
+# OUTDIR/docs/NAME.md is a package's DOC, for the repository's page; a
+# package with pictures (SRC/images, made by tools/pkg-shots.sh) has a
+# folder instead, OUTDIR/docs/NAME/README.md and its images/, which the
+# README names as images/FILE.png. The archive has the text only (MyNOS's
+# Markdown viewer leaves pictures out).
 #
 # A package's archive holds package.json (name, version, programs, the
 # sources of each in the order to compile them, libraries, depends, run,
@@ -39,7 +43,7 @@ root=$(pwd)
 # OUTDIR/packages holds only the archives of the specs: a package removed
 # or renamed leaves no archive behind
 mkdir -p "$out/packages" "$out/docs"
-rm -f "$out"/packages/*.tar "$out"/docs/*.md
+rm -rf "$out"/packages/*.tar "$out"/docs/*
 out=$(cd "$out" && pwd)
 mynos=$(cat VERSION 2>/dev/null || echo unknown)
 stage=$root/tmp/pkg-stage
@@ -63,7 +67,16 @@ for spec in packages/*/spec; do
     for f in $EXTRA; do cp -r "$f" "$d/"; done
     # its documentation: in the archive, and beside the index (the
     # repository's page links it)
-    [ -n "$DOC" ] && cp "$DOC" "$d/README.md" && cp "$DOC" "$out/docs/$NAME.md"
+    if [ -n "$DOC" ]; then
+        cp "$DOC" "$d/README.md"
+        if [ -d "$SRC/images" ]; then
+            mkdir -p "$out/docs/$NAME/images"
+            cp "$DOC" "$out/docs/$NAME/README.md"
+            cp "$SRC"/images/*.png "$out/docs/$NAME/images/"
+        else
+            cp "$DOC" "$out/docs/$NAME.md"
+        fi
+    fi
     [ -z "$SOURCES" ] && rmdir "$d/src"
     # the programs: NAME:SOURCES... (one, today)
     progs=

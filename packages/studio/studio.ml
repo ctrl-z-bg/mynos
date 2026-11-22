@@ -215,6 +215,12 @@ let watching : int option ref = ref None
 let watch_lines : Watch.line list ref = ref []
 let service_pid = ref 0
 
+(* the agent's question was scrolled into view *)
+let ask_shown = ref false
+
+(* Complete.read_count when the completion list was made *)
+let lists_read = ref 0
+
 type pane = Output | Problems | Watched
 let pane = ref Output
 
@@ -241,7 +247,8 @@ let poll_job () =
     let failed = List.exists (fun (e : Build.error) -> e.is_error) errors
                  || (errors = [] && String.trim messages <> "" && not (Sys.file_exists (Build.target path))) in
     if failed then begin
-      message := Printf.sprintf "%s: %d problems" (Filename.basename path) (List.length errors);
+      message := Printf.sprintf "%s: %d problem%s" (Filename.basename path) (List.length errors)
+          (if List.length errors = 1 then "" else "s");
       pane := Problems
     end else begin
       message := "built " ^ Build.target path
@@ -445,10 +452,12 @@ let () =
       (* the text *)
       (match shown () with
        | Some t ->
-         (* again while an interface is being read: it shows when read *)
-         let typed_now = ui.Gui.field = 1
-                         && (ui.Gui.keys <> []
-                             || (us.popup <> None && Complete.pending ())) in
+         (* again when an interface has been read since the list was made
+            (it said "reading") *)
+         let read_now = Atomic.get Complete.read_count in
+         let reading = us.popup <> None && read_now <> !lists_read in
+         let typed_now = ui.Gui.field = 1 && (ui.Gui.keys <> [] || reading) in
+         if typed_now then lists_read := read_now;
          Textarea.frame ui 1 t.area ed_x ed_y ed_w ed_h;
          if typed_now then begin
            let w = Textarea.word_before_cursor t.area in
@@ -546,6 +555,11 @@ let () =
              | None -> ());
             !y - top + 8);
         if !working && !asking = None then Gui.scroll_to_end ui 9;
+        (* a question: shown once at the end (the change it proposes) *)
+        (match !asking with
+         | Some _ when not !ask_shown -> Gui.scroll_to_end ui 9; ask_shown := true
+         | None -> ask_shown := false
+         | Some _ -> ());
         let fy = bar + 26 + conv_h + 8 in
         (match !asking with
          | Some (_, answer) ->

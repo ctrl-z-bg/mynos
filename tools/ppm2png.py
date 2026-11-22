@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""ppm2png.py IN.ppm OUT.png: a binary PPM (QEMU's screendump) as a PNG,
-with the standard library only (zlib)."""
+"""ppm2png.py IN.ppm OUT.png [X Y W H]: a binary PPM (QEMU's screendump)
+as a PNG, with the standard library only (zlib); with X Y W H, only that
+rectangle of it."""
 import struct
 import sys
 import zlib
@@ -37,5 +38,13 @@ def write_png(path, w, h, rgb):
         f.write(chunk(b"IEND", b""))
 
 
+def crop(w, h, rgb, x, y, cw, ch):
+    cw, ch = min(cw, w - x), min(ch, h - y)
+    return cw, ch, b"".join(rgb[((y + r) * w + x) * 3:((y + r) * w + x + cw) * 3] for r in range(ch))
+
+
 if __name__ == "__main__":
-    write_png(sys.argv[2], *read_ppm(sys.argv[1]))
+    image = read_ppm(sys.argv[1])
+    if len(sys.argv) == 7:
+        image = crop(*image, *map(int, sys.argv[3:7]))
+    write_png(sys.argv[2], *image)

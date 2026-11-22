@@ -1541,3 +1541,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
 - **2026-11-22** — Studio 1.2: completion from any module's interface too
   (`Gui.`, `List.`, `Graphics.`: `ocamlc -i` on `include M`, once a
   module, in a domain), beside the running services' requests.
+- **2026-11-22** — Package documentation with pictures (mynos-9q1):
+  `packages/NAME/images`, published as `docs/NAME/` in mynos-packages;
+  `tools/pkg-shots.sh NAME` makes them from `packages/NAME/shots.sh`
+  (a clean disk, the package from `tmp/packages`). Studio's README has
+  seven, the agent's among them. Studio: a completion list that said
+  "reading" for ever is asked again when an interface has been read.
+

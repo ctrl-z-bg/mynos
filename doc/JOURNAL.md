@@ -3007,3 +3007,24 @@ service (an older system) Textarea falls back on its own copy.
 cost one file, a protocol of two requests, and every program, the agent
 included, can use it, described like any other.
 
+## 2026-11-22 — A completion list that stayed "reading"
+
+**Symptom.** In Studio, after a Build, `Gui.` showed "Gui: reading its
+interface..." for ever; without a Build first it showed the list.
+
+**Diagnosis.** No ocamlc was left in `ps`, and its files in /tmp were
+gone: the interface had been read. The list is made again only on a key,
+or while something is being read; the condition was "an interface is
+pending", tested each frame.
+
+**Cause.** A race: the frame that last asked found the interface still
+being read; the domain finished before the next frame, which saw nothing
+pending and did not ask again. The Build only changed the timing.
+
+**Fix.** A counter of interfaces read (an Atomic, incremented by the
+domain): the list is asked again when it differs from the one seen when
+the list was made.
+
+**Lesson.** "Is it still busy?" polled from another thread misses the
+moment it stops; a count of completions does not.
+

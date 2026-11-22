@@ -30,8 +30,8 @@ for f in "$clone"/packages/*.tar; do
     else rm -f "$f"; removed=$((removed + 1))
     fi
 done
-rm -f "$clone"/docs/*.md
-cp "$src"/docs/*.md "$clone/docs/"
+rm -rf "$clone"/docs/*
+cp -r "$src"/docs/. "$clone/docs/"
 cp "$src/index.json" "$clone/index.json"
 # every archive the new index names: there, of its size and hash
 python3 - "$clone" <<'PY'

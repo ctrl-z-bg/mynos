@@ -443,6 +443,19 @@ cache for five minutes: a cached index must still find the archives it
 names, and a new archive, having its hash in its name, was never cached. A package whose sources changed gets
 a new `VERSION`, so that `pkg list` shows the installed one as older.
 
+A package's documentation may have pictures: `packages/NAME/images/`,
+named in its README as `images/FILE.png`. Its page in `mynos-packages`
+is then a folder, `docs/NAME/` (the README and the pictures); the archive
+keeps the text only, which MyNOS's Markdown viewer shows without them.
+The pictures are made by a script, not by hand: `tools/pkg-shots.sh
+NAME` starts MyNOS headless on a clean disk (with the files of
+`packages/NAME/shots/` in `/disk/NAME/`), installs the package from
+`tmp/packages`, opens the graphical session and follows
+`packages/NAME/shots.sh`, which types, clicks and takes the screen with
+the functions the tool's comment lists. A script that sets `AGENT=1`
+gets a copy of `llm.env` on that disk for the agent's pictures; the disk
+is removed at the end. Look at the pictures before committing them.
+
 ## H.10 Debugging
 
 The kernel is built with `-g` and without optimization, so a debugger

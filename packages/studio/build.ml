@@ -78,6 +78,8 @@ let parse file messages =
                       || (t <> "" && String.for_all (fun c -> c = '^' || c = ' ' || c = '.') t) in
            if code || t = "" then go acc cur rest
            else
+             (* one space where the compiler aligned ("Hint:   Did you mean") *)
+             let t = String.concat " " (List.filter (( <> ) "") (String.split_on_char ' ' t)) in
              let text = if e.text = "" then t else e.text ^ " " ^ t in
              let is_error = e.is_error || String.starts_with ~prefix:"Error" t in
              go acc (Some { e with text; is_error }) rest

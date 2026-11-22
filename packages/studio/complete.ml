@@ -132,9 +132,9 @@ type interface = Reading | Ready of item list | Absent
 let interfaces : (string, interface) Hashtbl.t = Hashtbl.create 16
 let ilock = Mutex.create ()
 
-(* an interface being read: the list is asked again until it is read *)
-let pending () =
-  Mutex.protect ilock (fun () -> Hashtbl.fold (fun _ i acc -> acc || i = Reading) interfaces false)
+(* how many interfaces have been read: a list made before the last one
+   was read is asked for again *)
+let read_count = Atomic.make 0
 
 (* the interface of [m], read once (in the background): Reading meanwhile *)
 let interface ~dir m =
@@ -147,7 +147,8 @@ let interface ~dir m =
             let r = match Build.interface ~dir m with
               | Ok text -> Ready (parse_interface text)
               | Error _ | exception _ -> Absent in
-            Mutex.protect ilock (fun () -> Hashtbl.replace interfaces m r)));
+            Mutex.protect ilock (fun () -> Hashtbl.replace interfaces m r);
+            Atomic.incr read_count));
         Reading)
 
 type answer =
