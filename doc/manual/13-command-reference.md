@@ -439,13 +439,17 @@ mynos:/$ free
 
 **Purpose** Starts the graphical session.
 
-**Syntax** `gui [stop|check]`
+**Syntax** `gui [WxH [once] | sizes | stop | check]`
 
 **Type** Program (`/gui.byte`).
 
 **Description** `gui` switches the screen to graphics, opens the welcome
 window, and waits until the session ends (the MyNOS menu's Exit); then it
-prints `gui: the graphical session ended`. `gui stop` ends the session
+prints `gui: the graphical session ended`. `gui WxH` (`gui 1280x800`)
+starts it with the screen at that size and keeps the size in
+`/disk/.display` for the next `gui`; `gui WxH once` does not keep it.
+`gui sizes` lists the usual sizes the video memory holds, and marks the
+one `gui` starts with. `gui stop` ends the session
 from any program. `gui check` compares the display server's description
 of its protocol with the library's (for the tests).
 

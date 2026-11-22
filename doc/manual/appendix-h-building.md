@@ -265,6 +265,9 @@ ends. The script sets:
   emulates the processor);
 - `SOUND` to the host's audio backend that QEMU has (PipeWire,
   PulseAudio, ALSA, Core Audio), unless `SOUND` is set (`SOUND=`: none);
+- QEMU's window to SDL's when there is sound, unless `QEMU_DISPLAY` is
+  set or a `-display` follows `--` (GTK's froze while the card played);
+- `UDP=PORT`, if given, forwards that UDP port of the host to MyNOS's;
 - `HTTP=8080` if that host port is free, so that `http://localhost:8080/`
   is MyNOS's `httpd`; `HTTP=PORT` chooses another;
 - with `SERIAL=1`, the host's terminal becomes MyNOS's second serial

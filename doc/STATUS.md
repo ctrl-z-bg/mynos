@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-21
+Last updated: 2026-11-23
 
 ---
 
@@ -1632,4 +1632,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   out at their width); a little CSS (hidden attribute, display:none and
   visibility:hidden in styles and in simple rules of `<style>` blocks;
   readable text colours). Test: a form's fields and a grid in --dump.
+- **2026-11-23** — Docs: the manual's table of run-demo.sh's variables (5.5)
+  and appendix H list `UDP` and `QEMU_DISPLAY`; GUI's entry in chapter 13
+  has `gui WxH [once]` and `gui sizes`; the release README has `--udp`.
 

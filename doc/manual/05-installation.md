@@ -239,6 +239,8 @@ SERIAL=1 tools/run-demo.sh                    the window, and this terminal as a
 SERIAL=1 tools/run-demo.sh -- -display none   this terminal only, no window
 NET= tools/run-demo.sh                        no network card
 HTTP=8000 tools/run-demo.sh                   the web server on host port 8000
+UDP=7145 tools/run-demo.sh                    GavML's network game reachable from outside
+QEMU_DISPLAY=gtk tools/run-demo.sh            QEMU's GTK window, even with sound
 VERBOSE=1 tools/run-demo.sh                   kernel messages stay on the screen
 ```
 
@@ -250,6 +252,8 @@ VERBOSE=1 tools/run-demo.sh                   kernel messages stay on the screen
 | `MEM` | `256` | memory, in MB |
 | `KVM` | `1`, with `/dev/kvm` | the host's processor runs MyNOS's; `KVM=` emulates it |
 | `SOUND` | the host's audio (`pipewire`, `pa`, `alsa`, `coreaudio`) | a Sound Blaster 16 heard through this QEMU audio backend; `wav:FILE` records it; `SOUND=` none |
+| `QEMU_DISPLAY` | `sdl` with sound (if QEMU has it), QEMU's own otherwise | QEMU's window (`gtk`, `sdl`, ... as `qemu-system-i386 -display help` lists them). With a sound card QEMU's GTK window froze while the card played, hence SDL. A `-display` after `--` wins. |
+| `UDP` | not set | with `NET`, this UDP port of the host forwarded to the same port of MyNOS, from any address: `UDP=7145` for GavML's network game |
 | `DISK` | `system/disk.img`, if it exists | the disk image |
 | `VERBOSE` | not set | `verbose` on the kernel's command line |
 | `CPU` | `qemu32,+rdrand,+rdseed` | QEMU's processor model |

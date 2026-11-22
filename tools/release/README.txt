@@ -33,6 +33,8 @@ Options (./run-mynos.sh --help):
   --mem MB       memory (default 256)
   --no-kvm       emulate the processor even if KVM is there
   --no-sound     no sound card (by default one, through the host's audio)
+  --udp PORT     this machine's UDP port forwarded to MyNOS's (GavML's
+                 network game: --udp 7145)
   --display UI   QEMU's window: sdl by default with sound (QEMU's gtk
                  window could freeze while the card played), or gtk...
   --reset-disk   start /disk again, empty
