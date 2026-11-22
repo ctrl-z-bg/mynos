@@ -508,12 +508,16 @@ let new_game places sprites =
   { tl; tr; ball; last = Mynos.uptime (); pending = 0.; winner = None }
 
 let steps = ref 0
+let frames = ref 0 and step_time = ref 0. and frame_time = ref 0.
 
 let step ui g =
   incr steps;
-  if !steps mod 50 = 0 then
-    log "ball %d,%d speed %d,%d gravity %d; score %d-%d" g.ball.bx g.ball.by g.ball.spdx
-      g.ball.spdy g.ball.accel_y g.tl.score g.tr.score;
+  if !steps mod 50 = 0 then begin
+    log "ball %d,%d speed %d,%d gravity %d; score %d-%d; %d frames drawn, steps %.0f ms, frames %.0f ms"
+      g.ball.bx g.ball.by g.ball.spdx g.ball.spdy g.ball.accel_y g.tl.score g.tr.score
+      !frames (!step_time *. 1000.) (!frame_time *. 1000.);
+    frames := 0; step_time := 0.; frame_time := 0.
+  end;
   let inputs p = if p.ai then plan p g.ball else human_input ui p.id in
   List.iter (fun t -> List.iter (fun p -> update_player p step_ms (inputs p)) t.players)
     [ g.tl; g.tr ];
@@ -542,22 +546,25 @@ let () =
       (match st.screen with
        | Choosing ->
          centre g 40 "GPL ARCADE VOLLEYBALL";
-         Gui.panel ui 120 80 400 250;
-         Gui.label ~bold:true ui 136 92 "Who plays";
+         (* the game's look: black, the field's grey border, its font *)
+         Gfx.fill g 104 80 432 256 0x000000;
+         Gfx.rect g 104 80 432 256 0xA8A8A8;
+         Gfx.rect g 106 82 428 252 0xA8A8A8;
+         text g 128 94 "WHO PLAYS";
          let row i label y =
-           Gui.label ui 136 (y + 5) label;
+           text g 128 (y + 5) label;
            let p = st.places.(i) in
-           if Gui.button ui 236 y 110 (place_name p) then
+           if Gui.button ui 256 y 110 (place_name p) then
              st.places.(i) <- (match p, i < 2 with
                  | Person, _ -> Computer
                  | Computer, true -> Person
                  | Computer, false -> Nobody
                  | Nobody, _ -> Person);
-           if st.places.(i) = Person then Gui.label ~colour:Gui.muted ui 356 (y + 5) key_names.(i) in
+           if st.places.(i) = Person then Gui.label ~colour:0x9A9A9A ui 376 (y + 9) key_names.(i) in
          row 0 "Left 1" 120; row 2 "Left 2" 152; row 1 "Right 1" 192; row 3 "Right 2" 224;
          let start = Gui.button ui 136 280 120 "Play"
                      || List.exists (fun k -> k = "\r" || k = "\n" || k = " ") ui.Gui.keys in
-         Gui.label ~colour:Gui.muted ui 270 285 "Enter plays; Escape stops a game";
+         Gui.label ~colour:0x9A9A9A ui 270 289 "Enter plays; Escape stops a game";
          if start then st.screen <- Playing (new_game st.places sprites)
        | Playing game ->
          if List.mem "\027" ui.Gui.keys then st.screen <- Choosing
@@ -566,15 +573,20 @@ let () =
            let now = Mynos.uptime () in
            game.pending <- Float.min 100. (game.pending +. (now -. game.last) *. 1000.);
            game.last <- now;
+           let t0 = Mynos.uptime () in
            while game.winner = None && game.pending >= float step_ms do
              step ui game;
              game.pending <- game.pending -. float step_ms
            done;
+           let t1 = Mynos.uptime () in
+           step_time := !step_time +. (t1 -. t0);
+           incr frames;
            List.iter (fun t -> List.iter (fun p -> draw g p.sprite p.frame p.x p.y) t.players)
              [ game.tl; game.tr ];
            text g 100 0 (string_of_int game.tl.score);
            text g (game.tr.xmax - 100) 0 (string_of_int game.tr.score);
            draw g game.ball.bs game.ball.bframe game.ball.bx game.ball.by;
+           frame_time := !frame_time +. (Mynos.uptime () -. t1);
            match game.winner with
            | Some w ->
              centre g 150 w;

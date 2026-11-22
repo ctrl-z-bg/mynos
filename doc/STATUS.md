@@ -1596,4 +1596,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   forms that send, cookies, CSS.
 - **2026-11-22** — The package gav renamed gavml (GavML: GAV in OCaml for
   MyNOS); its pictures stay in `third_party/gav`.
+- **2026-11-22** — gavml 1.1: its players' choice in the game's look (black,
+  the field's border, its font); `GAVML_DEBUG=1` logs frames and their cost.
+  Measured: 50 frames a second with or without KVM, sound on file, none or
+  PipeWire (each frame about 3 ms without KVM).
 
