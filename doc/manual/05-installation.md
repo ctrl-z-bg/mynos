@@ -80,6 +80,7 @@ takes the options of `run-demo.sh` (5.5), spelled as options:
 | `--reset-disk` | `/disk` empty again (`disk.img` replaced) |
 | `--no-kvm` | the processor emulated, even with KVM |
 | `--no-sound` | no sound card (by default a Sound Blaster 16, through the host's audio) |
+| `--udp PORT` | this machine's UDP port forwarded to MyNOS's (GavML's network game: `--udp 7145`; `tools/run-demo.sh`: `UDP=7145`) |
 | `--display UI` | QEMU's window: `sdl` by default when there is sound (QEMU's GTK window froze while the card played), `gtk`... (`tools/run-demo.sh`: `QEMU_DISPLAY=gtk`) |
 | `-- OPTIONS` | passed to QEMU, e.g. `-- -display none` with `--serial` |
 

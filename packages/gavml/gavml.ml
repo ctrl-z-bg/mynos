@@ -10,6 +10,10 @@
      Left 2:  h k, u to jump        Right 2: s f, e to jump
      Escape: back to the players' choice. M: the sounds off, and on.
 
+   A place may be "network": a player on another machine, with GavML or
+   GAV for Linux, over GAV's UDP protocol (module Gavnet); Join a game
+   plays at another machine's game.
+
    Points as in the original: only the side that serves scores; 15 to
    win, by two. The game runs in steps of 20 ms (GAV's 50 a second),
    whatever the window's pace. *)
@@ -115,6 +119,7 @@ type player = {
   id : int;                       (* 0 and 2 on the left, 1 and 3 on the right *)
   team : team;
   ai : bool;
+  remote : bool;                  (* played from the network (Gavnet) *)
   sprite : sprite;
   speed : int;
   mutable x : int;
@@ -156,8 +161,8 @@ let set_state ?(force = false) p st =
     true
   end
 
-let add_player team ~ai ~id sprite =
-  let p = { id; team; ai; sprite; speed = default_speed; x = 0; y = 0; speed_x = 0;
+let add_player ?(remote = false) team ~ai ~id sprite =
+  let p = { id; team; ai; remote; sprite; speed = default_speed; x = 0; y = 0; speed_x = 0;
             speed_y = 0.; state = Still; frame = 0; passed = 0; fb = 0; fe = 0; delay = 0;
             dispx = 0.; dispy = 0.; oif = -1 } in
   team.players <- team.players @ [ p ];
@@ -475,8 +480,9 @@ let human_input ui id =
 
 (* ---- the game ---- *)
 
-type place = Nobody | Person | Computer
-let place_name = function Nobody -> "nobody" | Person -> "keyboard" | Computer -> "computer"
+type place = Nobody | Person | Computer | Remote
+let place_name = function
+  | Nobody -> "nobody" | Person -> "keyboard" | Computer -> "computer" | Remote -> "network"
 
 type game = {
   tl : team;
@@ -485,30 +491,83 @@ type game = {
   mutable last : float;
   mutable pending : float;          (* ms not yet stepped *)
   mutable winner : string option;
+  server : Gavnet.server option;    (* places played from the network *)
 }
 
-type screen = Choosing | Playing of game
+(* a game played at another machine (GavML or GAV), shown here *)
+type view = {
+  client : Gavnet.client;
+  vtl : team;
+  vtr : team;
+  vball : ball;
+  mutable vlast : float;
+}
+
+type join = {
+  mutable host : string;
+  mutable left : bool;
+  mutable message : string;
+  mutable result : (Gavnet.client, string) result option;   (* the thread's answer *)
+  mutable busy : bool;
+}
+
+type screen = Choosing | Waiting of game | Playing of game | Joining of join | Watching of view
 
 type st = {
   places : place array;             (* left 1, right 1, left 2, right 2 *)
   mutable screen : screen;
 }
 
-let new_game places sprites =
-  let pl_l, pl_r, ball_s = sprites in
-  let tl = make_team (-1) and tr = make_team 1 in
-  Array.iteri (fun id place ->
-      let team = if id mod 2 = 0 then tl else tr in
-      match place with
-      | Nobody -> ()
-      | Person -> add_player team ~ai:false ~id (if id mod 2 = 0 then pl_l else pl_r)
-      | Computer -> add_player team ~ai:true ~id (if id mod 2 = 0 then pl_l else pl_r))
-    places;
+let new_ball ball_s =
   let ball = { bs = ball_s; bx = 0; by = 0; spdx = 0; spdy = 0; oldx = 0; oldy = 0; bframe = 0;
                bpassed = 0; accel_y = 0; bside = -1; scorer = 0; scored_time = 0;
                touches = [| 0; 0 |]; touching = None } in
   reset_ball ball (truncate (float sw *. 0.25)) (truncate (float sh *. 0.66));
-  { tl; tr; ball; last = Mynos.uptime (); pending = 0.; winner = None }
+  ball
+
+let new_game ?server places sprites =
+  let pl_l, pl_r, ball_s = sprites in
+  let tl = make_team (-1) and tr = make_team 1 in
+  Array.iteri (fun id place ->
+      let team = if id mod 2 = 0 then tl else tr in
+      let sprite = if id mod 2 = 0 then pl_l else pl_r in
+      match place with
+      | Nobody -> ()
+      | Person -> add_player team ~ai:false ~id sprite
+      | Computer -> add_player team ~ai:true ~id sprite
+      | Remote -> add_player ~remote:true team ~ai:false ~id sprite)
+    places;
+  { tl; tr; ball = new_ball ball_s; last = Mynos.uptime (); pending = 0.; winner = None; server }
+
+(* the places' players, as a snapshot has them: left 1, left 2, right 1, right 2 *)
+let snapshot_of g =
+  let at t i = match List.nth_opt t.players i with
+    | Some p -> (p.x, p.y, state_index p.state) | None -> (0, 0, 0) in
+  { Gavnet.players = [| at g.tl 0; at g.tl 1; at g.tr 0; at g.tr 1 |];
+    ball_xy = (g.ball.bx, g.ball.by); scores = (g.tl.score, g.tr.score) }
+
+(* a game shown from snapshots: the sides' players as the server says *)
+let new_view client sprites =
+  let pl_l, pl_r, ball_s = sprites in
+  let tl = make_team (-1) and tr = make_team 1 in
+  for i = 0 to min 2 client.Gavnet.nl - 1 do add_player tl ~ai:false ~id:(2 * i) pl_l done;
+  for i = 0 to min 2 client.Gavnet.nr - 1 do add_player tr ~ai:false ~id:(2 * i + 1) pl_r done;
+  { client; vtl = tl; vtr = tr; vball = new_ball ball_s; vlast = Mynos.uptime () }
+
+let state_of_index = function 1 -> Walk | 2 -> Jump | _ -> Still
+
+let apply_snapshot v (s : Gavnet.snapshot) ticks =
+  let put t i (x, y, f) = match List.nth_opt t.players i with
+    | Some p ->
+      p.x <- x; p.y <- y;
+      let changed = set_state p (state_of_index f) in
+      update_frame p ticks changed
+    | None -> () in
+  put v.vtl 0 s.players.(0); put v.vtl 1 s.players.(1);
+  put v.vtr 0 s.players.(2); put v.vtr 1 s.players.(3);
+  let bx, by = s.ball_xy in
+  v.vball.bx <- bx; v.vball.by <- by;
+  v.vtl.score <- fst s.scores; v.vtr.score <- snd s.scores
 
 let steps = ref 0
 let frames = ref 0 and step_time = ref 0. and frame_time = ref 0.
@@ -521,7 +580,13 @@ let step ui g =
       !frames (!step_time *. 1000.) (!frame_time *. 1000.);
     frames := 0; step_time := 0.; frame_time := 0.
   end;
-  let inputs p = if p.ai then plan p g.ball else human_input ui p.id in
+  let inputs p =
+    if p.ai then plan p g.ball
+    else if p.remote then
+      (match g.server with
+       | Some s -> let k = Gavnet.input s p.id in { left = k.left; right = k.right; jump = k.jump }
+       | None -> nothing)
+    else human_input ui p.id in
   List.iter (fun t -> List.iter (fun p -> update_player p step_ms (inputs p)) t.players)
     [ g.tl; g.tr ];
   update_ball g.ball step_ms g.tl g.tr;
@@ -543,6 +608,29 @@ let () =
         if k >= 0 && k < 104 then draw g font k (x + i * font.w) y) s in
   let centre g y s = text g ((sw - String.length s * font.w) / 2) y s in
   let st = { places = [| Person; Computer; Nobody; Nobody |]; screen = Choosing } in
+  let panel g h =
+    Gfx.fill g 104 80 432 h 0x000000;
+    Gfx.rect g 104 80 432 h 0xA8A8A8;
+    Gfx.rect g 106 82 428 (h - 4) 0xA8A8A8 in
+  let note ui x y s = Gui.label ~colour:0x9A9A9A ui x y s in
+  let enter ui = List.exists (fun k -> k = "\r" || k = "\n") ui.Gui.keys in
+  let escape ui = List.mem "\027" ui.Gui.keys in
+  let draw_field g tl tr ball =
+    List.iter (fun t -> List.iter (fun p -> draw g p.sprite p.frame p.x p.y) t.players) [ tl; tr ];
+    text g 100 0 (string_of_int tl.score);
+    text g (tr.xmax - 100) 0 (string_of_int tr.score);
+    draw g ball.bs ball.bframe ball.bx ball.by in
+  let stop_game = function
+    | { server = Some s; _ } -> Gavnet.close_server s
+    | _ -> () in
+  let start ui st =
+    let remote = Array.map (fun p -> p = Remote) st.places in
+    if Array.exists Fun.id remote then begin
+      let count side = List.length (List.filter (fun i -> st.places.(i) <> Nobody) side) in
+      match Gavnet.serve ~remote ~nl:(count [ 0; 2 ]) ~nr:(count [ 1; 3 ]) ~winning:winning_score with
+      | s -> st.screen <- Waiting (new_game ~server:s st.places sprites)
+      | exception e -> ignore ui; prerr_endline ("gavml: network: " ^ Printexc.to_string e)
+    end else st.screen <- Playing (new_game st.places sprites) in
   Gui.run ~title:"GavML" ~tick:0.02 sw sh st (fun ui st ->
       let g = ui.Gui.g in
       Gfx.blit back 0 0 g 0 0 sw sh;
@@ -550,9 +638,7 @@ let () =
        | Choosing ->
          centre g 40 "GPL ARCADE VOLLEYBALL";
          (* the game's look: black, the field's grey border, its font *)
-         Gfx.fill g 104 80 432 276 0x000000;
-         Gfx.rect g 104 80 432 276 0xA8A8A8;
-         Gfx.rect g 106 82 428 272 0xA8A8A8;
+         panel g 276;
          text g 128 94 "WHO PLAYS";
          let row i label y =
            text g 128 (y + 5) label;
@@ -560,21 +646,92 @@ let () =
            if Gui.button ui 256 y 110 (place_name p) then
              st.places.(i) <- (match p, i < 2 with
                  | Person, _ -> Computer
-                 | Computer, true -> Person
-                 | Computer, false -> Nobody
+                 | Computer, _ -> Remote
+                 | Remote, true -> Person
+                 | Remote, false -> Nobody
                  | Nobody, _ -> Person);
-           if st.places.(i) = Person then Gui.label ~colour:0x9A9A9A ui 376 (y + 9) key_names.(i) in
+           match st.places.(i) with
+           | Person -> note ui 376 (y + 9) key_names.(i)
+           | Remote -> note ui 376 (y + 9) "from GavML or GAV"
+           | _ -> () in
          row 0 "Left 1" 120; row 2 "Left 2" 152; row 1 "Right 1" 192; row 3 "Right 2" 224;
-         let start = Gui.button ui 136 280 120 "Play"
-                     || List.exists (fun k -> k = "\r" || k = "\n" || k = " ") ui.Gui.keys in
-         Gui.label ~colour:0x9A9A9A ui 270 289 "Enter plays; Escape stops a game";
+         let play = Gui.button ui 136 280 120 "Play"
+                    || List.exists (fun k -> k = "\r" || k = "\n" || k = " ") ui.Gui.keys in
+         if Gui.button ui 270 280 120 "Join a game" then
+           st.screen <- Joining { host = "10.0.2.2"; left = false; message = ""; result = None; busy = false };
          if Gui.button ui 136 312 120 (if !muted then "Sounds: off" else "Sounds: on") then
            muted := not !muted;
-         Gui.label ~colour:0x9A9A9A ui 270 317 "M, in a game, too";
-         if start then st.screen <- Playing (new_game st.places sprites)
+         note ui 270 317 "M: sounds; Esc: stops a game";
+         if play then start ui st
+       | Waiting game ->
+         (* the server: its network places, waiting for their players *)
+         panel g 200;
+         text g 128 94 "WAITING";
+         let n = match game.server with Some s -> Gavnet.missing s | None -> 0 in
+         ignore (Gui.paragraph ~colour:0xD0D0D0 ui 128 124 380
+                   (Printf.sprintf "%d player%s to join, on UDP port %d of this machine (%s). \
+                                    From another GavML: Join a game; from GAV for Linux: \
+                                    its network client, this address. Under QEMU, \
+                                    forward the port: UDP=%d tools/run-demo.sh, or \
+                                    run-mynos.sh --udp %d; the others use the host's address."
+                      n (if n = 1 then "" else "s") Gavnet.port (Gavnet.my_address ())
+                      Gavnet.port Gavnet.port));
+         if Gui.button ui 136 244 120 "Cancel" || escape ui then begin
+           stop_game game; st.screen <- Choosing
+         end else if n = 0 then begin
+           game.last <- Mynos.uptime (); st.screen <- Playing game
+         end
+       | Joining j ->
+         panel g 200;
+         text g 128 94 "JOIN A GAME";
+         note ui 128 128 "The server's address (host, or host:port):";
+         j.host <- Gui.text_field ui 1 128 146 380 j.host;
+         if Gui.button ui 128 180 120 (if j.left then "the left side" else "the right side") then
+           j.left <- not j.left;
+         note ui 258 185 "your keys: z c x, or the arrows";
+         let go = Gui.button ui 128 220 120 (if j.busy then "Joining..." else "Join")
+                  || (enter ui && ui.Gui.field = 1) in
+         if go && not j.busy then begin
+           j.busy <- true; j.message <- "";
+           let host = j.host and left = j.left in
+           ignore (Thread.create (fun () ->
+               let r = try Gavnet.join ~server:host ~left with e -> Error (Printexc.to_string e) in
+               j.result <- Some r) ())
+         end;
+         if Gui.button ui 258 220 120 "Back" || escape ui then st.screen <- Choosing;
+         (match j.result with
+          | Some (Ok c) -> j.result <- None; j.busy <- false; st.screen <- Watching (new_view c sprites)
+          | Some (Error m) -> j.result <- None; j.busy <- false; j.message <- m
+          | None -> ());
+         if j.message <> "" then Gui.label ~colour:0xE07070 ui 128 256 j.message
+       | Watching v ->
+         (* a game played elsewhere: its snapshots shown, our keys sent *)
+         if List.exists (fun k -> k = "m" || k = "M") ui.Gui.keys then muted := not !muted;
+         if escape ui then begin Gavnet.close_client v.client; st.screen <- Choosing end
+         else begin
+           let now = Mynos.uptime () in
+           let ticks = truncate ((now -. v.vlast) *. 1000.) in
+           v.vlast <- now;
+           let down ks = List.exists (fun k -> List.mem k ui.Gui.held) ks in
+           let l0, r0, j0 = keys.(0) and l1, r1, j1 = keys.(1) in
+           Gavnet.send_keys v.client
+             { Gavnet.left = down (l0 @ l1); right = down (r0 @ r1); jump = down (j0 @ j1) };
+           (match Gavnet.snapshot v.client with
+            | Some d -> apply_snapshot v (Gavnet.decode d) ticks
+            | None -> ());
+           v.vball.bpassed <- v.vball.bpassed + ticks;
+           if v.vball.bpassed > 250 then begin
+             v.vball.bpassed <- 0; v.vball.bframe <- (v.vball.bframe + 1) mod 4 end;
+           draw_field g v.vtl v.vtr v.vball;
+           let won a b = a.score >= winning_score && a.score > b.score + 1 in
+           if won v.vtl v.vtr || won v.vtr v.vtl then begin
+             centre g 150 (if won v.vtl v.vtr then "The left side wins" else "The right side wins");
+             centre g 230 "Escape: back"
+           end
+         end
        | Playing game ->
          if List.exists (fun k -> k = "m" || k = "M") ui.Gui.keys then muted := not !muted;
-         if List.mem "\027" ui.Gui.keys then st.screen <- Choosing
+         if escape ui then begin stop_game game; st.screen <- Choosing end
          else begin
            (* the game's time: steps of 20 ms, as many as have passed *)
            let now = Mynos.uptime () in
@@ -588,18 +745,16 @@ let () =
            let t1 = Mynos.uptime () in
            step_time := !step_time +. (t1 -. t0);
            incr frames;
-           List.iter (fun t -> List.iter (fun p -> draw g p.sprite p.frame p.x p.y) t.players)
-             [ game.tl; game.tr ];
-           text g 100 0 (string_of_int game.tl.score);
-           text g (game.tr.xmax - 100) 0 (string_of_int game.tr.score);
-           draw g game.ball.bs game.ball.bframe game.ball.bx game.ball.by;
+           draw_field g game.tl game.tr game.ball;
+           (* the network's players see what is drawn *)
+           Option.iter (fun s -> Gavnet.send_snapshot s (snapshot_of game)) game.server;
            frame_time := !frame_time +. (Mynos.uptime () -. t1);
            match game.winner with
            | Some w ->
              centre g 150 w;
              centre g 180 (Printf.sprintf "%d - %d" game.tl.score game.tr.score);
-             centre g 230 "Enter: again";
-             if List.exists (fun k -> k = "\r" || k = "\n") ui.Gui.keys then
+             centre g 230 (if game.server = None then "Enter: again" else "Escape: back");
+             if game.server = None && enter ui then
                st.screen <- Playing (new_game st.places sprites)
            | None -> ()
          end);

@@ -1610,4 +1610,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   SB16 played (JOURNAL). soundd pauses after 20 s of silence.
 - **2026-11-22** — `gui sizes`: the usual screen sizes the video memory
   holds (display/1 `sizes`, 14).
+- **2026-11-22** — gavml 1.3, GAV phase 2 (mynos-7j5): the network game,
+  GAV's UDP protocol (port 7145; register 5 bytes, keys 2, snapshots 32,
+  big-endian), so with GavML or GAV for Linux: a place may be "network",
+  Join a game plays at another's. Receiving in threads. `UDP=PORT`
+  (run-qemu.sh, run-demo.sh) and `run-mynos.sh --udp PORT` forward a UDP
+  port. Tried with two MyNOS under QEMU, one joining through the host.
 

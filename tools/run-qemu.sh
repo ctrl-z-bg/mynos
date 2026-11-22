@@ -20,6 +20,8 @@
 #   NET      if set, an NE2000 card (I/O 0x300) on QEMU's user network:
 #            MyNOS gets 10.0.2.15 by DHCP, the host is 10.0.2.2
 #   HTTP     with NET, a host port forwarded to MyNOS's port 80 (httpd)
+#   UDP      with NET, a UDP port of the host forwarded to the same port of
+#            MyNOS, from any address (GavML's network game: UDP=7145)
 #   KVM      if set, the host's processor runs MyNOS's (KVM: /dev/kvm),
 #            far faster than emulating it; run-demo.sh sets it if it can
 #   SOUND    a Sound Blaster 16 (soundd), heard through this audio backend
@@ -60,7 +62,7 @@ set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "${MEM:-32}" \
     -cpu "${CPU:-qemu32,+rdrand,+rdseed}" \
     ${VERBOSE:+-append verbose} ${KVM:+-accel kvm} \
     ${DISK:+-drive file=$DISK,format=raw,if=ide,index=0} \
-    ${NET:+-netdev user,id=n0${HTTP:+,hostfwd=tcp:127.0.0.1:$HTTP-:80}} \
+    ${NET:+-netdev user,id=n0${HTTP:+,hostfwd=tcp:127.0.0.1:$HTTP-:80}${UDP:+,hostfwd=udp::$UDP-:$UDP}} \
     ${NET:+-device ne2k_isa,netdev=n0,iobase=0x300,irq=9} $audio "$@"
 
 if [ -z "${SHOT:-}" ]; then

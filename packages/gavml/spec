@@ -1,12 +1,12 @@
 # The package gavml (tools/pkg-build.sh): GavML, GAV (GPL Arcade
 # Volleyball) in OCaml for MyNOS; its pictures are GAV's "classic" theme (third_party/gav)
 NAME=gavml
-VERSION=1.2
-DESCRIPTION='GavML: GAV, GPL Arcade Volleyball, ported to OCaml for MyNOS: 1 or 2 players a side, at the keyboard or the computer'
+VERSION=1.3
+DESCRIPTION='GavML: GAV, GPL Arcade Volleyball, ported to OCaml for MyNOS, network game included: 1 or 2 players a side, at the keyboard or the computer'
 LICENSE=GPL-2.0-or-later
 LIBRARIES=threads
 SRC=packages/gavml
-SOURCES='../view/image.ml ../view/inflate.ml ../view/png.ml gavml.ml'
+SOURCES='../view/image.ml ../view/inflate.ml ../view/png.ml gavnet.ml gavml.ml'
 RUN=gavml
 DOC=packages/gavml/README.md
 EXTRA='third_party/gav/background.png third_party/gav/ball.png third_party/gav/plml.png third_party/gav/plmr.png third_party/gav/font.png third_party/gav/LICENSE third_party/gav/MYNOS.md'

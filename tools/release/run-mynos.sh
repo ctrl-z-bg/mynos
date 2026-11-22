@@ -16,6 +16,8 @@
 #   --no-sound    no sound card (by default a Sound Blaster 16, through
 #                 the host's audio: pipewire, pulseaudio, alsa, coreaudio)
 #   --reset-disk  start /disk again, empty (disk.img is replaced)
+#   --udp PORT    this machine's UDP port PORT forwarded to MyNOS's (GavML's
+#                 network game: --udp 7145)
 #   --display UI  QEMU's window: sdl (the default with sound, when this
 #                 QEMU has it: with gtk and a sound card QEMU's window
 #                 could freeze), gtk, or another of qemu -display help
@@ -27,7 +29,7 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$here"
 
-serial= net=1 http=8080 http_given= mem=256 reset= kvm=1 sound=1 ui=
+serial= net=1 http=8080 http_given= mem=256 reset= kvm=1 sound=1 ui= udp=
 while [ $# -gt 0 ]; do
     case "$1" in
         --serial) serial=1 ;;
@@ -38,6 +40,7 @@ while [ $# -gt 0 ]; do
         --no-kvm) kvm= ;;
         --no-sound) sound= ;;
         --display) shift; ui=${1:?--display needs a name} ;;
+        --udp) shift; udp=${1:?--udp needs a port} ;;
         --) shift; break ;;
         -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "run-mynos.sh: unknown option $1 (--help)" >&2; exit 2 ;;
@@ -90,6 +93,10 @@ if [ -n "$net" ]; then
         else
             echo "run-mynos.sh: port $http is busy: no web server forwarding (--http PORT)" >&2
         fi
+    fi
+    if [ -n "$udp" ]; then
+        fwd="$fwd,hostfwd=udp::$udp-:$udp"
+        echo "run-mynos.sh: UDP port $udp of this machine goes to MyNOS's" >&2
     fi
     netopts="-netdev user,id=n0$fwd -device ne2k_isa,netdev=n0,iobase=0x300,irq=9"
 fi
