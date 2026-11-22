@@ -299,7 +299,34 @@ marks each model call and each tool, and saves the recording to
 be read afterwards with `trace calls /tmp/agent.trc`. If another program
 is recording, the agent says so in a `Note` and works unrecorded.
 
-## 21.7 Testing without a model
+## 21.7 MyNOS's voice: module `Voice`
+
+`Agent.create` also takes `?system` (the model's instructions, in place
+of the agent's), `?record` (each task under the event recorder; true)
+and `?extra` (tools of the program's: a `Llm.tool` and the function that
+runs it). Module `Voice` uses them to make the agent speak as MyNOS:
+its prompt says "you are MyNOS, in the first person; check what you say
+about yourself with your tools, take your design from your manual, say
+when you do not know", and its tools look at the running system:
+
+| Tool | What it gives |
+|---|---|
+| `my_state` | version, uptime, memory, every process (threads, C or OCaml, driver) and its services |
+| `my_log` | the last lines of the kernel's log |
+| `my_services` | each registered name, its program, protocol and summary |
+| `describe_service` | a service's description of itself, request by request |
+| `ask_service` | a request of a service: at once if it only reads, else after a yes |
+| `watch_me` | 1 to 5 seconds under the event recorder: who called whom, how often |
+| `manual_search`, `manual_read` | the package `manual`: lines with some words, then a section |
+
+`watch_me` needs the recorder, which is why `Voice.create` makes a
+session whose tasks are not recorded. The "Ask MyNOS" window (10.12) is
+the agent window started as `ask.byte`; it serves `mynos` (mynos/1,
+`ask`: a question, the answer) with a session of its own that never
+changes anything. The tools are checked without a model by the library
+test (`tests/mynos-ocaml`).
+
+## 21.8 Testing without a model
 
 `tools/net-peer.py llm PORT` is a fake provider for the host: it speaks
 both APIs, checks the headers and the shape of each request as the real
@@ -313,7 +340,7 @@ file as its argument (`llmd.byte /test.env`): the examples of this
 chapter run, and give the outputs shown, with no account and no cost.
 The network test (`tests/net/net_test.ml`) does exactly this.
 
-## 21.8 Known limits
+## 21.9 Known limits
 
 - No streaming: an answer comes whole, after the model has finished.
 - `Tools` maps strings as JSON strings: binary data (a disk sector) does

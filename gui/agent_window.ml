@@ -8,7 +8,15 @@
    The agent runs in a domain of its own (a model call takes seconds); it
    adds events to the log, and waits on a condition for the answer to a
    confirmation. The window's domain draws, at every event and four times a
-   second while the agent works. *)
+   second while the agent works.
+
+   Started as ask.byte (the same program), it is "Ask MyNOS": the agent is
+   MyNOS's voice (module Voice), speaking as the system, and the window
+   serves "mynos" (protocol mynos/1: ask a question, get the answer; what
+   would change things is not done), for other programs and the Services
+   window. *)
+
+let voice = Filename.basename Sys.argv.(0) = "ask.byte"
 
 type entry =
   | You of string
@@ -101,6 +109,50 @@ let start st session task =
       st.running <- false;
       Mutex.unlock lock))
 
+(* ---- Ask MyNOS's service: mynos/1 ---- *)
+
+type _ request = Ask : string -> string request
+
+module Protocol = struct
+  let id = "mynos/1"
+  let summary = "MyNOS itself, answering in the first person (a language model with \
+                 tools to look at the system): ask what it is, what it is doing, how \
+                 to do something. It only looks: what would change things is not done."
+  let requests = Ipc.[
+      request ~safe:true 0 "ask" "A question to MyNOS: its answer, after it has looked."
+        Wire.(field "question" string) Wire.string ]
+  type 'a r = 'a request
+  type 'a request = 'a r
+  type packed = Request : 'a request -> packed
+  let write_request (type a) w (r : a request) =
+    match r with Ask q -> Wire.write w Wire.int 0; Wire.write w Wire.string q
+  let read_request r =
+    match Wire.read r Wire.int with
+    | 0 -> Request (Ask (Wire.read r Wire.string))
+    | n -> raise (Wire.Error (Printf.sprintf "mynos: unknown request %d" n))
+  let reply : type a. a request -> a Wire.t = function Ask _ -> Wire.string
+end
+
+module Service = Ipc.Make (Protocol)
+
+(* one question at a time, in a session of its own *)
+let serve_mynos () =
+  let session = lazy (Voice.create ~warn:ignore ()) in
+  let one = Mutex.create () in
+  ignore (Domain.spawn (fun () ->
+      try
+        Service.serve "mynos" { Service.handle = fun (type a) _ (r : a request) : a ->
+            match r with
+            | Ask q ->
+              Mutex.protect one (fun () ->
+                  let said = ref [] in
+                  let emit = function Agent.Said s -> said := s :: !said | _ -> () in
+                  let a = Lazy.force session in
+                  Agent.forget a;
+                  ignore (Agent.run a ~emit ~confirm:(fun _ -> Agent.No) q);
+                  String.concat "\n\n" (List.rev !said)) }
+      with _ -> ()))
+
 (* ---- the window ---- *)
 
 let width = 760 and height = 560
@@ -111,7 +163,8 @@ let () =
   let st = { log = []; count = 0; drawn = 0; running = false; pending = None;
              input = ""; model = "" } in
   let session =
-    match Agent.create ~warn:(fun m -> add st (Note m)) () with
+    let warn m = add st (Note m) in
+    match (if voice then Voice.create ~warn () else Agent.create ~warn ()) with
     | a ->
       (match Llm.call (Llm.connect ()) Llm.Profiles with
        | (name, _, model) :: _ -> st.model <- Printf.sprintf "%s (%s)" name model
@@ -120,8 +173,17 @@ let () =
        | exception _ -> ());
       Some a
     | exception Failure m -> add st (Problem m); None in
-  add st (Note "Ask the agent to do something in MyNOS. What changes things waits for your yes.");
-  Gui.run ~title:"Agent" ~tick:0.25 ~resizable:(480, 320) width height () (fun ui () ->
+  if voice then begin
+    if session <> None then serve_mynos ();
+    add st (Note "I am MyNOS. Ask me what I am, what I am doing now, or how to do \
+                  something; I look before I answer. For example: Who are you? \
+                  What are you doing right now? Which of your services is the \
+                  busiest? How does a program talk to a service? (A language model \
+                  speaks for me, with my tools to look at myself.)")
+  end else
+    add st (Note "Ask the agent to do something in MyNOS. What changes things waits for your yes.");
+  let title = if voice then "Ask MyNOS" else "Agent" in
+  Gui.run ~title ~tick:0.25 ~resizable:(480, 320) width height () (fun ui () ->
       (* resizable: the size as it is now *)
       let width = Gui.width ui and height = Gui.height ui in
       let conv_w = width - 16 and conv_h = height - 110 in
@@ -131,7 +193,7 @@ let () =
           let g = ui.Gui.g in
           (* the header *)
           Gfx.fill g 0 0 width 34 0x1B3A57;
-          Gui.label ~colour:0xFFFFFF ~bold:true ui 12 9 "Agent";
+          Gui.label ~colour:0xFFFFFF ~bold:true ui 12 9 title;
           let info = match session with
             | None -> "no language model service"
             | Some a ->

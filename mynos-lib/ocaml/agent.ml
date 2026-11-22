@@ -20,7 +20,7 @@ let clip s =
   else String.sub s 0 max_result
        ^ Printf.sprintf "\n[... %d more bytes not shown]" (String.length s - max_result)
 
-let schema props =
+let string_schema props =
   Json.to_string (Json.Object [
       "type", Json.String "object";
       "properties", Json.Object (List.map (fun (n, d) ->
@@ -32,7 +32,7 @@ let own_tools = [
   { Llm.name = "run_command";
     description = "Run one command line in MyNOS sh (the user confirms it first): \
                    its exit status and its output (standard output and errors).";
-    schema = schema [ "command", "one line for MyNOS sh" ] };
+    schema = string_schema [ "command", "one line for MyNOS sh" ] };
   { name = "run_ocaml";
     description = "Compile an OCaml 5 program with ocamlc, against MyNOS's libraries \
                    (Mynos: processes, IPC, files; Net: the network; Http; Json; Llm: \
@@ -44,7 +44,7 @@ let own_tools = [
                    run_command for anything a typed interface does better. It waits \
                    for the program's end and keeps its output: not for programs that \
                    keep running (a window, an animation, a service): build_ocaml.";
-    schema = schema [ "code", "the program: an OCaml compilation unit (let () = ...)" ] };
+    schema = string_schema [ "code", "the program: an OCaml compilation unit (let () = ...)" ] };
   { name = "build_ocaml";
     description = "Compile an OCaml 5 program, against MyNOS's libraries as run_ocaml \
                    does (also Gfx, Display, Gui: windows; or OCaml's Graphics), \
@@ -54,7 +54,7 @@ let own_tools = [
                    programs that keep running: start a window or a service with \
                    run_command \"PROGRAM &\" (it returns at once); a program for \
                    the terminal (escape sequences, keys) is for the user to run.";
-    schema = schema [ "code", "the program: an OCaml compilation unit (let () = ...)";
+    schema = string_schema [ "code", "the program: an OCaml compilation unit (let () = ...)";
                       "output", "the program's file, ending in .byte, such as \
                                  /disk/life.byte" ] };
   { name = "ocaml_signature";
@@ -62,15 +62,15 @@ let own_tools = [
                    library (its types and functions), as the toplevel shows it: \
                    Mynos, Net, Http, Json, Llm, Ipc, Wire, Tools, Block, Gfx, \
                    Display, Gui, Graphics, Str, Num, List...";
-    schema = schema [ "module", "the module's name, such as Net" ] };
+    schema = string_schema [ "module", "the module's name, such as Net" ] };
   { name = "read_file"; description = "The contents of a file.";
-    schema = schema [ "path", "the file's path" ] };
+    schema = string_schema [ "path", "the file's path" ] };
   { name = "write_file";
     description = "Write a file (created, or replaced): the user confirms it first.";
-    schema = schema [ "path", "the file's path"; "content", "its new contents" ] };
+    schema = string_schema [ "path", "the file's path"; "content", "its new contents" ] };
   { name = "list_directory";
     description = "The entries of a directory, with sizes; directories end with /.";
-    schema = schema [ "path", "the directory's path" ] } ]
+    schema = string_schema [ "path", "the directory's path" ] } ]
 
 let arg input name =
   match Json.(member name (of_string input)) with
@@ -254,7 +254,7 @@ let package_tools ?(warn = prerr_endline) () =
                | Json.Object l -> List.map (fun (k, v) -> (k, Json.to_string_value v)) l
                | _ -> [] in
              Some { ptool = { Llm.name = str "name"; description = str "description";
-                              schema = schema params };
+                              schema = string_schema params };
                     command = Json.(member "command" j |> to_list |> List.map to_string_value);
                     safe = (match Json.member "safe" j with Json.Bool b -> b | _ -> false) }
            with Json.Error m | Failure m -> warn (Printf.sprintf "package %s: tool.json: %s" pkg m); None)
@@ -284,8 +284,17 @@ let run_package_tool ~emit ~confirm t input =
   else if confirm ("run: " ^ line) then (run_command line, false)
   else ("The user did not allow this command.", true)
 
+(* a tool of the program's (Agent.create ~extra) *)
+type extra = {
+  tool : Llm.tool;
+  run : emit:(event -> unit) -> confirm:(string -> bool) -> string -> string * bool;
+}
+
 (* a tool call: (result, is an error) *)
-let execute ~emit ~confirm ?(package_tools = []) service_tools name input =
+let execute ~emit ~confirm ?(package_tools = []) ?(extra = []) service_tools name input =
+  match List.find_opt (fun t -> t.tool.Llm.name = name) extra with
+  | Some t -> t.run ~emit ~confirm input
+  | None ->
   match List.find_opt (fun t -> t.ptool.Llm.name = name) package_tools with
   | Some t -> run_package_tool ~emit ~confirm t input
   | None ->
@@ -323,8 +332,8 @@ let execute ~emit ~confirm ?(package_tools = []) service_tools name input =
         (clip (Tools.call t input), false)
       end else ("The user did not allow this request.", true)
 
-let execute ~emit ~confirm ?package_tools service_tools name input =
-  match execute ~emit ~confirm ?package_tools service_tools name input with
+let execute ~emit ~confirm ?package_tools ?extra service_tools name input =
+  match execute ~emit ~confirm ?package_tools ?extra service_tools name input with
   | r -> r
   | exception (Failure m | Sys_error m | Invalid_argument m) -> (m, true)
   | exception Ipc.Remote_error (s, m) -> (s ^ ": " ^ m, true)
@@ -387,6 +396,8 @@ type t = {
   services : string list;
   service_tools : Tools.t list;
   package_tools : package_tool list;
+  extra : extra list;
+  record : bool;
   tools : Llm.tool list;
   system : string;
   max_turns : int;
@@ -398,7 +409,8 @@ type t = {
 }
 
 let create ?(profile = "") ?(services = [ "net" ]) ?(max_turns = 20)
-    ?(trace_file = "/tmp/agent.trc") ?(yes_to_all = false) ?(warn = prerr_endline) () =
+    ?(trace_file = "/tmp/agent.trc") ?(yes_to_all = false) ?(warn = prerr_endline)
+    ?system ?(record = true) ?(extra = []) () =
   let llm = try Llm.connect () with Mynos.Error _ ->
     failwith "no language model service (llmd)" in
   let service_tools = List.concat_map (fun s ->
@@ -407,10 +419,10 @@ let create ?(profile = "") ?(services = [ "net" ]) ?(max_turns = 20)
       | exception e -> warn (Printf.sprintf "service %s: %s" s (Printexc.to_string e)); [])
       services in
   let package_tools = package_tools ~warn () in
-  { llm; profile; services; service_tools; package_tools;
-    tools = own_tools @ List.map (fun t -> t.ptool) package_tools
+  { llm; profile; services; service_tools; package_tools; extra; record;
+    tools = List.map (fun t -> t.tool) extra @ own_tools @ List.map (fun t -> t.ptool) package_tools
             @ List.map (fun t -> t.Tools.tool) service_tools;
-    system = system_prompt services
+    system = (match system with Some s -> s | None -> system_prompt services)
              ^ (if package_tools = [] then "" else
                   "\nThe installed packages add these tools: "
                   ^ String.concat ", " (List.map (fun t -> t.ptool.Llm.name) package_tools) ^ "."); max_turns; trace_file; yes_to_all;
@@ -432,6 +444,7 @@ let run a ~emit ~confirm task =
   (* the recorder, read after every step so that its buffer does not fill *)
   let raw = Buffer.create 65536 in
   let recording =
+    if not a.record then false else
     match Tracer.start () with
     | () -> true
     | exception Tracer.Busy ->
@@ -469,7 +482,8 @@ let run a ~emit ~confirm task =
                 let arg = String.map (fun c -> if c < ' ' then ' ' else c) arg in
                 Tracer.mark (name ^ (if arg = "" then "" else ": " ^ arg))
               end;
-              let content, error = execute ~emit ~confirm ~package_tools:a.package_tools a.service_tools name input in
+              let content, error = execute ~emit ~confirm ~package_tools:a.package_tools ~extra:a.extra
+                  a.service_tools name input in
               drain ();
               emit (Result { text = content; error });
               Llm.Tool_result { id; content; error })

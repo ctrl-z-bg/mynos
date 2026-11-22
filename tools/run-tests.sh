@@ -476,7 +476,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     click 20 10; sleep 1; click 40 39; sleep 8
     tools/type-keys.py "$tmp/mon-g" 'pkg install studio; studio &\n'; sleep 25
     click 265 91; sleep 20
-    click 20 10; sleep 1; click 30 347; sleep 4    # the MyNOS menu, Exit
+    click 20 10; sleep 1; click 30 369; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /tmp/sel.txt /disk/untitled.txt; ls /disk /disk/studio\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too

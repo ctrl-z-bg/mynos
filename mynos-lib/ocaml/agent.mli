@@ -25,12 +25,27 @@ type answer = Yes | No | All       (** [All]: yes, and to everything after *)
 type t
 (** A session: the model, the tools, the conversation so far. *)
 
+type extra = {
+  tool : Llm.tool;
+  run : emit:(event -> unit) -> confirm:(string -> bool) -> string -> string * bool;
+      (** its JSON input: the result, and whether it is an error; [confirm]
+          before what changes things *)
+}
+(** A tool of the program's, beside the agent's own. *)
+
+val string_schema : (string * string) list -> string
+(** A tool's input schema: these arguments, strings, with their
+    descriptions, all required. *)
+
 val create :
   ?profile:string -> ?services:string list -> ?max_turns:int -> ?trace_file:string ->
-  ?yes_to_all:bool -> ?warn:(string -> unit) -> unit -> t
+  ?yes_to_all:bool -> ?warn:(string -> unit) ->
+  ?system:string -> ?record:bool -> ?extra:extra list -> unit -> t
 (** [services]: the typed services it may use (["net"]); [max_turns]: model
-    calls per task (20); [trace_file]: [/tmp/agent.trc]. @raise Failure
-    without the language model service. *)
+    calls per task (20); [trace_file]: [/tmp/agent.trc]. [system]: the
+    model's instructions, in place of the agent's; [record]: each task
+    under the event recorder (true); [extra]: tools of the program's (see
+    module {!Voice}). @raise Failure without the language model service. *)
 
 val run : t -> emit:(event -> unit) -> confirm:(string -> answer) -> string -> int
 (** [run a ~emit ~confirm task]: carries the task out, in the conversation

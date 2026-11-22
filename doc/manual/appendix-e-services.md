@@ -181,6 +181,7 @@ a service too: one of its domains serves **power/1** (E.16).
 | — | `httpd/httpd.ml` | OCaml | — | `start` | a client of net/1 |
 | — | `sh/sh.ml` | OCaml | — | `respawn` | a client |
 | `term<pid>` | `gui/terminal.ml` | OCaml | — | the GUI | console/1 |
+| `mynos` | `gui/agent_window.ml` (as `ask.byte`) | OCaml | — | the GUI | mynos/1: `ask` (MyNOS's voice, 21.7) |
 
 The first column is the name in the registry. Who talks to whom:
 

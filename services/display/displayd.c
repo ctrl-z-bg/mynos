@@ -366,6 +366,7 @@ static const struct menu_item menu[] = {
   { "Packages", "/packages.byte" },
   { "Applications", "/apps.byte" },
   { "Text", "/text.byte" },
+  { "Ask MyNOS", "/ask.byte" },
   { NULL, NULL },
   { "Exit", NULL },
   { "Shut down", "/shutdown.byte" },
@@ -387,7 +388,17 @@ static const char * pointer_shape[] = {
 
 /* the top bar's tabs: the shown windows, in the order they were made */
 #define TABS_X 96
-#define TABS_END (W - 8 * 8 - 24)
+/* the volume (soundd's), left of the clock, when there is sound */
+#define VOL_W 64
+#define VOL_X (W - 8 * 8 - 24 - VOL_W)
+#define VP_W 88
+#define VP_X (VOL_X + VOL_W / 2 - VP_W / 2)
+#define VP_H 176
+#define VP_T0 (TOP + 36)                 /* the slider: from 100 at the top */
+#define VP_T1 (TOP + VP_H - 28)          /* to 0 at the bottom */
+static int volume_level = -1;            /* -1: no sound service */
+static int volume_open = 0, volume_drag = 0;
+#define TABS_END (volume_level >= 0 ? VOL_X - 8 : W - 8 * 8 - 24)
 static int tabs(int * slots)
 {
   int n = 0, i, j;
@@ -462,6 +473,60 @@ static void draw_desktop(void)
     snprintf(clock, sizeof clock, "%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
     text(W - 8 * 8 - 12, 4, clock, 8, C_BAR_TEXT, 0);
   }
+  if (volume_level >= 0) {             /* a loudspeaker, and the volume */
+    char v[16];
+    int i, c = volume_open ? 0xFFFFFF : C_BAR_TEXT, x = VOL_X + 6;
+    if (volume_open) fill(VOL_X, 3, VOL_X + VOL_W, TOP - 4, C_TITLE_ON);
+    fill(x, 10, x + 4, 15, c);
+    for (i = 0; i < 5; i++) fill(x + 4 + i, 10 - i, x + 5 + i, 15 + i, c);
+    if (volume_level > 0) fill(x + 11, 11, x + 12, 14, c);
+    if (volume_level > 50) fill(x + 13, 9, x + 14, 16, c);
+    snprintf(v, sizeof v, "%d%%", volume_level);
+    text(VOL_X + 26, 4, v, 4, c, 0);
+  }
+}
+
+/* the volume's panel, under the bar: a slider */
+static void draw_volume(void)
+{
+  int y = VP_T1 - (VP_T1 - VP_T0) * volume_level / 100, cx = VP_X + VP_W / 2;
+  char v[16];
+  fill(VP_X, TOP, VP_X + VP_W, TOP + VP_H, C_MENU);
+  fill(VP_X, TOP + VP_H, VP_X + VP_W, TOP + VP_H + 1, C_BORDER);
+  text(VP_X + 12, TOP + 8, "Volume", 8, C_MENU_TEXT, 1);
+  fill(cx - 3, VP_T0, cx + 3, VP_T1, 0xC0C8D0);
+  fill(cx - 3, y, cx + 3, VP_T1, C_TITLE_ON);
+  fill(cx - 12, y - 4, cx + 12, y + 4, C_ACCENT);
+  snprintf(v, sizeof v, "%d%%", volume_level);
+  text(cx - 4 * (int)strlen(v), VP_T1 + 6, v, 5, C_MENU_TEXT, 0);
+}
+
+/* sound/1's volume (case 6): set it (0 to 100) or ask it (-1); -1 when
+   there is no sound service, or it does not answer within half a second */
+static int sound_volume(int level)
+{
+  wire_writer w;
+  wire_reader r;
+  mynos_msg_t * msg;
+  int port = mynos_registryLookUp("sound"), ch, res = -1;
+  long long v;
+  if (port < 0) return -1;
+  wire_writer_init(&w);
+  wire_put_cstring(&w, "sound/1");
+  wire_put_int(&w, 6);
+  wire_put_int(&w, level);
+  if (w.error || (ch = mynos_connectToPort(port)) < 0) { wire_writer_free(&w); return -1; }
+  mynos_send(ch, w.buf, w.len, 0);
+  wire_writer_free(&w);
+  if (mynos_recv(ch, &msg, 0, 500) < 0) { mynos_freeChannel(ch); return -1; }
+  mynos_freeChannel(ch);
+  wire_reader_init(&r, msg->start, msg->size);
+  if (wire_get_int(&r) == 0) {
+    v = wire_get_int(&r);
+    if (!r.error) res = (int)v;
+  }
+  mynos_freeMsg(&msg);
+  return res;
 }
 
 static void draw_window(struct window * w, int focused)
@@ -565,6 +630,7 @@ static void compose(int x0, int y0, int x1, int y1)
   }
   if (resizing >= 0) draw_outline();
   if (menu_open) draw_menu();
+  if (volume_open) draw_volume();
   draw_pointer();
   for (y = y0; y < y1; y++)
     memcpy(fb + y * W + x0, back + y * W + x0, (x1 - x0) * 4);
@@ -807,6 +873,18 @@ static void toggle_maximize(struct window * w)
   compose_window(w);
 }
 
+#define VOLUME_CHANGED() compose(VP_X < VOL_X ? VP_X : VOL_X, 0, VP_X + VP_W + 1, TOP + VP_H + 2)
+
+/* the volume from the slider's height */
+static void volume_at(int y)
+{
+  int v = (VP_T1 - y) * 100 / (VP_T1 - VP_T0), got;
+  if (v < 0) v = 0;
+  if (v > 100) v = 100;
+  if ((got = sound_volume(v)) >= 0) volume_level = got;
+  VOLUME_CHANGED();
+}
+
 /* ---- the pointer ---- */
 
 static void pointer_to(int x, int y, int buttons)
@@ -855,6 +933,28 @@ static void pointer_to(int x, int y, int buttons)
       compose(w->x - 1, w->y - TITLE - 1, w->x + (rs_w > w->w ? rs_w : w->w) + 5,
               w->y + (rs_h > w->h ? rs_h : w->h) + 5);
     }
+  }
+
+  /* the volume's panel: the slider follows the pointer while held */
+  if (volume_drag) {
+    if (buttons & 1) { if (y != oy) volume_at(y); }
+    else volume_drag = 0;
+  }
+  if ((changed & 1) && (buttons & 1) && volume_open) {
+    if (x >= VP_X && x < VP_X + VP_W && y >= TOP && y < TOP + VP_H) {
+      if (y >= VP_T0 - 10 && y <= VP_T1 + 10) { volume_drag = 1; volume_at(y); }
+      return;
+    }
+    volume_open = 0;                               /* a click elsewhere: closed */
+    VOLUME_CHANGED();
+    if (y < TOP && x >= VOL_X && x < VOL_X + VOL_W) return;
+  } else if ((changed & 1) && (buttons & 1) && volume_level >= 0 && !menu_open &&
+             y < TOP && x >= VOL_X && x < VOL_X + VOL_W) {
+    int got = sound_volume(-1);
+    if (got >= 0) volume_level = got;
+    volume_open = 1;
+    VOLUME_CHANGED();
+    return;
   }
 
   if ((changed & 1) && (buttons & 1)) {           /* a click */
@@ -934,11 +1034,21 @@ static void pointer_to(int x, int y, int buttons)
   compose(px, py, px + PW, py + PH);
 }
 
-/* the wheel: to the window under the pointer (positive: down) */
+/* the wheel: to the window under the pointer (positive: down); over the
+   volume, or its panel, the volume (5 a notch) */
 static void wheel(int dz)
 {
   int slot;
   if (!active || dz == 0) return;
+  if (volume_level >= 0 && ((py < TOP && px >= VOL_X && px < VOL_X + VOL_W) ||
+      (volume_open && px >= VP_X && px < VP_X + VP_W && py < TOP + VP_H))) {
+    int v = volume_level - 5 * dz, got;
+    if (v < 0) v = 0;
+    if (v > 100) v = 100;
+    if ((got = sound_volume(v)) >= 0) volume_level = got;
+    VOLUME_CHANGED();
+    return;
+  }
   slot = window_at(px, py);
   if (slot >= 0) {
     struct event e;
@@ -1170,6 +1280,18 @@ static void * timer_thread(void * arg)
 	if (info < 0 || !(info & MYNOS_PROC_ALIVE)) remove_window(i);
       }
       compose(W - 8 * 8 - 12, 0, W, TOP);          /* the clock */
+      /* the volume, every five seconds: soundd may have come, gone, or
+         been changed by another program */
+      if (last_second % 5 == 0 && !volume_drag) {
+        int v = sound_volume(-1);
+        if (v != volume_level) {
+          int was = volume_level;
+          volume_level = v;
+          if (v < 0) volume_open = 0;
+          if ((was < 0) != (v < 0)) compose(0, 0, W, TOP + VP_H + 2);   /* the tabs too */
+          else VOLUME_CHANGED();
+        }
+      }
     }
     pthread_mutex_unlock(&lock);
   }

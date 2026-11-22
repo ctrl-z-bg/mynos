@@ -73,6 +73,7 @@ Click **MyNOS**, top left. The menu opens:
 | Packages | the packages: demos and programs to install from the web (10.14) |
 | Applications | the installed packages that open a window; a click starts one (10.14) |
 | Text | the text editor (10.9) |
+| Ask MyNOS | MyNOS itself, answering in the first person (10.12, chapter 21.7) |
 | Exit | ends the session: back to the text console (10.16) |
 | Shut down | turns the machine off (10.16) |
 
@@ -309,6 +310,24 @@ reach the hardware themselves; each says what it is written in.*
 The menu's **Agent** (or the welcome window's button) opens a
 conversation with the agent of chapter 12: you type a task at the
 bottom, and confirm with buttons what it wants to do. Chapter 12, 12.7.
+
+The menu's **Ask MyNOS** is the same window with another voice: the
+system itself, in the first person. Ask it what it is, what it is doing
+now, which service is the busiest, how to write a driver: it looks
+before it answers (its processes, its log, its services' descriptions, a
+few seconds under its event recorder, its manual if the package
+`manual` is installed), and says where a fact comes from. A language
+model speaks for it (the window says so); it only looks, unless you
+ask it to do something, which waits for your yes. While the window is
+open it is also a service, `mynos` (protocol mynos/1, one request,
+`ask`): the Services window, a script or another agent can ask it a
+question. Chapter 21.7.
+
+**The volume.** With a sound card (chapter 9), the top bar shows a
+loudspeaker and the volume, left of the clock. A click opens a slider;
+the wheel over the loudspeaker changes it by 5. It is soundd's volume,
+for every program (`play`, a game); the bar follows a change made
+elsewhere within five seconds.
 
 ## 10.13 Tour
 

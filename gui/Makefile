@@ -8,7 +8,7 @@ MYNOS = ../mynos-lib/ocaml/mynos.cmi ../mynos-lib/ocaml/mynos.cma \
 PROGRAMS = gui.byte welcome.byte clock.byte services.byte terminal.byte recordings.byte files.byte \
 	tour.byte log_window.byte \
 	system.byte \
-	agent_window.byte text.byte
+	agent_window.byte ask.byte text.byte
 
 all: $(PROGRAMS)
 
@@ -23,6 +23,10 @@ system.byte: system.ml lesson.cmo $(MYNOS)
 
 tour.byte: tour.ml lesson.cmo $(MYNOS)
 	$(OCAMLC) mynos.cma lesson.cmo -o $@ tour.ml
+
+# Ask MyNOS: the agent window, which knows itself by its name
+ask.byte: agent_window.byte
+	cp agent_window.byte $@
 
 %.byte: %.ml $(MYNOS)
 	$(OCAMLC) mynos.cma -o $@ $<

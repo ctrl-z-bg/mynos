@@ -272,5 +272,19 @@ let () =
          "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nX-A: b\r\n\r\n\
           5\r\nhello\r\n7;x=1\r\n, world\r\n0\r\n\r\n" in
      r.Http.status = 200 && r.body = "hello, world" && Http.header "x-a" r = Some "b");
+  (* MyNOS's voice: its tools, without a model (mynos-gi1) *)
+  let voice name input =
+    let t = List.find (fun (t : Agent.extra) -> t.tool.Llm.name = name) Voice.tools in
+    t.run ~emit:ignore ~confirm:(fun _ -> false) input in
+  let contains s w =
+    let n = String.length s and k = String.length w in
+    let rec at i = i + k <= n && (String.sub s i k = w || at (i + 1)) in at 0 in
+  ok &&& check "voice: my_state" (contains (fst (voice "my_state" "{}")) "memrofsd: memrofs");
+  ok &&& check "voice: describe_service"
+    (contains (fst (voice "describe_service" {|{"service": "memrofs"}|})) "fs/1");
+  ok &&& check "voice: manual_search without the manual"
+    (contains (fst (voice "manual_search" {|{"words": "ipc"}|})) "pkg install manual");
+  ok &&& check "voice: a request that changes things, not allowed"
+    (snd (voice "ask_service" {|{"service": "memrofs", "request": "remove", "arguments": "{\"path\": \"x\"}"}|}));
   print_endline (if !ok then "mynos-ocaml: all checks passed"
                  else "mynos-ocaml: SOME CHECKS FAILED")

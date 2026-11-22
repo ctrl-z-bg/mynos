@@ -3050,3 +3050,16 @@ text while output scrolls.
 **Lesson.** An immediate-mode toolkit can still answer "what is under
 the pointer": by remembering, for one frame, what it drew.
 
+## 2026-11-22 — No microphone on QEMU's Sound Blaster
+
+**Question.** Could soundd record (a microphone) as it plays?
+
+**Finding.** The SB16's DSP has input commands, but QEMU's emulation
+(10.2) does not implement them: its binary says "ADC not yet supported".
+v86 emulates only the SB16 too. Recording needs another card: QEMU's
+ES1370 or AC97 (PCI, bus-master DMA) capture from the host's input.
+
+**Decision.** Not done now: a second driver (PCI, which displayd
+already reads to find the frame buffer), and only under QEMU. Playback
+stays on the SB16, which both emulators have.
+

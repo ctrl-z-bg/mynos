@@ -1557,4 +1557,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
 - **2026-11-22** — Manual: Smalltalk among the systems of chapter 3.2
   (the liveliness MyNOS gained: messages, self-description, the
   Services window as an inspector), a note in 17.6, appendix J.
+- **2026-11-22** — Ask MyNOS (mynos-gi1): module `Voice` (the agent as
+  the system, in the first person, with tools that observe it: state,
+  log, services, a request, a few seconds of the recorder, the manual);
+  `Agent.create ?system ?record ?extra`; the agent window started as
+  `ask.byte` is "Ask MyNOS" (menu, after Text: Exit moved to y=369) and
+  serves `mynos` (mynos/1). Tried with a real model. The volume in the
+  top bar (mynos-asq): displayd asks soundd (sound/1 volume), a slider,
+  the wheel. Recording from a microphone: not with QEMU's SB16 (no ADC);
+  it needs another card's driver (see the evaluation in the work log of
+  this day).
 
