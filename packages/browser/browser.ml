@@ -134,7 +134,56 @@ let is_html name ct =
   let ct = String.lowercase_ascii ct in
   Html.contains ct "html" || (ct = "" && (Filename.check_suffix name ".html" || Filename.check_suffix name ".htm"))
 
-let fetch url : doc =
+(* ---- cookies: in memory, by domain, for this window's life ---- *)
+
+let cookies : (string * string * string) list ref = ref []     (* domain, name, value *)
+let cookie_lock = Mutex.create ()
+
+let host_of url =
+  match Http.parse_url url with
+  | _, host, _, _ -> String.lowercase_ascii host
+  | exception _ -> ""
+
+let domain_matches host d = host = d || String.ends_with ~suffix:("." ^ d) host
+
+let take_cookies url (r : Http.response) =
+  let host = host_of url in
+  List.iter (fun (k, v) ->
+      if k = "set-cookie" then
+        match List.map String.trim (String.split_on_char ';' v) with
+        | nv :: attrs ->
+          (match String.index_opt nv '=' with
+           | Some i ->
+             let name = String.trim (String.sub nv 0 i)
+             and value = String.trim (String.sub nv (i + 1) (String.length nv - i - 1)) in
+             let attr a = List.find_map (fun x ->
+                 let lx = String.lowercase_ascii x in
+                 if String.starts_with ~prefix:(a ^ "=") lx then
+                   Some (String.sub x (String.length a + 1) (String.length x - String.length a - 1))
+                 else None) attrs in
+             let domain = match attr "domain" with
+               | Some d ->
+                 let d = String.lowercase_ascii d in
+                 let d = if String.length d > 0 && d.[0] = '.' then String.sub d 1 (String.length d - 1) else d in
+                 if domain_matches host d then d else host      (* not another site's *)
+               | None -> host in
+             let gone = (match attr "max-age" with
+                 | Some a -> (match int_of_string_opt a with Some n -> n <= 0 | None -> false)
+                 | None -> false) in
+             Mutex.protect cookie_lock (fun () ->
+                 cookies := List.filter (fun (d, n, _) -> not (d = domain && n = name)) !cookies;
+                 if not gone then cookies := (domain, name, value) :: !cookies)
+           | None -> ())
+        | [] -> ()) r.headers
+
+let cookie_headers url =
+  let host = host_of url in
+  match Mutex.protect cookie_lock (fun () ->
+      List.filter (fun (d, _, _) -> domain_matches host d) !cookies) with
+  | [] -> []
+  | cs -> [ ("Cookie", String.concat "; " (List.rev_map (fun (_, n, v) -> n ^ "=" ^ v) cs)) ]
+
+let fetch ?body url : doc =
   let page u tokens status = { url = u; tokens; status } in
   let of_body u ct body status =
     let body = if Html.charset ~content_type:ct body = `Latin1 then Html.latin1_to_utf8 body else body in
@@ -144,7 +193,7 @@ let fetch url : doc =
     else page u (Html.tokens (message_page "Not a page"
                                 (Printf.sprintf "This is %s, %d bytes: the browser shows only text for now."
                                    ct (String.length body)))) status in
-  let rec go u n =
+  let rec go ?body u n =
     let u, _ = strip_fragment u in
     match scheme_of u with
     | Some "about" -> page u (Html.tokens start_page) "about"
@@ -158,9 +207,15 @@ let fetch url : doc =
           | body -> of_body u "" body "a file"
           | exception Sys_error m -> page u (Html.tokens (message_page "Cannot open" m)) m)
     | Some ("http" | "https") ->
-      (match Http.get ~timeout:20000 ~headers:[ ("User-Agent", user_agent);
-                                                ("Accept", "text/html,text/plain;q=0.9,*/*;q=0.5") ] u with
-       | r when r.Http.status >= 300 && r.status < 400 && n < 8 ->
+      let headers = ("User-Agent", user_agent)
+                    :: ("Accept", "text/html,text/plain;q=0.9,*/*;q=0.5") :: cookie_headers u in
+      let answer = match body with
+        | Some b -> Http.post ~timeout:20000
+                      ~headers:(("Content-Type", "application/x-www-form-urlencoded") :: headers) ~body:b u
+        | None -> Http.get ~timeout:20000 ~headers u in
+      (match answer with
+       | r when (take_cookies u r; r.Http.status >= 300 && r.status < 400 && n < 8) ->
+         (* a redirection: a GET, the form's data not sent again *)
          (match Http.header "location" r with
           | Some l -> go (resolve u l) (n + 1)
           | None -> of_body u (Option.value (Http.header "content-type" r) ~default:"") r.body
@@ -171,8 +226,8 @@ let fetch url : doc =
        | exception e -> page u (Html.tokens (message_page "Not reached" (Printexc.to_string e))) "error")
     | Some s -> page u (Html.tokens (message_page "Not a web address"
                                        ("The browser does not open " ^ s ^ ": addresses."))) s
-    | None -> go (of_typed u) n in
-  go url 0
+    | None -> go ?body (of_typed u) n in
+  go ?body url 0
 
 (* ---- --dump: the page as text ---- *)
 
@@ -204,7 +259,34 @@ type st = {
   mutable want_scroll : int option;
   mutable offset : int;                         (* the page's scroll, as drawn *)
   mutable hover : string option;
+  values : (int * int, string * bool) Hashtbl.t;   (* the forms' fields, as changed *)
+  mutable focus : (int * int) option;             (* the field that has the keys *)
 }
+
+(* application/x-www-form-urlencoded *)
+let urlencode s =
+  let b = Buffer.create (String.length s) in
+  String.iter (fun c -> match c with
+      | 'A'..'Z' | 'a'..'z' | '0'..'9' | '-' | '_' | '.' | '~' -> Buffer.add_char b c
+      | ' ' -> Buffer.add_char b '+'
+      | c -> Buffer.add_string b (Printf.sprintf "%%%02X" (Char.code c))) s;
+  Buffer.contents b
+
+let value_of st (f : Layout.field) w =
+  match Hashtbl.find_opt st.values w with Some v -> v | None -> (f.value, f.checked)
+
+(* a form's data: its fields' names and values, the button pressed's *)
+let form_data st (page : Layout.page) fi submitter =
+  let f = page.forms.(fi) in
+  let pairs = List.concat (List.mapi (fun k (fl : Layout.field) ->
+      let v, c = value_of st fl (fi, k) in
+      if fl.fname = "" then []
+      else match fl.kind with
+        | Hidden | Text | Password | Textarea | Select -> [ (fl.fname, v) ]
+        | Checkbox | Radio -> if c then [ (fl.fname, v) ] else []
+        | Submit -> if submitter = Some k then [ (fl.fname, fl.value) ] else [])
+      (Array.to_list f.fields)) in
+  String.concat "&" (List.map (fun (k, v) -> urlencode k ^ "=" ^ urlencode v) pairs)
 
 let lock = Mutex.create ()
 let fetched : (int * doc) option ref = ref None
@@ -225,8 +307,8 @@ let rec bytes_of ?(n = 0) url =
     let path = String.sub url 5 (String.length url - 5) in
     (try Ok (In_channel.with_open_bin path In_channel.input_all) with Sys_error m -> Error m)
   | Some ("http" | "https") ->
-    (match Http.get ~timeout:20000 ~headers:[ ("User-Agent", user_agent) ] url with
-     | r when r.Http.status >= 300 && r.status < 400 && n < 5 ->
+    (match Http.get ~timeout:20000 ~headers:(("User-Agent", user_agent) :: cookie_headers url) url with
+     | r when (take_cookies url r; r.Http.status >= 300 && r.status < 400 && n < 5) ->
        (match Http.header "location" r with
         | Some l -> bytes_of ~n:(n + 1) (resolve url l)
         | None -> Error "a redirection without its place")
@@ -285,19 +367,31 @@ let () =
   | args ->
     let first = match args with u :: _ -> of_typed u | [] -> "about:start" in
     let st = { doc = fetch "about:start"; laid = None; address = first; back = []; forward = [];
-               loading = None; want_scroll = None; offset = 0; hover = None } in
-    let start_fetch url =
+               loading = None; want_scroll = None; offset = 0; hover = None;
+               values = Hashtbl.create 8; focus = None } in
+    let start_fetch ?body url =
       incr fetches;
       let n = !fetches in
       st.loading <- Some (url, n);
       st.address <- url;
       ignore (Thread.create (fun () ->
-          let d = fetch url in
+          let d = fetch ?body url in
           Mutex.protect lock (fun () -> fetched := Some (n, d))) ()) in
-    let go url =
+    let go ?body url =
       st.back <- (st.doc.url, st.offset) :: st.back;
       st.forward <- [];
-      start_fetch url in
+      start_fetch ?body url in
+    let submit (page : Layout.page) fi submitter =
+      let f = page.forms.(fi) in
+      let data = form_data st page fi submitter in
+      let base = fst (strip_fragment st.doc.url) in
+      let action = if f.action = "" then base else resolve base f.action in
+      st.focus <- None;
+      if f.meth = "post" then go ~body:data action
+      else
+        let no_query = match String.index_opt action '?' with
+          | Some i -> String.sub action 0 i | None -> action in
+        go (no_query ^ "?" ^ data) in
     if first <> "about:start" then go first;
     let pictures_seen = ref 0 in
     Gui.run ~title:"Browser" ~tick:0.1 ~resizable:(480, 320) 900 640 st (fun ui st ->
@@ -307,6 +401,7 @@ let () =
          | Some (n, d) when (match st.loading with Some (_, m) -> m = n | None -> false) ->
            let asked = match st.loading with Some (u, _) -> u | None -> d.url in
            st.doc <- d; st.laid <- None; st.loading <- None;
+           Hashtbl.reset st.values; st.focus <- None;
            (* the address after redirections, with the fragment asked for *)
            st.address <- d.url ^ (match snd (strip_fragment asked) with
                | Some f -> "#" ^ f | None -> "");
@@ -367,6 +462,33 @@ let () =
              | None -> s in
            Gui.scroll_to ui 2 s; st.want_scroll <- None
          | None -> ());
+        (* a field of the page has the keys: they edit it *)
+        if ui.Gui.field = 1 then st.focus <- None;
+        (match st.focus with
+         | Some ((fi, k) as w) when fi < Array.length page.forms && k < Array.length page.forms.(fi).fields ->
+           let f = page.forms.(fi).fields.(k) in
+           let v, c = value_of st f w in
+           let drop_last s =
+             if s = "" then s else begin
+               let j = ref (String.length s - 1) in
+               while !j > 0 && Char.code s.[!j] land 0xC0 = 0x80 do decr j done;
+               String.sub s 0 !j
+             end in
+           List.iter (fun key ->
+               match key with
+               | "\r" | "\n" -> submit page fi None
+               | "\027" -> st.focus <- None
+               | "\127" | "\b" -> Hashtbl.replace st.values w (drop_last v, c)
+               | "\021" -> Hashtbl.replace st.values w ("", c)
+               | "\022" ->
+                 let clip = match String.split_on_char '\n' (Clipboard.get ()) with l :: _ -> l | [] -> "" in
+                 Hashtbl.replace st.values w (v ^ clip, c)
+               | key when String.length key > 0 && key.[0] >= ' ' && key.[0] <> '\127' ->
+                 let v, _ = value_of st f w in
+                 Hashtbl.replace st.values w (v ^ key, c)
+               | _ -> ()) ui.Gui.keys;
+           ui.Gui.keys <- []
+         | _ -> st.focus <- None);
         (* keys: the page's, when the address does not have them *)
         if ui.Gui.field <> 1 then begin
           let page_step = box_h - 2 * line_h in
@@ -382,7 +504,38 @@ let () =
               | "\b" | "\127" -> ()
               | _ -> ()) ui.Gui.keys
         end;
-        let links = ref [] in
+        let links = ref [] and widgets = ref [] in
+        (* a form's field, drawn as what it is *)
+        let draw_widget x y cells ((fi, k) as w) =
+          let f = page.forms.(fi).fields.(k) in
+          let v, c = value_of st f w in
+          let pw = cells * Gfx.char_w in
+          let focused = st.focus = Some w in
+          (match f.kind with
+           | Text | Password | Textarea ->
+             Gfx.fill g x y (pw - 2) (line_h - 2) 0xFFFFFF;
+             Gfx.rect g x y (pw - 2) (line_h - 2) (if focused then Gui.accent else 0x8A96A3);
+             let shown = if f.kind = Password then String.make (Layout.cells v) '*' else v in
+             let room = cells - 2 in
+             let shown = if Layout.cells shown <= room then shown
+               else snd (Layout.split_cells shown (Layout.cells shown - room)) in
+             ignore (Gfx.text g (x + 6) (y + 1) shown Gui.foreground);
+             if focused then Gfx.fill g (x + 6 + Layout.cells shown * Gfx.char_w) (y + 2) 2 13 Gui.accent
+           | Submit ->
+             Gfx.fill g x y (pw - 4) (line_h - 2) Gui.accent;
+             let lw = Layout.cells f.label * Gfx.char_w in
+             ignore (Gfx.text ~bold:true g (x + (pw - 4 - lw) / 2) (y + 1) f.label 0xFFFFFF)
+           | Checkbox | Radio ->
+             Gfx.rect g (x + 4) (y + 2) 13 13 0x5F6B76;
+             if c then Gfx.fill g (x + 7) (y + 5) 7 7 (if f.kind = Radio then Gui.accent else 0x1A2228)
+           | Select ->
+             Gfx.fill g x y (pw - 2) (line_h - 2) 0xF0F3F6;
+             Gfx.rect g x y (pw - 2) (line_h - 2) 0x8A96A3;
+             let words = match List.assoc_opt v f.options with Some w -> w | None -> v in
+             ignore (Gfx.text ~max:(cells - 3) g (x + 6) (y + 1) words Gui.foreground);
+             ignore (Gfx.text g (x + pw - 16) (y + 1) "v" Gui.muted)
+           | Hidden -> ());
+          widgets := (x, y, pw, line_h, w) :: !widgets in
         Gui.scroll ~colour:0xFFFFFF ui 2 4 box_y (width - 8) box_h (fun top ->
             st.offset <- box_y + 1 - top;
             Array.iteri (fun i (l : Layout.line) ->
@@ -414,6 +567,9 @@ let () =
                   List.iter (fun (s : Layout.span) ->
                       let x = 16 + s.col * Gfx.char_w in
                       let n = Layout.cells s.text in
+                      match s.widget with
+                      | Some w -> draw_widget x y n w
+                      | None ->
                       ignore (Gui.text ~bold:s.style.bold ui x y s.text s.style.colour);
                       if s.style.underline then Gfx.fill g x (y + 15) (n * Gfx.char_w) 1 s.style.colour;
                       if s.style.strike then Gfx.fill g x (y + 8) (n * Gfx.char_w) 1 s.style.colour;
@@ -429,7 +585,36 @@ let () =
         List.iter (fun ((_, _, _, _, h) as l) ->
             if inside l ui.Gui.mx ui.Gui.my then st.hover <- Some (resolve st.doc.url h))
           !links;
+        (* a click on a field: the keys to it, or its value changed, or the
+           form sent *)
+        let on_widget = ref false in
         (if ui.Gui.clicked then
+           let px, py = ui.Gui.press in
+           let hit (x, y, w, h, _) = px >= x && px < x + w && py >= y && py < y + h
+                                     && py >= box_y && py < box_y + box_h in
+           match List.find_opt hit !widgets with
+           | Some (_, _, _, _, ((fi, k) as w)) ->
+             on_widget := true;
+             let form = page.forms.(fi) in
+             let f = form.fields.(k) in
+             let v, c = value_of st f w in
+             (match f.kind with
+              | Text | Password | Textarea -> st.focus <- Some w; ui.Gui.field <- 0
+              | Checkbox -> Hashtbl.replace st.values w (v, not c)
+              | Radio ->
+                Array.iteri (fun j (o : Layout.field) ->
+                    if o.kind = Radio && o.fname = f.fname then
+                      Hashtbl.replace st.values (fi, j) (fst (value_of st o (fi, j)), j = k)) form.fields
+              | Select ->
+                let rec next = function
+                  | (a, _) :: (b, _) :: _ when a = v -> b
+                  | _ :: rest -> next rest
+                  | [] -> (match f.options with (a, _) :: _ -> a | [] -> v) in
+                Hashtbl.replace st.values w (next f.options, c)
+              | Submit -> submit page fi (Some k)
+              | Hidden -> ())
+           | None -> if py >= box_y then st.focus <- None);
+        (if ui.Gui.clicked && not !on_widget then
            let px, py = ui.Gui.press in
            match List.find_opt (fun l -> inside l px py && inside l ui.Gui.mx ui.Gui.my) !links with
            | Some (_, _, _, _, h) ->

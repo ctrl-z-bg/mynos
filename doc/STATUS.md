@@ -1622,4 +1622,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   nearest-sample upsampling below that), fetched by a thread after the
   page, laid out at their size on lines of their own, narrowed to the
   page, clickable in links; icons stay text. Gui's fields: Ctrl-U.
+- **2026-11-22** — browser 1.2, phase 2 done (mynos-vtq): forms (text,
+  password, checkbox, radio, select, textarea, buttons; GET and POST,
+  urlencoded; the values kept outside the layout, so a new layout keeps
+  them) and cookies (in memory, by domain, sent with pages and pictures).
+  Tried: a search on lite.duckduckgo.com (POST).
+- **2026-11-22** — browser 1.2, phase 3 (mynos-28y): simple tables as
+  grids (columns from their words' widths, narrowed to fit, cells laid
+  out at their width); a little CSS (hidden attribute, display:none and
+  visibility:hidden in styles and in simple rules of `<style>` blocks;
+  readable text colours). Test: a form's fields and a grid in --dump.
 

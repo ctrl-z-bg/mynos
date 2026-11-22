@@ -192,7 +192,7 @@ let tokens s =
         i := min n (!k + 1); text_start := !i;
         if List.mem name raw_text then begin
           let e = find_from !i ("</" ^ name) in
-          if name = "title" || name = "textarea" then
+          if name = "title" || name = "textarea" || name = "style" then
             emit (Text (decode (String.sub s !i (e - !i))));
           emit (End name);
           let close = try String.index_from s e '>' with Not_found -> n - 1 in

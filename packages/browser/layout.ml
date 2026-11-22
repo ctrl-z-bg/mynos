@@ -12,7 +12,27 @@ type style = {
   link : string option;            (* the href, as written *)
 }
 
-type span = { col : int; text : string; style : style }
+type span = {
+  col : int;
+  text : string;
+  style : style;
+  widget : (int * int) option;     (* a form's field: (form, field) *)
+}
+
+(* forms: what the page asks, and how it is sent *)
+type field_kind = Text | Password | Hidden | Submit | Checkbox | Radio | Textarea | Select
+
+type field = {
+  fname : string;
+  kind : field_kind;
+  value : string;                  (* as the page gives it *)
+  checked : bool;
+  options : (string * string) list;   (* a select's: value, words *)
+  label : string;                  (* a button's words *)
+  cells : int;                     (* its width on the line *)
+}
+
+type form = { action : string; meth : string; fields : field array }
 
 type line = {
   spans : span list;
@@ -35,6 +55,7 @@ type page = {
   lines : line array;
   anchors : (string * int) list;   (* id or name -> line *)
   base : string option;            (* <base href> *)
+  forms : form array;
 }
 
 let text_colour = 0x1A2228
@@ -75,12 +96,125 @@ let block_tags = [ "p"; "div"; "section"; "article"; "header"; "footer"; "nav"; 
                    "aside"; "form"; "fieldset"; "figure"; "figcaption"; "address"; "details";
                    "summary"; "center"; "table"; "caption"; "dl"; "legend"; "hgroup"; "menu" ]
 let skipped = [ "script"; "style"; "head"; "template"; "svg"; "math"; "iframe"; "object";
-                "select"; "canvas"; "audio"; "video"; "map"; "noembed" ]
+                "canvas"; "audio"; "video"; "map"; "noembed" ]
 
 (* [size src]: a picture's size in pixels, when known (fetched, or its
    width and height attributes); a picture is laid out on lines of its
    own, as tall as it is, narrowed to the page *)
-let layout ?(size = fun _ _ -> None) ~width tokens =
+(* ---- a little CSS: what is hidden, and readable colours ---- *)
+
+let void = [ "area"; "base"; "br"; "col"; "embed"; "hr"; "img"; "input"; "link"; "meta";
+             "source"; "track"; "wbr"; "param" ]
+
+let squeeze s = String.concat "" (String.split_on_char ' ' (String.lowercase_ascii s))
+
+let hides decls =
+  let d = squeeze decls in
+  Html.contains d "display:none" || Html.contains d "visibility:hidden"
+
+(* the simple selectors of rules that hide: (tag, class, id), any may be "" *)
+let hiding_rules css =
+  let css = (* without comments *)
+    let b = Buffer.create (String.length css) and i = ref 0 and n = String.length css in
+    while !i < n do
+      if !i + 1 < n && css.[!i] = '/' && css.[!i + 1] = '*' then begin
+        i := !i + 2;
+        while !i + 1 < n && not (css.[!i] = '*' && css.[!i + 1] = '/') do incr i done;
+        i := !i + 2
+      end else begin Buffer.add_char b css.[!i]; incr i end
+    done;
+    Buffer.contents b in
+  List.concat_map (fun rule ->
+      match String.index_opt rule '{' with
+      | Some i when hides (String.sub rule (i + 1) (String.length rule - i - 1)) ->
+        List.filter_map (fun sel ->
+            let sel = String.trim sel in
+            if sel = "" || String.exists (fun c -> c = ' ' || c = ':' || c = '[' || c = '>'
+                                                     || c = '+' || c = '~' || c = '*') sel then None
+            else begin
+              let cut c s = match String.index_opt s c with
+                | Some j -> (String.sub s 0 j, String.sub s (j + 1) (String.length s - j - 1))
+                | None -> (s, "") in
+              let rest, id = cut '#' sel in
+              let tag, cls = cut '.' rest in
+              if String.contains cls '.' then None
+              else Some (String.lowercase_ascii tag, cls, id)
+            end) (String.split_on_char ',' (String.sub rule 0 i))
+      | _ -> []) (String.split_on_char '}' css)
+
+let named_colours = [ "black", 0x000000; "red", 0xC00000; "green", 0x007000; "blue", 0x0000C0;
+                      "maroon", 0x800000; "navy", 0x000080; "purple", 0x800080; "teal", 0x008080;
+                      "olive", 0x707000; "gray", 0x606060; "grey", 0x606060; "darkred", 0x8B0000;
+                      "darkgreen", 0x006400; "darkblue", 0x00008B; "brown", 0x8B4513 ]
+
+(* a colour, if it reads on white (not too light) *)
+let readable_colour v =
+  let v = String.trim (String.lowercase_ascii v) in
+  let hex s = int_of_string_opt ("0x" ^ s) in
+  let c = if String.length v = 7 && v.[0] = '#' then hex (String.sub v 1 6)
+    else if String.length v = 4 && v.[0] = '#' then
+      Option.map (fun x -> let r = (x lsr 8) land 15 and g = (x lsr 4) land 15 and b = x land 15 in
+                   (r * 17) lsl 16 lor (g * 17) lsl 8 lor (b * 17)) (hex (String.sub v 1 3))
+    else List.assoc_opt v named_colours in
+  match c with
+  | Some c ->
+    let r = c lsr 16 and g = (c lsr 8) land 255 and b = c land 255 in
+    if (299 * r + 587 * g + 114 * b) / 1000 < 150 then Some c else None
+  | None -> None
+
+let style_value attrs prop =
+  match Html.attr "style" attrs with
+  | None -> None
+  | Some s ->
+    List.find_map (fun d ->
+        match String.index_opt d ':' with
+        | Some i when String.trim (String.lowercase_ascii (String.sub d 0 i)) = prop ->
+          Some (String.trim (String.sub d (i + 1) (String.length d - i - 1)))
+        | _ -> None) (String.split_on_char ';' s)
+
+(* ---- tables: the simple ones (no tables, no fields inside) as grids ---- *)
+
+let table_end tokens =
+  (* the tokens of a table (after its start), and the ones after its end *)
+  let rec go depth acc = function
+    | [] -> (List.rev acc, [])
+    | (Html.End "table" as t) :: rest -> if depth = 0 then (List.rev acc, rest) else go (depth - 1) (t :: acc) rest
+    | (Html.Start ("table", _) as t) :: rest -> go (depth + 1) (t :: acc) rest
+    | t :: rest -> go depth (t :: acc) rest in
+  go 0 [] tokens
+
+let simple_table toks =
+  not (List.exists (function
+      | Html.Start (("table" | "input" | "select" | "textarea" | "button" | "form" | "pre"), _) -> true
+      | _ -> false) toks)
+
+(* rows of cells: (header, columns spanned, its tokens) *)
+let table_rows toks =
+  let rows = ref [] and row = ref None and cell = ref None in
+  let close_cell () = match !cell, !row with
+    | Some (h, span, ts), Some cells -> row := Some ((h, span, List.rev ts) :: cells); cell := None
+    | Some _, None -> cell := None
+    | None, _ -> () in
+  let close_row () = close_cell (); (match !row with
+      | Some cells when cells <> [] -> rows := List.rev cells :: !rows | _ -> ()); row := None in
+  List.iter (function
+      | Html.Start ("tr", _) -> close_row (); row := Some []
+      | Html.End "tr" -> close_row ()
+      | Html.Start (("td" | "th") as n, a) ->
+        close_cell (); if !row = None then row := Some [];
+        let span = match Html.attr "colspan" a with
+          | Some s -> max 1 (min 12 (Option.value (int_of_string_opt (String.trim s)) ~default:1)) | None -> 1 in
+        cell := Some (n = "th", span, [])
+      | Html.End ("td" | "th") -> close_cell ()
+      | Html.Start (("thead" | "tbody" | "tfoot" | "colgroup" | "col"), _)
+      | Html.End ("thead" | "tbody" | "tfoot" | "colgroup") -> ()
+      | Html.Start ("caption", _) -> close_row (); row := Some []; cell := Some (true, 12, [])
+      | Html.End "caption" -> close_row ()
+      | t -> (match !cell with Some (h, s, ts) -> cell := Some (h, s, t :: ts) | None -> ())) toks;
+  close_row ();
+  List.rev !rows
+
+let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
   let width = max 20 width in
   let lines = ref [] and anchors = ref [] and title = ref "" and base = ref None in
   let cur = ref [] and col = ref 0 in           (* the line being made: spans, reversed *)
@@ -122,10 +256,10 @@ let layout ?(size = fun _ _ -> None) ~width tokens =
     let rec put w =
       let room = width - !col in
       if cells w <= room || room <= 0 then begin
-        cur := { col = !col; text = w; style } :: !cur; col := !col + cells w
+        cur := { col = !col; text = w; style; widget = None } :: !cur; col := !col + cells w
       end else begin
         let a, b = split_cells w room in
-        cur := { col = !col; text = a; style } :: !cur;
+        cur := { col = !col; text = a; style; widget = None } :: !cur;
         push_line (); col := !indent; put b
       end in
     put w in
@@ -143,6 +277,35 @@ let layout ?(size = fun _ _ -> None) ~width tokens =
       if !styles = [] then styles := [ ("", plain) ]
     end in
   let pre = ref 0 and skip = ref 0 and in_title = ref false in
+  (* the forms, as they come: (action, method, fields reversed), reversed *)
+  let forms = ref [] and form = ref (-1) in
+  let add_field f =
+    if !form < 0 then begin forms := ("", "get", ref []) :: !forms; form := List.length !forms - 1 end;
+    let _, _, fl = List.nth !forms (List.length !forms - 1 - !form) in
+    fl := f :: !fl;
+    (!form, List.length !fl - 1) in
+  let add_widget w cells =
+    let cells = max 1 (min cells (width - !indent)) in
+    if !cur <> [] && !col + 1 + cells > width then push_line ();
+    start_text ();
+    if !pending_space && !col > !indent then incr col;
+    pending_space := false;
+    cur := { col = !col; text = String.make cells ' '; style = plain; widget = Some w } :: !cur;
+    col := !col + cells;
+    pending_space := true in
+  let field ?(value = "") ?(checked = false) ?(options = []) ?(label = "") ~cells name kind =
+    { fname = name; kind; value; checked; options; label; cells } in
+  (* a textarea's text, a select's options, a button's words: gathered *)
+  let in_textarea : (string * int * Buffer.t) option ref = ref None in
+  let in_select : (string * (string * string * bool) list ref) option ref = ref None in
+  let option : (string option * bool * Buffer.t) option ref = ref None in
+  let in_button : (string * string * string * Buffer.t) option ref = ref None in
+  let end_option () =
+    match !in_select, !option with
+    | Some (_, opts), Some (v, sel, b) ->
+      let words = String.trim (Buffer.contents b) in
+      opts := (Option.value v ~default:words, words, sel) :: !opts; option := None
+    | _ -> option := None in
   let lists = ref [] in                          (* (ordered, counter) for each open list *)
   let table_cell = ref 0 in
   let text s =
@@ -155,7 +318,7 @@ let layout ?(size = fun _ _ -> None) ~width tokens =
           if p <> "" then begin
             start_text ();
             let p = String.map (fun c -> if c = '\r' then ' ' else c) (Gfx.expand_tabs p) in
-            cur := { col = !col; text = p; style = style () } :: !cur;
+            cur := { col = !col; text = p; style = style (); widget = None } :: !cur;
             col := !col + cells p
           end) parts
     end else begin
@@ -173,8 +336,23 @@ let layout ?(size = fun _ _ -> None) ~width tokens =
     end in
   let heading_level n = match n with
     | "h1" -> 1 | "h2" -> 2 | "h3" -> 3 | "h4" -> 4 | "h5" -> 5 | "h6" -> 6 | _ -> 0 in
-  List.iter (function
-      | Html.Text s -> text s
+  let css = Buffer.create 256 and in_style = ref false in
+  let rules = ref [] in
+  let handle = (function
+      | Html.Text s when !in_style -> Buffer.add_string css s
+      | Html.Start ("style", _) -> in_style := true; incr skip
+      | Html.End "style" ->
+        in_style := false; if !skip > 0 then decr skip;
+        rules := hiding_rules (Buffer.contents css)
+      | Html.Text s ->
+        (match !in_textarea, !in_select, !in_button with
+         | Some (_, _, b), _, _ -> Buffer.add_string b s
+         | _, Some _, _ -> (match !option with Some (_, _, b) -> Buffer.add_string b s | None -> ())
+         | _, _, Some (_, _, _, b) -> Buffer.add_string b s
+         | None, None, None -> text s)
+      | Html.Start (name, attrs) when !in_select <> None && name = "option" ->
+        end_option ();
+        option := Some (Html.attr "value" attrs, List.mem_assoc "selected" attrs, Buffer.create 16)
       | Html.Start (name, attrs) ->
         (match Html.attr "id" attrs with
          | Some id -> anchors := (id, line_count ()) :: !anchors | None -> ());
@@ -205,7 +383,7 @@ let layout ?(size = fun _ _ -> None) ~width tokens =
               | _ -> "\xe2\x80\xa2" in
             start_text ();
             let c = max 0 (!indent - 2) in
-            cur := { col = c; text = mark; style = { st with colour = muted } } :: !cur;
+            cur := { col = c; text = mark; style = { st with colour = muted }; widget = None } :: !cur;
             col := max !col (c + cells mark + 1)
           | "dt" -> new_line (); push name { st with bold = true }
           | "dd" -> new_line (); indent := !indent + 4
@@ -238,7 +416,7 @@ let layout ?(size = fun _ _ -> None) ~width tokens =
             let small = match num "width", num "height" with
               | Some w, Some h -> w <= 32 && h <= 32 | Some w, None -> w <= 32
               | None, Some h -> h <= 32 | None, None -> false in
-            if src = "" || small then begin
+            if src = "" || small || not pictures then begin
               (* an icon, a spacer: its words, if it has some *)
               if alt <> "" then
                 add_word { st with colour = (if st.link <> None then link_colour else muted) } ("[" ^ alt ^ "]")
@@ -262,15 +440,47 @@ let layout ?(size = fun _ _ -> None) ~width tokens =
                 lines := { spans = []; rule = false; bar = !bars;
                            picture = Some { src; alt; plink = st.link; pw = 0; ph = line_h } } :: !lines
             end
+          | "form" ->
+            new_line ();
+            forms := (Option.value (Html.attr "action" attrs) ~default:"",
+                      String.lowercase_ascii (Option.value (Html.attr "method" attrs) ~default:"get"),
+                      ref []) :: !forms;
+            form := List.length !forms - 1
           | "input" ->
-            (match Option.map String.lowercase_ascii (Html.attr "type" attrs) with
-             | Some "hidden" -> ()
-             | Some ("submit" | "button" | "reset") ->
-               add_word { st with colour = muted }
-                 ("[" ^ Option.value (Html.attr "value" attrs) ~default:"Submit" ^ "]")
-             | _ -> add_word { st with colour = muted } "[________]")
-          | "textarea" -> add_word { st with colour = muted } "[text]"; incr skip
-          | "button" -> push name { st with colour = muted }
+            let name = Option.value (Html.attr "name" attrs) ~default:"" in
+            let value = Option.value (Html.attr "value" attrs) ~default:"" in
+            let size = match Html.attr "size" attrs with
+              | Some s -> Option.value (int_of_string_opt (String.trim s)) ~default:20 | None -> 20 in
+            (match String.lowercase_ascii (Option.value (Html.attr "type" attrs) ~default:"text") with
+             | "hidden" -> ignore (add_field (field ~value ~cells:0 name Hidden))
+             | "submit" | "image" ->
+               let label = if value = "" then "Submit" else value in
+               let cells = cells label + 4 in
+               add_widget (add_field (field ~value ~label ~cells name Submit)) cells
+             | "button" | "reset" | "file" -> ()
+             | "checkbox" | "radio" as k ->
+               let value = if value = "" then "on" else value in
+               add_widget (add_field (field ~value ~checked:(List.mem_assoc "checked" attrs) ~cells:3 name
+                                        (if k = "radio" then Radio else Checkbox))) 3
+             | k ->
+               let cells = max 6 (min 40 size) + 2 in
+               add_widget (add_field (field ~value ~cells name (if k = "password" then Password else Text))) cells)
+          | "textarea" ->
+            let cols = match Html.attr "cols" attrs with
+              | Some s -> Option.value (int_of_string_opt (String.trim s)) ~default:40 | None -> 40 in
+            in_textarea := Some (Option.value (Html.attr "name" attrs) ~default:"", max 10 (min 60 cols) + 2,
+                                 Buffer.create 64)
+          | "select" -> in_select := Some (Option.value (Html.attr "name" attrs) ~default:"", ref [])
+          | "span" | "font" ->
+            let c = match style_value attrs "color" with
+              | Some v -> readable_colour v
+              | None -> Option.bind (Html.attr "color" attrs) readable_colour in
+            push name (match c with Some c when st.link = None -> { st with colour = c } | _ -> st)
+          | "button" ->
+            in_button := Some (Option.value (Html.attr "name" attrs) ~default:"",
+                               Option.value (Html.attr "value" attrs) ~default:"",
+                               String.lowercase_ascii (Option.value (Html.attr "type" attrs) ~default:"submit"),
+                               Buffer.create 16)
           | _ ->
             let h = heading_level name in
             if h > 0 then begin
@@ -284,7 +494,37 @@ let layout ?(size = fun _ _ -> None) ~width tokens =
           if name <> "head" && !skip > 0 then decr skip
         end
         else if name = "title" then in_title := false
-        else if name = "textarea" then (if !skip > 0 then decr skip)
+        else if name = "textarea" then
+          (match !in_textarea with
+           | Some (n, cells, b) ->
+             in_textarea := None;
+             if !skip = 0 then add_widget (add_field (field ~value:(Buffer.contents b) ~cells n Textarea)) cells
+           | None -> ())
+        else if name = "option" && !in_select <> None then end_option ()
+        else if name = "select" then
+          (match !in_select with
+           | Some (n, opts) ->
+             end_option ();
+             in_select := None;
+             let opts = List.rev !opts in
+             let chosen = match List.find_opt (fun (_, _, s) -> s) opts with
+               | Some (v, _, _) -> v | None -> (match opts with (v, _, _) :: _ -> v | [] -> "") in
+             let options = List.map (fun (v, w, _) -> (v, w)) opts in
+             let cells = 4 + List.fold_left (fun a (_, w) -> max a (cells w)) 4 options in
+             if !skip = 0 then add_widget (add_field (field ~value:chosen ~options ~cells:(min 30 cells) n Select)) (min 30 cells)
+           | None -> ())
+        else if name = "button" then
+          (match !in_button with
+           | Some (n, v, t, b) ->
+             in_button := None;
+             let label = String.trim (Buffer.contents b) in
+             let label = if label = "" then "Submit" else label in
+             if t = "submit" && !skip = 0 then begin
+               let cells = cells label + 4 in
+               add_widget (add_field (field ~value:v ~label ~cells n Submit)) cells
+             end
+           | None -> ())
+        else if name = "form" then begin new_line (); form := -1 end
         else if !skip > 0 then ()
         else begin
           match name with
@@ -303,12 +543,113 @@ let layout ?(size = fun _ _ -> None) ~width tokens =
             pop name;
             if heading_level name > 0 then want_blank 1
             else if List.mem name block_tags then new_line ()
-        end)
-    tokens;
+        end) in
+  (* is an element hidden (the hidden attribute, its style, a rule)? *)
+  let hidden name attrs =
+    List.mem_assoc "hidden" attrs
+    || (match Html.attr "style" attrs with Some s -> hides s | None -> false)
+    || (!rules <> [] &&
+        let classes = match Html.attr "class" attrs with
+          | Some c -> String.split_on_char ' ' c | None -> [] in
+        let id = Option.value (Html.attr "id" attrs) ~default:"" in
+        List.exists (fun (t, c, i) ->
+            (t = "" || t = name) && (c = "" || List.mem c classes) && (i = "" || i = id)
+            && (t <> "" || c <> "" || i <> "")) !rules) in
+  (* a simple table, as a grid: its columns as wide as their words need,
+     narrowed to fit *)
+  let grid toks =
+    let rows = table_rows toks in
+    let ncols = List.fold_left (fun a r -> max a (List.fold_left (fun a (_, s, _) -> a + s) 0 r)) 0 rows in
+    if ncols = 0 then ()
+    else begin
+      let gap = 2 in
+      let avail = max ncols (width - !indent - gap * (ncols - 1)) in
+      let natural ts =
+        let p = layout ~pictures:false ~width:1000 ts in
+        Array.fold_left (fun a (l : line) ->
+            max a (List.fold_left (fun a s -> max a (s.col + cells s.text)) 0 l.spans)) 0 p.lines in
+      let longest_word ts =
+        List.fold_left (fun a t -> match t with
+            | Html.Text s ->
+              List.fold_left (fun a w -> max a (cells w)) a
+                (String.split_on_char ' ' (String.map (fun c -> if c = '\n' || c = '\t' then ' ' else c) s))
+            | _ -> a) 1 ts in
+      let col_max = Array.make ncols 1 and col_min = Array.make ncols 1 in
+      List.iter (fun r ->
+          ignore (List.fold_left (fun j (_, s, ts) ->
+              if s = 1 && j < ncols then begin
+                col_max.(j) <- max col_max.(j) (natural ts);
+                col_min.(j) <- max col_min.(j) (min 20 (longest_word ts))
+              end;
+              j + s) 0 r)) rows;
+      let sum a = Array.fold_left ( + ) 0 a in
+      let widths =
+        if sum col_max <= avail then Array.copy col_max
+        else if sum col_min >= avail then
+          Array.map (fun m -> max 3 (m * avail / max 1 (sum col_min))) col_min
+        else
+          Array.mapi (fun j m ->
+              m + (col_max.(j) - m) * (avail - sum col_min) / max 1 (sum col_max - sum col_min)) col_min in
+      new_line ();
+      List.iter (fun r ->
+          (* each cell laid out at its width; the row as tall as its tallest *)
+          let _, cells_laid = List.fold_left (fun (j, acc) (h, s, ts) ->
+              let j1 = min ncols (j + s) in
+              let w = ref 0 in
+              for k = j to j1 - 1 do w := !w + widths.(k) done;
+              let w = !w + gap * (max 0 (j1 - j - 1)) in
+              let x = ref !indent in
+              for k = 0 to j - 1 do x := !x + widths.(k) + gap done;
+              let ts = if h then (Html.Start ("b", []) :: ts) @ [ Html.End "b" ] else ts in
+              let p = layout ~pictures:false ~width:(max 1 w) ts in
+              (* the blank lines it starts or ends with: not in a cell *)
+              let ls = List.filter (fun (l : line) -> l.spans <> []) (Array.to_list p.lines) in
+              (j1, (!x, ls) :: acc)) (0, []) r in
+          let height = List.fold_left (fun a (_, ls) -> max a (List.length ls)) 1 cells_laid in
+          for i = 0 to height - 1 do
+            let spans = List.concat_map (fun (x, ls) ->
+                match List.nth_opt ls i with
+                | Some (l : line) -> List.map (fun s -> { s with col = s.col + x }) l.spans
+                | None -> []) (List.rev cells_laid) in
+            lines := { spans; rule = false; bar = !bars; picture = None } :: !lines
+          done) rows;
+      blank_wanted := max !blank_wanted 1
+    end in
+  let hiding = ref None in                       (* (element, depth) being skipped *)
+  let rec run = function
+    | [] -> ()
+    | t :: rest ->
+      match !hiding, t with
+      | Some (n, d), Html.Start (m, _) when m = n -> hiding := Some (n, d + 1); run rest
+      | Some (n, d), Html.End m when m = n -> hiding := (if d <= 1 then None else Some (n, d - 1)); run rest
+      | Some _, _ -> run rest
+      | None, Html.Start (name, attrs) when !skip = 0 && !in_select = None && hidden name attrs ->
+        if not (List.mem name void) then hiding := Some (name, 1);
+        run rest
+      | None, Html.Start ("table", _) when !skip = 0 && !in_select = None && !in_textarea = None ->
+        let toks, after = table_end rest in
+        if simple_table toks then begin grid toks; run after end
+        else begin handle t; run rest end
+      | None, t -> handle t; run rest in
+  run tokens;
   new_line ();
   let title = String.trim (String.concat " " (List.filter (( <> ) "")
                                                 (String.split_on_char ' ' (String.map (fun c -> if c = '\n' then ' ' else c) !title)))) in
-  { title; lines = Array.of_list (List.rev !lines); anchors = List.rev !anchors; base = !base }
+  let forms = Array.of_list (List.rev_map (fun (action, meth, fl) ->
+      { action; meth; fields = Array.of_list (List.rev !fl) }) !forms) in
+  { title; lines = Array.of_list (List.rev !lines); anchors = List.rev !anchors; base = !base; forms }
+
+(* a field as text: what --dump shows *)
+let field_text f value checked =
+  match f.kind with
+  | Text | Textarea -> "[" ^ value ^ String.make (max 0 (f.cells - 2 - cells value)) '_' ^ "]"
+  | Password -> "[" ^ String.make (cells value) '*' ^ String.make (max 0 (f.cells - 2 - cells value)) '_' ^ "]"
+  | Hidden -> ""
+  | Submit -> "[ " ^ f.label ^ " ]"
+  | Checkbox -> if checked then "[x]" else "[ ]"
+  | Radio -> if checked then "(*)" else "( )"
+  | Select ->
+    "[" ^ (match List.assoc_opt value f.options with Some w -> w | None -> value) ^ " v]"
 
 (* the text, as --dump prints it *)
 let to_text page =
@@ -322,7 +663,11 @@ let to_text page =
         let col = ref 0 in
         List.iter (fun s ->
             if s.col > !col then Buffer.add_string b (String.make (s.col - !col) ' ');
-            Buffer.add_string b s.text; col := max !col s.col + cells s.text) l.spans
+            let t = match s.widget with
+              | Some (fi, k) ->
+                let f = page.forms.(fi).fields.(k) in field_text f f.value f.checked
+              | None -> s.text in
+            Buffer.add_string b t; col := max !col s.col + cells t) l.spans
       end;
       Buffer.add_char b '\n') page.lines;
   Buffer.contents b
