@@ -1594,4 +1594,6 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   redirections, history, fetches in a thread; `browser --dump URL`.
   Tried on text.npr.org and Wikipedia over HTTPS. Not yet: pictures,
   forms that send, cookies, CSS.
+- **2026-11-22** — The package gav renamed gavml (GavML: GAV in OCaml for
+  MyNOS); its pictures stay in `third_party/gav`.
 

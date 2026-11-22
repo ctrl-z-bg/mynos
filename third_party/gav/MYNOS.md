@@ -9,4 +9,4 @@ commit 17b90605391fa6f8104a05417716504b9c8b81b4, 2022-04-26), GPL-2.0
   RGB (black is GAV's transparent colour; MyNOS's PNG reader lays alpha
   on white).
 
-The game itself was rewritten in OCaml: `packages/gav/gav.ml`.
+The game itself was rewritten in OCaml: GavML, `packages/gavml/gavml.ml`.

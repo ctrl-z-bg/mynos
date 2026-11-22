@@ -1,4 +1,4 @@
-(* gav: GAV, GPL Arcade Volleyball, in OCaml for MyNOS.
+(* gavml: GavML, GAV (GPL Arcade Volleyball) in OCaml for MyNOS.
 
    A port of GAV (https://github.com/ctrl-z-bg/gav, C++ and SDL, 2002-),
    a remake of the DOS game Arcade Volleyball: its physics, its players,
@@ -39,7 +39,7 @@ let step_ms = 20
 
 type sprite = { w : int; h : int; frames : int; iw : int; pix : int array }
 
-let dir = "/disk/pkg/gav"
+let dir = "/disk/pkg/gavml"
 
 let load name frames =
   let path = if Sys.file_exists (Filename.concat dir name) then Filename.concat dir name else name in
@@ -277,8 +277,8 @@ let hit b p =
   if (p.speed_y -. float b.spdy) *. float dy > 0. then b.spdy <- truncate p.speed_y;
   if b.spdy < 100 && cby < cply then b.spdy <- truncate (1.1 *. elastic *. float (abs oldspdy))
 
-let debug = Sys.getenv_opt "GAV_DEBUG" <> None
-let log fmt = Printf.ksprintf (fun s -> if debug then Mynos.log ("gav: " ^ s)) fmt
+let debug = Sys.getenv_opt "GAVML_DEBUG" <> None
+let log fmt = Printf.ksprintf (fun s -> if debug then Mynos.log ("gavml: " ^ s)) fmt
 
 let assign_point b side team =
   log "point to the %s (it served: %b)" (if side < 0 then "left" else "right") (b.bside = side);
@@ -536,7 +536,7 @@ let () =
         if k >= 0 && k < 104 then draw g font k (x + i * font.w) y) s in
   let centre g y s = text g ((sw - String.length s * font.w) / 2) y s in
   let st = { places = [| Person; Computer; Nobody; Nobody |]; screen = Choosing } in
-  Gui.run ~title:"GAV" ~tick:0.02 sw sh st (fun ui st ->
+  Gui.run ~title:"GavML" ~tick:0.02 sw sh st (fun ui st ->
       let g = ui.Gui.g in
       Gfx.blit back 0 0 g 0 0 sw sh;
       (match st.screen with

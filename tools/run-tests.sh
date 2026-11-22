@@ -845,8 +845,8 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" 'df; X=ok; clip clip-$X; clip\n'; sleep 5
     # GAV (mynos-0ns): installed with its pictures, which it reads before
     # it asks for a window (none in text mode)
-    tools/type-keys.py "$tmp/mon7" 'pkg install gav; gav\n'
-    waitfor "gav.byte: no graphical session" 60
+    tools/type-keys.py "$tmp/mon7" 'pkg install gavml; gavml\n'
+    waitfor "gavml.byte: no graphical session" 60
     # the browser (mynos-asr), as text: a page of the disk, its entities,
     # its link made absolute; the start page
     tools/type-keys.py "$tmp/mon7" "pkg install browser; echo '<title>T</title><h1>T&eacute;st</h1><p>a <a href=x.html>link</a> &copy; 2026</p>' > /tmp/t.html; browser --dump /tmp/t.html; browser --dump about:start > /tmp/start.txt; grep -c ocaml.org /tmp/start.txt; X=done; echo browser-\$X\n"
@@ -1149,8 +1149,8 @@ if [ -f system/ramdisk.dsk ]; then
     expect "Directions: north, south"                 # minotaur
     expect "%  /disk"                                 # df
     expect "clip-ok"                                  # clip, the clipboard service
-    expect "pkg: gav 1.1 installed"                   # GAV...
-    expect "gav.byte: no graphical session"           # ... its pictures read first
+    expect "pkg: gavml 1.0 installed"                 # GavML (GAV)...
+    expect "gavml.byte: no graphical session"         # ... its pictures read first
     expect "Tést"                                     # the browser: entities,
     expect "a link © 2026"                            # inline text,
     expect "1. file:/tmp/x.html"                      # links made absolute
