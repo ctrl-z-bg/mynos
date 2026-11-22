@@ -1498,3 +1498,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
 - **2026-11-22** — The manual's timeline (4.4) has 21 and 22 November:
   the packages, httpd's uploads, KVM, key releases, faster disk writes,
   sound, resizable windows.
+- **2026-11-22** — Reinstalling paint just after a publish failed: "its
+  BLAKE2b hash is not the index's". raw.githubusercontent.com served the
+  index from its cache (5 minutes, the previous build's) and the archive
+  fresh. Archives now carry the start of their hash in their name
+  (`NAME-VERSION-HASH.tar`, tools/pkg-build.sh), and
+  `tools/pkg-publish.sh` publishes into a clone keeping the previous
+  index's archives: a cached index finds its own. pkg is unchanged.

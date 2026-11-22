@@ -399,7 +399,8 @@ holds only what `pkg` downloads:
   index.json                      the packages: name, version, description,
                                   licence, archive, size, BLAKE2b-256 hash,
                                   the MyNOS they were built on
-  packages/NAME-VERSION.tar       one archive per package and version
+  packages/NAME-VERSION-HASH.tar  one archive per package and build (HASH:
+                                  the start of its BLAKE2b-256)
 ```
 
 Each package is a directory of `packages/` in the main repository with a
@@ -434,10 +435,12 @@ package keeps its hash. `tools/build-all.sh` builds them into
 `tmp/packages`, which the test suite serves to MyNOS from the host
 (`tools/net-peer.py files`).
 
-To publish: build, make a clone of `mynos-packages` hold what
-`tmp/packages` holds (`rsync -a --delete --exclude .git --exclude
-README.md tmp/packages/ CLONE/`, so that a package removed or renamed
-goes too), commit and push. A package whose sources changed gets
+To publish: build, then `tools/pkg-publish.sh CLONE` (a clone of
+`mynos-packages`) copies the new index, its archives and the packages'
+documentation, keeps the archives of the index it replaces and removes
+older ones; commit and push the clone. GitHub serves raw files from a
+cache for five minutes: a cached index must still find the archives it
+names, and a new archive, having its hash in its name, was never cached. A package whose sources changed gets
 a new `VERSION`, so that `pkg list` shows the installed one as older.
 
 ## H.10 Debugging

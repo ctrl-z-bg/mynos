@@ -1,7 +1,11 @@
 #!/bin/sh
 # Build the packages of packages/*/spec into OUTDIR (mynos-vcd,
 # doc/decisions/packages.md): OUTDIR/index.json and
-# OUTDIR/packages/NAME-VERSION.tar, the layout of the packages'
+# OUTDIR/packages/NAME-VERSION-HASH.tar (HASH: the first 12 hexadecimal
+# digits of its BLAKE2b-256: a new archive is a new name, which no cache
+# of raw.githubusercontent.com has served before; tools/pkg-publish.sh
+# keeps the previous index's archives, so that a cached index finds its
+# own), the layout of the packages'
 # repository (ctrl-z-bg/mynos-packages), which pkg reads.
 #
 # Usage: tools/pkg-build.sh OUTDIR     (in the dev container:
@@ -105,11 +109,12 @@ $pjson
   "mynos": "$(json "$mynos")"
 }
 JSON
-    tar=packages/$NAME-$VERSION.tar
     tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner \
-        --mtime=@0 -cf "$out/$tar" -C "$d" .
-    size=$(wc -c < "$out/$tar" | tr -d ' ')
-    hash=$(b2sum -l 256 "$out/$tar" | cut -d' ' -f1)
+        --mtime=@0 -cf "$out/packages/.building.tar" -C "$d" .
+    size=$(wc -c < "$out/packages/.building.tar" | tr -d ' ')
+    hash=$(b2sum -l 256 "$out/packages/.building.tar" | cut -d' ' -f1)
+    tar=packages/$NAME-$VERSION-$(printf '%s' "$hash" | cut -c1-12).tar
+    mv "$out/packages/.building.tar" "$out/$tar"
     entry=$(printf '    {"name": "%s", "version": "%s", "description": "%s",\n     "license": "%s", "archive": "%s", "size": %s,\n     "blake2b-256": "%s", "mynos": "%s",\n     "depends": [%s], "programs": [%s]}' \
         "$(json "$NAME")" "$(json "$VERSION")" "$(json "$DESCRIPTION")" \
         "$(json "$LICENSE")" "$tar" "$size" "$hash" "$(json "$mynos")" \

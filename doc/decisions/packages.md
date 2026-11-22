@@ -13,7 +13,10 @@ versions and packages as archives, on GitHub.
 ## Choices
 
 1. **A separate repository**, `ctrl-z-bg/mynos-packages`, public, holding
-   only what `pkg` downloads: `index.json` and `packages/NAME-VERSION.tar`.
+   only what `pkg` downloads: `index.json` and `packages/NAME-VERSION-HASH.tar`
+   (since 2026-11-22: HASH, the start of its BLAKE2b-256, so that a
+   cached index and a new archive never meet under one name;
+   `tools/pkg-publish.sh` keeps the previous index's archives).
    Binary archives in the main repository would weigh on every clone
    forever. The packages are *described* in the main repository
    (`packages/NAME/spec`), next to the code they are built from, and

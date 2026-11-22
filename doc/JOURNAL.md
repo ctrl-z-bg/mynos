@@ -2924,3 +2924,30 @@ editing and man's pager see the new size when they start or redraw.
 **Lesson.** When pixels are shared, not sent, a size is part of the
 contract: changing it is a conversation (propose, answer with new
 memory), and the side that owns the memory must be the one to answer.
+
+## 2026-11-22 — An index and an archive from two different minutes
+
+**Symptom.** Right after the packages were published again, Install
+paint, after Update index: "packages/paint-1.0.tar: its BLAKE2b hash is
+not the index's".
+
+**Diagnosis.** Fetched by hand: raw.githubusercontent.com answered the
+index from its cache (`x-cache: HIT`, `max-age=300`), the previous
+build's, and the archive as just pushed. Both were right, five minutes
+apart. A query string did not get past the cache.
+
+**Cause.** An archive's name was the same for every build of a version
+(`NAME-VERSION.tar`), and each publish rebuilt them all (the archive
+records the MyNOS it was built on): for five minutes, an old index and
+a new archive met under one name.
+
+**Fix.** The name carries the start of the archive's hash
+(`NAME-VERSION-HASH.tar`): a new archive is a new name, never cached
+before. `tools/pkg-publish.sh` copies a build into the repository's
+clone and keeps the archives of the index it replaces, removing older
+ones: an index served from the cache still finds its own. `pkg`, which
+takes the archive's path from the index, did not change.
+
+**Lesson.** Files that must agree, served through a cache, must not
+share names across versions: name them by their content, and keep the
+previous generation as long as a cache can hold its pointer.
