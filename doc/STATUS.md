@@ -1538,3 +1538,6 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   Text, Paint, Studio). utils 1.1: `df` (mynos-0nc), on fs/1's new
   `space` (memrofs, tmpfs, fatfs). Tests: the seventh boot's df and clip.
   Studio 1.1 keeps its files in `/disk/studio/`; Paint 1.1.
+- **2026-11-22** — Studio 1.2: completion from any module's interface too
+  (`Gui.`, `List.`, `Graphics.`: `ocamlc -i` on `include M`, once a
+  module, in a domain), beside the running services' requests.

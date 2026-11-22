@@ -14,10 +14,12 @@ type error = {
 
 let target file = Filename.remove_extension file ^ ".byte"
 
-(* the compiler, as a process: its messages into [out] *)
-let spawn file out =
+(* the compiler, as a process: its messages into [out]; [args] what it
+   is asked (by default: build [file] beside it) *)
+let spawn ?args file out =
   let code = try In_channel.with_open_bin file In_channel.input_all with Sys_error _ -> "" in
   let dir = Filename.dirname file in
+  let args = match args with Some a -> a | None -> [ "-o"; target file; file ] in
   let env = Array.of_list (
       List.filter (fun kv ->
           not (List.exists (fun p -> String.starts_with ~prefix:(p ^ "=") kv)
@@ -27,8 +29,21 @@ let spawn file out =
   Out_channel.with_open_bin out (fun _ -> ());
   let argv = [ "ocamlrun"; "/ocamlc.byte"; "-use-prims"; "/primitives" ]
              @ Agent.ocamlc_libraries code
-             @ [ "-I"; dir; "-o"; target file; file ] in
+             @ [ "-I"; dir ] @ args in
   Mynos.spawn ~env "ocamlrun" (Array.of_list argv)
+
+(* a module's interface, as the compiler knows it from its .cmi (the
+   system's, OCaml's, or one beside the files in [dir]): "include M"
+   compiled with -i prints it. [Error] the compiler's message. *)
+let interface ~dir m =
+  let stem = Printf.sprintf "/tmp/studio%d_%s" (Mynos.getpid ()) (String.lowercase_ascii m) in
+  let src = stem ^ ".ml" and out = stem ^ ".txt" in
+  Out_channel.with_open_bin src (fun oc -> output_string oc ("include " ^ m ^ "\n"));
+  let pid = spawn ~args:[ "-I"; dir; "-i"; src ] src out in
+  let status = Mynos.wait pid in
+  let text = try In_channel.with_open_bin out In_channel.input_all with Sys_error _ -> "" in
+  List.iter (fun f -> try Sys.remove f with Sys_error _ -> ()) [ src; out ];
+  if status = Mynos.Exited 0 then Ok text else Error (String.trim text)
 
 (* ocamlc's messages: a header (File "f", line L, characters A-B:, or
    lines L1-L2), the code shown, then the error or warning, until the

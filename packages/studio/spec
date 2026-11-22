@@ -1,7 +1,7 @@
 # The package studio (tools/pkg-build.sh): MyNOS Studio, an IDE
 # (doc/decisions/studio.md)
 NAME=studio
-VERSION=1.1
+VERSION=1.2
 DESCRIPTION='MyNOS Studio: an editor for OCaml in MyNOS, a service itself (ide/1) that its agent uses; build and run inside MyNOS, completion from the running services, run under the event recorder, services of your own'
 LICENSE=GPL-2.0-or-later
 SRC=packages/studio

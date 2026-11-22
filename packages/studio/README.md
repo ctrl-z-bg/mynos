@@ -42,11 +42,22 @@ calls. **Recordings** replays the recording, step by step.
 
 ## Completion from the running system
 
-Nothing to press: as you type `Sound.`, `Display.`, `Net.` (any module
-of a service's protocol), and the letters after the dot, a list offers the requests of the service as it describes itself now:
-the constructor, its typed arguments, its reply, its documentation. Up,
-Down, Enter or Tab, Escape. A module of MyNOS's whose service is not
-running says so ("sound: not running").
+Nothing to press: as you type a module's name and a dot (`Gui.`,
+`List.`, `Sound.`), and then letters, a list offers what completes it.
+Up, Down, Enter or Tab, Escape. It comes from two places:
+
+- **the module's interface**, as the compiler inside MyNOS knows it: its
+  values with their types, its types and their constructors, its
+  exceptions and modules. Any module whose `.cmi` the compiler finds:
+  MyNOS's library (`Gui`, `Gfx`, `Textarea`, `Ipc`...), OCaml's (`List`,
+  `String`, `Hashtbl`...), `Graphics`, `Str`, and your own beside the
+  file. Studio asks `ocamlc -i` once for each module, in the background
+  (half a second; "reading its interface..." meanwhile).
+- **the running service** whose protocol has that name (`Sound` is
+  `sound/1`'s, `Display`, `Net`, `Fs`, a service of your own): its
+  requests as the service describes itself now, the constructor, its
+  typed arguments, its reply, its documentation, in green. A module of
+  MyNOS's whose service is not running says so ("sound: not running").
 
 ## The agent, and ide/1
 

@@ -301,25 +301,37 @@ let draw_popup ui (word, answer, sel) =
     Gfx.fill g x y (Gfx.char_w * String.length m + 16) 24 0xFFF4E0;
     Gfx.rect g x y (Gfx.char_w * String.length m + 16) 24 0xE0B070;
     ignore (Gfx.text g (x + 8) (y + 4) m 0x8A5A00)
-  | Complete.Items (service, items) ->
-    let items = List.filteri (fun i _ -> i < 8) items in
-    let w = 460 and h = 24 + 20 * List.length items + 54 in
+  | Complete.Reading m ->
+    let m = Printf.sprintf "%s: reading its interface..." m in
+    Gfx.fill g x y (Gfx.char_w * String.length m + 16) 24 0xFFFFFF;
+    Gfx.rect g x y (Gfx.char_w * String.length m + 16) 24 Gui.accent;
+    ignore (Gfx.text g (x + 8) (y + 4) m Gui.muted)
+  | Complete.Items (source, all) ->
+    (* eight at a time, the selected one among them *)
+    let top = max 0 (sel - 7) in
+    let items = List.filteri (fun i _ -> i >= top && i < top + 8) all in
+    let w = 520 and h = 24 + 20 * List.length items + 54 in
+    let x = max 0 (min x (Gui.width ui - w - 6)) in
     Gfx.fill g (x + 4) (y + 4) w h 0x8090A0;
     Gfx.fill g x y w h 0xFFFFFF;
     Gfx.rect g x y w h Gui.accent;
-    ignore (Gfx.text g (x + 8) (y + 4) ("from the running service " ^ service) Gui.muted);
+    let more = if List.length all > 8 then Printf.sprintf "  %d/%d" (sel + 1) (List.length all) else "" in
+    ignore (Gfx.text ~max:((w - 16) / Gfx.char_w) g (x + 8) (y + 4) ("from " ^ source ^ more) Gui.muted);
     List.iteri (fun i (it : Complete.item) ->
         let ry = y + 24 + i * 20 in
-        if i = sel then Gfx.fill g (x + 1) ry (w - 2) 20 0xDCE6EF;
-        ignore (Gfx.text ~bold:true g (x + 8) (ry + 2) it.constructor 0x1F5F99);
+        if top + i = sel then Gfx.fill g (x + 1) ry (w - 2) 20 0xDCE6EF;
+        (* a service's requests in green, the interface's values in blue *)
+        ignore (Gfx.text ~bold:true g (x + 8) (ry + 2) it.constructor
+                  (if it.request then 0x2E7D32 else 0x1F5F99));
         ignore (Gfx.text ~max:((w - 30) / Gfx.char_w - String.length it.constructor - 2) g
                   (x + 16 + Gfx.char_w * String.length it.constructor) (ry + 2)
                   (": " ^ it.signature) Gui.foreground)) items;
-    (match List.nth_opt items sel with
+    (match List.nth_opt all sel with
      | Some it ->
        let dy = y + 24 + 20 * List.length items + 4 in
        List.iteri (fun i l -> if i < 2 then ignore (Gfx.text g (x + 8) (dy + i * 18) l Gui.muted))
-         (wrap ((w - 16) / Gfx.char_w) ((if it.safe then "(safe) " else "") ^ it.doc))
+         (wrap ((w - 16) / Gfx.char_w)
+            ((if it.request then "request" ^ (if it.safe then " (safe): " else ": ") else "") ^ it.doc))
      | None -> ())
   | Complete.Nothing -> ()
 
@@ -364,7 +376,7 @@ let () =
       (* the completion list takes its keys first *)
       (match us.popup with
        | Some (word, (Complete.Items (_, items) as ans), sel) when ui.Gui.field = 1 ->
-         let n = min 8 (List.length items) in
+         let n = List.length items in
          let accept = ref None and close = ref false and sel = ref sel in
          ui.Gui.keys <- List.filter (fun k ->
              match k with
@@ -433,12 +445,15 @@ let () =
       (* the text *)
       (match shown () with
        | Some t ->
-         let typed_now = ui.Gui.field = 1 && ui.Gui.keys <> [] in
+         (* again while an interface is being read: it shows when read *)
+         let typed_now = ui.Gui.field = 1
+                         && (ui.Gui.keys <> []
+                             || (us.popup <> None && Complete.pending ())) in
          Textarea.frame ui 1 t.area ed_x ed_y ed_w ed_h;
          if typed_now then begin
            let w = Textarea.word_before_cursor t.area in
            us.popup <- (if String.contains w '.' then
-                          match Complete.for_word w with
+                          match Complete.for_word ~dir:(Filename.dirname t.path) w with
                           | Complete.Nothing -> None
                           | Complete.Items (_, []) -> None
                           | a -> Some (w, a, 0)
