@@ -89,6 +89,8 @@ let devices = [|
     drivers = [ "netd" ]; irqs = [ 9 ] };
   { d_name = "Video"; d_what = "VGA text, and the Bochs graphics mode with its frame \
                                buffer, mapped by displayd"; drivers = [ "displayd" ]; irqs = [] };
+  { d_name = "Sound"; d_what = "Sound Blaster 16: IRQ 5, soundd; it reads the samples \
+                               by DMA from the kernel's DMA area"; drivers = [ "soundd" ]; irqs = [ 5 ] };
 |]
 
 let device_of_irq irq driver =
@@ -115,7 +117,7 @@ let classify ~io ~parent ~names ~name =
   else if names <> [] || parent = 0 || (parent = 1 && name <> "sh") then Services
   else Programs
 
-let known_driver = [ "consoled"; "ata"; "netd"; "displayd"; "keyboardd"; "seriald" ]
+let known_driver = [ "consoled"; "ata"; "netd"; "displayd"; "soundd"; "keyboardd"; "seriald" ]
 
 let poll st =
   let now = Mynos.uptime () in

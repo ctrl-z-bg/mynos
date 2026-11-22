@@ -1481,3 +1481,5 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   Test: seventh boot, a WAV file and a tone recorded by QEMU and checked
   by frequency. Manual: appendices A, B, E (new E.15, the next renumbered),
   chapters 5, 13 (PLAY), 24, H.
+- **2026-11-22** — The System window shows the sound card: a Sound
+  device (IRQ 5) wired to `soundd`, which it now places among the drivers.
