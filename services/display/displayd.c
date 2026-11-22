@@ -1364,6 +1364,8 @@ static const wire_request_doc requests[] = {
   { 0, "start_at", "(width:I,height:I)", "U",
     "Start the graphical session with the screen at this size (from 800x600, a width "
     "multiple of 8, within the video memory)." },
+  { 1, "sizes", "U", "L<(width:I,height:I)>",
+    "The usual screen sizes the video memory holds (start_at takes others too)." },
 };
 
 static void describe(int ch)
@@ -1525,6 +1527,28 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     break;
   }
   case 7: END(); start_session(1024, 768); reply_unit(ch); break;   /* start */
+  case 14: {                                       /* sizes */
+    static const int usual[][2] = {
+      { 800, 600 }, { 1024, 768 }, { 1152, 864 }, { 1280, 720 }, { 1280, 800 },
+      { 1280, 960 }, { 1280, 1024 }, { 1360, 768 }, { 1440, 900 }, { 1600, 900 },
+      { 1600, 1200 }, { 1680, 1050 }, { 1920, 1080 }, { 1920, 1200 }, { 2560, 1440 },
+      { 2560, 1600 }, { 3840, 2160 } };
+    int k, n = 0;
+    wire_writer o;
+    END();
+    for (k = 0; k < (int)(sizeof usual / sizeof usual[0]); k++)
+      if (!size_refused(usual[k][0], usual[k][1])) n++;
+    wire_writer_init(&o);
+    wire_reply_ok(&o);
+    wire_put_int(&o, n);
+    for (k = 0; k < (int)(sizeof usual / sizeof usual[0]); k++)
+      if (!size_refused(usual[k][0], usual[k][1])) {
+        wire_put_int(&o, usual[k][0]);
+        wire_put_int(&o, usual[k][1]);
+      }
+    send_reply(ch, &o);
+    break;
+  }
   case 13: {                                       /* start_at */
     int ww = wire_get_int(&r), hh = wire_get_int(&r);
     const char * why;

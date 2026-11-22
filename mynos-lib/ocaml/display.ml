@@ -26,6 +26,7 @@ type _ request =
   | Resize_to : int * int * int -> unit request
   | Resizable : int * int * int -> unit request
   | Start_at : int * int -> unit request
+  | Sizes : (int * int) list request
 
 let window_f = Wire.(field "window" int)
 let size_codec = Wire.(pair (field "width" int) (field "height" int))
@@ -94,7 +95,10 @@ module Protocol = struct
       request 13 "start_at"
         "Start the graphical session with the screen at this size (from 800x600, a width \
          multiple of 8, within the video memory)."
-        Wire.(pair (field "width" int) (field "height" int)) Wire.unit ]
+        Wire.(pair (field "width" int) (field "height" int)) Wire.unit;
+      request ~safe:true 14 "sizes"
+        "The usual screen sizes the video memory holds (start_at takes others too)."
+        Wire.unit Wire.(list (pair (field "width" int) (field "height" int))) ]
   type 'a r = 'a request
   type 'a request = 'a r
   type packed = Request : 'a request -> packed
@@ -116,6 +120,7 @@ module Protocol = struct
     | Resize_to (i, x, y) -> case 11; Wire.write w resize_args (i, x, y)
     | Resizable (i, x, y) -> case 12; Wire.write w resizable_args (i, x, y)
     | Start_at (x, y) -> case 13; Wire.write w Wire.(pair (field "width" int) (field "height" int)) (x, y)
+    | Sizes -> case 14
 
   let read_request r =
     match Wire.read r Wire.int with
@@ -134,6 +139,7 @@ module Protocol = struct
     | 12 -> let i, x, y = Wire.read r resizable_args in Request (Resizable (i, x, y))
     | 13 -> let x, y = Wire.read r Wire.(pair (field "width" int) (field "height" int)) in
       Request (Start_at (x, y))
+    | 14 -> Request Sizes
     | n -> raise (Wire.Error (Printf.sprintf "display: unknown request %d" n))
 
   let reply : type a. a request -> a Wire.t = function
@@ -151,6 +157,7 @@ module Protocol = struct
     | Resize_to _ -> Wire.unit
     | Resizable _ -> Wire.unit
     | Start_at _ -> Wire.unit
+    | Sizes -> Wire.(list (pair (field "width" int) (field "height" int)))
 end
 
 module I = Ipc.Make (Protocol)

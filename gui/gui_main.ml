@@ -6,6 +6,7 @@
      gui WxH       start it with the screen at this size (1280x800,
                    1920x1080...), and keep it for the next times
      gui WxH once  this time only
+     gui sizes     the sizes this machine's video memory holds
      gui stop      end it (from another program)
      gui check     compare displayd's description of its protocol with
                    display.ml's (the tests) *)
@@ -13,6 +14,15 @@
 let () =
   match Array.to_list Sys.argv with
   | _ :: [ "stop" ] -> Display.call (Display.connect ()) Display.Stop
+  | _ :: [ "sizes" ] ->
+    let saved = try String.trim (In_channel.with_open_bin "/disk/.display" In_channel.input_all)
+      with Sys_error _ -> "1024x768" in
+    List.iter (fun (w, h) ->
+        let s = Printf.sprintf "%dx%d" w h in
+        Printf.printf "%-10s%s\n" s (if s = saved then "  (gui starts so)" else ""))
+      (Display.call (Display.connect ()) Display.Sizes);
+    print_endline "gui WxH starts at that size and keeps it; other sizes fit too \
+                   (a width multiple of 8, from 800x600)"
   | _ :: [ "check" ] ->
     let shape (rs : Ipc.request_doc list) =
       List.map (fun (r : Ipc.request_doc) -> (r.case, r.name, r.args, r.reply, r.safe)) rs in
@@ -30,8 +40,8 @@ let () =
       | [ s ] | [ s; "once" ] ->
         (match parse s with
          | Some _ as sz -> (sz, args = [ s ])
-         | None -> prerr_endline "usage: gui [WIDTHxHEIGHT [once] | stop | check]"; exit 2)
-      | _ -> prerr_endline "usage: gui [WIDTHxHEIGHT [once] | stop | check]"; exit 2 in
+         | None -> prerr_endline "usage: gui [WIDTHxHEIGHT [once] | sizes | stop | check]"; exit 2)
+      | _ -> prerr_endline "usage: gui [WIDTHxHEIGHT [once] | sizes | stop | check]"; exit 2 in
     (match Display.connect () with
      | exception Mynos.Error _ ->
        prerr_endline "gui: no display service (displayd: QEMU's standard VGA is needed)";
@@ -52,4 +62,4 @@ let () =
        Gui.spawn "/welcome.byte";
        Display.call d Display.Wait_session;
        print_endline "gui: the graphical session ended")
-  | _ -> prerr_endline "usage: gui [WIDTHxHEIGHT [once] | stop | check]"; exit 2
+  | _ -> prerr_endline "usage: gui [WIDTHxHEIGHT [once] | sizes | stop | check]"; exit 2
