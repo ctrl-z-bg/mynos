@@ -755,6 +755,11 @@ let handle = { Fs.handle = fun (type a) (caller : Ipc.caller) (q : a Fs.request)
       | Fs.Mkdir name -> do_mkdir name
       | Fs.Rmdir name -> remove name ~want_dir:true
       | Fs.Rename (name, target) -> do_rename name target
+      | Fs.Space ->
+        (* the clusters, and those the FAT says are free *)
+        let free = ref 0 in
+        for c = 2 to clusters + 1 do if get_fat c = 0 then incr free done;
+        (clusters * (cluster_bytes / 512) / 2, !free * (cluster_bytes / 512) / 2)
     with
     | Status st -> Fs.fail st
     | Invalid_argument e -> Mynos.log ("fatfs: " ^ e); Fs.fail Fs.invalid }

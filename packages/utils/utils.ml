@@ -8,7 +8,7 @@
 let commands : (string * (unit -> unit)) list = [
   "grep", Grep.main; "wc", Wc.main; "head", Head.main; "tail", Tail.main;
   "sort", Sort.main; "uniq", Uniq.main; "find", Find.main; "du", Du.main;
-  "hexdump", Hexdump.main; "tree", Tree.main;
+  "hexdump", Hexdump.main; "tree", Tree.main; "df", Df.main; "clip", Clip.main;
 ]
 
 let () =

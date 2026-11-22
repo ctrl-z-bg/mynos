@@ -171,6 +171,7 @@ a service too: one of its domains serves **power/1** (E.16).
 | `power` | `init/init.ml` | OCaml | io | boot module (`ocamlrun`) | power/1 |
 | `console` | `services/console/consoled.c` | C | io | `driver` | console/1 |
 | `tmpfs` | `services/tmpfs/tmpfs.ml` | OCaml | — | `start` | fs/1 |
+| `clipboard` | `services/clipboard/clipboard_service.ml` | OCaml | — | `start` | clipboard/1: `get`, `set` (the text copied last, for every program) |
 | `ata0` | `services/ata/ata.ml` | OCaml | io | `driver` | block/1 |
 | `fatfs` | `services/fatfs/fatfs.ml` | OCaml | — | `start` | fs/1 |
 | `net` | `services/net/netd.c` | C | io | `driver` | net/1 |
@@ -279,6 +280,7 @@ without a leading slash; `""` is its root.
 | 7 | `mkdir` | `path:S` | `U` | |
 | 8 | `rmdir` | `path:S` (empty) | `U` | |
 | 9 | `rename` | `(from:S,to:S)`; a file of the new name is replaced | `U` | |
+| 10 | `space` | `U` | `(size_kb:I,free_kb:I)`: what `df` shows | yes |
 
 Open flags: 1 write, 2 create, 4 truncate, 8 append (0: read). `whence`:
 0 from the start, 1 from the position, 2 from the end. A descriptor of

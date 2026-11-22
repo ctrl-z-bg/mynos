@@ -57,6 +57,8 @@
 #define FS_RMDIR   8   /* (path:S): an empty directory -> U             */
 #define FS_RENAME  9   /* (from:S,to:S): an existing file of the new
                           name is replaced          -> U                */
+#define FS_SPACE  10   /* () -> (size_kb:I,free_kb:I): the file system's
+                          size and the space free in it, in KB          */
 
 /* Open flags */
 #define FS_O_WRITE   1   /* open for writing (and reading) */

@@ -465,13 +465,13 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     mon "sendkey ctrl-s"; sleep 1
     tools/type-keys.py "$tmp/mon-g" '\n'; sleep 3
     # MyNOS Studio (the package studio, mynos-y87): installed from a
-    # Terminal, started; Run builds its first program (/disk/hello.ml) with
-    # the ocamlc inside MyNOS and runs it (hello.byte, seen from text mode)
+    # Terminal, started; Run builds its first program (/disk/studio/hello.ml)
+    # with the ocamlc inside MyNOS and runs it (hello.byte, seen from text mode)
     click 20 10; sleep 1; click 40 39; sleep 8
     tools/type-keys.py "$tmp/mon-g" 'pkg install studio; studio &\n'; sleep 25
     click 265 91; sleep 20
     click 20 10; sleep 1; click 30 347; sleep 4    # the MyNOS menu, Exit
-    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /disk/untitled.txt; ls /disk\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /disk/untitled.txt; ls /disk /disk/studio\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too
     tools/type-keys.py "$tmp/mon-g" 'ps\n'; sleep 3
@@ -834,6 +834,9 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     waitfor "pkg: calc 1.0 installed" 90
     tools/type-keys.py "$tmp/mon7" "echo zeta > /tmp/s; echo alpha >> /tmp/s; sort /tmp/s | head -n 1 | grep -n alpha; calc '2^100' '1/3 + 1/6'\n"; sleep 8
     tools/type-keys.py "$tmp/mon7" "echo '#!/sh.byte' > /disk/bin/hi; echo 'echo script-\$1' >> /disk/bin/hi; hi ran\n"; sleep 4
+    # df: the file systems' space, each asked (fs/1 space); clip: the
+    # clipboard service, set and read back
+    tools/type-keys.py "$tmp/mon7" 'df; X=ok; clip clip-$X; clip\n'; sleep 5
     # the Z-machine interpreter, in the terminal (no session), against
     # Czech's tests (tests/zmachine)
     tools/type-keys.py "$tmp/mon7" 'pkg install zmachine; echo | zmachine /disk/czech.z5 > /tmp/cz.txt; grep Failed /tmp/cz.txt\n'
@@ -1121,7 +1124,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "windtree-2"                                # ran: no session
     expect "windtree   1.0      compiled from its sources"   # pkg list -i
     expect "pkg: 2048 removed"
-    expect "pkg: utils 1.0 installed (its bytecode): grep wc head tail sort uniq find du hexdump tree"
+    expect "pkg: utils 1.1 installed (its bytecode): grep wc head tail sort uniq find du df hexdump tree clip"
     expect "1:alpha"                                  # sort | head | grep
     expect "1267650600228229401496703205376"          # calc
     expect "1/2 = 0.5"
@@ -1130,6 +1133,8 @@ if [ -f system/ramdisk.dsk ]; then
     expect "717897987691852588770249"                 # scheme
     expect "Purpose Installs packages: demos"         # man
     expect "Directions: north, south"                 # minotaur
+    expect "%  /disk"                                 # df
+    expect "clip-ok"                                  # clip, the clipboard service
     expect "soundd: Sound Blaster 16 (DSP 4.05)"
     expect "play: soundd describes sound/1 as sound.ml does"
     if [ -n "$sound_ok" ]; then

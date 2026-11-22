@@ -97,6 +97,13 @@ Every window has a title bar, with a close box at its right:
 - **Moving.** Drag a window by its title bar.
 - **Closing.** Press the close box and release on it: the window closes.
   If you slip off it before releasing, nothing happens.
+- **Copy and paste.** One clipboard for every window and the console:
+  a service (`clipboard`), so what Text copies Studio pastes, and back.
+  Ctrl-C, Ctrl-X, Ctrl-V in the text boxes and fields; in a Terminal a
+  right click pastes. From `sh`, the package `utils`'s `clip` prints it
+  or copies (`ls | clip`).
+- **Unsaved changes.** Text, Paint and Studio ask before their close box
+  ends them with changes not saved.
 - **Resizing.** A window that can be resized (Terminal, Files, Packages,
   Applications, Log, Agent, Tour, and the packages' manual, wiki, feeds
   and view) has a grip at its bottom right corner: drag it, an outline

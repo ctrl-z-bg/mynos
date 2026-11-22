@@ -121,6 +121,11 @@ let handle = { Fs.handle = fun (type a) (caller : Ipc.caller) (r : a Fs.request)
          Hashtbl.remove files name;
          Hashtbl.replace files target f)          (* replaces an existing one *)
     | Fs.Mkdir _ | Fs.Rmdir _ -> Fs.fail Fs.invalid   (* flat *)
+    | Fs.Space ->
+      (* in memory: what its files take, and the machine's free memory *)
+      let used = Hashtbl.fold (fun _ f acc -> acc + (f.size + 1023) / 1024) files 0 in
+      let free = try (Mynos.stats ()).Mynos.free_pages * 4 with _ -> 0 in
+      (used + free, free)
   }
 
 let () =

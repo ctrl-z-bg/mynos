@@ -480,6 +480,7 @@ let () =
   let alive () = match Mynos.process_info child with
     | Some i -> i.Mynos.alive | None -> false | exception Mynos.Error _ -> false in
   let current () = match !window with Some w -> w | None -> w in
+  let right_was = ref false in
   let rec loop () =
     match Display.next_event ~timeout:0.1 (current ()) with
     | Display.Close -> ()
@@ -489,6 +490,11 @@ let () =
        | Display.Key k -> set_view 0; key k
        | Display.Focus f -> focused := f
        | Display.Wheel n -> set_view (!view - 3 * n)
+       | Display.Mouse { buttons; _ } when buttons land 2 <> 0 && not !right_was ->
+         (* a right click pastes the clipboard (the system's), as if typed *)
+         right_was := true;
+         let s = Clipboard.get () in
+         if s <> "" then begin set_view 0; key s end
        | Display.Resize (nw, nh) ->
          (* the grid that fits, and the window at its exact size *)
          resize ((nw - 2 * margin - bar_w) / cw) ((nh - 2 * margin) / ch);
@@ -506,6 +512,7 @@ let () =
          let room = max 1 (height () - th) in
          set_view (!hist_len - (y - th / 2) * !hist_len / room)
        | _ -> ());
+      (match ev with Display.Mouse { buttons; _ } when buttons land 2 = 0 -> right_was := false | _ -> ());
       serve_reads ();
       render ();
       Mutex.unlock lock;

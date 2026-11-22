@@ -2985,3 +2985,25 @@ included).
 **Lesson.** A handed-over lock is state that lives in a thread: whatever
 ends threads must know about it. And a build that does not know what a
 header changes will one day link two versions of one struct.
+
+## 2026-11-22 — The clipboard: a service of its own
+
+**Symptom.** Text and Studio each had a clipboard of their own (a
+reference in Textarea): what one copied, the other could not paste, and
+a Terminal or sh had none.
+
+**Diagnosis.** The clipboard is state shared by every program, and
+outlives the program that copied. In X it belongs to the display server;
+here displayd is C and knows windows, not text, and the console (sh,
+text mode) has no display at all.
+
+**Decision.** A service, `clipboard` (OCaml, a few lines, protocol
+clipboard/1: get, set), started by init in text mode as well: Textarea
+and Gui's fields copy and paste through it, a Terminal pastes on a right
+click, `clip` (utils) reads it and copies from a pipe. Without the
+service (an older system) Textarea falls back on its own copy.
+
+**Lesson.** In a microkernel a shared piece of state is a service: it
+cost one file, a protocol of two requests, and every program, the agent
+included, can use it, described like any other.
+

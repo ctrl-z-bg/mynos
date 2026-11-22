@@ -277,10 +277,16 @@ let key t k =
   | "\001" ->                                           (* Ctrl-A: all *)
     t.ay <- 0; t.ax <- 0; t.cy <- Array.length t.lines - 1;
     t.cx <- String.length t.lines.(t.cy); t.follow <- true
-  | "\003" -> (match selection t with Some s -> clipboard := s | None -> ())
+  (* the clipboard is the system's (the clipboard service: other programs
+     paste what is copied here); this program's copy if it is not there *)
+  | "\003" -> (match selection t with Some s -> clipboard := s; Clipboard.set s | None -> ())
   | "\024" ->                                           (* Ctrl-X *)
-    (match selection t with Some s -> clipboard := s; delete_selection t 3 | None -> ())
-  | "\022" -> if !clipboard <> "" then insert_kind t 3 !clipboard   (* Ctrl-V *)
+    (match selection t with
+     | Some s -> clipboard := s; Clipboard.set s; delete_selection t 3
+     | None -> ())
+  | "\022" ->                                           (* Ctrl-V *)
+    let s = match Clipboard.get () with "" -> !clipboard | s -> s in
+    if s <> "" then insert_kind t 3 s
   | "\026" -> undo t
   | "\025" -> redo t
   | "\r" | "\n" ->

@@ -11,6 +11,7 @@ type _ request =
   | Mkdir : string -> unit request
   | Rmdir : string -> unit request
   | Rename : string * string -> unit request
+  | Space : (int * int) request
 
 let o_write = 1 and o_creat = 2 and o_trunc = 4 and o_append = 8
 and o_excl = 16
@@ -69,7 +70,10 @@ module Protocol = struct
       request 7 "mkdir" "Make a directory." path Wire.unit;
       request 8 "rmdir" "Remove an empty directory." path Wire.unit;
       request 9 "rename" "Rename a file (one of the new name is replaced)." rename_args
-        Wire.unit ]
+        Wire.unit;
+      request ~safe:true 10 "space"
+        "The file system's size and the space free in it, in KB (a read-only one: none free)."
+        Wire.unit Wire.(pair (field "size_kb" int) (field "free_kb" int)) ]
   type 'a r = 'a request
   type 'a request = 'a r
   type packed = Request : 'a request -> packed
@@ -87,6 +91,7 @@ module Protocol = struct
     | Mkdir p -> case 7; Wire.write w path p
     | Rmdir p -> case 8; Wire.write w path p
     | Rename (a, b) -> case 9; Wire.write w rename_args (a, b)
+    | Space -> case 10
 
   let read_request r =
     match Wire.read r Wire.int with
@@ -100,6 +105,7 @@ module Protocol = struct
     | 7 -> Request (Mkdir (Wire.read r path))
     | 8 -> Request (Rmdir (Wire.read r path))
     | 9 -> let a, b = Wire.read r rename_args in Request (Rename (a, b))
+    | 10 -> Request Space
     | n -> raise (Wire.Error (Printf.sprintf "fs: unknown request %d" n))
 
   let reply : type a. a request -> a Wire.t = function
@@ -113,6 +119,7 @@ module Protocol = struct
     | Mkdir _ -> Wire.unit
     | Rmdir _ -> Wire.unit
     | Rename _ -> Wire.unit
+    | Space -> Wire.(pair (field "size_kb" int) (field "free_kb" int))
 end
 
 module I = Ipc.Make (Protocol)

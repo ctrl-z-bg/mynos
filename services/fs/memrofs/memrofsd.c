@@ -115,6 +115,8 @@ static const wire_request_doc requests[] = {
   { 0, "mkdir", "path:S", "U", "Make a directory." },
   { 0, "rmdir", "path:S", "U", "Remove an empty directory." },
   { 0, "rename", "(from:S,to:S)", "U", "Rename a file (one of the new name is replaced)." },
+  { 1, "space", "U", "(size_kb:I,free_kb:I)",
+    "The file system's size and the space free in it, in KB (a read-only one: none free)." },
 };
 
 static void describe(int channel)
@@ -245,6 +247,18 @@ static void handle(int channel, int client, const char * msg, unsigned int len)
   case FS_WRITE: case FS_REMOVE: case FS_MKDIR: case FS_RMDIR: case FS_RENAME:
     reply_error(channel, FS_READONLY);   /* read-only */
     return;
+  case FS_SPACE: {                       /* its files' bytes; none free */
+    wire_writer w;
+    long long total = 0;
+    int i;
+    for (i = 0; i < MAXFILES && filesystem[i].filename[0]; i++) total += filesystem[i].size;
+    wire_writer_init(&w);
+    wire_reply_ok(&w);
+    wire_put_int(&w, (total + 1023) / 1024);
+    wire_put_int(&w, 0);
+    send_reply(channel, &w);
+    return;
+  }
   }
   reply_error(channel, FS_INVALID);      /* malformed */
 }

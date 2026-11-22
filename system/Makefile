@@ -43,7 +43,7 @@ FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo n
 	../log/log.byte ../gui/log_window.byte ../play/play.byte \
 	../services/llm/llmd.byte \
 	../third_party/ca-certificates/cacert.pem \
-	../services/tmpfs/tmpfs.byte ../services/ata/ata.byte \
+	../services/tmpfs/tmpfs.byte ../services/clipboard/clipboard.byte ../services/ata/ata.byte \
 	../services/fatfs/fatfs.byte ../editor/edit.byte ../sh/sh.byte \
 	../shell/shell.byte ../shell/shell.cmi ../mynos-lib/ocaml/mynos.cmi \
 	$(wildcard $(STDLIB)/*.cmi) \
@@ -60,7 +60,7 @@ FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo n
 	../mynos-lib/ocaml/tracer.cmi ../mynos-lib/ocaml/json.cmi ../mynos-lib/ocaml/http.cmi \
 	../mynos-lib/ocaml/llm.cmi ../mynos-lib/ocaml/tools.cmi \
 	../mynos-lib/ocaml/gfx.cmi ../mynos-lib/ocaml/display.cmi ../mynos-lib/ocaml/gui.cmi \
-	../mynos-lib/ocaml/sound.cmi ../mynos-lib/ocaml/textarea.cmi \
+	../mynos-lib/ocaml/sound.cmi ../mynos-lib/ocaml/textarea.cmi ../mynos-lib/ocaml/clipboard.cmi \
 	../mynos-lib/ocaml/power.cmi ../mynos-lib/ocaml/agent.cmi \
 	../tests/hello/hello.byte ../tests/spawn/child.byte \
 	../tests/ramdisk/AUTOEXEC.BAT

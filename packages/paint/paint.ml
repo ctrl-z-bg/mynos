@@ -29,6 +29,7 @@ type state = {
   mutable colour : int;
   mutable size : int;                          (* 1, 3, 8 *)
   mutable undo : Gfx.t list;
+  mutable changed : bool;                      (* since it was saved or opened *)
   mutable start : (int * int) option;          (* a shape's first corner *)
   mutable last : (int * int) option;           (* the pencil's last point *)
   mutable file : string;
@@ -113,7 +114,9 @@ let copy (c : Gfx.t) =
   let d = Gfx.create c.width c.height in
   Gfx.blit c 0 0 d 0 0 c.width c.height; d
 
-let remember st = st.undo <- copy st.canvas :: List.filteri (fun i _ -> i < 15) st.undo
+let remember st =
+  st.undo <- copy st.canvas :: List.filteri (fun i _ -> i < 15) st.undo;
+  st.changed <- true
 
 let undo st =
   match st.undo with
@@ -129,7 +132,7 @@ let save st =
   let f = if Filename.check_suffix (String.lowercase_ascii st.file) ".png" then st.file
     else Filename.remove_extension st.file ^ ".png" in
   match Out_channel.with_open_bin f (fun oc -> output_string oc (Png.write (to_image st.canvas))) with
-  | () -> st.file <- f; st.message <- "saved: " ^ f
+  | () -> st.file <- f; st.changed <- false; st.message <- "saved: " ^ f
   | exception Sys_error m -> st.message <- m
 
 let load st f =
@@ -143,16 +146,16 @@ let load st f =
         Bigarray.Array1.unsafe_set c.pixels (y * cw + x) (Int32.of_int img.pixels.(y * img.width + x))
       done
     done;
-    remember st; st.canvas <- c; st.file <- f; st.message <- "opened: " ^ f
+    remember st; st.canvas <- c; st.file <- f; st.changed <- false; st.message <- "opened: " ^ f
   | exception (Image.Bad m | Sys_error m) -> st.message <- Filename.basename f ^ ": " ^ m
 
 let () =
   let canvas = Gfx.create cw ch in
   Gfx.fill canvas 0 0 cw ch 0xFFFFFF;
-  let st = { canvas; tool = Pencil; colour = 0; size = 3; undo = []; start = None; last = None;
+  let st = { canvas; tool = Pencil; colour = 0; size = 3; undo = []; changed = false; start = None; last = None;
              file = "/disk/picture.png"; message = "" } in
   (match List.tl (Array.to_list Sys.argv) with f :: _ -> load st f; st.undo <- [] | [] -> ());
-  Gui.run ~title:"Paint" width height st (fun ui st ->
+  Gui.run ~title:"Paint" ~unsaved:(fun () -> st.changed) width height st (fun ui st ->
       let g = ui.Gui.g in
       Gfx.fill g 0 0 width height 0xDDE3E8;
       (* the pointer on the canvas, in the canvas's pixels *)

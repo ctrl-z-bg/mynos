@@ -1530,3 +1530,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   shows as lines removed and added and waits for Allow. Tested by hand
   with a real model (read, replace, build); the graphical session's test
   installs it and runs its first program.
+- **2026-11-22** — The clipboard, a service (mynos-vlr): `clipboard`
+  (`services/clipboard`, started by init, protocol clipboard/1, module
+  `Clipboard`); Textarea and Gui's fields copy and paste through it, a
+  Terminal pastes on a right click, utils' `clip` from sh. Windows ask
+  before closing with unsaved changes (mynos-ia2: `Gui.run ~unsaved`;
+  Text, Paint, Studio). utils 1.1: `df` (mynos-0nc), on fs/1's new
+  `space` (memrofs, tmpfs, fatfs). Tests: the seventh boot's df and clip.
+  Studio 1.1 keeps its files in `/disk/studio/`; Paint 1.1.

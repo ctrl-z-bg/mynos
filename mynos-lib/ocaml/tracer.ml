@@ -187,7 +187,7 @@ let protocols = [
   "fs/1", [| "Open", [ S; I ], [ I ]; "Close", [ I ], []; "Read", [ I; I ], [ S ];
              "Write", [ I; S ], [ I ]; "Seek", [ I; I; I ], [ I ]; "List", [ S ], [];
              "Remove", [ S ], []; "Mkdir", [ S ], []; "Rmdir", [ S ], [];
-             "Rename", [ S; S ], [] |];
+             "Rename", [ S; S ], []; "Space", [], [ I; I ] |];
   "registry/1", [| "Register", [ S ], [ I ]; "Lookup", [ S ], [ I ]; "List", [], [] |];
   "console/1", [| "Read", [ I ], [ S ]; "Mode", [ I; I; I ], []; "Keymap", [ I ], [ I ];
                   "Size", [], [ I; I ];

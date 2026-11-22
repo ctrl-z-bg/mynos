@@ -122,14 +122,16 @@ val file_picker : ui -> int -> picked option
 
 exception Quit
 
-val run : ?title:string -> ?tick:float -> ?resizable:int * int -> int -> int -> 'a ->
-  (ui -> 'a -> 'a) -> unit
+val run : ?title:string -> ?tick:float -> ?resizable:int * int -> ?unsaved:(unit -> bool) ->
+  int -> int -> 'a -> (ui -> 'a -> 'a) -> unit
 (** [run width height state frame]: a window, drawn by [frame] at every
     event (and every [tick] seconds, if given), until it is closed (its
     close box, or [frame] raising {!Quit}). Outside the graphical session
     it says so, and ends the program (exit status 2). With [~resizable:(min_w,
     min_h)] the user may resize it (its grip, a double click on its title
-    to maximize): [frame] then lays out by {!width} and {!height}. *)
+    to maximize): [frame] then lays out by {!width} and {!height}. With
+    [~unsaved], its close box asks "Close without saving?" while
+    [unsaved ()] is true. *)
 
 val width : ui -> int
 val height : ui -> int

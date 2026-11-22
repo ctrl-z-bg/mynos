@@ -85,6 +85,12 @@ let text_field ui id x y w value =
             while !i > 0 && Char.code v.[!i] land 0xC0 = 0x80 do decr i done;
             String.sub v 0 !i
           end
+        (* the clipboard (the system's): Ctrl-V pastes its first line,
+           Ctrl-C copies the field, Ctrl-X cuts it *)
+        | "\022" ->
+          (match String.split_on_char '\n' (Clipboard.get ()) with l :: _ -> v ^ l | [] -> v)
+        | "\003" -> Clipboard.set v; v
+        | "\024" -> Clipboard.set v; ""
         | k when String.length k > 0 && (k.[0] = '\027' || k.[0] < ' ') -> v
         | k -> v ^ k) value ui.keys in
   Gfx.fill ui.g x y w h 0xFFFFFF;
@@ -167,7 +173,7 @@ let scroll ?(colour = panel_colour) ui id x y w h content =
 
 exception Quit
 
-let run ?(title = "") ?(tick = 0.) ?resizable w h state frame =
+let run ?(title = "") ?(tick = 0.) ?resizable ?unsaved w h state frame =
   let window =
     try Display.window ~title w h with
     | Ipc.Remote_error (_, m) | Failure m ->
@@ -191,6 +197,26 @@ let run ?(title = "") ?(tick = 0.) ?resizable w h state frame =
      it is due, not a whole period after every event (moving the mouse over
      a window stopped its animation) *)
   let next_tick = ref (Mynos.uptime () +. tick) in
+  (* the close box with changes not saved: a question over the window,
+     which takes the clicks meanwhile (a modal, as the file picker) *)
+  let closing = ref false in
+  let ask_close () =
+    in_modal := true;
+    Fun.protect ~finally:(fun () -> in_modal := false) (fun () ->
+        let w = width ui and h = height ui in
+        let bw = min 440 (w - 16) and bh = 112 in
+        let bx = (w - bw) / 2 and by = max 8 ((h - bh) / 2) in
+        Gfx.fill ui.g (bx + 5) (by + 5) bw bh 0x55606A;
+        Gfx.fill ui.g bx by bw bh 0xFFFFFF;
+        Gfx.rect ui.g bx by bw bh 0x1B3A57;
+        label ~bold:true ui (bx + 14) (by + 12) "Close without saving?";
+        ignore (paragraph ~colour:muted ui (bx + 14) (by + 36) (bw - 28)
+                  "The changes that were not saved will be lost.");
+        let close = button ui (bx + bw - 262) (by + bh - 38) 148 "Close anyway" in
+        let cancel = button ui (bx + bw - 106) (by + bh - 38) 92 "Cancel"
+                     || List.mem "\027" ui.keys in
+        if cancel && not close then begin closing := false; decr modals end;
+        close) in
   let rec loop state =
     if tick > 0. && Mynos.uptime () >= !next_tick then begin
       ui.tick <- true;
@@ -199,6 +225,7 @@ let run ?(title = "") ?(tick = 0.) ?resizable w h state frame =
     Gfx.fill ui.g 0 0 (width ui) (height ui) background;
     match frame ui state with
     | exception Quit -> destroy ()
+    | state when !closing && ask_close () -> destroy ()
     | state ->
       match Display.damage ui.window with
       | exception (Ipc.Remote_error _ | Mynos.Error _) -> ()
@@ -211,7 +238,13 @@ let run ?(title = "") ?(tick = 0.) ?resizable w h state frame =
       if changed then loop state else
       let timeout = if tick > 0. then max 0.001 (!next_tick -. Mynos.uptime ()) else tick in
       (match Display.next_event ~timeout ui.window with
-       | Display.Close -> destroy ()
+       | Display.Close ->
+         (match unsaved with
+          | Some f when f () ->
+            (* asked once: the question shows until it is answered *)
+            if not !closing then begin closing := true; incr modals end;
+            loop state
+          | _ -> destroy ())
        | Display.Mouse { x; y; buttons } ->
          if buttons land 1 <> 0 && ui.buttons land 1 = 0 then ui.press <- (x, y);
          if buttons land 1 = 0 && ui.buttons land 1 <> 0 then ui.clicked <- true;

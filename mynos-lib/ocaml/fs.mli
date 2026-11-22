@@ -23,6 +23,8 @@ type _ request =
   | Mkdir : string -> unit request
   | Rmdir : string -> unit request
   | Rename : string * string -> unit request
+  | Space : (int * int) request
+      (** the file system's size and its space free, in KB *)
 
 (** Open flags *)
 

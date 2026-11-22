@@ -32,7 +32,11 @@ let message = ref ""
 
 let is_ocaml p = Filename.check_suffix p ".ml" || Filename.check_suffix p ".mli"
 
-let absolute p = if Filename.is_relative p then Filename.concat "/disk" p else p
+(* Studio's files: in a folder of their own, unless a path says otherwise *)
+let home = "/disk/studio"
+let make_home () = try Sys.mkdir home 0o755 with Sys_error _ -> ()
+
+let absolute p = if Filename.is_relative p then Filename.concat home p else p
 
 let find_tab path = List.find_index (fun t -> t.path = path) !tabs
 
@@ -322,10 +326,11 @@ let draw_popup ui (word, answer, sel) =
 let () =
   start_service ();
   Runner.start_service ();
+  make_home ();
   List.iter (fun f -> ignore (open_tab f)) (List.tl (Array.to_list Sys.argv));
   if !tabs = [] then begin
     (* a first program, to build and run at once *)
-    let hello = "/disk/hello.ml" in
+    let hello = Filename.concat home "hello.ml" in
     if not (Sys.file_exists hello) then
       (try Out_channel.with_open_bin hello (fun oc ->
            output_string oc "(* Build, then Run: its output comes below. *)\n\n\
@@ -336,7 +341,9 @@ let () =
   current := 0;
   let us = { find = ""; typed = ""; line = ""; naming = None; popup = None } in
   let first = ref true in
-  Gui.run ~title:"MyNOS Studio" ~tick:0.2 ~resizable:(720, 460) width height () (fun ui () ->
+  Gui.run ~title:"MyNOS Studio" ~tick:0.2 ~resizable:(720, 460)
+    ~unsaved:(fun () -> List.exists (fun t -> Textarea.modified t.area) !tabs)
+    width height () (fun ui () ->
       Mutex.protect lock @@ fun () ->
       let width = Gui.width ui and height = Gui.height ui in
       let g = ui.Gui.g in
@@ -351,7 +358,7 @@ let () =
           | "\019" -> (match shown () with Some t -> ignore (save_tab t) | None -> ())
           | "\002" -> start_build Show
           | "\018" -> start_build Run_it
-          | "\015" -> Gui.open_file_picker ~title:"A file" ~dir:"/disk" 1
+          | "\015" -> Gui.open_file_picker ~title:"A file" ~dir:home 1
           | "\006" -> ui.Gui.field <- 5
           | _ -> ()) ui.Gui.keys;
       (* the completion list takes its keys first *)
@@ -381,8 +388,8 @@ let () =
       Gfx.fill g 0 0 width bar 0x1B3A57;
       let bx = ref 6 in
       let button label w = let x = !bx in bx := !bx + w + 4; Gui.button ui x 4 w label in
-      if button "Open" 52 then Gui.open_file_picker ~title:"A file" ~dir:"/disk" 1;
-      if button "New" 44 then begin us.naming <- Some (false, "/disk/new.ml"); ui.Gui.field <- 4 end;
+      if button "Open" 52 then Gui.open_file_picker ~title:"A file" ~dir:home 1;
+      if button "New" 44 then begin us.naming <- Some (false, Filename.concat home "new.ml"); ui.Gui.field <- 4 end;
       if button "Save" 50 then (match shown () with Some t -> ignore (save_tab t) | None -> ());
       if button "Build" 56 then start_build Show;
       if button "Run" 44 then start_build Run_it;
@@ -568,8 +575,8 @@ let () =
            us.naming <- None; ui.Gui.field <- 1;
            if not service then ignore (open_tab name)
            else begin
-             (try Sys.mkdir "/disk/studio" 0o755 with Sys_error _ -> ());
-             let path = Printf.sprintf "/disk/studio/%s.ml" name in
+             make_home ();
+             let path = Printf.sprintf "%s/%s.ml" home name in
              if not (Sys.file_exists path) then
                Out_channel.with_open_bin path (fun oc -> output_string oc (Template.service name));
              ignore (open_tab path);

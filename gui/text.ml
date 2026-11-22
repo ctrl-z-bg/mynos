@@ -61,7 +61,8 @@ let () =
      else begin st.path <- Some f; st.area <- area_for f ""; st.message <- "a new file: " ^ f end
    | [] -> ());
   let first = ref true in
-  Gui.run ~title:(title st) ~resizable:(360, 200) width height st (fun ui st ->
+  Gui.run ~title:(title st) ~resizable:(360, 200) ~unsaved:(fun () -> Textarea.modified st.area)
+    width height st (fun ui st ->
       let width = Gui.width ui and height = Gui.height ui in
       if !first then begin first := false; ui.Gui.field <- 1 end;
       (* the title says the file, and whether it changed *)

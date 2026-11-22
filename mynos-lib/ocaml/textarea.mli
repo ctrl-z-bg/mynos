@@ -13,7 +13,7 @@
     id: a click in it gives them): the arrows, Home, End, Page Up and Page
     Down, with Shift to select; Backspace, Delete, Enter (keeping the
     line's indentation), Tab; Ctrl-A all, Ctrl-C copy, Ctrl-X cut, Ctrl-V
-    paste (a clipboard of the program's), Ctrl-Z undo, Ctrl-Y redo. Other
+    paste (the system's clipboard), Ctrl-Z undo, Ctrl-Y redo. Other
     keys (Ctrl-S, Ctrl-F...) are the program's: it finds them in
     [ui.Gui.keys]. The mouse places the cursor and selects by dragging;
     the wheel and the bar at the right scroll. *)
@@ -106,6 +106,7 @@ val set_marks : t -> mark list -> unit
 
 val mark_at_cursor : t -> mark option
 
-(** {1 The clipboard} (the program's: shared by its boxes) *)
+(** {1 The clipboard} The system's (module {!Clipboard}): what one program
+    copies, another pastes. This copy serves without the service. *)
 
 val clipboard : string ref

@@ -94,6 +94,12 @@ display.cmi: display.mli gfx.cmi ipc.cmi
 display.cmo: display.ml display.cmi
 	$(OCAMLC) -c display.ml
 
+clipboard.cmi: clipboard.mli ipc.cmi
+	$(OCAMLC) -c clipboard.mli
+
+clipboard.cmo: clipboard.ml clipboard.cmi
+	$(OCAMLC) -c clipboard.ml
+
 sound.cmi: sound.mli ipc.cmi
 	$(OCAMLC) -c sound.mli
 
@@ -106,7 +112,7 @@ textarea.cmi: textarea.mli gui.cmi
 textarea.cmo: textarea.ml textarea.cmi
 	$(OCAMLC) -c textarea.ml
 
-gui.cmi: gui.mli display.cmi
+gui.cmi: gui.mli display.cmi clipboard.cmi
 	$(OCAMLC) -c gui.mli
 
 gui.cmo: gui.ml gui.cmi
@@ -124,7 +130,7 @@ tracer.cmi: tracer.mli
 tracer.cmo: tracer.ml tracer.cmi
 	$(OCAMLC) -c tracer.ml
 
-MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo fs.cmo console.cmo registry.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo tracer.cmo agent.cmo gfx.cmo display.cmo gui.cmo textarea.cmo power.cmo sound.cmo
+MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo fs.cmo console.cmo registry.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo tracer.cmo agent.cmo gfx.cmo display.cmo clipboard.cmo gui.cmo textarea.cmo power.cmo sound.cmo
 
 # every module but Mynos uses Mynos: a change in mynos.mli recompiles them
 $(filter-out mynos.cmo,$(MODULES)) $(filter-out mynos.cmi,$(MODULES:.cmo=.cmi)): mynos.cmi
