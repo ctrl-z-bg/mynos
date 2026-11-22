@@ -210,6 +210,73 @@ let lock = Mutex.create ()
 let fetched : (int * doc) option ref = ref None
 let fetches = ref 0
 
+(* ---- pictures: fetched by a thread, after the page; PNG and JPEG ---- *)
+
+type picture = Loading | Ready of Image.t | Failed
+
+let pictures : (string, picture) Hashtbl.t = Hashtbl.create 32
+let pictures_done = Atomic.make 0              (* a picture came: lay out again *)
+let scaled : (string * int * int, Gfx.t) Hashtbl.t = Hashtbl.create 32
+
+(* the bytes of a URL: file:, http:, https: (redirections followed) *)
+let rec bytes_of ?(n = 0) url =
+  match scheme_of url with
+  | Some "file" ->
+    let path = String.sub url 5 (String.length url - 5) in
+    (try Ok (In_channel.with_open_bin path In_channel.input_all) with Sys_error m -> Error m)
+  | Some ("http" | "https") ->
+    (match Http.get ~timeout:20000 ~headers:[ ("User-Agent", user_agent) ] url with
+     | r when r.Http.status >= 300 && r.status < 400 && n < 5 ->
+       (match Http.header "location" r with
+        | Some l -> bytes_of ~n:(n + 1) (resolve url l)
+        | None -> Error "a redirection without its place")
+     | r when r.status = 200 -> Ok r.body
+     | r -> Error (string_of_int r.status)
+     | exception Http.Error m -> Error m
+     | exception e -> Error (Printexc.to_string e))
+  | _ -> Error "not fetched"
+
+let decode_picture body =
+  match (if Png.is_png body then Some (Png.read body)
+         else if Jpeg.is_jpeg body then Some (Jpeg.read body) else None) with
+  | Some img when img.Image.width <= 4096 && img.height <= 4096
+                  && img.width * img.height <= 4_000_000 -> Ready img
+  | _ | exception _ -> Failed
+
+(* the pictures of a page, one after the other (40 at most) *)
+let fetch_pictures urls =
+  let todo = Mutex.protect lock (fun () ->
+      List.filter (fun u ->
+          if Hashtbl.mem pictures u then false
+          else (Hashtbl.replace pictures u Loading; true)) urls) in
+  if todo <> [] then
+    ignore (Thread.create (fun () ->
+        List.iteri (fun i u ->
+            let p = if i >= 40 then Failed else
+                match bytes_of u with
+                | Ok body when String.length body <= 4_000_000 -> decode_picture body
+                | _ -> Failed in
+            Mutex.protect lock (fun () -> Hashtbl.replace pictures u p);
+            Atomic.incr pictures_done) todo) ())
+
+let picture_of url = Mutex.protect lock (fun () -> Hashtbl.find_opt pictures url)
+
+(* a picture at its size on the page, made once (nearest pixel) *)
+let picture_at url (img : Image.t) w h =
+  match Hashtbl.find_opt scaled (url, w, h) with
+  | Some g -> g
+  | None ->
+    let g = Gfx.create w h in
+    for y = 0 to h - 1 do
+      let sy = y * img.height / h in
+      for x = 0 to w - 1 do
+        let sx = x * img.width / w in
+        Bigarray.Array1.unsafe_set g.Gfx.pixels (y * w + x)
+          (Int32.of_int img.pixels.(sy * img.width + sx))
+      done
+    done;
+    Hashtbl.replace scaled (url, w, h) g; g
+
 let line_h = 18
 
 let () =
@@ -232,6 +299,7 @@ let () =
       st.forward <- [];
       start_fetch url in
     if first <> "about:start" then go first;
+    let pictures_seen = ref 0 in
     Gui.run ~title:"Browser" ~tick:0.1 ~resizable:(480, 320) 900 640 st (fun ui st ->
         let g = ui.Gui.g and width = Gui.width ui and height = Gui.height ui in
         (* a page fetched: shown, at its fragment if it has one *)
@@ -273,9 +341,23 @@ let () =
         (* the page, laid out for the width it has *)
         let box_y = 44 and box_h = height - 44 - 24 in
         let cols = (width - 40) / Gfx.char_w in
+        (* a picture came: the page laid out again, with its size *)
+        let done_now = Atomic.get pictures_done in
+        if done_now <> !pictures_seen then begin pictures_seen := done_now; st.laid <- None end;
+        let size src attr =
+          match picture_of (resolve st.doc.url src) with
+          | Some (Ready img) -> Some (img.Image.width, img.height)
+          | Some Failed -> (match attr with Some _ -> attr | None -> Some (0, 0))
+          | _ -> attr in
         let page = match st.laid with
           | Some (w, p) when w = cols -> p
-          | _ -> let p = Layout.layout ~width:cols st.doc.tokens in st.laid <- Some (cols, p); p in
+          | _ ->
+            let p = Layout.layout ~size ~width:cols st.doc.tokens in
+            st.laid <- Some (cols, p);
+            (* its pictures, to fetch *)
+            fetch_pictures (Array.to_list p.lines |> List.filter_map (fun (l : Layout.line) ->
+                Option.map (fun (pic : Layout.picture) -> resolve st.doc.url pic.src) l.picture));
+            p in
         (match st.want_scroll with
          | Some s ->
            (* a fragment: its anchor's line *)
@@ -310,6 +392,25 @@ let () =
                     Gfx.fill g (12 + k * 16) y 2 line_h 0xC0C8D0
                   done;
                   if l.rule then Gfx.fill g 12 (y + 8) (width - 48) 1 0xC0C8D0;
+                  (match l.picture with
+                   | Some pic ->
+                     let url = resolve st.doc.url pic.src in
+                     let x = 16 + 8 * l.bar * 2 in
+                     (match picture_of url with
+                      | Some (Ready img) when pic.pw > 0 ->
+                        Gfx.blit (picture_at url img pic.pw pic.ph) 0 0 g x y pic.pw pic.ph
+                      | state ->
+                        (* not here (yet): a frame and its words *)
+                        let label = (if pic.alt <> "" then pic.alt else Filename.basename pic.src)
+                                    ^ (match state with Some Loading | None -> " (loading)" | _ -> "") in
+                        let w = max 60 (if pic.pw > 0 then pic.pw else 8 * Layout.cells label + 16) in
+                        let h = max (line_h - 2) pic.ph in
+                        Gfx.rect g x y (min w (width - 40)) h 0xC0C8D0;
+                        ignore (Gui.text ~max:((min w (width - 40) - 8) / 8) ui (x + 4) (y + 1) label Gui.muted));
+                     (match pic.plink with
+                      | Some h -> links := (x, y, max pic.pw 60, max line_h pic.ph, h) :: !links
+                      | None -> ())
+                   | None -> ());
                   List.iter (fun (s : Layout.span) ->
                       let x = 16 + s.col * Gfx.char_w in
                       let n = Layout.cells s.text in
@@ -317,22 +418,21 @@ let () =
                       if s.style.underline then Gfx.fill g x (y + 15) (n * Gfx.char_w) 1 s.style.colour;
                       if s.style.strike then Gfx.fill g x (y + 8) (n * Gfx.char_w) 1 s.style.colour;
                       match s.style.link with
-                      | Some h -> links := (x, y, n * Gfx.char_w, h) :: !links
+                      | Some h -> links := (x, y, n * Gfx.char_w, line_h, h) :: !links
                       | None -> ()) l.spans
                 end) page.lines;
             12 + Array.length page.lines * line_h);
         (* a link under the pointer: shown below; a click follows it *)
-        let inside (x, y, w, _) px py = px >= x && px < x + w && py >= y && py < y + line_h
-                                        && py >= box_y && py < box_y + box_h in
+        let inside (x, y, w, lh, _) px py = px >= x && px < x + w && py >= y && py < y + lh
+                                            && py >= box_y && py < box_y + box_h in
         st.hover <- None;
-        List.iter (fun (x, y, w, h) ->
-            if inside (x, y, w, h) ui.Gui.mx ui.Gui.my then st.hover <- Some (resolve st.doc.url h))
+        List.iter (fun ((_, _, _, _, h) as l) ->
+            if inside l ui.Gui.mx ui.Gui.my then st.hover <- Some (resolve st.doc.url h))
           !links;
         (if ui.Gui.clicked then
            let px, py = ui.Gui.press in
-           match List.find_opt (fun (x, y, w, h) ->
-               inside (x, y, w, h) px py && inside (x, y, w, h) ui.Gui.mx ui.Gui.my) !links with
-           | Some (_, _, _, h) ->
+           match List.find_opt (fun l -> inside l px py && inside l ui.Gui.mx ui.Gui.my) !links with
+           | Some (_, _, _, _, h) ->
              let target = resolve st.doc.url h in
              if String.length h > 0 && h.[0] = '#' then begin
                st.address <- target; st.want_scroll <- Some st.offset

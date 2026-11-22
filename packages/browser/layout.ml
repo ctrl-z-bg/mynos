@@ -18,7 +18,17 @@ type line = {
   spans : span list;
   rule : bool;                     (* a horizontal rule *)
   bar : int;                       (* quote bars at its left (blockquote depth) *)
+  picture : picture option;        (* a picture starts on this line *)
 }
+and picture = {
+  src : string;                    (* as written *)
+  alt : string;
+  plink : string option;           (* inside a link: its href *)
+  pw : int;                        (* its size on the page, in pixels *)
+  ph : int;
+}
+
+let line_h = 18
 
 type page = {
   title : string;
@@ -67,7 +77,10 @@ let block_tags = [ "p"; "div"; "section"; "article"; "header"; "footer"; "nav"; 
 let skipped = [ "script"; "style"; "head"; "template"; "svg"; "math"; "iframe"; "object";
                 "select"; "canvas"; "audio"; "video"; "map"; "noembed" ]
 
-let layout ~width tokens =
+(* [size src]: a picture's size in pixels, when known (fetched, or its
+   width and height attributes); a picture is laid out on lines of its
+   own, as tall as it is, narrowed to the page *)
+let layout ?(size = fun _ _ -> None) ~width tokens =
   let width = max 20 width in
   let lines = ref [] and anchors = ref [] and title = ref "" and base = ref None in
   let cur = ref [] and col = ref 0 in           (* the line being made: spans, reversed *)
@@ -76,7 +89,7 @@ let layout ~width tokens =
   let blank_wanted = ref 0 in                   (* empty lines due before the next text *)
   let line_count () = List.length !lines in
   let push_line ?(rule = false) () =
-    lines := { spans = List.rev !cur; rule; bar = !bars } :: !lines;
+    lines := { spans = List.rev !cur; rule; bar = !bars; picture = None } :: !lines;
     cur := []; col := 0; pending_space := false in
   let new_line () = if !cur <> [] then push_line () in
   let want_blank n =
@@ -217,8 +230,38 @@ let layout ~width tokens =
           | "small" | "sub" | "sup" -> push name { st with colour = (if st.link <> None then st.colour else muted) }
           | "mark" -> push name { st with bold = true }
           | "img" ->
-            let alt = match Html.attr "alt" attrs with Some a when String.trim a <> "" -> a | _ -> "image" in
-            add_word { st with colour = (if st.link <> None then link_colour else muted) } ("[" ^ alt ^ "]")
+            let alt = match Html.attr "alt" attrs with Some a -> String.trim a | None -> "" in
+            let num a = match Html.attr a attrs with
+              | Some v -> int_of_string_opt (String.trim (List.hd (String.split_on_char 'p' v)))
+              | None -> None in
+            let src = Option.value (Html.attr "src" attrs) ~default:"" in
+            let small = match num "width", num "height" with
+              | Some w, Some h -> w <= 32 && h <= 32 | Some w, None -> w <= 32
+              | None, Some h -> h <= 32 | None, None -> false in
+            if src = "" || small then begin
+              (* an icon, a spacer: its words, if it has some *)
+              if alt <> "" then
+                add_word { st with colour = (if st.link <> None then link_colour else muted) } ("[" ^ alt ^ "]")
+            end else begin
+              let attr_size = match num "width", num "height" with
+                | Some w, Some h when w > 0 && h > 0 -> Some (w, h) | _ -> None in
+              let max_w = width * 8 - 8 * !indent in
+              match (match size src attr_size with Some s -> Some s | None -> attr_size) with
+              | Some (w, h) when w > 0 && h > 0 ->
+                let pw = min w max_w in
+                let ph = h * pw / w in
+                new_line ();
+                lines := { spans = []; rule = false; bar = !bars;
+                           picture = Some { src; alt; plink = st.link; pw; ph } } :: !lines;
+                for _ = 2 to (ph + line_h - 1) / line_h do push_line () done;
+                blank_wanted := 0
+              | _ ->
+                (* its size not known yet: a line, which the picture
+                   takes once fetched *)
+                new_line ();
+                lines := { spans = []; rule = false; bar = !bars;
+                           picture = Some { src; alt; plink = st.link; pw = 0; ph = line_h } } :: !lines
+            end
           | "input" ->
             (match Option.map String.lowercase_ascii (Html.attr "type" attrs) with
              | Some "hidden" -> ()
@@ -271,6 +314,9 @@ let layout ~width tokens =
 let to_text page =
   let b = Buffer.create 4096 in
   Array.iter (fun l ->
+      (match l.picture with
+       | Some p -> Buffer.add_string b ("[picture" ^ (if p.alt <> "" then ": " ^ p.alt else "") ^ "]")
+       | None -> ());
       if l.rule then Buffer.add_string b "----------------------------------------"
       else begin
         let col = ref 0 in

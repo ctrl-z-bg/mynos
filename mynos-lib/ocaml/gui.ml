@@ -279,6 +279,7 @@ let text_field ui id x y w value =
         | "\022" ->
           (match String.split_on_char '\n' (Clipboard.get ()) with l :: _ -> v ^ l | [] -> v)
         | "\003" -> Clipboard.set v; v
+        | "\021" -> ""                                   (* Ctrl-U: all of it gone *)
         | "\024" -> Clipboard.set v; ""
         | k when String.length k > 0 && (k.[0] = '\027' || k.[0] < ' ') -> v
         | k -> v ^ k) value ui.keys in

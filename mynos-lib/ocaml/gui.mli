@@ -88,7 +88,8 @@ val scroll_to : ui -> int -> int -> unit
 val text_field : ui -> int -> int -> int -> int -> string -> string
 (** [text_field ui id x y width value]: an editable line; [id] tells the
     fields of a window apart (a click gives the keys to one). The value,
-    edited by this frame's keys. *)
+    edited by this frame's keys: Backspace, Ctrl-U (all gone), Ctrl-C,
+    Ctrl-X, Ctrl-V (the clipboard). *)
 
 val list_item : ui -> int -> int -> int -> selected:bool -> string -> bool
 (** [list_item ui x y width ~selected label]: a row of a list; [true] when

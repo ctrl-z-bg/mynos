@@ -1616,4 +1616,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   Join a game plays at another's. Receiving in threads. `UDP=PORT`
   (run-qemu.sh, run-demo.sh) and `run-mynos.sh --udp PORT` forward a UDP
   port. Tried with two MyNOS under QEMU, one joining through the host.
+- **2026-11-22** — browser 1.1, phase 2 begun (mynos-vtq): pictures, PNG
+  and JPEG (`jpeg.ml`, baseline: Huffman, IDCT, any chroma sampling,
+  restart markers; checked against PIL: 52 dB at 4:4:4, the chroma's
+  nearest-sample upsampling below that), fetched by a thread after the
+  page, laid out at their size on lines of their own, narrowed to the
+  page, clickable in links; icons stay text. Gui's fields: Ctrl-U.
 
