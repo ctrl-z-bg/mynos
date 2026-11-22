@@ -16,6 +16,9 @@
 #   --no-sound    no sound card (by default a Sound Blaster 16, through
 #                 the host's audio: pipewire, pulseaudio, alsa, coreaudio)
 #   --reset-disk  start /disk again, empty (disk.img is replaced)
+#   --display UI  QEMU's window: sdl (the default with sound, when this
+#                 QEMU has it: with gtk and a sound card QEMU's window
+#                 could freeze), gtk, or another of qemu -display help
 #
 # A llm.env beside this script (see llm.env.example) is copied into the
 # disk at every start, if mtools' mcopy is installed; otherwise write
@@ -24,7 +27,7 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$here"
 
-serial= net=1 http=8080 http_given= mem=256 reset= kvm=1 sound=1
+serial= net=1 http=8080 http_given= mem=256 reset= kvm=1 sound=1 ui=
 while [ $# -gt 0 ]; do
     case "$1" in
         --serial) serial=1 ;;
@@ -34,6 +37,7 @@ while [ $# -gt 0 ]; do
         --reset-disk) reset=1 ;;
         --no-kvm) kvm= ;;
         --no-sound) sound= ;;
+        --display) shift; ui=${1:?--display needs a name} ;;
         --) shift; break ;;
         -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "run-mynos.sh: unknown option $1 (--help)" >&2; exit 2 ;;
@@ -123,6 +127,17 @@ if [ -n "$serial" ]; then
         -serial chardev:term -mon chardev=term,mode=readline "$@"
     echo "run-mynos.sh: this terminal is MyNOS's console too (Ctrl-A X stops QEMU)" >&2
 fi
+
+# the window: with a sound card, SDL rather than GTK (QEMU's GTK window
+# froze, its main loop spinning, while the sound card played), unless
+# the options choose one
+case " $* " in
+    *" -display "*|*" -nographic "*) ;;
+    *)
+        if [ -z "$ui" ] && [ -n "$audio" ] &&
+           qemu-system-i386 -display help 2>/dev/null | grep -qx sdl; then ui=sdl; fi
+        [ -n "$ui" ] && set -- -display "$ui" "$@" ;;
+esac
 
 # -boot d: the BIOS would try the disk first, which is not bootable
 # shellcheck disable=SC2086

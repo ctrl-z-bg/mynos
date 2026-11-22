@@ -8,7 +8,9 @@
 # opens the OCaml toplevel. NET= (empty) boots without a network card;
 # HTTP=PORT forwards another host port to httpd. With /dev/kvm usable,
 # KVM runs the processor (KVM= emulates it). A Sound Blaster 16 plays
-# through the host's audio (SOUND=BACKEND chooses QEMU's, SOUND= none). llm.env, if there is one
+# through the host's audio (SOUND=BACKEND chooses QEMU's, SOUND= none);
+# with sound, QEMU's window is SDL's, not GTK's (QEMU_DISPLAY=gtk chooses
+# it again: with a sound card it froze). llm.env, if there is one
 # (see llm.env.example), is copied into the disk as /disk/llm.env, for llmd.
 # SERIAL=1 makes this terminal a console of MyNOS too (its second serial
 # port: doc/decisions/console.md), with the host's copy and paste,
@@ -74,6 +76,17 @@ if [ -z "${KVM+set}" ]; then
     fi
 fi
 [ "${1:-}" = "--" ] && shift
+# the window: with a sound card, SDL rather than GTK (QEMU's GTK window
+# froze, its main loop spinning, while the sound card played);
+# QEMU_DISPLAY=gtk (or another) chooses, a -display among the options too
+case " $* " in
+    *" -display "*|*" -nographic "*) ;;
+    *)
+        ui=${QEMU_DISPLAY:-}
+        if [ -z "$ui" ] && [ -n "${SOUND:-}" ] &&
+           qemu-system-i386 -display help 2>/dev/null | grep -qx sdl; then ui=sdl; fi
+        [ -n "$ui" ] && set -- -display "$ui" "$@" ;;
+esac
 if [ -n "${SERIAL:-}" ]; then
     set -- -chardev stdio,id=term,signal=off,mux=on -serial null \
         -serial chardev:term -mon chardev=term,mode=readline "$@"

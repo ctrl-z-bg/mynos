@@ -3112,3 +3112,31 @@ game's beeps keep the card running. GavML turns its sounds off with M
 **Lesson.** An emulated device's cost is the host's too: what is cheap
 on the card (pausing it) may be dear for the emulator.
 
+## 2026-11-22 — QEMU's GTK window froze with the sound card playing
+
+**Symptom.** With sound, as soon as GavML's ball was touched, the whole
+screen froze, the pointer too; the game went on (its beeps were heard).
+QEMU printed "audio: Writing to disabled voice sb16" now and then.
+
+**Diagnosis.** The game going on meant MyNOS was not stuck: displayd
+answers every frame of GavML, which would have stopped with it. `top -H`
+on the host: QEMU's main thread at 100%, its vCPU (KVM) at 8%. The main
+thread draws QEMU's window and reads the mouse and the keyboard; the
+guest runs in the vCPU. gdb on it: in its main loop's ppoll. The same
+with PipeWire and PulseAudio; not with SDL's window; not without a
+window (here: the main thread at 1 to 17%, whatever the backend).
+
+**Cause.** In QEMU (10.2), its GTK window and the SB16 playing make the
+main loop spin; not MyNOS's.
+
+**Fix.** run-demo.sh and run-mynos.sh open SDL's window when there is a
+sound card and this QEMU has SDL (`QEMU_DISPLAY=gtk`, `--display gtk`
+choose GTK again). Along the way, two things that could have made
+MyNOS's side worse are gone: soundd pauses the card after 20 s of
+silence, not half a second (a game's beeps no longer pause and resume it
+again and again), and displayd asks soundd for the volume without
+holding its lock (the pointer never waits for soundd).
+
+**Lesson.** "Everything froze but the sound goes on" points out of the
+guest: look at the emulator's threads before the system's.
+

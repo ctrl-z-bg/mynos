@@ -1605,4 +1605,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   JOURNAL). gavml 1.2: M, or a button, turns its sounds off.
   displayd asks soundd for the volume without its lock (the pointer and
   the windows never wait for soundd).
+- **2026-11-22** — With sound, run-demo.sh and run-mynos.sh open QEMU's SDL
+  window, not GTK's: GTK's froze (QEMU's main loop spinning) while the
+  SB16 played (JOURNAL). soundd pauses after 20 s of silence.
 
