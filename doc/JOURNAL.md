@@ -3063,3 +3063,27 @@ ES1370 or AC97 (PCI, bus-master DMA) capture from the host's input.
 already reads to find the frame buffer), and only under QEMU. Playback
 stays on the SB16, which both emulators have.
 
+## 2026-11-22 — A second domain slowed camlboy by a tenth
+
+**Symptom.** With the Game Boy's sound on, camlboy ran at 54 frames a
+second under KVM instead of 60; with the sound off (M), 60 again.
+
+**Diagnosis.** The sound's emulation costs 15% on the host (329 frames
+a second without, 273 with): far from the margin, CAMLBOY doing 357
+inside MyNOS. So not the CPU. The other change was a domain that sends
+the samples to the sound service. Changed to a thread (module Thread):
+60 frames a second, with the sound.
+
+**Cause.** In OCaml 5 a minor collection stops every domain. A domain
+waiting (a Condition, an IPC call) takes part through its backup
+thread, which the runtime must wake; in MyNOS a thread wakes at the
+scheduler's pace, so each of camlboy's many minor collections waited for
+it.
+
+**Fix.** Threads, not domains, for helpers that mostly wait (camlboy's
+sound, GAV's tones). Threads share their domain's lock: no stop the
+world to join.
+
+**Lesson.** In MyNOS a domain is for work that runs in parallel and is
+worth its cost at every collection; something that waits is a thread.
+

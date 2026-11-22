@@ -13,9 +13,10 @@ module Make (Cartridge : Addressable_intf.S) = struct
     ic          : Interrupt_controller.t;
     timer       : Timer.t;
     dt          : Mmap_register.t;
+    apu         : Apu.t;
   }
 
-  let create ~cartridge ~wram ~gpu ~zero_page ~shadow_ram ~joypad ~serial_port ~ic ~timer ~dma_transfer = {
+  let create ~cartridge ~wram ~gpu ~zero_page ~shadow_ram ~joypad ~serial_port ~ic ~timer ~dma_transfer ~apu = {
     cartridge;
     wram;
     shadow_ram;
@@ -26,6 +27,7 @@ module Make (Cartridge : Addressable_intf.S) = struct
     ic;
     timer;
     dt = dma_transfer;
+    apu;
   }
 
 
@@ -41,6 +43,7 @@ module Make (Cartridge : Addressable_intf.S) = struct
     | _ when Interrupt_controller.accepts t.ic addr -> Interrupt_controller.read_byte t.ic addr
     | _ when Timer.accepts t.timer addr             -> Timer.read_byte t.timer addr
     | _ when Mmap_register.accepts t.dt addr        -> Mmap_register.read_byte t.dt addr
+    | _ when Apu.accepts t.apu addr                 -> Apu.read_byte t.apu addr
     | _ ->
       (* Undocumented IO registers should always return 0xFF. Blargg's cpu_insrs fail without this.
        * https://www.reddit.com/r/EmuDev/comments/ipap0w/comment/g76m04i/?utm_source=share&utm_medium=web2x&context=3 *)
@@ -71,6 +74,7 @@ module Make (Cartridge : Addressable_intf.S) = struct
     | _ when Mmap_register.accepts t.dt  addr       ->
       Mmap_register.write_byte t.dt ~addr ~data;
       dma_transfer data
+    | _ when Apu.accepts t.apu addr                 -> Apu.write_byte t.apu ~addr ~data
     | _ -> ()
 
   let accepts t addr =
@@ -85,6 +89,7 @@ module Make (Cartridge : Addressable_intf.S) = struct
     || Interrupt_controller.accepts t.ic addr
     || Timer.accepts t.timer addr
     || Mmap_register.accepts t.dt  addr
+    || Apu.accepts t.apu addr
 
 
   let read_word t addr =

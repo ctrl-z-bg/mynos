@@ -11,6 +11,7 @@ module Make (Cartridge : Cartridge_intf.S) = struct
     timer  : Timer.t;
     gpu    : Gpu.t;
     joypad : Joypad.t;
+    apu    : Apu.t;
   }
 
   let show t = Cpu.show t.cpu
@@ -140,6 +141,8 @@ module Make (Cartridge : Cartridge_intf.S) = struct
         ~type_:`RW
         ()
     in
+    let apu = Apu.create () in
+    Apu.after_boot apu;
     let bus = Bus.create
         ~cartridge
         ~wram
@@ -151,6 +154,7 @@ module Make (Cartridge : Cartridge_intf.S) = struct
         ~ic
         ~timer
         ~dma_transfer
+        ~apu
     in
     let registers = Registers.create () in
     let cpu = Cpu.create
@@ -163,12 +167,17 @@ module Make (Cartridge : Cartridge_intf.S) = struct
         ~ime:false
     in
     initialize_state ~bus ~registers ~lcd_stat;
-    { cpu; timer; gpu; joypad }
+    { cpu; timer; gpu; joypad; apu }
 
   let run_instruction t =
     let mcycles = Cpu.run_instruction t.cpu in
     Timer.run t.timer ~mcycles;
+    Apu.run t.apu ~mcycles;
     Gpu.run t.gpu ~mcycles
+
+  let audio_samples t = Apu.take_samples t.apu
+
+  let set_audio t b = Apu.set_enabled t.apu b
 
   let press t key = Joypad.press t.joypad key
 

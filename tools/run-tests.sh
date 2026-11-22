@@ -1145,7 +1145,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "Directions: north, south"                 # minotaur
     expect "%  /disk"                                 # df
     expect "clip-ok"                                  # clip, the clipboard service
-    expect "pkg: gav 1.0 installed"                   # GAV...
+    expect "pkg: gav 1.1 installed"                   # GAV...
     expect "gav.byte: no graphical session"           # ... its pictures read first
     expect "soundd: Sound Blaster 16 (DSP 4.05)"
     expect "play: soundd describes sound/1 as sound.ml does"

@@ -17,6 +17,7 @@ module Make (Cartridge : Addressable_intf.S) : sig
     ic:Interrupt_controller.t ->
     timer:Timer.t ->
     dma_transfer:Mmap_register.t ->
+    apu:Apu.t ->
     t
 
   include Word_addressable_intf.S with type t := t

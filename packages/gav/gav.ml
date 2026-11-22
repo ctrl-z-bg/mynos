@@ -83,15 +83,17 @@ let sounds = Queue.create ()
 let sounds_lock = Mutex.create ()
 let sounds_ready = Condition.create ()
 
+(* a thread, not a domain: a second domain must join every minor
+   collection, which in MyNOS slows the game (camlboy measured it) *)
 let () =
-  ignore (Domain.spawn (fun () ->
+  ignore (Thread.create (fun () ->
       let ok = ref true in
       while true do
         let hz, ms = Mutex.protect sounds_lock (fun () ->
             while Queue.is_empty sounds do Condition.wait sounds_ready sounds_lock done;
             Queue.pop sounds) in
         if !ok then (try Sound.tone hz ms with _ -> ok := false)
-      done))
+      done) ())
 
 let sound hz ms =
   Mutex.protect sounds_lock (fun () ->
@@ -582,4 +584,5 @@ let () =
                st.screen <- Playing (new_game st.places sprites)
            | None -> ()
          end);
-      st)
+      st);
+  exit 0

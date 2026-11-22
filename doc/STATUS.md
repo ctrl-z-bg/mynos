@@ -1578,4 +1578,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `third_party/gav`; 1 or 2 players a side, keyboard or computer; steps
   of 20 ms; tones through the sound service; `GAV_DEBUG=1` logs the
   ball. Test: the seventh boot installs it (its pictures read).
+- **2026-11-22** — camlboy 1.1 has sound (mynos-7k4): measured first,
+  60 frames a second under KVM with room to spare (CAMLBOY's benchmark:
+  357); `third_party/camlboy/src/apu.ml`, MyNOS's (the DMG's four
+  channels, the frame sequencer, the output's high-pass filter), routed
+  by small changes to CAMLBOY's bus; samples sent by a thread (a domain
+  slowed it to 54: JOURNAL); off by itself below 50 frames a second; M
+  mutes. The music checked offline: the spectrogram of Tobu Tobu Girl's
+  first 25 s shows notes (G1, G2, G3, D2, C5...). GAV 1.1: its tones
+  from a thread too.
 

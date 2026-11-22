@@ -1,9 +1,10 @@
 # The package gav (tools/pkg-build.sh): GAV, GPL Arcade Volleyball, in
 # OCaml; its pictures are GAV's "classic" theme (third_party/gav)
 NAME=gav
-VERSION=1.0
+VERSION=1.1
 DESCRIPTION='GAV, GPL Arcade Volleyball, ported to OCaml: 1 or 2 players a side, at the keyboard or the computer'
 LICENSE=GPL-2.0-or-later
+LIBRARIES=threads
 SRC=packages/gav
 SOURCES='../view/image.ml ../view/inflate.ml ../view/png.ml gav.ml'
 RUN=gav

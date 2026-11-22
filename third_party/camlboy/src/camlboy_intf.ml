@@ -13,6 +13,12 @@ module type S = sig
 
   val release : t -> Joypad.key -> unit
 
+  val audio_samples : t -> string
+  (** Stereo 16-bit little-endian samples at 22050 Hz, made since the last
+      call (MyNOS's Apu). *)
+
+  val set_audio : t -> bool -> unit
+
   module For_tests : sig
     val prev_inst : t -> Instruction.t
 
