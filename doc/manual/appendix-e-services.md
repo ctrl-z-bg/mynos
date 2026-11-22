@@ -160,7 +160,7 @@ name and gets a new port. `Ipc` clients look the name up again (E.2),
 and so does libmynos: when a connection fails it forgets that port in
 all its caches and sends the undelivered request to the port the
 registry now gives (`fs_request`, `mynos-lib/src/fileio.c`). `init` is
-a service too: one of its domains serves **power/1** (E.15).
+a service too: one of its domains serves **power/1** (E.16).
 
 ## E.4 The running system
 
@@ -175,6 +175,7 @@ a service too: one of its domains serves **power/1** (E.15).
 | `fatfs` | `services/fatfs/fatfs.ml` | OCaml | — | `start` | fs/1 |
 | `net` | `services/net/netd.c` | C | io | `driver` | net/1 |
 | `display` | `services/display/displayd.c` | C | io | `driver` | display/1 |
+| `sound` | `services/sound/soundd.c` | C | io | `driver` | sound/1 |
 | `llm` | `services/llm/llmd.ml` | OCaml | — | `start` | llm/1 |
 | — | `httpd/httpd.ml` | OCaml | — | `start` | a client of net/1 |
 | — | `sh/sh.ml` | OCaml | — | `respawn` | a client |
@@ -552,7 +553,36 @@ boot and ends with code 0. Protocol **display/1**
 - At most 32 windows, each its creator's (`not your window`); a timer
   thread removes those of programs that have ended.
 
-## E.15 power: init as a service
+## E.15 soundd: sound
+
+`soundd` (`services/sound/soundd.c`, C, 2026, a `driver`), registered as
+`sound`. It drives a Sound Blaster 16 at `0x220` (QEMU's `-device sb16`,
+which `run-demo.sh` adds; v86 has one), IRQ 5, 16-bit DMA on channel 5;
+without the card it logs it at boot and ends with code 0. The card reads
+its samples from the kernel's **DMA area**: 64 KB of RAM below 16 MB on a
+64 KB boundary, as ISA DMA requires, chosen at boot where the bootloader
+put nothing and mapped for a driver by call 29 (appendices A and B).
+Two halves of 4 KB (46 ms) play in turn; at the card's interrupt for one,
+`soundd` fills it again with the mix of what programs play. The output is
+22050 Hz, 16-bit, stereo; after half a second of silence the card pauses.
+Protocol **sound/1** (`mynos-lib/ocaml/sound.ml`):
+
+| Case | Request | Arguments | Reply |
+|---|---|---|---|
+| 0 | `info` (safe) | `U` | `(rate:I,channels:I)` |
+| 1 | `open` | `U` | `I`: a stream |
+| 2 | `write` | `(stream:I,samples:S)` | `U`; waits while the stream holds more than a second |
+| 3 | `close` | `stream:I` | `U`, once what it holds has played |
+| 4 | `stop` | `stream:I` | `U`: it ends at once |
+| 5 | `tone` | `(hz:I,ms:I)` | `U`: a square wave, mixed in |
+| 6 | `volume` | `level:I` (0–100, -1 asks) | `I` |
+
+A stream is its creator's, and goes when that process ends. The pace of
+the music is the card's: a program writes a second at a time and waits.
+`play` (chapter 13) plays WAV files and tones; module `Sound` converts a
+WAV file's rate and format on the way.
+
+## E.16 power: init as a service
 
 **power/1** (`mynos-lib/ocaml/power.ml`) is served by `init` itself, as
 `power`: case 0 `shutdown` and case 1 `reboot`, both `U` → `U`. `init`
@@ -567,7 +597,7 @@ user.
 > happens to be `init`. The service explorer or a language model's tool
 > can send it the same way, and it describes itself like any other.
 
-## E.16 2002 and 2026
+## E.17 2002 and 2026
 
 The last commit of the original project (tag `legacy-2008`) had four
 services, all in C, each with its own struct protocol: the
@@ -598,7 +628,7 @@ displayd are C, living with C libraries (lwIP, mbedTLS) and interrupt
 threads; ata shows that a driver can be an ordinary OCaml bytecode
 program with the `io` privilege.
 
-## E.17 Known limits
+## E.18 Known limits
 
 - fatfs and ata answer one request at a time: two programs reading
   `/disk` wait for each other (mynos-cui). So does consoled, whose main

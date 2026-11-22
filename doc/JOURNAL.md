@@ -2863,3 +2863,37 @@ gets the focus.
 **Lesson.** A frame function runs four times a second: whatever it reads
 from the disk, it holds open four times a second. Keep the reads where
 the comment about them is.
+
+## 2026-11-22 — Where to put 64 KB below 16 MB
+
+**Symptom.** A Sound Blaster plays from RAM by ISA DMA: below 16 MB, not
+across a 64 KB boundary, at a physical address the driver knows. MyNOS's
+drivers could map a device's memory, never RAM.
+
+**Diagnosis.** The obvious place, a fixed address, was measured before
+being chosen: a temporary line in the kernel printed the modules'
+addresses. QEMU's multiboot loader puts them right after the kernel, from
+2.5 MB, the RAM disk up to 31 MB; GRUB puts `registry` and `memrofsd`
+between 1.15 and 1.32 MB and the RAM disk from 4.3 MB. Below 16 MB, the
+only room common to both was inside the first 4 MB, which the kernel
+keeps whole but uses only for its page directory (1 MB) and its image
+(2 MB).
+
+**Cause.** The kernel's reservation of the first 4 MB dated from when its
+image was loaded at 1 MB; it moved to 2 MB, and the gap stayed reserved
+and empty. And a bootloader may use that gap, which a fixed address
+would have collided with under GRUB.
+
+**Fix.** At boot, before any allocation, the kernel chooses 64 KB on a 64
+KB boundary in that gap, avoiding the modules and the bootloader's
+structures (now registered as reserved too), else above 4 MB in free
+pages, and logs where (0x110000 under both loaders today). Call 29 maps
+it, counted as shared pages are. A prototype driver, a tone in the area
+and one DMA transfer, worked at once in QEMU (recorded with `-audiodev
+wav`) and, after one surprise, in v86: there the card asks for samples
+only when the browser's audio adapter asks it for data, so under Node no
+interrupt came until the script played the adapter's part.
+
+**Lesson.** Before fixing an address, print the ones the bootloaders
+chose: two loaders, two layouts. And an emulator's device may be driven
+by its host side: a silent card can be a missing listener.

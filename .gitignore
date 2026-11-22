@@ -45,6 +45,8 @@ system/consoled
 system/netd
 system/displayd
 services/display/displayd
+system/soundd
+services/sound/soundd
 services/net/netd
 tests/net/netd
 tests/net/ocamlrun

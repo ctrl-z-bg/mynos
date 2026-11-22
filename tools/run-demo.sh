@@ -7,7 +7,8 @@
 # an NE2000 card on QEMU's user network, httpd) and sh. Type help; "ocaml"
 # opens the OCaml toplevel. NET= (empty) boots without a network card;
 # HTTP=PORT forwards another host port to httpd. With /dev/kvm usable,
-# KVM runs the processor (KVM= emulates it). llm.env, if there is one
+# KVM runs the processor (KVM= emulates it). A Sound Blaster 16 plays
+# through the host's audio (SOUND=BACKEND chooses QEMU's, SOUND= none). llm.env, if there is one
 # (see llm.env.example), is copied into the disk as /disk/llm.env, for llmd.
 # SERIAL=1 makes this terminal a console of MyNOS too (its second serial
 # port: doc/decisions/console.md), with the host's copy and paste,
@@ -45,6 +46,23 @@ if [ -n "$NET" ] && [ -z "${HTTP+set}" ]; then
     if python3 -c 'import socket; socket.socket().bind(("127.0.0.1", 8080))' 2>/dev/null
     then export HTTP=8080; echo "run-demo.sh: http://localhost:8080/ is MyNOS's httpd" >&2
     else echo "run-demo.sh: port 8080 is busy, no web server forwarding" >&2
+    fi
+fi
+# sound: a Sound Blaster 16, through the host's audio, by a backend this
+# QEMU has
+if [ -z "${SOUND+set}" ]; then
+    backends=$(qemu-system-i386 -audiodev help 2>/dev/null)
+    has() { printf '%s\n' "$backends" | grep -qx "$1"; }
+    run=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+    if [ -S "$run/pipewire-0" ] && has pipewire; then SOUND=pipewire
+    elif [ -S "$run/pulse/native" ] && has pa; then SOUND=pa
+    elif [ "$(uname)" = Darwin ] && has coreaudio; then SOUND=coreaudio
+    elif [ -d /dev/snd ] && has alsa; then SOUND=alsa
+    else SOUND=
+    fi
+    export SOUND
+    if [ -n "$SOUND" ]; then echo "run-demo.sh: sound through $SOUND (SOUND= for none)" >&2
+    else echo "run-demo.sh: no audio backend found: no sound" >&2
     fi
 fi
 # KVM: the host's processor, if /dev/kvm is there and ours

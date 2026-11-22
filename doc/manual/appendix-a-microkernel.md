@@ -279,6 +279,7 @@ The native calls:
 | 26 | `channelPeer`: the pid at the other end of a channel | C |
 | 27 | `processInfo`: alive, privileged, an OCaml program | A.4 |
 | 28 | `mapPhysical`: physical memory into the caller (`io` only) | B |
+| 29 | `dmaArea`: the DMA area, mapped, or its physical address (`io` only) | B |
 | 30 | `spawn` (image, argv, envp, privileges) | A.9 |
 | 31 | `log`: a line on the log port | A.2 |
 | 32 | `trace`: the event recorder | G |

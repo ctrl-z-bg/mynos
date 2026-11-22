@@ -77,6 +77,13 @@
     screen_container: document.getElementById("screen_container"),
     autostart: true,
   });
+  // sound (the Sound Blaster 16, soundd): browsers keep a page's audio
+  // suspended until the user does something there
+  const wake_audio = () => {
+    try { emulator.speaker_adapter && emulator.speaker_adapter.audio_context.resume(); } catch (e) {}
+  };
+  document.addEventListener("click", wake_audio);
+  document.addEventListener("keydown", wake_audio);
   emulator.add_listener("download-progress", e => {
     if (!ready && e.lengthComputable && e.total > 1000000)
       status.textContent = "Loading " + Math.round(100 * e.loaded / e.total) + "%...";

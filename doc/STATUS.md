@@ -193,6 +193,17 @@ All services are linked statically against `libmynos` and placed at
   or anyone with `httpd -w`; Host and Origin must name the server.
   Writing to `/disk` goes at about 800 KB/s under KVM (mynos-ipg: KVM
   exits for each word of `rep outsw`; reading is 12 MB/s).
+- **Sound** (2026-11-22, `doc/decisions/sound.md`, mynos-7jn): the
+  kernel keeps a DMA area at boot (64 KB below 16 MB on a 64 KB boundary,
+  in the gap between its page directory and its image, else above 4 MB;
+  call 29 `dmaArea` maps it for a driver). `soundd` (C, a driver) plays a
+  Sound Blaster 16 by 16-bit auto-init DMA from it, IRQ 5, and mixes up to
+  8 streams and 4 tones (22050 Hz, 16-bit stereo, halves of 46 ms; pauses
+  in silence): protocol sound/1, module `Sound` (WAV files converted),
+  `play` (files, tones, volume). QEMU: `SOUND=BACKEND` (run-demo.sh and
+  run-mynos.sh choose the host's), `SOUND=wav:FILE` for the tests; v86
+  plays it in the browser. Tested in the seventh boot (the recording's
+  frequencies) and on v86 from Node.
 - **Packages** (2026-11-20, `doc/decisions/packages.md`, mynos-vcd):
   `pkg` (`pkg/pkg.ml`, on the RAM disk) lists, installs, removes the
   packages of the repository ctrl-z-bg/mynos-packages (`index.json`,
@@ -1461,3 +1472,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   remove an open file. It reads it with the installed list, at the start
   and after each job; `pkg` tries a file it cannot remove again for a
   second (the Applications window may be reading it).
+- **2026-11-22** — Sound (mynos-7jn, `doc/decisions/sound.md`): the
+  kernel's DMA area (call 29), `soundd` (SB16 driver and mixer, sound/1),
+  module `Sound`, `play`; `SOUND` in run-qemu.sh, chosen by run-demo.sh
+  and run-mynos.sh (`--no-sound`); the web page wakes the browser's
+  audio. Measured first with a prototype: QEMU's recording and v86's
+  samples (the browser's speaker adapter played from Node) both at 440 Hz.
+  Test: seventh boot, a WAV file and a tone recorded by QEMU and checked
+  by frequency. Manual: appendices A, B, E (new E.15, the next renumbered),
+  chapters 5, 13 (PLAY), 24, H.

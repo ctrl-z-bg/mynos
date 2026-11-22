@@ -22,6 +22,9 @@
 #   HTTP     with NET, a host port forwarded to MyNOS's port 80 (httpd)
 #   KVM      if set, the host's processor runs MyNOS's (KVM: /dev/kvm),
 #            far faster than emulating it; run-demo.sh sets it if it can
+#   SOUND    a Sound Blaster 16 (soundd), heard through this audio backend
+#            of QEMU's (pipewire, pa, alsa, coreaudio...), or wav:FILE to
+#            record it; run-demo.sh picks one
 #   VERBOSE  if set, kernel messages stay on screen after boot (they always
 #            go to the second serial port)
 #   SHOT     if set, run headless, save a PNG of the screen to $SHOT after
@@ -45,12 +48,20 @@ if [ -z "$modules" ] && [ -z "${KERNEL_ONLY:-}" ]; then
     exec "$root/tools/run-demo.sh" -- "$@"
 fi
 
+audio=
+case ${SOUND:-} in
+    "") ;;
+    wav:*) audio="-audiodev wav,id=snd,path=${SOUND#wav:} -device sb16,audiodev=snd" ;;
+    *) audio="-audiodev $SOUND,id=snd -device sb16,audiodev=snd" ;;
+esac
+
+# shellcheck disable=SC2086
 set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "${MEM:-32}" \
     -cpu "${CPU:-qemu32,+rdrand,+rdseed}" \
     ${VERBOSE:+-append verbose} ${KVM:+-accel kvm} \
     ${DISK:+-drive file=$DISK,format=raw,if=ide,index=0} \
     ${NET:+-netdev user,id=n0${HTTP:+,hostfwd=tcp:127.0.0.1:$HTTP-:80}} \
-    ${NET:+-device ne2k_isa,netdev=n0,iobase=0x300,irq=9} "$@"
+    ${NET:+-device ne2k_isa,netdev=n0,iobase=0x300,irq=9} $audio "$@"
 
 if [ -z "${SHOT:-}" ]; then
     exec qemu-system-i386 "$@"

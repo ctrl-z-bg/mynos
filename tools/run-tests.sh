@@ -31,7 +31,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload edit_utf8 log_shown"
+results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload sound_ok edit_utf8 log_shown"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -621,7 +621,7 @@ fi
 sec_seventh() {
 # seventh boot: the system RAM disk, init starts the services and sh, driven
 # through the keyboard: the OCaml toplevel (ocaml), programs, sh again
-history_saved= kilo_saved= edit_saved= edit_utf8= log_shown= sh_saved= trace_calls= trace_json= agent_marks=
+history_saved= kilo_saved= edit_saved= edit_utf8= log_shown= sh_saved= trace_calls= trace_json= agent_marks= sound_ok=
 disk_reads=
 serial_same_sh=
 if [ -f system/ramdisk.dsk ]; then
@@ -631,14 +631,19 @@ if [ -f system/ramdisk.dsk ]; then
     # of characters the screen's font lacks (doc/decisions/console.md)
     if [ -f tests/fat/run-shell.img ]; then
         printf '\303\210 cos\303\254: \342\202\2545\n' > tests/fat/run-utf8.txt
-        tools/in-container.sh dev sh -c "mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/llm.env && mcopy -i tests/fat/run-shell.img tests/fat/run-utf8.txt ::/utf8.txt && mcopy -i tests/fat/run-shell.img tests/greeter/greeter.byte ::/greeter.byte && mcopy -i tests/fat/run-shell.img tests/stdio/stdio ::/stdio-test && mcopy -i tests/fat/run-shell.img tests/zmachine/czech.z5 ::/czech.z5"
-        rm -f tests/fat/run-utf8.txt
+        # a WAV file for play (mynos-7jn): half a second of 440 Hz, 8-bit mono 11025 Hz
+        python3 -c 'import wave, math
+w = wave.open("tests/fat/run-a440.wav", "wb"); w.setnchannels(1); w.setsampwidth(1); w.setframerate(11025)
+w.writeframes(bytes(int(128 + 100 * math.sin(2 * math.pi * 440 * i / 11025)) for i in range(5512))); w.close()'
+        tools/in-container.sh dev sh -c "mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/llm.env && mcopy -i tests/fat/run-shell.img tests/fat/run-utf8.txt ::/utf8.txt && mcopy -i tests/fat/run-shell.img tests/greeter/greeter.byte ::/greeter.byte && mcopy -i tests/fat/run-shell.img tests/stdio/stdio ::/stdio-test && mcopy -i tests/fat/run-shell.img tests/zmachine/czech.z5 ::/czech.z5 && mcopy -i tests/fat/run-shell.img tests/fat/run-a440.wav ::/a440.wav"
+        rm -f tests/fat/run-utf8.txt tests/fat/run-a440.wav
     fi
     tools/net-peer.py llm 47090 & llm7_pid=$!
     # the packages' repository (tools/pkg-build.sh), served by the host
     tools/net-peer.py files 47101 tmp/packages & files7_pid=$!
+    # a Sound Blaster 16, recorded into a WAV file (mynos-7jn)
     NET=1 HTTP=47180 DISK=$([ -f tests/fat/run-shell.img ] && echo tests/fat/run-shell.img) \
-    MEM=256 tools/run-qemu.sh "$ocamlrun" \
+    SOUND="wav:$tmp/sound7.wav" MEM=256 tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
         -- -display none -serial null \
@@ -821,6 +826,10 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" 'pkg install scheme manual; echo "(display (expt 3 50))" > /tmp/a.scm; scheme /tmp/a.scm; echo; man pkg | head -n 3\n'
     waitfor "Installs packages: demos" 120
     tools/type-keys.py "$tmp/mon7" 'pkg install minotaur; echo help | minotaur\n'
+    # sound (mynos-7jn): soundd's protocol as module Sound has it, a WAV
+    # file converted and played, a tone; the recording is checked below
+    waitfor "Directions: north" 90; sleep 2
+    tools/type-keys.py "$tmp/mon7" 'play check; play /disk/a440.wav; play -t 1320 300\n'; sleep 5
     waitfor "Directions: north, south" 60
     # Ctrl-C on a program waiting for a line: the next line is sh's, not
     # swallowed by the program it ended (mynos-5dd)
@@ -864,6 +873,20 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     wait $qemu || true
     kill $llm7_pid $files7_pid $peer7 2>/dev/null || true
     cat "$log7" >> "$part"
+    # what the sound card played: half a second at 440 Hz, then 0.3 s at
+    # 1320 Hz (windows of 0.1 s, their zero crossings)
+    python3 - "$tmp/sound7.wav" <<'PY' && sound_ok=yes
+import sys, wave, struct
+w = wave.open(sys.argv[1]); n = w.getnframes(); rate = w.getframerate()
+s = struct.unpack('<%dh' % (n * w.getnchannels()), w.readframes(n))[::w.getnchannels()]
+step = rate // 10; hz = []
+for i in range(0, len(s) - step, step):
+    seg = s[i:i + step]
+    if max(abs(v) for v in seg) > 1000:
+        hz.append(sum(1 for a, b in zip(seg, seg[1:]) if (a < 0) != (b < 0)) / 2 / 0.1)
+low = sum(1 for f in hz if 430 <= f <= 450); high = sum(1 for f in hz if 1300 <= f <= 1340)
+sys.exit(0 if low >= 3 and high >= 2 else 1)
+PY
     if [ -f tests/fat/run-shell.img ]; then
         tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/.history \
             2>/dev/null | grep -qx '6 \* 7;;' && history_saved=yes
@@ -1090,6 +1113,13 @@ if [ -f system/ramdisk.dsk ]; then
     expect "717897987691852588770249"                 # scheme
     expect "Purpose Installs packages: demos"         # man
     expect "Directions: north, south"                 # minotaur
+    expect "soundd: Sound Blaster 16 (DSP 4.05)"
+    expect "play: soundd describes sound/1 as sound.ml does"
+    if [ -n "$sound_ok" ]; then
+        echo "ok    sound: a WAV file and a tone, as the card played them"
+    else
+        echo "FAIL  sound: a WAV file and a tone, as the card played them"; fail=1
+    fi
     if [ -n "$httpd_private" ]; then
         echo "ok    httpd: serves /disk, not its .env files"
     else

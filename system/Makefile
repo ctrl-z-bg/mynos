@@ -22,6 +22,8 @@ netd: ../services/net/netd
 	strip -o $@ $<
 displayd: ../services/display/displayd
 	strip -o $@ $<
+soundd: ../services/sound/soundd
+	strip -o $@ $<
 
 # the bytecode compiler, to compile programs inside MyNOS
 ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2/bin/ocamlc.byte)
@@ -31,14 +33,14 @@ ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2
 NUM_CMI = $(addprefix ../third_party/num/, num.cmi big_int.cmi nat.cmi ratio.cmi \
 	arith_status.cmi arith_flags.cmi int_misc.cmi)
 
-FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo netd displayd ../httpd/httpd.byte \
+FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo netd displayd soundd ../httpd/httpd.byte \
 	../gui/gui.byte ../gui/welcome.byte ../gui/clock.byte ../gui/services.byte ../gui/terminal.byte \
 	../gui/agent_window.byte ../gui/recordings.byte ../gui/system.byte ../gui/files.byte \
 	../gui/tour.byte ../gui/tour.txt \
 	../third_party/fonts/terminus16.psf ../third_party/fonts/terminus16-bold.psf \
 	../gui/mynos-logo.pgm ../gui/mynos-logo-2x.pgm \
 	../trace/trace.byte ../fetch/fetch.byte ../llm/llm.byte ../agent/agent.byte \
-	../log/log.byte ../gui/log_window.byte \
+	../log/log.byte ../gui/log_window.byte ../play/play.byte \
 	../services/llm/llmd.byte \
 	../third_party/ca-certificates/cacert.pem \
 	../services/tmpfs/tmpfs.byte ../services/ata/ata.byte \
@@ -58,6 +60,7 @@ FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo n
 	../mynos-lib/ocaml/tracer.cmi ../mynos-lib/ocaml/json.cmi ../mynos-lib/ocaml/http.cmi \
 	../mynos-lib/ocaml/llm.cmi ../mynos-lib/ocaml/tools.cmi \
 	../mynos-lib/ocaml/gfx.cmi ../mynos-lib/ocaml/display.cmi ../mynos-lib/ocaml/gui.cmi \
+	../mynos-lib/ocaml/sound.cmi \
 	../mynos-lib/ocaml/power.cmi ../mynos-lib/ocaml/agent.cmi \
 	../tests/hello/hello.byte ../tests/spawn/child.byte \
 	../tests/ramdisk/AUTOEXEC.BAT
@@ -74,4 +77,4 @@ $(DISK):
 	rm -f $@.readme
 
 clean:
-	rm -f ocamlrun consoled kilo netd displayd ocamlc.byte ramdisk.dsk
+	rm -f ocamlrun consoled kilo netd displayd soundd ocamlc.byte ramdisk.dsk

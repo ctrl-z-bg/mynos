@@ -12,6 +12,7 @@ driver ata.byte
 start fatfs.byte
 driver netd
 driver displayd
+driver soundd
 start llmd.byte
 start httpd.byte
 respawn sh.byte

@@ -32,6 +32,7 @@ Options (./run-mynos.sh --help):
                  another, or --http 0 for none)
   --mem MB       memory (default 256)
   --no-kvm       emulate the processor even if KVM is there
+  --no-sound     no sound card (by default one, through the host's audio)
   --reset-disk   start /disk again, empty
   -- OPTIONS     passed to QEMU (e.g. -- -display none, with --serial)
 

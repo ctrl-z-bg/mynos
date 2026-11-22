@@ -35,6 +35,7 @@
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 #   fetch/fetch.byte                 HTTP and HTTPS from the command line
 #   log/log.byte                     the kernel's log
+#   play/play.byte                   sound: WAV files, tones (soundd)
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -87,10 +88,12 @@ make -C httpd
 make -C trace
 make -C fetch
 make -C log
+make -C play
 make -C services/llm
 make -C llm
 make -C agent
 make -C services/display
+make -C services/sound
 make -C gui
 make -C graphics
 make -C tests/net

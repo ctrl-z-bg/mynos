@@ -54,6 +54,44 @@ void mem_reserveAtBoot(uint32_t start, uint32_t len) {
   }
 }
 
+/* The DMA area (mynos-7jn): 64 KB of RAM below 16 MB on a 64 KB
+   boundary, as ISA DMA needs (a sound card's: the 8237 reaches 16 MB, and
+   a transfer does not cross 64 KB), chosen at boot where nothing was
+   loaded, kept for ever, mapped for drivers by mapDmaArea. 0: none. */
+uint32_t __dma_area = 0;
+
+static int overlaps_boot_reserved(uint32_t start, uint32_t len) {
+  uint32_t i;
+  for (i = 0; i < n_boot_reserved; i++)
+    if (start < boot_reserved_start[i] + boot_reserved_len[i] &&
+	boot_reserved_start[i] < start + len)
+      return 1;
+  return 0;
+}
+
+/* Where: first between the kernel's page directory (1 MB to 0x105000)
+   and its image (2 MB), a part of the first 4 MB that the kernel keeps
+   but does not use (a bootloader may have put a small module there:
+   GRUB does); else above 4 MB, below 16 MB, in pages still free (the
+   modules are marked by then). */
+static void reserve_dma_area(void) {
+  uint32_t a, k, page;
+  for (a = 0x110000; a + DMA_AREA_SIZE <= 0x1000000; a += DMA_AREA_SIZE) {
+    if (a >= 0x200000 && a < 0x400000) continue;   /* the kernel, its stack */
+    if (overlaps_boot_reserved(a, DMA_AREA_SIZE)) continue;
+    if (a >= 0x400000) {
+      for (k = 0; k < DMA_AREA_SIZE / PAGE_SIZE; k++) {
+	page = (a >> 12) + k;
+	if (__memory_bitmap[page / 8] & (1 << (page % 8))) break;
+      }
+      if (k < DMA_AREA_SIZE / PAGE_SIZE) continue;
+      for (k = 0; k < DMA_AREA_SIZE / PAGE_SIZE; k++) pmem_set((a >> 12) + k);
+    }
+    __dma_area = a;
+    return;
+  }
+}
+
 void init_memory() {
   uint32_t i;
   uint32_t * tmp;
@@ -82,6 +120,10 @@ void init_memory() {
 	pmem_set(page);
   }
   //__SET_MEMORY_BITMAP_PAGE_BIT(i);
+  reserve_dma_area();
+  printk("DMA area (64 KB, ISA): ");
+  if (__dma_area) print_uint_hex(__dma_area); else printk("none");
+  printk("\n");
 
   /* start.asm identity-maps only the first 4MB: map the module pages above
      it at linear == physical too, so that modinfo addresses stay valid.
@@ -206,6 +248,29 @@ void * __OS_mapPhysical(uint32_t phys, uint32_t npages) {
     uint32_t * pte = (uint32_t *)__GET_PAGE_TABLE_ENTRY(__PAGE_PD_INDEX(page),
 							 __PAGE_PT_INDEX(page));
     *pte = (phys + (i << 12)) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED;
+    INVALIDATE_THE_CACHE(page << 12);
+  }
+  return (void *)(start << 12);
+}
+
+/* the DMA area, mapped into the current process (one reference to each
+   of its pages, dropped when the process ends: the area itself keeps
+   the first): its address, or NULL */
+void * __OS_mapDmaArea(void) {
+  uint32_t start, i, npages = DMA_AREA_SIZE / PAGE_SIZE;
+  if (__dma_area == 0) return NULL;
+  start = __lmt_allocArea(&(processTable[currProcess]->lmemmap), npages);
+  if (start < USERMINPAGE) return NULL;
+  if (__OS_askPagesFrom((void *)(start << 12), npages, 0, PF_USER | PF_READWRITE) == NULL) {
+    __lmt_freeArea(&(processTable[currProcess]->lmemmap), start, npages);
+    return NULL;
+  }
+  for (i = 0; i < npages; i++) {
+    uint32_t page = start + i;
+    uint32_t * pte = (uint32_t *)__GET_PAGE_TABLE_ENTRY(__PAGE_PD_INDEX(page),
+							 __PAGE_PT_INDEX(page));
+    pmem_set((__dma_area >> 12) + i);
+    *pte = (__dma_area + (i << 12)) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED;
     INVALIDATE_THE_CACHE(page << 12);
   }
   return (void *)(start << 12);

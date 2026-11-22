@@ -247,6 +247,7 @@ tests. Its environment:
 | `HTTP` | none | with `NET`, this host port (on 127.0.0.1) forwarded to MyNOS's port 80 |
 | `VERBOSE` | none | `verbose` on the kernel's command line: its messages stay on screen |
 | `KVM` | none | `-accel kvm`: the host's processor runs MyNOS's |
+| `SOUND` | none | a Sound Blaster 16 (`-device sb16`) heard through this QEMU audio backend, or recorded with `wav:FILE` |
 | `KERNEL` | `mynos-core/kernel/kernel.elf` | another kernel |
 | `KERNEL_ONLY` | none | with no module, boot the bare kernel |
 | `SHOT` | none | run headless, wait `WAIT` seconds (3), save the screen as an image (with ImageMagick's `convert`), stop |
@@ -262,6 +263,8 @@ ends. The script sets:
 - `NET=1` unless `NET` is set (`NET=` boots without a network card);
 - `KVM=1` if `/dev/kvm` can be used, unless `KVM` is set (`KVM=`
   emulates the processor);
+- `SOUND` to the host's audio backend that QEMU has (PipeWire,
+  PulseAudio, ALSA, Core Audio), unless `SOUND` is set (`SOUND=`: none);
 - `HTTP=8080` if that host port is free, so that `http://localhost:8080/`
   is MyNOS's `httpd`; `HTTP=PORT` chooses another;
 - with `SERIAL=1`, the host's terminal becomes MyNOS's second serial

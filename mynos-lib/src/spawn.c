@@ -35,6 +35,18 @@ void * mynos_mapPhysical(unsigned long phys, int npages) {
   return r >= (unsigned long)-4096 ? NULL : (void *)r;
 }
 
+/* dmaArea (29): the DMA area mapped here, its physical address in *phys;
+   NULL without one (or without the io privilege) */
+void * mynos_dmaArea(unsigned long * phys) {
+  long p = __mynos_syscall(29, 1, 0, 0, 0, 0);
+  unsigned long r;
+  if (p < 0 && p > -4096) return NULL;
+  r = (unsigned long)__mynos_syscall(29, 0, 0, 0, 0, 0);
+  if (r >= (unsigned long)-4096) return NULL;
+  if (phys) *phys = (unsigned long)p;
+  return (void *)r;
+}
+
 /* processInfo (27): MYNOS_PROC_ALIVE | privileges, or an error */
 int mynos_processInfo(int pid)
 {

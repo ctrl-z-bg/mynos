@@ -830,6 +830,34 @@ appendix H, H.9.
 
 ---
 
+### PLAY
+
+**Purpose** Plays sound: WAV files and tones.
+
+**Syntax** `play FILE.wav` · `play -t HZ [MS]` · `play -v [LEVEL]`
+
+**Type** Program (`/play.byte`).
+
+**Description** Plays a WAV file (PCM, 8 or 16 bits, mono or stereo, any
+rate, converted to the card's 22050 Hz stereo) and returns when it has
+played; `-t` plays a tone of `HZ` for `MS` milliseconds (200); `-v` sets
+the volume (0 to 100) or prints it. Several programs may play at once:
+`soundd` mixes them. Without a sound card (`--no-sound`, a machine
+without a Sound Blaster 16) it says so and ends with status 1.
+
+**Example**
+
+```
+mynos:/$ play -t 440 500
+mynos:/$ play /disk/hello.wav
+mynos:/$ play -v 50
+volume 50
+```
+
+**See also** appendix E, E.15.
+
+---
+
 ### PS
 
 **Purpose** Lists the processes.
@@ -1170,7 +1198,7 @@ hand:
 | Name | What it is |
 |---|---|
 | `init` | the first program, started at boot; it reads `init.rc` and starts the services: not to be started again |
-| `ata`, `consoled`, `displayd`, `netd` | drivers, started by `init` with the `io` privilege; started from `sh` they have none: `ata` says so and stops, the others are ended at their first access to the hardware (status 139) |
+| `ata`, `consoled`, `displayd`, `netd`, `soundd` | drivers, started by `init` with the `io` privilege; started from `sh` they have none: `ata` says so and stops, the others are ended at their first access to the hardware (status 139) |
 | `fatfs`, `tmpfs`, `llmd` | services, started by `init` and restarted by it (chapter 11, 11.7) |
 | `httpd` | the web server, started by `init`; `httpd [-w] [DIR [PORT]] &` starts another, on another port; it receives files too (`curl -T`) (chapter 9, 9.7) |
 | `ocamlrun` | the OCaml runtime, which `sh` uses to run every `.byte` program |

@@ -289,6 +289,17 @@ keeps them as they are, and since they are not RAM no reference count
 ever touches them. `displayd` maps the graphics card's frame buffer this
 way.
 
+**The DMA area** (call 29, `dmaArea`, `io` only) is RAM for a device
+that reads memory by itself: ISA DMA, which reaches only the first 16 MB
+and whose transfers do not cross a 64 KB boundary. At boot, before any
+allocation, `init_memory` chooses 64 KB on a 64 KB boundary below 16 MB
+where nothing was loaded: first between the kernel's page directory and
+its image (1 to 2 MB, kept but unused), else above 4 MB in pages still
+free; the boot log says where. Its pages stay taken for ever. `dmaArea(1)`
+returns its physical address, for the DMA controller; `dmaArea(0)` maps
+it into the caller, one reference to each page, which the end of the
+process drops, as for shared pages. `soundd` plays from it (appendix E).
+
 ## B.10 Pointers from processes
 
 The kernel must not trust a process's pointers: an address below 1 GB

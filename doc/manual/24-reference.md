@@ -458,7 +458,7 @@ return once `init` has the request; it ends the graphical session, then
 acts (ACPI, or the keyboard controller's reset line). Any process may
 ask.
 
-**SEE ALSO** — appendix E.15.
+**SEE ALSO** — appendix E.16.
 
 ---
 
@@ -1019,7 +1019,7 @@ block. Others: 0. A `MYNOS_ERR_*` on error.
 ## 24.22 driver(2)
 
 **NAME** — `mynos_driverRegister`, `mynos_enableIrq`,
-`mynos_disableIrq`, `mynos_mapPhysical`, `inportb`, `outportb`: device
+`mynos_disableIrq`, `mynos_mapPhysical`, `mynos_dmaArea`, `inportb`, `outportb`: device
 access, for processes with the `io` privilege.
 
 **SYNOPSIS**
@@ -1030,6 +1030,7 @@ int  mynos_driverRegister(char * name, unsigned int irq,
 int  mynos_enableIrq(unsigned short n);
 int  mynos_disableIrq(unsigned short n);
 void * mynos_mapPhysical(unsigned long phys, int npages);
+void * mynos_dmaArea(unsigned long * phys);
 unsigned char inportb(unsigned short port);
 void outportb(unsigned short port, unsigned char value);
 ```
@@ -1039,7 +1040,9 @@ void outportb(unsigned short port, unsigned char value);
 its interrupts, after acknowledging the controllers; `io` and `mem` are
 not used (pass `NULL`). `enableIrq` and `disableIrq` unmask and mask one
 of the caller's lines. `mapPhysical` maps `npages` pages of device
-memory (page-aligned, beyond RAM) into the caller. `inportb` and
+memory (page-aligned, beyond RAM) into the caller. `dmaArea` maps the
+kernel's DMA area (`MYNOS_DMA_AREA_SIZE`, 64 KB below 16 MB, for ISA
+DMA: appendix B) and puts its physical address in `*phys`. `inportb` and
 `outportb` are the `in` and `out` instructions.
 
 **RETURN VALUE** — `driverRegister`: a semaphore, or `DENY` (no

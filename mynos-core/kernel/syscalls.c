@@ -83,6 +83,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .mynos_processInfo\n"\
 	 "   cmpl $28, %eax\n"\
 	 "   je .mynos_mapPhysical\n"\
+	 "   cmpl $29, %eax\n"\
+	 "   je .mynos_dmaArea\n"\
 	 "   cmpl $30, %eax\n"\
 	 "   je .mynos_spawn\n"\
 	 "   cmpl $31, %eax\n"\
@@ -236,6 +238,11 @@ __asm__ (".pushsection .text\n" \
 	 "   popl  %ebx\n"\
 	 "   popl  %ecx\n"\
 	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_dmaArea:\n"\
+	 "   pushl %ebx\n"\
+	 "   call _mynos_syscall_dmaArea\n"\
+	 "   popl  %ebx\n"\
+	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_processInfo:\n"\
 	 "   pushl %ebx\n"\
 	 "   call _mynos_syscall_processInfo\n"\
@@ -375,6 +382,20 @@ int _mynos_syscall_mapPhysical(uint32_t phys, uint32_t npages) {
     return MYNOS_ERR_DENY;
   a = __OS_mapPhysical(phys, npages);
   return a ? (int)a : MYNOS_ERR_INVALID;
+}
+
+/* dmaArea (29): the DMA area (mem.c: 64 KB below 16 MB, for ISA DMA).
+   what 0: mapped into the caller, its address; 1: its physical address,
+   which the driver gives the DMA controller. Drivers only (the io
+   privilege); MYNOS_ERR_INVALID if the boot found no place for it. */
+int _mynos_syscall_dmaArea(uint32_t what) {
+  void * a;
+  if (!(processTable[currProcess]->privileges & MYNOS_PRIV_IO))
+    return MYNOS_ERR_DENY;
+  if (__dma_area == 0) return MYNOS_ERR_INVALID;
+  if (what == 1) return (int)__dma_area;
+  a = __OS_mapDmaArea();
+  return a ? (int)a : MYNOS_ERR_FULL;
 }
 
 /* processInfo (27): a process's privileges, with MYNOS_PROC_ALIVE while

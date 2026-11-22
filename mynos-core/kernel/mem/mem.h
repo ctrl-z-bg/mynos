@@ -202,6 +202,9 @@ void mem_reserveAtBoot(uint32_t start, uint32_t len);
    'NULL'     if some problem occours
 */
 void * __OS_mapPhysical(uint32_t phys, uint32_t npages);
+#define DMA_AREA_SIZE 0x10000
+extern uint32_t __dma_area;
+void * __OS_mapDmaArea(void);
 void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
 			 int alloc_now, uint32_t flags);
 

@@ -79,6 +79,7 @@ takes the options of `run-demo.sh` (5.5), spelled as options:
 | `--mem MB` | the memory (default 256) |
 | `--reset-disk` | `/disk` empty again (`disk.img` replaced) |
 | `--no-kvm` | the processor emulated, even with KVM |
+| `--no-sound` | no sound card (by default a Sound Blaster 16, through the host's audio) |
 | `-- OPTIONS` | passed to QEMU, e.g. `-- -display none` with `--serial` |
 
 A `llm.env` beside the script is copied into the disk at every start
@@ -246,6 +247,7 @@ VERBOSE=1 tools/run-demo.sh                   kernel messages stay on the screen
 | `HTTP` | `8080`, if free | the host port (on 127.0.0.1 only) forwarded to MyNOS's web server |
 | `MEM` | `256` | memory, in MB |
 | `KVM` | `1`, with `/dev/kvm` | the host's processor runs MyNOS's; `KVM=` emulates it |
+| `SOUND` | the host's audio (`pipewire`, `pa`, `alsa`, `coreaudio`) | a Sound Blaster 16 heard through this QEMU audio backend; `wav:FILE` records it; `SOUND=` none |
 | `DISK` | `system/disk.img`, if it exists | the disk image |
 | `VERBOSE` | not set | `verbose` on the kernel's command line |
 | `CPU` | `qemu32,+rdrand,+rdseed` | QEMU's processor model |
