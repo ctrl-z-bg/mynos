@@ -96,6 +96,13 @@ typedef struct {
   uint32_t fpu_valid;
   ubyte_t fpu_area[512 + 16];
 
+  /* a semaphore's lock handed to this thread by the V that woke it (its
+     index + 1; 0: none): the thread takes the semaphore and frees the
+     lock when it runs. If it ends before (killed), endProcess frees it
+     (__OS_sem_threadEnded). Last: the fields above have offsets that
+     assembly knows */
+  int semHeld;
+
 } tss_t;
 
 #endif

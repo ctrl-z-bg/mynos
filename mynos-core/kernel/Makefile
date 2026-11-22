@@ -65,7 +65,7 @@ clean:
 	for i in $(SUBDIRS) ; do \
           make -C $$i clean;\
 	done
-	rm -f *.o *.elf *~ Makefile.depend
+	rm -f *.o *.d *.elf *~ Makefile.depend
 
 depend:
 	for i in $(SUBDIRS) ; do \
@@ -82,3 +82,5 @@ endif
 
 # compiled again when the version changes
 main.o linux_syscalls.o: $(wildcard ../../VERSION)
+
+-include $(OFILESC:.o=.d)

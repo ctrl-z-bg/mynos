@@ -108,6 +108,7 @@ void tsksw() {
 
   //SEM
   processTable[0]->tss->privSem = __OS_sem_allocateSemaphore(0);
+  processTable[0]->tss->semHeld = 0;
 
   gdt_index = gdt_get_free_index();
   tssd_gdt_selector = (uint32_t)gdt_index << 3;

@@ -329,7 +329,10 @@ To use another repository, write its address in the file
 `/disk/pkg/url` (one line): the window and `pkg` both read it.
 
 The menu's **Applications** lists the installed packages that open a
-window, each with its description: a click starts it.
+window, each with its description: a click starts it. Among the
+packages, `studio` is an IDE for OCaml inside MyNOS (MyNOS Studio: build
+and run, completion from the running services, an agent that edits
+through Studio's own protocol); its page is on the packages' repository.
 
 ## 10.15 Graphical programs outside the session
 

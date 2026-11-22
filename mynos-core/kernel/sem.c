@@ -266,8 +266,22 @@ int __OS_sem_P(int semid) {
     /* Here the semaphore is mine:
        if I was in the queue the lock has been done by the V */
     semaphores.list[i].value--;
+    currThread->semHeld = 0;
     __unlock(sm);
     return(0);
+}
+
+/* a thread that ends (its process killed) after a V woke it, before it
+   ran: the lock the V handed it is freed, and the V stays (the value it
+   raised, taken by nobody). Without it the lock stayed held: the next P,
+   V or free of that semaphore spun in __lock for ever (a window's program
+   woken by its Close and killed at once by its terminal's hang-up, at the
+   end of the graphical session: the kernel then turned in sched) */
+void __OS_sem_threadEnded(void * thread) {
+    tss_t * t = thread;
+    if (t->semHeld > 0 && t->semHeld <= MAXSEM)
+	__unlock(&semaphores.list[t->semHeld - 1].mutex);
+    t->semHeld = 0;
 }
 
 int __OS_sem_tryP(int semid) {
@@ -335,7 +349,10 @@ int __OS_sem_V(int semid) {
 #endif
 
 	/* Wake me up before you go go... */
-	if (p) readyQueueInsert(p);
+	if (p) {
+	    p->semHeld = i + 1;       /* the lock, handed to it */
+	    readyQueueInsert(p);
+	}
     } else __unlock(sm);
 
     return(0);

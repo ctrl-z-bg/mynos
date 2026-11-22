@@ -1513,3 +1513,20 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   arrows, Home and End as xterm does (`ESC [ 1 ; 2 A`), released with the
   modifier. Test: the graphical session types in Text and saves.
   Next: MyNOS Studio, a package (the epic mynos-y87).
+- **2026-11-22** — Kernel: Exit with a window program started from a
+  Terminal hung the system (the kernel spun in `__lock`): a thread woken
+  by a `V`, which hands it the semaphore's lock, and killed before it ran
+  kept that lock for ever. Threads now remember a handed lock
+  (`semHeld`), freed by `endProcess`. The kernel's Makefiles track header
+  dependencies (`-MMD -MP`). Found by MyNOS Studio's test.
+- **2026-11-22** — MyNOS Studio, the package `studio` (mynos-y87.3-.7,
+  `doc/decisions/studio.md`): tabs on Textarea; Build with the ocamlc
+  inside MyNOS (errors marked and listed), Run with Studio as the
+  program's console (studiorun<pid>); Watch under the event recorder
+  (whom the program talked to, nested calls, the slowest); New service
+  (a typed service from a template), Run as service, Restart; completion
+  from the running services' descriptions; Studio is a service, ide/1
+  (studio<pid>), and its agent pane is MyNOS's agent given it: a replace
+  shows as lines removed and added and waits for Allow. Tested by hand
+  with a real model (read, replace, build); the graphical session's test
+  installs it and runs its first program.

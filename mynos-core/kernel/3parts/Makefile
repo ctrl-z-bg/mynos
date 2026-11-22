@@ -36,7 +36,7 @@ $(MODULE_NAME): $(OFILES)
 	$(CC) -c $(CFLAGS) $<
 
 clean:
-	rm -f *.o *.bin *~ Makefile.depend
+	rm -f *.o *.d *.bin *~ Makefile.depend
 
 depend:
 	$(RM) $(DEPEND)
@@ -47,3 +47,5 @@ DEPEND = Makefile.depend
 ifeq ($(wildcard $(DEPEND)),$(DEPEND))
 include $(DEPEND)
 endif
+
+-include $(OFILES:.o=.d)

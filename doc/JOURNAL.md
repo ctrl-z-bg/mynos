@@ -2951,3 +2951,37 @@ takes the archive's path from the index, did not change.
 **Lesson.** Files that must agree, served through a cache, must not
 share names across versions: name them by their content, and keep the
 previous generation as long as a cache can hold its pointer.
+
+## 2026-11-22 — A lock handed to a thread that never ran
+
+**Symptom.** Exit, in the MyNOS menu, with a window program started from
+a Terminal (`clock &`, `text &`, Studio): the session ended, and the text
+console answered no more. QEMU turned at 100% of a processor. The same
+on a build of two days before: an old bug, found by Studio's test.
+
+**Diagnosis.** The registers sampled from QEMU's monitor were always in
+the kernel, under the Terminal's page directory; a temporary line
+printing each process's CR3 named it. gdb on QEMU's stub gave the stack:
+the Terminal's `kill` of the program, `endProcess`, the freeing of the
+program's semaphores, and `__lock` on one of them, yielding for ever.
+
+**Cause.** A `V` that wakes a waiting thread does not free the
+semaphore's lock: it hands it over ("pass the critical section to the
+woken process"), and the woken thread frees it when it runs. At the
+session's end displayd woke the program (its window's Close) and the
+Terminal, closing too, killed it at once: woken, never run, the lock
+held for ever; freeing that semaphore then spun in `__lock`, with
+interrupts off, in the kernel.
+
+**Fix.** A thread remembers the lock a `V` handed it (`semHeld`, set by
+`V`, cleared by `P`); `endProcess` frees it for each thread of the
+process it ends (`__OS_sem_threadEnded`), the `V` staying (its value
+raised, for nobody). On the way, a second lesson: the field, added in
+the middle of `tss_t`, made a kernel that no longer booted, because the
+kernel's Makefiles knew no header dependencies and linked objects of
+the old layout with new ones. They now do (`-MMD -MP`, the `.d` files
+included).
+
+**Lesson.** A handed-over lock is state that lives in a thread: whatever
+ends threads must know about it. And a build that does not know what a
+header changes will one day link two versions of one struct.

@@ -464,6 +464,12 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     tools/type-keys.py "$tmp/mon-g" 'typed-in-text'; sleep 1
     mon "sendkey ctrl-s"; sleep 1
     tools/type-keys.py "$tmp/mon-g" '\n'; sleep 3
+    # MyNOS Studio (the package studio, mynos-y87): installed from a
+    # Terminal, started; Run builds its first program (/disk/hello.ml) with
+    # the ocamlc inside MyNOS and runs it (hello.byte, seen from text mode)
+    click 20 10; sleep 1; click 40 39; sleep 8
+    tools/type-keys.py "$tmp/mon-g" 'pkg install studio; studio &\n'; sleep 25
+    click 265 91; sleep 20
     click 20 10; sleep 1; click 30 347; sleep 4    # the MyNOS menu, Exit
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /disk/untitled.txt; ls /disk\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
@@ -1227,6 +1233,7 @@ PY
     expect "gui: displayd describes display/1 as display.ml does"
     expect "graphics: all checks passed"
     expect "typed-in-text"                             # Text saved a file
+    expect "hello.byte"                                # Studio built and ran hello.ml
     expect "keys: size 340x110"                        # a grip dragged
     expect "keys: size 1022x720"                       # maximized
     expect "keys: down x, held ESC[C x"                # two keys held at once

@@ -29,3 +29,8 @@ MAKE	= make
 AS = nasm
 ASFLAGS = -f elf
 
+# each object's header dependencies, written as it compiles (OBJ.d) and
+# read by the Makefiles: a changed header (tss.h) recompiles what includes
+# it. Without them, objects of an old layout of a struct were linked with
+# new ones (mynos-y87: tss_t grew, and the kernel no longer booted)
+CFLAGS += -MMD -MP

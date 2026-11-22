@@ -1067,6 +1067,7 @@ static tss_t * copyThreads(process_descriptor_t * ddest,
 	    sizeof(tss_t));
     dest->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
     dest->privSem = __OS_sem_allocateSemaphore(0);
+    dest->semHeld = 0;
     dest->tid = pid;          /* only the calling thread will run */
     dest->clearTid = NULL;
     dest->prev = prevDest;

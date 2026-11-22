@@ -19,6 +19,7 @@ NOTE*
 
 # Build outputs
 *.o
+*.d
 *.a
 *.elf
 *.bin

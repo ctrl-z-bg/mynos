@@ -23,6 +23,7 @@ int __OS_sem_allocateSemaphore(uint32_t n);
 int __OS_sem_freeSemaphore(int semid);
 int __OS_sem_allocateUserSemaphore(uint32_t n);
 void __OS_sem_freeProcessSemaphores(int pid);
+void __OS_sem_threadEnded(void * thread);   /* a tss_t */
 void __OS_sem_setOwner(int semid, int pid);
 int __OS_sem_userP(int semid);
 int __OS_sem_userTryP(int semid);

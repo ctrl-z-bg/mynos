@@ -458,6 +458,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
   /* Private Semaphore initialized to 0, as soon as P is made it yields */
   desc->tss->privSem = __OS_sem_allocateSemaphore(0);
+  desc->tss->semHeld = 0;
 
 #ifdef RAMDISK
   if (ramdisk_present && (ramdiskNPTs || buildRamdiskPTs() == 0)) {
@@ -585,6 +586,7 @@ static void endProcess(process_descriptor_t * self, int status, uint32_t pgdir) 
     timerQueueExtractThread(tss);
     q = tss->queue;
     if (q) pqExtractThread(q, tss);
+    __OS_sem_threadEnded(tss);      /* a semaphore's lock a V handed it */
     tss = tss->next;
   }
 

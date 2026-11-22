@@ -92,6 +92,7 @@ void threadStart(tss_t * tss) {
 
   /* the new thread's private semaphore */
   tss->privSem = __OS_sem_allocateSemaphore(0);
+  tss->semHeld = 0;
 
   readyQueueInsert(tss);
 }
