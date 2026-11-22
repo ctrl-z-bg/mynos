@@ -473,7 +473,7 @@ let handle s = function
   | Display.Mouse { x; y; buttons } ->
     s.mx <- x; s.my <- gy s y; s.buttons <- buttons
   | Display.Close -> close_graph (); exit 0
-  | Display.Tick | Display.Focus _ | Display.Wheel _ | Display.Key_up _ -> ()
+  | Display.Tick | Display.Focus _ | Display.Wheel _ | Display.Key_up _ | Display.Resize _ -> ()
 
 (* the events waiting, without waiting *)
 let drain s =

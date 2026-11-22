@@ -149,7 +149,9 @@ let window () =
              busy = []; result = Atomic.make []; item_page = 0 } in
   if not (Sys.file_exists file) then write_list st.urls;
   List.iter (start_fetch st) st.urls;
-  Gui.run ~title:"Feeds" ~tick:0.3 width height st (fun ui st ->
+  Gui.run ~title:"Feeds" ~tick:0.3 ~resizable:(600, 360) width height st (fun ui st ->
+      (* resizable: the size as it is now *)
+      let width = Gui.width ui and height = Gui.height ui in
       let g = ui.Gui.g in
       List.iter (fun (url, r) ->
           st.busy <- List.filter (( <> ) url) st.busy;

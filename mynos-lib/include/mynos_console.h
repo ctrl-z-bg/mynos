@@ -37,6 +37,8 @@
                                 waits for (0: none) -> U. Ctrl-C ends it
                                 (an interrupt), unless the mode has
                                 CONSOLE_NOSIG                              */
+#define CONSOLE_SIZE       5 /* () -> (cols:I,rows:I): the screen's size (a
+                                terminal window's, as it is now)           */
 #define CONSOLE_LAYOUT_US 0
 #define CONSOLE_LAYOUT_IT 1
 

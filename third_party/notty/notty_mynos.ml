@@ -38,7 +38,7 @@ module Term = struct
       ibuf = Bytes.create 1024;
       carry = "";
     } in
-    Tmachine.set_size t.trm (80, 25);
+    Tmachine.set_size t.trm (Console.size ());          (* a terminal window's, as it is *)
     at_exit (fun () -> release t);
     write t;
     t

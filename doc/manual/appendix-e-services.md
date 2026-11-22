@@ -402,6 +402,7 @@ its own. Both serve **console/1** (`mynos-lib/ocaml/console.ml`,
 | 2 | `keymap` | `layout:I`: 0 us, 1 it, −1 unchanged | `I`: the layout in use |
 | 3 | `write` | `data:S` | `U` |
 | 4 | `foreground` | `pid:I`: the program the caller waits for, 0 none | `U` |
+| 5 | `size` (safe) | `U` | `(cols:I,rows:I)`: 80 × 25, or a terminal window's as it is now |
 
 libmynos translates termios: `ICANON` and `ECHO` are bits 1 and 2, the
 absence of `ISIG` sets bit 4, VMIN and VTIME pass through.
@@ -530,13 +531,15 @@ boot and ends with code 0. Protocol **display/1**
 | 1 | `create` | `(title:S,width:I,height:I)` | `I`: a window |
 | 2 | `attach` | `window:I`, then a shared message of pixels | `U` |
 | 3 | `damage` | `((window:I,x:I,y:I),(width:I,height:I))` | `U` |
-| 4 | `next_event` | `(window:I,timeout_ms:I)` | `V(0:key=S,1:mouse=(x:I,y:I,buttons:I),2:close=U,3:tick=U,4:focus=B,5:wheel=I,6:key_up=S)` |
+| 4 | `next_event` | `(window:I,timeout_ms:I)` | `V(0:key=S,1:mouse=(x:I,y:I,buttons:I),2:close=U,3:tick=U,4:focus=B,5:wheel=I,6:key_up=S,7:resize=(width:I,height:I))` |
 | 5 | `destroy` | `window:I` | `U` |
 | 6 | `set_title` | `(window:I,title:S)` | `U` |
 | 7 | `start` | `U` | `U`: the session begins |
 | 8 | `wait_session` | `U` | `U`, when the session ends |
 | 9 | `stop` | `U` | `U`: windows get `close`, text mode is back |
 | 10 | `move` | `(window:I,x:I,y:I)` | `U` |
+| 11 | `resize` | `(window:I,width:I,height:I)`, then a shared message of pixels | `U` |
+| 12 | `resizable` | `(window:I,min_width:I,min_height:I)`; 0: not | `U` |
 
 - *Pixels are shared, not sent.* After `attach` the same connection
   carries one more message, sent with `MYNOS_IPC_SHARED`: the window's
@@ -552,6 +555,11 @@ boot and ends with code 0. Protocol **display/1**
   back after the session.
 - At most 32 windows, each its creator's (`not your window`); a timer
   thread removes those of programs that have ended.
+- *Resizing*: a window made `resizable` gets a grip; displayd draws an
+  outline while it is dragged, and on release sends the program `resize`
+  with the size asked (a double click on the title asks for the whole
+  screen, or the size before). The program answers with the request
+  `resize` and new pixels; until then the old ones show.
 
 ## E.15 soundd: sound
 

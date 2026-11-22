@@ -96,6 +96,11 @@ Every window has a title bar, with a close box at its right:
 - **Moving.** Drag a window by its title bar.
 - **Closing.** Press the close box and release on it: the window closes.
   If you slip off it before releasing, nothing happens.
+- **Resizing.** A window that can be resized (Terminal, Files, Packages,
+  Applications, Log, Agent, Tour, and the packages' manual, wiki, feeds
+  and view) has a grip at its bottom right corner: drag it, an outline
+  shows the new size, the window takes it when you let go. A double
+  click on its title maximizes it, and another brings it back.
 - **Tabs.** A click on a window's tab in the top bar brings it to the
   front, wherever it is: a window hidden under others is found without
   moving them. Tabs keep their order.
@@ -116,8 +121,8 @@ Welcome opens another.
 ## 10.6 The Terminal
 
 The menu's **Terminal** opens a window with `sh` running in it, as at the
-text console: 80 columns by 25 lines, the same commands, the same line
-editing.
+text console: 80 columns by 25 lines at first, as many as fit once it is
+resized or maximized; the same commands, the same line editing.
 
 ```
 mynos:/$ ps

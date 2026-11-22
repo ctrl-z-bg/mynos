@@ -1,8 +1,8 @@
 (* A small immediate-mode toolkit: see gui.mli. *)
 
 type ui = {
-  window : Display.window;
-  g : Gfx.t;
+  mutable window : Display.window;
+  mutable g : Gfx.t;
   mutable mx : int;
   mutable my : int;
   mutable buttons : int;
@@ -16,6 +16,9 @@ type ui = {
   mutable released : string list;
   mutable held : string list;
 }
+
+let width ui = ui.g.Gfx.width
+let height ui = ui.g.Gfx.height
 
 let background = 0xF4F6F8
 let foreground = 0x1A2228
@@ -164,7 +167,7 @@ let scroll ?(colour = panel_colour) ui id x y w h content =
 
 exception Quit
 
-let run ?(title = "") ?(tick = 0.) w h state frame =
+let run ?(title = "") ?(tick = 0.) ?resizable w h state frame =
   let window =
     try Display.window ~title w h with
     | Ipc.Remote_error (_, m) | Failure m ->
@@ -180,7 +183,10 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
              field = -1; wheel = 0; released = []; held = [] } in
   (* the window may be gone already (the session ended: displayd closed
      every window), so its end is quiet *)
-  let destroy () = try Display.destroy window with Ipc.Remote_error _ | Mynos.Error _ -> () in
+  (match resizable with
+   | Some (mw, mh) -> (try Display.set_resizable window mw mh with Ipc.Remote_error _ -> ())
+   | None -> ());
+  let destroy () = try Display.destroy ui.window with Ipc.Remote_error _ | Mynos.Error _ -> () in
   (* ticks keep their pace: the wait for the next one is what is left until
      it is due, not a whole period after every event (moving the mouse over
      a window stopped its animation) *)
@@ -190,11 +196,11 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
       ui.tick <- true;
       next_tick := Mynos.uptime () +. tick
     end;
-    Gfx.fill ui.g 0 0 w h background;
+    Gfx.fill ui.g 0 0 (width ui) (height ui) background;
     match frame ui state with
     | exception Quit -> destroy ()
     | state ->
-      match Display.damage window with
+      match Display.damage ui.window with
       | exception (Ipc.Remote_error _ | Mynos.Error _) -> ()
       | () ->
       (* a click or a key may have changed the state halfway through the
@@ -204,7 +210,7 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
       ui.clicked <- false; ui.keys <- []; ui.tick <- false; ui.wheel <- 0; ui.released <- [];
       if changed then loop state else
       let timeout = if tick > 0. then max 0.001 (!next_tick -. Mynos.uptime ()) else tick in
-      (match Display.next_event ~timeout window with
+      (match Display.next_event ~timeout ui.window with
        | Display.Close -> destroy ()
        | Display.Mouse { x; y; buttons } ->
          if buttons land 1 <> 0 && ui.buttons land 1 = 0 then ui.press <- (x, y);
@@ -228,6 +234,12 @@ let run ?(title = "") ?(tick = 0.) w h state frame =
          if not f then begin ui.released <- ui.held; ui.held <- [] end;
          loop state
        | Display.Wheel n -> ui.wheel <- n; loop state
+       | Display.Resize (nw, nh) ->
+         (* the user's size: new pixels, drawn at once *)
+         (match Display.resize ui.window nw nh with
+          | win -> ui.window <- win; ui.g <- win.Display.pixels
+          | exception (Ipc.Remote_error _ | Mynos.Error _) -> ());
+         loop state
        | exception Ipc.Remote_error _ -> ()) in
   loop state
 

@@ -11,8 +11,9 @@
    Two domains: the service (requests; never waits for input: a read with
    nothing to give stays pending) and the window (keys, ticks). One lock. *)
 
-let cols = 80
-let rows = 25
+(* the grid: 80 x 25 at first, then as the window is resized *)
+let cols = ref 80
+let rows = ref 25
 let margin = 4
 let cw = Gfx.char_w
 let ch = Gfx.char_h
@@ -30,8 +31,8 @@ let palette = [|
 type cell = { mutable c : string; mutable fg : int; mutable bg : int; mutable bold : bool }
 
 let blank () = { c = " "; fg = -1; bg = -1; bold = false }
-let screen = Array.init rows (fun _ -> Array.init cols (fun _ -> blank ()))
-let dirty = Array.make rows true
+let screen = ref (Array.init !rows (fun _ -> Array.init !cols (fun _ -> blank ())))
+let dirty = ref (Array.make !rows true)
 let row = ref 0 and col = ref 0 and wrap_pending = ref false
 let saved = ref (0, 0)
 let cursor_on = ref true
@@ -42,8 +43,8 @@ let copy_cell d s = d.c <- s.c; d.fg <- s.fg; d.bg <- s.bg; d.bold <- s.bold
 let clear_cell x = x.c <- " "; x.fg <- !cur_fg; x.bg <- !cur_bg; x.bold <- false
 
 let erase r c0 c1 =
-  for c = max 0 c0 to min cols c1 - 1 do clear_cell screen.(r).(c) done;
-  dirty.(r) <- true
+  for c = max 0 c0 to min !cols c1 - 1 do clear_cell !screen.(r).(c) done;
+  !dirty.(r) <- true
 
 (* ---- scrollback: the lines scrolled off the top of the main screen ---- *)
 
@@ -54,7 +55,7 @@ let view = ref 0                       (* lines looked back; 0: the screen *)
 let all_dirty = ref true               (* the view moved: everything again *)
 
 let push_history r =
-  history.(!hist_next) <- Array.map (fun x -> { x with c = x.c }) screen.(r);
+  history.(!hist_next) <- Array.map (fun x -> { x with c = x.c }) !screen.(r);
   hist_next := (!hist_next + 1) mod history_max;
   if !hist_len < history_max then incr hist_len;
   (* looking back: the same lines stay in view *)
@@ -69,49 +70,76 @@ let set_view v =
 
 let scroll_up top n =
   if top = 0 && !alternate = None then
-    for r = 0 to min n rows - 1 do push_history r done;
-  for r = top to rows - 1 do
-    if r + n < rows then Array.iteri (fun c x -> copy_cell x screen.(r + n).(c)) screen.(r)
-    else erase r 0 cols;
-    dirty.(r) <- true
+    for r = 0 to min n !rows - 1 do push_history r done;
+  for r = top to !rows - 1 do
+    if r + n < !rows then Array.iteri (fun c x -> copy_cell x !screen.(r + n).(c)) !screen.(r)
+    else erase r 0 !cols;
+    !dirty.(r) <- true
   done
 
 let scroll_down top n =
-  for r = rows - 1 downto top do
-    if r - n >= top then Array.iteri (fun c x -> copy_cell x screen.(r - n).(c)) screen.(r)
-    else erase r 0 cols;
-    dirty.(r) <- true
+  for r = !rows - 1 downto top do
+    if r - n >= top then Array.iteri (fun c x -> copy_cell x !screen.(r - n).(c)) !screen.(r)
+    else erase r 0 !cols;
+    !dirty.(r) <- true
   done
 
 let newline () =
   col := 0; wrap_pending := false;
-  if !row = rows - 1 then scroll_up 0 1 else incr row
+  if !row = !rows - 1 then scroll_up 0 1 else incr row
 
 let put s =
   if !wrap_pending then newline ();
-  let x = screen.(!row).(!col) in
+  let x = !screen.(!row).(!col) in
   let fg, bg = if !reverse then
       ((if !cur_bg < 0 then 0 else !cur_bg), (if !cur_fg < 0 then 7 else !cur_fg))
     else (!cur_fg, !cur_bg) in
   x.c <- s; x.fg <- fg; x.bg <- bg; x.bold <- !cur_bold;
-  dirty.(!row) <- true;
-  if !col = cols - 1 then wrap_pending := true else incr col
+  !dirty.(!row) <- true;
+  if !col = !cols - 1 then wrap_pending := true else incr col
 
 let clamp () =
-  row := max 0 (min (rows - 1) !row);
-  col := max 0 (min (cols - 1) !col)
+  row := max 0 (min (!rows - 1) !row);
+  col := max 0 (min (!cols - 1) !col)
 
 let set_alternate on =
   match on, !alternate with
   | true, None ->
-    alternate := Some (Array.map (Array.map (fun x -> { x with c = x.c })) screen, !row, !col);
-    for r = 0 to rows - 1 do erase r 0 cols done;
+    alternate := Some (Array.map (Array.map (fun x -> { x with c = x.c })) !screen, !row, !col);
+    for r = 0 to !rows - 1 do erase r 0 !cols done;
     row := 0; col := 0
   | false, Some (s, r, c) ->
-    Array.iteri (fun i line -> Array.iteri (fun j x -> copy_cell screen.(i).(j) x) line) s;
-    Array.fill dirty 0 rows true;
-    row := r; col := c; alternate := None
+    (* saved at another size, maybe: what fits *)
+    for r = 0 to !rows - 1 do erase r 0 !cols done;
+    Array.iteri (fun i line ->
+        if i < !rows then
+          Array.iteri (fun j x -> if j < !cols then copy_cell !screen.(i).(j) x) line) s;
+    Array.fill !dirty 0 !rows true;
+    row := r; col := c; clamp (); alternate := None
   | _ -> ()
+
+(* a new size of the grid (the window resized). Lines that no longer fit
+   above the cursor go to the scrollback, so that the cursor's line stays
+   in view; a line keeps the cells that fit. The programs inside learn the
+   size when they ask (console/1 size); one that drew the whole screen
+   (edit) draws again at its next start *)
+let resize nc nr =
+  let nc = max 20 nc and nr = max 5 nr in
+  if nc <> !cols || nr <> !rows then begin
+    let shift = max 0 (!row + 1 - nr) in
+    if !alternate = None then for r = 0 to shift - 1 do push_history r done;
+    let old = !screen and oldr = !rows and oldc = !cols in
+    screen := Array.init nr (fun r ->
+        Array.init nc (fun c ->
+            let o = r + shift in
+            if o < oldr && c < oldc then { (old.(o).(c)) with c = old.(o).(c).c } else blank ()));
+    rows := nr; cols := nc;
+    dirty := Array.make nr true;
+    row := !row - shift;
+    wrap_pending := false;
+    clamp ();
+    all_dirty := true
+  end
 
 let sgr params =
   let params = if params = [] then [ 0 ] else params in
@@ -150,28 +178,28 @@ let csi priv params final =
      | 'H' | 'f' -> row := p 0 1 - 1; col := p 1 1 - 1
      | 'J' ->
        (match p 0 0 with
-        | 0 -> erase !row !col cols; for r = !row + 1 to rows - 1 do erase r 0 cols done
-        | 1 -> for r = 0 to !row - 1 do erase r 0 cols done; erase !row 0 (!col + 1)
-        | _ -> for r = 0 to rows - 1 do erase r 0 cols done)
+        | 0 -> erase !row !col !cols; for r = !row + 1 to !rows - 1 do erase r 0 !cols done
+        | 1 -> for r = 0 to !row - 1 do erase r 0 !cols done; erase !row 0 (!col + 1)
+        | _ -> for r = 0 to !rows - 1 do erase r 0 !cols done)
      | 'K' ->
        (match p 0 0 with
-        | 0 -> erase !row !col cols
+        | 0 -> erase !row !col !cols
         | 1 -> erase !row 0 (!col + 1)
-        | _ -> erase !row 0 cols)
+        | _ -> erase !row 0 !cols)
      | 'L' -> scroll_down !row n
      | 'M' -> scroll_up !row n
      | 'P' ->
-       let line = screen.(!row) in
-       for c = !col to cols - 1 do
-         if c + n < cols then copy_cell line.(c) line.(c + n) else clear_cell line.(c)
+       let line = !screen.(!row) in
+       for c = !col to !cols - 1 do
+         if c + n < !cols then copy_cell line.(c) line.(c + n) else clear_cell line.(c)
        done;
-       dirty.(!row) <- true
+       !dirty.(!row) <- true
      | '@' ->
-       let line = screen.(!row) in
-       for c = cols - 1 downto !col do
+       let line = !screen.(!row) in
+       for c = !cols - 1 downto !col do
          if c - n >= !col then copy_cell line.(c) line.(c - n) else clear_cell line.(c)
        done;
-       dirty.(!row) <- true
+       !dirty.(!row) <- true
      | 'X' -> erase !row !col (!col + n)
      | 'm' -> sgr params
      | 's' -> saved := (!row, !col)
@@ -193,11 +221,11 @@ let output_byte b =
     (match b with
      | '[' -> state := Csi (false, Buffer.create 8)
      | 'E' -> newline ()
-     | 'D' -> if !row = rows - 1 then scroll_up 0 1 else incr row
+     | 'D' -> if !row = !rows - 1 then scroll_up 0 1 else incr row
      | 'M' -> if !row = 0 then scroll_down 0 1 else decr row
      | '7' -> saved := (!row, !col)
      | '8' -> let r, c = !saved in row := r; col := c
-     | 'c' -> for r = 0 to rows - 1 do erase r 0 cols done; row := 0; col := 0
+     | 'c' -> for r = 0 to !rows - 1 do erase r 0 !cols done; row := 0; col := 0
      | _ -> ())
   | Csi (priv, buf) ->
     (match b with
@@ -222,7 +250,7 @@ let output_byte b =
       | '\n' -> newline ()
       | '\r' -> col := 0; wrap_pending := false
       | '\b' -> if !col > 0 then decr col; wrap_pending := false
-      | '\t' -> col := min (cols - 1) ((!col + 8) land (lnot 7))
+      | '\t' -> col := min (!cols - 1) ((!col + 8) land (lnot 7))
       | '\007' | '\000' -> ()
       | _ when c >= 0xC0 ->
         Buffer.clear utf8; Buffer.add_char utf8 b;
@@ -244,16 +272,19 @@ let colour i default = if i < 0 then default else palette.(i land 15)
 let draw_row g r =
   let y = margin + r * ch in
   let k = r - !view in                 (* < 0: a line of the scrollback *)
-  let line = if k >= 0 then screen.(k) else history_line (- k) in
+  let line = if k >= 0 then !screen.(k) else history_line (- k) in
   let (cr, cc) = if !view = 0 then (!row, !col) else (-1, -1) in
   let c = ref 0 in
-  while !c < cols do
+  (* a line of the scrollback keeps the width it had: the rest is blank *)
+  let n = min !cols (Array.length line) in
+  if n < !cols then Gfx.fill g (margin + n * cw) y ((!cols - n) * cw) ch default_bg;
+  while !c < n do
     (* a run of cells of the same attributes *)
     let x0 = !c in
     let a = line.(x0) in
     let is_cursor i = !cursor_on && r = cr && i = cc in
     let b = Buffer.create 80 in
-    while !c < cols && line.(!c).fg = a.fg && line.(!c).bg = a.bg && line.(!c).bold = a.bold
+    while !c < n && line.(!c).fg = a.fg && line.(!c).bg = a.bg && line.(!c).bold = a.bold
           && not (is_cursor !c) && (not (is_cursor x0) || !c = x0) do
       Buffer.add_string b line.(!c).c; incr c
     done;
@@ -266,19 +297,19 @@ let draw_row g r =
   done
 
 (* the scrollbar, right of the grid *)
-let bar_x = cols * cw + 2 * margin
+let bar_x () = !cols * cw + 2 * margin
 let bar_w = 12
-let height = rows * ch + 2 * margin
+let height () = !rows * ch + 2 * margin
 let drawn_bar = ref (-1, -1)
 
 let draw_bar g =
-  let total = rows + !hist_len in
-  let th = max 24 (height * rows / total) in
+  let total = !rows + !hist_len in
+  let th = max 24 (height () * !rows / total) in
   let ty = if !hist_len = 0 then 0
-    else (height - th) * (!hist_len - !view) / !hist_len in
+    else (height () - th) * (!hist_len - !view) / !hist_len in
   if (ty, th) <> !drawn_bar then begin
-    Gfx.fill g bar_x 0 bar_w height 0x1A2026;
-    if !hist_len > 0 then Gfx.fill g (bar_x + 3) (ty + 2) (bar_w - 6) (th - 4) 0x5A6670;
+    Gfx.fill g (bar_x ()) 0 bar_w (height ()) 0x1A2026;
+    if !hist_len > 0 then Gfx.fill g (bar_x () + 3) (ty + 2) (bar_w - 6) (th - 4) 0x5A6670;
     drawn_bar := (ty, th);
     true
   end else false
@@ -288,17 +319,17 @@ let render () =
   | None -> ()
   | Some w ->
     let g = w.Display.pixels in
-    if !all_dirty then (Array.fill dirty 0 rows true; all_dirty := false);
+    if !all_dirty then (Array.fill !dirty 0 !rows true; all_dirty := false);
     (* looking back, screen rows show lower down: anything changed, all again *)
-    if !view > 0 && Array.exists Fun.id dirty then Array.fill dirty 0 rows true;
+    if !view > 0 && Array.exists Fun.id !dirty then Array.fill !dirty 0 !rows true;
     (* rows on screen move down by view: a screen row r shows at r + view *)
     let (pr, _) = !drawn_cursor in
-    if pr >= 0 && pr < rows then dirty.(pr) <- true;
-    if !row + !view < rows then dirty.(!row + !view) <- true;
-    let top = ref rows and bottom = ref (-1) in
-    for r = 0 to rows - 1 do
-      if dirty.(r) then begin
-        draw_row g r; dirty.(r) <- false;
+    if pr >= 0 && pr < !rows then !dirty.(pr) <- true;
+    if !row + !view < !rows then !dirty.(!row + !view) <- true;
+    let top = ref !rows and bottom = ref (-1) in
+    for r = 0 to !rows - 1 do
+      if !dirty.(r) then begin
+        draw_row g r; !dirty.(r) <- false;
         top := min !top r; bottom := max !bottom r
       end
     done;
@@ -372,7 +403,8 @@ let handle chn msg =
         | Console.Write data as r ->
           output data;
           ok r ();
-          render ())
+          render ()
+        | Console.Size as r -> ok r (!cols, !rows))
 
 let serve port =
   while true do
@@ -430,8 +462,11 @@ let () =
   let me = Mynos.getpid () in
   let name = Printf.sprintf "term%d" me in
   let port = Mynos.register name in
-  let w = Display.window ~title:"Terminal" (cols * cw + 2 * margin + bar_w) height in
+  let w = Display.window ~title:"Terminal" (!cols * cw + 2 * margin + bar_w) (height ()) in
   window := Some w;
+  (* resizable, down to 20 x 5 *)
+  (try Display.set_resizable w (20 * cw + 2 * margin + bar_w) (5 * ch + 2 * margin)
+   with Ipc.Remote_error _ -> ());
   Gfx.fill w.Display.pixels 0 0 w.pixels.Gfx.width w.pixels.Gfx.height default_bg;
   Mutex.lock lock; render (); Mutex.unlock lock;
   ignore (Domain.spawn (fun () -> serve port));
@@ -444,8 +479,9 @@ let () =
   let child = Mynos.spawn ~env "ocamlrun" [| "ocamlrun"; "/sh.byte" |] in
   let alive () = match Mynos.process_info child with
     | Some i -> i.Mynos.alive | None -> false | exception Mynos.Error _ -> false in
+  let current () = match !window with Some w -> w | None -> w in
   let rec loop () =
-    match Display.next_event ~timeout:0.1 w with
+    match Display.next_event ~timeout:0.1 (current ()) with
     | Display.Close -> ()
     | ev ->
       Mutex.lock lock;
@@ -453,10 +489,21 @@ let () =
        | Display.Key k -> set_view 0; key k
        | Display.Focus f -> focused := f
        | Display.Wheel n -> set_view (!view - 3 * n)
-       | Display.Mouse { x; y; buttons } when buttons land 1 <> 0 && x >= bar_x && !hist_len > 0 ->
+       | Display.Resize (nw, nh) ->
+         (* the grid that fits, and the window at its exact size *)
+         resize ((nw - 2 * margin - bar_w) / cw) ((nh - 2 * margin) / ch);
+         (match Display.resize (current ()) (!cols * cw + 2 * margin + bar_w) (height ()) with
+          | w' ->
+            window := Some w';
+            Gfx.fill w'.Display.pixels 0 0 w'.pixels.Gfx.width w'.pixels.Gfx.height default_bg;
+            drawn_bar := (-1, -1);
+            drawn_cursor := (-1, -1);
+            all_dirty := true
+          | exception (Ipc.Remote_error _ | Mynos.Error _) -> ())
+       | Display.Mouse { x; y; buttons } when buttons land 1 <> 0 && x >= bar_x () && !hist_len > 0 ->
          (* the bar: the thumb follows the pointer *)
-         let th = max 24 (height * rows / (rows + !hist_len)) in
-         let room = max 1 (height - th) in
+         let th = max 24 (height () * !rows / (!rows + !hist_len)) in
+         let room = max 1 (height () - th) in
          set_view (!hist_len - (y - th / 2) * !hist_len / room)
        | _ -> ());
       serve_reads ();
@@ -476,5 +523,5 @@ let () =
           if p.parent = pid then tree p.p_pid else []) ps in
     List.iter (fun pid -> try Mynos.kill pid with Mynos.Error _ -> ()) (tree child)
   end;
-  Display.destroy w;
+  Display.destroy (current ());
   exit 0

@@ -343,10 +343,20 @@ int ioctl(int fd, IOCTL_REQ req, ...)
       return 0;
     }
     case TIOCGWINSZ: {
+      /* the console's size: a terminal window's changes */
       struct winsize * w = arg;
+      wire_writer ww;
+      wire_reader rr;
+      mynos_msg_t * msg;
       memset(w, 0, sizeof(*w));
       w->ws_row = CONSOLE_ROWS;
       w->ws_col = CONSOLE_COLS;
+      console_start(&ww, CONSOLE_SIZE);
+      if (console_request(console_cache.port, &ww, &rr, &msg) == 0) {
+        int c = wire_get_int(&rr), rw = wire_get_int(&rr);
+        if (!rr.error && c > 0 && rw > 0) { w->ws_col = c; w->ws_row = rw; }
+        mynos_freeMsg(&msg);
+      }
       return 0;
     }
     }

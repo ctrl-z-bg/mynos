@@ -121,7 +121,11 @@ let () =
       Some a
     | exception Failure m -> add st (Problem m); None in
   add st (Note "Ask the agent to do something in MyNOS. What changes things waits for your yes.");
-  Gui.run ~title:"Agent" ~tick:0.25 width height () (fun ui () ->
+  Gui.run ~title:"Agent" ~tick:0.25 ~resizable:(480, 320) width height () (fun ui () ->
+      (* resizable: the size as it is now *)
+      let width = Gui.width ui and height = Gui.height ui in
+      let conv_w = width - 16 and conv_h = height - 110 in
+      let cols = (conv_w - 32) / Gfx.char_w in
       Mutex.lock lock;
       Fun.protect ~finally:(fun () -> Mutex.unlock lock) (fun () ->
           let g = ui.Gui.g in

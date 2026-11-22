@@ -190,6 +190,7 @@ let protocols = [
              "Rename", [ S; S ], [] |];
   "registry/1", [| "Register", [ S ], [ I ]; "Lookup", [ S ], [ I ]; "List", [], [] |];
   "console/1", [| "Read", [ I ], [ S ]; "Mode", [ I; I; I ], []; "Keymap", [ I ], [ I ];
+                  "Size", [], [ I; I ];
                   "Write", [ S ], []; "Foreground", [ I ], [] |];
 ]
 

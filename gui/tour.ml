@@ -58,7 +58,9 @@ let run st (l : Lesson.t) =
 let () =
   let lessons = Array.of_list (Lesson.load "/tour.txt" @ Lesson.load "/disk/tour.txt") in
   let st = { lessons; sel = 0; message = ""; running = false } in
-  Gui.run ~title:"Tour of MyNOS" ~tick:0.5 width height () (fun ui () ->
+  Gui.run ~title:"Tour of MyNOS" ~tick:0.5 ~resizable:(600, 400) width height () (fun ui () ->
+      (* resizable: the size as it is now *)
+      let width = Gui.width ui and height = Gui.height ui in
       let g = ui.Gui.g in
       Mutex.lock lock;
       let done_ = !finished in

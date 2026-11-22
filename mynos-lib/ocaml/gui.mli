@@ -13,8 +13,8 @@
     ]} *)
 
 type ui = {
-  window : Display.window;
-  g : Gfx.t;                      (** the window's pixels *)
+  mutable window : Display.window;
+  mutable g : Gfx.t;              (** the window's pixels (new ones after a resize) *)
   mutable mx : int;               (** the pointer, in the window *)
   mutable my : int;
   mutable buttons : int;
@@ -122,11 +122,18 @@ val file_picker : ui -> int -> picked option
 
 exception Quit
 
-val run : ?title:string -> ?tick:float -> int -> int -> 'a -> (ui -> 'a -> 'a) -> unit
+val run : ?title:string -> ?tick:float -> ?resizable:int * int -> int -> int -> 'a ->
+  (ui -> 'a -> 'a) -> unit
 (** [run width height state frame]: a window, drawn by [frame] at every
     event (and every [tick] seconds, if given), until it is closed (its
     close box, or [frame] raising {!Quit}). Outside the graphical session
-    it says so, and ends the program (exit status 2). *)
+    it says so, and ends the program (exit status 2). With [~resizable:(min_w,
+    min_h)] the user may resize it (its grip, a double click on its title
+    to maximize): [frame] then lays out by {!width} and {!height}. *)
+
+val width : ui -> int
+val height : ui -> int
+(** The window's size now. *)
 
 val spawn : ?args:string list -> string -> unit
 (** Start a program of the RAM disk (a .byte, on ocamlrun), with these

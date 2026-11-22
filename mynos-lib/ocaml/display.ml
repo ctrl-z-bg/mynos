@@ -9,6 +9,7 @@ type event =
   | Focus of bool
   | Wheel of int
   | Key_up of string
+  | Resize of int * int
 
 type _ request =
   | Info : (int * int) request
@@ -22,6 +23,8 @@ type _ request =
   | Wait_session : unit request
   | Stop : unit request
   | Move : int * int * int -> unit request
+  | Resize_to : int * int * int -> unit request
+  | Resizable : int * int * int -> unit request
 
 let window_f = Wire.(field "window" int)
 let size_codec = Wire.(pair (field "width" int) (field "height" int))
@@ -30,6 +33,8 @@ let damage_args = Wire.(pair (triple window_f (field "x" int) (field "y" int)) s
 let event_args = Wire.(pair window_f (field "timeout_ms" int))
 let title_args = Wire.(pair window_f (field "title" string))
 let move_args = Wire.(triple window_f (field "x" int) (field "y" int))
+let resize_args = Wire.(triple window_f (field "width" int) (field "height" int))
+let resizable_args = Wire.(triple window_f (field "min_width" int) (field "min_height" int))
 
 let event_codec =
   Wire.(variant [
@@ -41,7 +46,9 @@ let event_codec =
       case ~name:"tick" 3 unit (fun () -> Tick) (function Tick -> Some () | _ -> None);
       case ~name:"focus" 4 bool (fun b -> Focus b) (function Focus b -> Some b | _ -> None);
       case ~name:"wheel" 5 int (fun n -> Wheel n) (function Wheel n -> Some n | _ -> None);
-      case ~name:"key_up" 6 string (fun s -> Key_up s) (function Key_up s -> Some s | _ -> None) ])
+      case ~name:"key_up" 6 string (fun s -> Key_up s) (function Key_up s -> Some s | _ -> None);
+      case ~name:"resize" 7 size_codec (fun (w, h) -> Resize (w, h))
+        (function Resize (w, h) -> Some (w, h) | _ -> None) ])
 
 module Protocol = struct
   let id = "display/1"
@@ -62,7 +69,8 @@ module Protocol = struct
         "The window's next event: keys (UTF-8, VT100 sequences for the others) and \
          their releases (key_up: the same text), the \
          mouse in the window (buttons: 1 left, 2 right, 4 middle), close, focus, the \
-         wheel over it (its notches, positive towards the user: down); tick when none \
+         wheel over it (its notches, positive towards the user: down), resize (the size \
+         the user asked for: answer with resize); tick when none \
          came within timeout_ms (0: wait forever; negative: do not wait). Waits."
         event_args event_codec;
       request 5 "destroy" "Close a window." window_f Wire.unit;
@@ -73,7 +81,15 @@ module Protocol = struct
         Wire.unit Wire.unit;
       request 9 "stop" "End the graphical session: windows get close, text mode is back."
         Wire.unit Wire.unit;
-      request 10 "move" "Move a window (its content's top left corner)." move_args Wire.unit ]
+      request 10 "move" "Move a window (its content's top left corner)." move_args Wire.unit;
+      request 11 "resize"
+        "A window's new size: the same connection then carries a shared message of its \
+         pixels, as attach does, which replaces the old one."
+        resize_args Wire.unit;
+      request 12 "resizable"
+        "Let the user resize a window (a grip, a double click on the title to maximize), \
+         down to this size; 0: not resizable."
+        resizable_args Wire.unit ]
   type 'a r = 'a request
   type 'a request = 'a r
   type packed = Request : 'a request -> packed
@@ -92,6 +108,8 @@ module Protocol = struct
     | Wait_session -> case 8
     | Stop -> case 9
     | Move (i, x, y) -> case 10; Wire.write w move_args (i, x, y)
+    | Resize_to (i, x, y) -> case 11; Wire.write w resize_args (i, x, y)
+    | Resizable (i, x, y) -> case 12; Wire.write w resizable_args (i, x, y)
 
   let read_request r =
     match Wire.read r Wire.int with
@@ -106,6 +124,8 @@ module Protocol = struct
     | 8 -> Request Wait_session
     | 9 -> Request Stop
     | 10 -> let i, x, y = Wire.read r move_args in Request (Move (i, x, y))
+    | 11 -> let i, x, y = Wire.read r resize_args in Request (Resize_to (i, x, y))
+    | 12 -> let i, x, y = Wire.read r resizable_args in Request (Resizable (i, x, y))
     | n -> raise (Wire.Error (Printf.sprintf "display: unknown request %d" n))
 
   let reply : type a. a request -> a Wire.t = function
@@ -120,6 +140,8 @@ module Protocol = struct
     | Wait_session -> Wire.unit
     | Stop -> Wire.unit
     | Move _ -> Wire.unit
+    | Resize_to _ -> Wire.unit
+    | Resizable _ -> Wire.unit
 end
 
 module I = Ipc.Make (Protocol)
@@ -164,4 +186,21 @@ let poll win = call win.display (Next_event (win.id, -1))
 
 let set_title win t = call win.display (Set_title (win.id, t))
 let move win x y = call win.display (Move (win.id, x, y))
+
+(* new pixels of the new size, shared, on the request's connection: as
+   [window]'s attach *)
+let resize win w h =
+  let pixels = Gfx.create w h in
+  let req = Resize_to (win.id, w, h) in
+  let ch = Mynos.connect (Mynos.lookup "display") in
+  let answer =
+    Fun.protect ~finally:(fun () -> try Mynos.free_channel ch with Mynos.Error _ -> ())
+      (fun () ->
+         Mynos.send ch (I.request_message req);
+         Gfx.send_shared ch pixels;
+         Mynos.recv ch) in
+  I.read_reply answer req;
+  { win with pixels }
+
+let set_resizable win w h = call win.display (Resizable (win.id, w, h))
 let destroy win = try call win.display (Destroy win.id) with Ipc.Remote_error _ -> ()

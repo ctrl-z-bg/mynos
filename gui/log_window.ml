@@ -22,7 +22,9 @@ let () =
       fresh := true;
       drain ()
     end in
-  Gui.run ~title:"Log" ~tick:0.5 width height () (fun ui () ->
+  Gui.run ~title:"Log" ~tick:0.5 ~resizable:(360, 200) width height () (fun ui () ->
+      (* resizable: the size as it is now *)
+      let width = Gui.width ui and height = Gui.height ui in
       let g = ui.Gui.g in
       drain ();
       Gfx.fill g 0 0 width 30 0x1B3A57;

@@ -91,7 +91,7 @@ let poll st =
 
 (* the right side: the selected package, what can be done with it *)
 let details ui st x =
-  let w = width - x - 12 in
+  let w = Gui.width ui - x - 12 in
   let busy = st.job <> None in
   match List.assoc_opt st.selected (rows st) with
   | None ->
@@ -161,7 +161,9 @@ let () =
              verdict = None } in
   reload st;
   if not (Sys.file_exists index_file) then start st "Reading the index" [ "update" ];
-  Gui.run ~title:"Packages" ~tick:0.25 width height st (fun ui st ->
+  Gui.run ~title:"Packages" ~tick:0.25 ~resizable:(560, 380) width height st (fun ui st ->
+      (* resizable: the size as it is now *)
+      let width = Gui.width ui and height = Gui.height ui in
       poll st;
       let g = ui.Gui.g in
       (* the list *)

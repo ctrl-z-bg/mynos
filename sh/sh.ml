@@ -949,8 +949,6 @@ let as_word ?(quoted = false) ~close s =
 
 (* ---- the editor ---- *)
 
-let columns = 80
-
 (* UTF-8: the line moves and erases whole characters, and its width on
    screen is its characters *)
 let is_cont c = Char.code c land 0xC0 = 0x80
@@ -960,6 +958,8 @@ let next_char t p =
   let p = ref (p + 1) in while !p < String.length t && is_cont t.[!p] do incr p done; !p
 
 let read_line_edited prompt =
+  (* the screen's width: a terminal window's, as it is now *)
+  let columns = fst (Console.size ()) in
   let line = Buffer.create 80 in
   let text () = Buffer.contents line in
   let pos = ref 0 in                    (* the cursor, in the line *)

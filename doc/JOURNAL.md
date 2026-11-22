@@ -2897,3 +2897,30 @@ interrupt came until the script played the adapter's part.
 **Lesson.** Before fixing an address, print the ones the bootloaders
 chose: two loaders, two layouts. And an emulator's device may be driven
 by its host side: a silent card can be a missing listener.
+
+## 2026-11-22 — A window of a new size is a new window's pixels
+
+**Symptom.** None: a feature. Windows had the size their program asked
+for at creation, and the Terminal was 80 x 25 for ever.
+
+**Diagnosis.** A window's pixels are a message shared between the
+program and displayd, of exactly width x height; a new size cannot be
+the same memory. And programs laid out with constants (`let width = 720`).
+
+**Cause.** The design made resizing a protocol matter, not a drawing
+one: displayd cannot stretch pixels it does not own.
+
+**Fix.** displayd only proposes: a grip (an outline while dragged) or a
+double click on the title (the whole screen, or back) sends the program
+an event `resize`; the program answers with the request `resize` and new
+shared pixels, as `attach` did at the start; until then the old ones
+show. Only windows that ask (`resizable`, with a minimum) get a grip, so
+nothing changes for the others. `Gui.run ~resizable` does it for a
+program; its frame lays out by `Gui.width`/`Gui.height`. The Terminal
+also had to tell the programs inside it: console/1 got `size`, which
+libmynos uses for `TIOCGWINSZ`, so kilo, edit (through notty), sh's line
+editing and man's pager see the new size when they start or redraw.
+
+**Lesson.** When pixels are shared, not sent, a size is part of the
+contract: changing it is a conversation (propose, answer with new
+memory), and the side that owns the memory must be the one to answer.

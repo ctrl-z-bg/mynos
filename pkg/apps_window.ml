@@ -23,7 +23,9 @@ type state = { mutable list : app list; mutable focused : bool }
 
 let () =
   let st = { list = apps (); focused = true } in
-  Gui.run ~title:"Applications" width height st (fun ui st ->
+  Gui.run ~title:"Applications" ~resizable:(300, 220) width height st (fun ui st ->
+      (* resizable: the size as it is now *)
+      let width = Gui.width ui and height = Gui.height ui in
       if ui.Gui.focused && not st.focused then st.list <- apps ();
       st.focused <- ui.Gui.focused;
       let g = ui.Gui.g in

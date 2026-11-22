@@ -1483,3 +1483,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   chapters 5, 13 (PLAY), 24, H.
 - **2026-11-22** — The System window shows the sound card: a Sound
   device (IRQ 5) wired to `soundd`, which it now places among the drivers.
+- **2026-11-22** — Resizable windows (mynos-1e9): displayd draws a grip
+  at a resizable window's bottom right corner (an outline while dragged)
+  and maximizes it on a double click on its title; display/1 gets the
+  event `resize` and the requests `resize` (new shared pixels) and
+  `resizable` (a minimum size). `Gui.run ~resizable`, `Gui.width`,
+  `Gui.height`. The Terminal resizes its grid (lines that no longer fit
+  go to the scrollback) and tells the programs inside through console/1's
+  new `size` (libmynos's `TIOCGWINSZ`, `Console.size`: sh's line editing,
+  edit through notty, man's pager). Resizable: Terminal, Files, Packages,
+  Applications, Log, Agent, Tour, and the packages manual, wiki, feeds,
+  view. System, Recordings, Services and the games stay fixed. Test: the
+  graphical session drags tests/keys's grip and maximizes it.

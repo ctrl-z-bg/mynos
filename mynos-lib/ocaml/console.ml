@@ -6,6 +6,7 @@ type _ request =
   | Keymap : int -> int request
   | Write : string -> unit request
   | Foreground : int -> unit request
+  | Size : (int * int) request
 
 let canon = 1 and echo = 2 and nosig = 4
 let layout_us = 0 and layout_it = 1
@@ -34,7 +35,9 @@ module Protocol = struct
       request 4 "foreground"
         "The program the caller waits for (one of its children; 0: none): Ctrl-C \
          ends it."
-        Wire.(field "pid" int) Wire.unit ]
+        Wire.(field "pid" int) Wire.unit;
+      request ~safe:true 5 "size" "The screen: its columns and rows (a terminal window's, as it is now)."
+        Wire.unit Wire.(pair (field "cols" int) (field "rows" int)) ]
   type 'a r = 'a request
   type 'a request = 'a r
   type packed = Request : 'a request -> packed
@@ -47,6 +50,7 @@ module Protocol = struct
     | Keymap l -> case 2; Wire.write w Wire.int l
     | Write s -> case 3; Wire.write w Wire.string s
     | Foreground p -> case 4; Wire.write w Wire.int p
+    | Size -> case 5
 
   let read_request r =
     match Wire.read r Wire.int with
@@ -55,6 +59,7 @@ module Protocol = struct
     | 2 -> Request (Keymap (Wire.read r Wire.int))
     | 3 -> Request (Write (Wire.read r Wire.string))
     | 4 -> Request (Foreground (Wire.read r Wire.int))
+    | 5 -> Request Size
     | n -> raise (Wire.Error (Printf.sprintf "console: unknown request %d" n))
 
   let reply : type a. a request -> a Wire.t = function
@@ -63,6 +68,7 @@ module Protocol = struct
     | Keymap _ -> Wire.int
     | Write _ -> Wire.unit
     | Foreground _ -> Wire.unit
+    | Size -> Wire.(pair (field "cols" int) (field "rows" int))
 end
 
 module I = Ipc.Make (Protocol)
@@ -73,3 +79,9 @@ let call = I.call
 let decode = I.decode
 let reply = I.reply
 let error_reply = I.error_reply
+
+(* this program's console: a terminal window's (MYNOS_CONSOLE), else
+   consoled; its size, 80 x 25 if it cannot say *)
+let size () =
+  let service = Option.value (Sys.getenv_opt "MYNOS_CONSOLE") ~default:"console" in
+  try call (connect ~service ()) Size with _ -> (80, 25)

@@ -14,6 +14,8 @@ type _ request =
   | Write : string -> unit request
   | Foreground : int -> unit request
       (** the program the caller waits for: Ctrl-C ends it (0: none) *)
+  | Size : (int * int) request
+      (** the screen's columns and rows (a terminal window's change) *)
 
 val canon : int
 val echo : int
@@ -34,3 +36,7 @@ val call : client -> 'a request -> 'a
 val decode : string -> (Protocol.packed, string) result
 val reply : 'a request -> 'a -> string
 val error_reply : string -> string
+
+val size : unit -> int * int
+(** This program's console's columns and rows (its terminal window's, as
+    it is now); 80 x 25 if it cannot say. *)

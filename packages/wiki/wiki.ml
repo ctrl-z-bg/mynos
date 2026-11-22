@@ -146,7 +146,11 @@ let window () =
     st.view <- v; st.page <- st.page + 1 in
   let open_article st title =
     fetch st ("Reading " ^ title) (fun () -> Article (article st.lang title)) in
-  Gui.run ~title:"Wikipedia" ~tick:0.2 width height st (fun ui st ->
+  let wrapped_w = ref width in               (* the article wrapped again at a new width *)
+  Gui.run ~title:"Wikipedia" ~tick:0.2 ~resizable:(600, 360) width height st (fun ui st ->
+      (* resizable: the size as it is now *)
+      let width = Gui.width ui and height = Gui.height ui in
+      if width <> !wrapped_w then begin wrapped_w := width; st.wrapped_for <- "" end;
       let g = ui.Gui.g in
       (match Atomic.exchange st.result None with
        | Some r ->

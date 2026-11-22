@@ -63,6 +63,7 @@ it again; `damage ~x ~y ~w ~h w`, a part. The screen is 1024 by 768.
 | `Key s` | a key, to the window that has the focus: UTF-8 text, or a VT100 sequence (`"\027[A"` for ↑), `"\r"` for Enter, `"\127"` for Backspace |
 | `Mouse { x; y; buttons }` | the pointer moved or a button changed, in window coordinates; `buttons`: 1 left, 2 right, 4 middle |
 | `Key_up s` | the key whose `Key s` came was let go (several may be held at once) |
+| `Resize (w, h)` | the user asked for this size (a resizable window): answer with `Display.resize` |
 | `Wheel n` | the wheel over the window: `n` notches, positive downwards |
 | `Focus b` | the window got (`true`) or lost the focus |
 | `Close` | its close box was clicked, or the session ended |
@@ -162,14 +163,17 @@ result (`damage`), and waits for the next event, which it records in `ui`
 before the next frame. It ends when the window is closed, or when
 `frame` raises `Gui.Quit`. With `~tick:s` a frame also comes every `s`
 seconds without events, with `ui.tick` set: animations and clocks use
-it. Outside the graphical session `run` prints why and ends the program
-with exit status 2.
+it. With `~resizable:(min_w, min_h)` the user may resize the window (its
+grip, a double click on its title): `run` takes the new pixels itself,
+and `frame` lays out by `Gui.width ui` and `Gui.height ui`. Outside the
+graphical session `run` prints why and ends the program with exit
+status 2.
 
 The `ui` record is what the frame knows about input:
 
 | Field | Meaning |
 |---|---|
-| `g` | the window's pixels, to draw with `Gfx` |
+| `g` | the window's pixels, to draw with `Gfx`; new ones after a resize (`Gui.width ui`, `Gui.height ui`: its size now) |
 | `mx`, `my`, `buttons` | the pointer, in the window, and its buttons |
 | `clicked`, `press` | the left button was released in this frame; where it was pressed |
 | `keys` | the keys of this frame (one per event) |

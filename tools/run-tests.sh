@@ -446,6 +446,10 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     # key releases (mynos-ap3): a window (tests/keys) gets Right and X held
     # at once, then their releases, then q, which ends it
     tools/type-keys.py "$tmp/mon-g" '/disk/keys.byte\n'; sleep 6
+    # resizable windows (mynos-1e9): the same window (at 200,300, 240 x 60)
+    # by its grip to 340 x 110, then maximized by a double click on its title
+    to 437 357; mon "mouse_button 1"; to 537 407; mon "mouse_button 0"; sleep 2
+    to 300 289; mon "mouse_button 1"; mon "mouse_button 0"; mon "mouse_button 1"; mon "mouse_button 0"; sleep 2
     mon "sendkey right-x 400"; sleep 1
     mon "sendkey q"; sleep 2
     # the Packages window (pkg/packages_window.ml), the menu's eleventh
@@ -1215,6 +1219,8 @@ PY
     fi
     expect "gui: displayd describes display/1 as display.ml does"
     expect "graphics: all checks passed"
+    expect "keys: size 340x110"                        # a grip dragged
+    expect "keys: size 1022x720"                       # maximized
     expect "keys: down x, held ESC[C x"                # two keys held at once
     expect "keys: up x, held ESC[C"
     expect "keys: up ESC[C, held"

@@ -775,7 +775,7 @@ caller's. `load`: `Failure "FILE: not a MyNOS recording"`, `Sys_error`.
 ```ocaml
 type event =
   | Key of string | Mouse of { x : int; y : int; buttons : int }
-  | Close | Tick | Focus of bool | Wheel of int | Key_up of string
+  | Close | Tick | Focus of bool | Wheel of int | Key_up of string | Resize of int * int
 type _ request =
   | Info : (int * int) request
   | Create : string * int * int -> int request
@@ -788,6 +788,8 @@ type _ request =
   | Wait_session : unit request
   | Stop : unit request
   | Move : int * int * int -> unit request
+  | Resize_to : int * int * int -> unit request
+  | Resizable : int * int * int -> unit request
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
 type t
 val connect : unit -> t
@@ -798,6 +800,8 @@ val damage : ?x:int -> ?y:int -> ?w:int -> ?h:int -> window -> unit
 val next_event : ?timeout:float -> window -> event
 val set_title : window -> string -> unit
 val move : window -> int -> int -> unit
+val resize : window -> int -> int -> window
+val set_resizable : window -> int -> int -> unit
 val destroy : window -> unit
 ```
 
@@ -870,7 +874,7 @@ channel as shared memory (what `Display.window` does).
 **SYNOPSIS**
 
 ```ocaml
-type ui = { window : Display.window; g : Gfx.t;
+type ui = { mutable window : Display.window; mutable g : Gfx.t;
             mutable mx : int; mutable my : int; mutable buttons : int;
             mutable clicked : bool; mutable press : int * int;
             mutable keys : string list; mutable focused : bool;
@@ -896,14 +900,17 @@ type picked = Picked of string | Cancelled
 val open_file_picker : ?title:string -> ?dir:string -> ?filter:(string -> bool) -> int -> unit
 val file_picker : ui -> int -> picked option
 exception Quit
-val run : ?title:string -> ?tick:float -> int -> int -> 'a -> (ui -> 'a -> 'a) -> unit
+val run : ?title:string -> ?tick:float -> ?resizable:int * int -> int -> int -> 'a ->
+  (ui -> 'a -> 'a) -> unit
+val width : ui -> int  val height : ui -> int
 val spawn : ?args:string list -> string -> unit
 ```
 
 **DESCRIPTION** — `run w h state frame` makes a window and calls
 `frame ui state` at every event (and every `tick` seconds without one),
 keeping what it returns as the next state, until the window is closed
-or `frame` raises `Quit`. Widgets draw and answer in one call: `button`
+or `frame` raises `Quit`; with `~resizable` the user may resize it, and
+`width ui`, `height ui` give its size now. Widgets draw and answer in one call: `button`
 is `true` in the frame it is clicked, `text_field ui id x y w v` returns
 `v` edited by this frame's keys, `list_item` is `true` when clicked,
 `scroll ui id x y w h content` draws `content top` clipped and scrolled.

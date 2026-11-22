@@ -127,7 +127,10 @@ let () =
   let st = { dir = "/"; listing = []; chosen = None; mode = Browse; clip = None;
              message = ""; services = []; procs = []; last_poll = -10. } in
   go st (if (try Sys.is_directory start with Sys_error _ -> false) then start else "/");
-  Gui.run ~title:"Files" ~tick:1.0 width height () (fun ui () ->
+  Gui.run ~title:"Files" ~tick:1.0 ~resizable:(640, 400) width height () (fun ui () ->
+      (* resizable: the size as it is now *)
+      let width = Gui.width ui and height = Gui.height ui in
+      let list_w = width - side_w - 16 and list_h = height - 180 in
       let g = ui.Gui.g in
       let now = Mynos.uptime () in
       if now -. st.last_poll > 2. then begin

@@ -20,7 +20,7 @@ type state = {
   mutable oy : int;
   mutable drag_from : (int * int * int * int) option;
   mutable picker_asked : bool;
-  mutable cache : (Gfx.t * (Image.t * float * int * int)) option;
+  mutable cache : (Gfx.t * (Image.t * float * int * int * int * int)) option;
     (* the view, scaled: made again only when the image, the scale or
        the place change (a loop over pixels in OCaml is slow) *)
 }
@@ -40,7 +40,7 @@ let load st path =
   | exception Image.Bad m -> st.img <- None; st.error <- Filename.basename path ^ ": " ^ m
   | exception Sys_error m -> st.img <- None; st.error <- m
 
-let scale_of st (img : Image.t) =
+let scale_of st (img : Image.t) width height =
   if st.zoom > 0. then st.zoom
   else min 1. (min (float width /. float img.width) (float (height - bar) /. float img.height))
 
@@ -48,16 +48,18 @@ let scale_of st (img : Image.t) =
    the image's pixel under it *)
 let draw ui st (img : Image.t) =
   let g = ui.Gui.g in
-  let s = scale_of st img in
+  let width = Gui.width ui and height = Gui.height ui in
+  let s = scale_of st img width height in
   let vw = min width (int_of_float (float img.width *. s))
   and vh = min (height - bar) (int_of_float (float img.height *. s)) in
   let x0 = (width - vw) / 2 and y0 = bar + (height - bar - vh) / 2 in
   let maxox = max 0 (int_of_float (float img.width *. s) - vw)
   and maxoy = max 0 (int_of_float (float img.height *. s) - vh) in
   st.ox <- max 0 (min st.ox maxox); st.oy <- max 0 (min st.oy maxoy);
-  let key = (img, s, st.ox, st.oy) in
+  let key = (img, s, st.ox, st.oy, vw, vh) in
   let view = match st.cache with
-    | Some (v, (i, s', ox, oy)) when i == img && s' = s && ox = st.ox && oy = st.oy -> v
+    | Some (v, (i, s', ox, oy, w', h')) when i == img && s' = s && ox = st.ox && oy = st.oy
+                                            && w' = vw && h' = vh -> v
     | _ ->
       let v = Gfx.create (max 1 vw) (max 1 vh) in
       let px = v.Gfx.pixels in
@@ -80,7 +82,9 @@ let () =
   (match List.tl (Array.to_list Sys.argv) with
    | f :: _ -> load st f
    | [] -> ());
-  Gui.run ~title:"View" width height st (fun ui st ->
+  Gui.run ~title:"View" ~resizable:(400, 300) width height st (fun ui st ->
+      (* resizable: the size as it is now *)
+      let width = Gui.width ui and height = Gui.height ui in
       let g = ui.Gui.g in
       Gfx.fill g 0 bar width (height - bar) 0x2B2F33;
       let open_picker () =

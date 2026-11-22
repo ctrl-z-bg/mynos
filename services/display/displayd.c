@@ -280,12 +280,12 @@ static int text(int x, int y, const char * s, int max, unsigned int c, int bold)
 
 /* ---- windows, events ---- */
 
-enum { EV_KEY, EV_MOUSE, EV_CLOSE, EV_TICK, EV_FOCUS, EV_WHEEL, EV_KEY_UP };
+enum { EV_KEY, EV_MOUSE, EV_CLOSE, EV_TICK, EV_FOCUS, EV_WHEEL, EV_KEY_UP, EV_RESIZE };
 
 struct event {
   int kind;
   char text[32];                       /* EV_KEY, EV_KEY_UP */
-  int x, y, buttons;                   /* EV_MOUSE; x: EV_FOCUS's bool */
+  int x, y, buttons;                   /* EV_MOUSE, EV_RESIZE's size; x: EV_FOCUS's bool */
 };
 
 struct window {
@@ -298,6 +298,9 @@ struct window {
   int qh, qn;
   int waiting;                         /* a next_event's channel, or -1 */
   long deadline;                       /* its timeout, in ms (0: none) */
+  int resizable, min_w, min_h;         /* a grip, a double click on the title */
+  int maximized, rx, ry, rw, rh;       /* maximized: where and how big it was */
+  long title_click;                    /* the last click on its title (ms) */
 };
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -313,6 +316,10 @@ static int active = 0;                 /* the graphical session */
 static int px = W / 2, py = H / 2, pbuttons = 0;
 static int dragging = -1, drag_dx, drag_dy;
 static int closing = -1;               /* the window whose close box is held */
+/* a window being resized by its grip: the size asked so far (an outline
+   shows it), and the pointer's distance from the corner */
+static int resizing = -1, rs_w, rs_h, rs_dx, rs_dy;
+#define GRIP 12
 static int menu_open = 0;
 static int waiters[16], nwaiters = 0;  /* wait_session's channels */
 
@@ -489,6 +496,25 @@ static void draw_window(struct window * w, int focused)
       for (x = ix0; x < ix1; x++) back[y * W + x] = 0xFFFFFF;
     }
   }
+  if (w->resizable) {                  /* the grip: three short diagonals */
+    int i, gx = w->x + w->w, gy = w->y + w->h;
+    for (i = 0; i < GRIP - 2; i++) {
+      fill(gx - 2 - i, gy - GRIP + 1 + i, gx - 1 - i, gy - GRIP + 2 + i, 0x7F8C98);
+      if (i >= 4) fill(gx - 2 - i + 4, gy - GRIP + 1 + i, gx - 1 - i + 4, gy - GRIP + 2 + i, 0x7F8C98);
+      if (i >= 8) fill(gx - 2 - i + 8, gy - GRIP + 1 + i, gx - 1 - i + 8, gy - GRIP + 2 + i, 0x7F8C98);
+    }
+  }
+}
+
+/* the outline of the size a grip asks for */
+static void draw_outline(void)
+{
+  struct window * w = &win[resizing];
+  int x0 = w->x - 1, y0 = w->y - TITLE - 1, x1 = w->x + rs_w + 1, y1 = w->y + rs_h + 1;
+  fill(x0, y0, x1, y0 + 2, C_ACCENT);
+  fill(x0, y1 - 2, x1, y1, C_ACCENT);
+  fill(x0, y0, x0 + 2, y1, C_ACCENT);
+  fill(x1 - 2, y0, x1, y1, C_ACCENT);
 }
 
 static void draw_menu(void)
@@ -536,6 +562,7 @@ static void compose(int x0, int y0, int x1, int y1)
     struct window * w = &win[order[i]];
     if (w->used && w->shown) draw_window(w, order[i] == focus);
   }
+  if (resizing >= 0) draw_outline();
   if (menu_open) draw_menu();
   draw_pointer();
   for (y = y0; y < y1; y++)
@@ -600,6 +627,10 @@ static void reply_event(int ch, const struct event * e)
     wire_put_int(&w, e->buttons);
     break;
   case EV_FOCUS: wire_put_bool(&w, e->x); break;
+  case EV_RESIZE:
+    wire_put_int(&w, e->x);
+    wire_put_int(&w, e->y);
+    break;
   case EV_WHEEL: wire_put_int(&w, e->x); break;
   }
   send_reply(ch, &w);
@@ -686,6 +717,7 @@ static void remove_window(int slot)
   }
   if (dragging == slot) dragging = -1;
   if (closing == slot) closing = -1;
+  if (resizing == slot) resizing = -1;
   compose(w->x - 1, w->y - TITLE - 1, w->x + w->w + 5, w->y + w->h + 5);
   BAR_CHANGED();
 }
@@ -737,6 +769,43 @@ static void end_session(void)
   nwaiters = 0;
 }
 
+/* ---- resizing ---- */
+
+/* the largest content a window can have where it stands */
+static int max_w(struct window * w) { return W - 1 - w->x; }
+static int max_h(struct window * w) { return H - 1 - w->y; }
+
+static void post_resize(struct window * w, int nw, int nh)
+{
+  struct event e;
+  memset(&e, 0, sizeof e);
+  e.kind = EV_RESIZE;
+  e.x = nw;
+  e.y = nh;
+  post(w, &e);
+}
+
+/* a double click on the title: as big as the screen, or back. The window
+   moves at once; its program answers the resize event with new pixels */
+static void toggle_maximize(struct window * w)
+{
+  int ox = w->x, oy = w->y;
+  if (!w->maximized) {
+    w->rx = w->x; w->ry = w->y; w->rw = w->w; w->rh = w->h;
+    w->x = 1;
+    w->y = TOP + TITLE + 1;
+    w->maximized = 1;
+    post_resize(w, W - 2, H - TOP - TITLE - 2);
+  } else {
+    w->x = w->rx;
+    w->y = w->ry;
+    w->maximized = 0;
+    post_resize(w, w->rw, w->rh);
+  }
+  compose(ox - 1, oy - TITLE - 1, ox + w->w + 5, oy + w->h + 5);
+  compose_window(w);
+}
+
 /* ---- the pointer ---- */
 
 static void pointer_to(int x, int y, int buttons)
@@ -761,6 +830,31 @@ static void pointer_to(int x, int y, int buttons)
     }
   } else if (dragging >= 0)
     dragging = -1;
+
+  if (resizing >= 0) {                             /* a grip held */
+    struct window * w = &win[resizing];
+    int ow = rs_w, oh = rs_h;
+    if (buttons & 1) {
+      rs_w = x - w->x + rs_dx;
+      rs_h = y - w->y + rs_dy;
+      if (rs_w < w->min_w) rs_w = w->min_w;
+      if (rs_h < w->min_h) rs_h = w->min_h;
+      if (rs_w > max_w(w)) rs_w = max_w(w);
+      if (rs_h > max_h(w)) rs_h = max_h(w);
+      if (rs_w != ow || rs_h != oh) {
+        int bw = (rs_w > ow ? rs_w : ow), bh = (rs_h > oh ? rs_h : oh);
+        compose(w->x - 1, w->y - TITLE - 1, w->x + bw + 5, w->y + bh + 5);
+      }
+    } else {                                       /* let go: the program is told */
+      resizing = -1;
+      if (rs_w != w->w || rs_h != w->h) {
+        w->maximized = 0;
+        post_resize(w, rs_w, rs_h);
+      }
+      compose(w->x - 1, w->y - TITLE - 1, w->x + (rs_w > w->w ? rs_w : w->w) + 5,
+              w->y + (rs_h > w->h ? rs_h : w->h) + 5);
+    }
+  }
 
   if ((changed & 1) && (buttons & 1)) {           /* a click */
     if (menu_open) {
@@ -792,7 +886,19 @@ static void pointer_to(int x, int y, int buttons)
 	if (x >= w->x + w->w - 20) {               /* the close box: held */
 	  closing = slot;
 	  compose(w->x + w->w - 20, w->y - TITLE, w->x + w->w, w->y);
-	} else { dragging = slot; drag_dx = x - w->x; drag_dy = y - w->y; }
+	} else if (w->resizable && now_ms() - w->title_click < 400) {
+	  w->title_click = 0;                      /* a double click */
+	  toggle_maximize(w);
+	} else {
+	  w->title_click = now_ms();
+	  dragging = slot; drag_dx = x - w->x; drag_dy = y - w->y;
+	}
+      } else if (w->resizable && x >= w->x + w->w - GRIP && y >= w->y + w->h - GRIP &&
+		 x < w->x + w->w && y < w->y + w->h) { /* the grip */
+	resizing = slot;
+	rs_w = w->w; rs_h = w->h;
+	rs_dx = w->x + w->w - x;
+	rs_dy = w->y + w->h - y;
       }
     }
   }
@@ -806,7 +912,7 @@ static void pointer_to(int x, int y, int buttons)
   }
   /* the focused window's: clicks in it, and moves over it (and the one
      that leaves it, so that it stops showing what is under the pointer) */
-  if (focus >= 0 && dragging < 0) {
+  if (focus >= 0 && dragging < 0 && resizing < 0) {
     static int was_inside = 0;
     struct window * w = &win[focus];
     int inside = x >= w->x && y >= w->y && x < w->x + w->w && y < w->y + w->h;
@@ -1078,11 +1184,12 @@ static const wire_request_doc requests[] = {
     "A part of the window's pixels changed: it is shown again." },
   { 0, "next_event", "(window:I,timeout_ms:I)",
     "V(0:key=S,1:mouse=(x:I,y:I,buttons:I),2:close=U,3:tick=U,4:focus=B,5:wheel=I,"
-    "6:key_up=S)",
+    "6:key_up=S,7:resize=(width:I,height:I))",
     "The window's next event: keys (UTF-8, VT100 sequences for the others) and their "
     "releases (key_up: the same text), the "
     "mouse in the window (buttons: 1 left, 2 right, 4 middle), close, focus, the "
-    "wheel over it (its notches, positive towards the user: down); tick when none "
+    "wheel over it (its notches, positive towards the user: down), resize (the size "
+    "the user asked for: answer with resize); tick when none "
     "came within timeout_ms (0: wait forever; negative: do not wait). Waits." },
   { 0, "destroy", "window:I", "U", "Close a window." },
   { 0, "set_title", "(window:I,title:S)", "U", "A window's title." },
@@ -1090,6 +1197,12 @@ static const wire_request_doc requests[] = {
   { 0, "wait_session", "U", "U", "Wait until the graphical session ends. Waits." },
   { 0, "stop", "U", "U", "End the graphical session: windows get close, text mode is back." },
   { 0, "move", "(window:I,x:I,y:I)", "U", "Move a window (its content's top left corner)." },
+  { 0, "resize", "(window:I,width:I,height:I)", "U",
+    "A window's new size: the same connection then carries a shared message of its "
+    "pixels, as attach does, which replaces the old one." },
+  { 0, "resizable", "(window:I,min_width:I,min_height:I)", "U",
+    "Let the user resize a window (a grip, a double click on the title to maximize), "
+    "down to this size; 0: not resizable." },
 };
 
 static void describe(int ch)
@@ -1257,6 +1370,52 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     waiters[nwaiters++] = ch;
     break;
   case 9: END(); reply_unit(ch); end_session(); break;     /* stop */
+  case 11: {                                       /* resize */
+    mynos_msg_t * m = NULL;
+    int wid = wire_get_int(&r), ww = wire_get_int(&r), hh = wire_get_int(&r);
+    int ox, oy, ow, oh;
+    END();
+    if (!(w = owned(ch, wid, caller))) return;
+    if (ww < 16 || hh < 16 || ww > W - 2 || hh > H - TOP - TITLE - 2) {
+      reply_error(ch, "bad size"); return;
+    }
+    /* the pixels of the new size: the next message, shared */
+    pthread_mutex_unlock(&lock);
+    n = mynos_recv(ch, &m, 0, 2000);
+    pthread_mutex_lock(&lock);
+    if ((int)n < 0 || !m) { reply_error(ch, "resize: no pixels"); return; }
+    if (!(w = find(wid)) || m->size < (unsigned)(ww * hh * 4)) {
+      mynos_freeMsg(&m);
+      reply_error(ch, "resize: not that size");
+      return;
+    }
+    ox = w->x; oy = w->y; ow = w->w; oh = w->h;
+    if (w->msg) mynos_freeMsg(&w->msg);
+    w->msg = m;
+    w->pix = (unsigned int *)m->start;
+    w->w = ww; w->h = hh;
+    /* on the screen whole: moved up and left if it grew past its edge */
+    if (w->x + ww > W - 1) w->x = W - 1 - ww;
+    if (w->y + hh > H - 1) w->y = H - 1 - hh;
+    if (w->x < 1) w->x = 1;
+    if (w->y < TOP + TITLE + 1) w->y = TOP + TITLE + 1;
+    reply_unit(ch);
+    compose(ox - 1, oy - TITLE - 1, ox + ow + 5, oy + oh + 5);
+    compose_window(w);
+    BAR_CHANGED();
+    break;
+  }
+  case 12: {                                       /* resizable */
+    int wid = wire_get_int(&r), mw = wire_get_int(&r), mh = wire_get_int(&r);
+    END();
+    if (!(w = owned(ch, wid, caller))) return;
+    w->resizable = mw > 0 && mh > 0;
+    w->min_w = mw < 16 ? 16 : mw;
+    w->min_h = mh < 16 ? 16 : mh;
+    reply_unit(ch);
+    compose_window(w);
+    break;
+  }
   case 10: {                                       /* move */
     int wid = wire_get_int(&r), x = wire_get_int(&r), y = wire_get_int(&r);
     int ox, oy;

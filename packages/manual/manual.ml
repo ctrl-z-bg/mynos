@@ -74,7 +74,7 @@ let ansi (l : Md.line) =
 (* a screenful at a time, on the console *)
 let page lines =
   let console = Sys.getenv_opt "MYNOS_STDOUT" = None && Sys.getenv_opt "MYNOS_STDIN" = None in
-  let rows = 23 in
+  let rows = snd (Console.size ()) - 2 in
   let rec go n = function
     | [] -> ()
     | l :: rest ->
@@ -144,6 +144,7 @@ type state = {
   mutable find : string;
   mutable found_at : int;                    (* the line found last *)
   mutable jump : int option;                 (* scroll to this line at the next frame *)
+  mutable per : int;                         (* the text's width, in characters *)
 }
 
 let window () =
@@ -151,10 +152,15 @@ let window () =
   if files = [] then (prerr_endline "manual: the manual is not installed"; exit 2);
   let per = (width - side - 40) / Gfx.char_w in
   let st = { files; titles = List.map title files; chapter = 0;
-             lines = Md.render per (read (List.hd files)); find = ""; found_at = -1; jump = None } in
+             lines = Md.render per (read (List.hd files)); find = ""; found_at = -1; jump = None;
+             per } in
   let open_chapter st i =
-    st.chapter <- i; st.lines <- Md.render per (read (List.nth st.files i)); st.found_at <- -1 in
-  Gui.run ~title:"Manual" width height st (fun ui st ->
+    st.chapter <- i; st.lines <- Md.render st.per (read (List.nth st.files i)); st.found_at <- -1 in
+  Gui.run ~title:"Manual" ~resizable:(560, 300) width height st (fun ui st ->
+      (* resizable: the size as it is now; the text laid out again at a new width *)
+      let width = Gui.width ui and height = Gui.height ui in
+      let per = (width - side - 40) / Gfx.char_w in
+      if per <> st.per then begin st.per <- per; open_chapter st st.chapter end;
       let g = ui.Gui.g in
       Gfx.fill g 0 0 side height 0xE6EBF0;
       Gui.label ~bold:true ui 12 10 "MyNOS Reference Manual";

@@ -25,6 +25,7 @@ type event =
   | Focus of bool
   | Wheel of int             (** the wheel over the window: notches, positive down *)
   | Key_up of string         (** a key let go: the text of its [Key] *)
+  | Resize of int * int      (** the size the user asked for: answer with {!resize} *)
 
 type _ request =
   | Info : (int * int) request
@@ -38,6 +39,8 @@ type _ request =
   | Wait_session : unit request
   | Stop : unit request
   | Move : int * int * int -> unit request
+  | Resize_to : int * int * int -> unit request
+  | Resizable : int * int * int -> unit request
 
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
 
@@ -65,4 +68,14 @@ val poll : window -> event
 
 val set_title : window -> string -> unit
 val move : window -> int -> int -> unit
+
+val resize : window -> int -> int -> window
+(** The window at a new size (the user's, from a [Resize] event, or the
+    program's own): new pixels, shared, in the window it returns (the old
+    ones are no longer shown). Draw, then {!damage}. *)
+
+val set_resizable : window -> int -> int -> unit
+(** [set_resizable w min_w min_h]: the user may resize it (a grip at its
+    bottom right corner, a double click on its title to maximize), not
+    below this size; 0 0: not. *)
 val destroy : window -> unit

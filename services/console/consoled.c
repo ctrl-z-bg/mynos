@@ -774,6 +774,8 @@ static const wire_request_doc requests[] = {
   { 0, "foreground", "pid:I", "U",
     "The program the caller waits for (one of its children; 0: none): Ctrl-C ends "
     "it." },
+  { 1, "size", "U", "(cols:I,rows:I)",
+    "The screen: its columns and rows (a terminal window's, as it is now)." },
 };
 
 static void describe(wire_writer * w)
@@ -862,8 +864,8 @@ int main()
       if (kind == CONSOLE_WRITE) data = wire_get_string(&r, &dlen);
       else if (kind == CONSOLE_MODE) {
         a1 = wire_get_int(&r); a2 = wire_get_int(&r); a3 = wire_get_int(&r);
-      } else a1 = wire_get_int(&r);
-      if (r.error || !wire_at_end(&r) || kind < CONSOLE_READ || kind > CONSOLE_FOREGROUND)
+      } else if (kind != CONSOLE_SIZE) a1 = wire_get_int(&r);
+      if (r.error || !wire_at_end(&r) || kind < CONSOLE_READ || kind > CONSOLE_SIZE)
         kind = -1;
     }
     if (kind < 0) {
@@ -898,6 +900,10 @@ int main()
       wire_reply_ok(&w);
       wire_put_int(&w, layout);
       keymap_sync();
+    } else if (kind == CONSOLE_SIZE) {
+      wire_reply_ok(&w);
+      wire_put_int(&w, CONSOLE_COLS);
+      wire_put_int(&w, CONSOLE_ROWS);
     } else if (kind == CONSOLE_FOREGROUND) {
       if (a1 == 0 || child_of(a1, caller)) foreground = a1;
       wire_reply_ok(&w);
