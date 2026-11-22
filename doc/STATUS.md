@@ -1567,4 +1567,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   the wheel. Recording from a microphone: not with QEMU's SB16 (no ADC);
   it needs another card's driver (see the evaluation in the work log of
   this day).
+- **2026-11-22** — Bigger screens (mynos-wjd): `gui WxH` (kept in
+  `/disk/.display`; `once`), display/1 `start_at` (13); displayd maps
+  all the video memory (BGA register 10) and checks a size against it;
+  the picture's offset past the text-mode memory rounded up to whole
+  rows. 1280x800 and 1920x1080 tried in QEMU.
 

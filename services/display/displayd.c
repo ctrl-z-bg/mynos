@@ -48,8 +48,12 @@
 
 #define SERVICE  "display"
 #define PROTOCOL "display/1"
-#define W 1024
-#define H 768
+/* the screen's size: chosen when a session starts (gui WxH), 1024x768
+   by default, within the video memory */
+static int W = 1024, H = 768;
+static unsigned long vram = 0;           /* bytes of video memory, mapped */
+static unsigned int * vram_base;
+static int fb_rows_skipped;              /* rows of FB_SKIP, rounded up */
 #define TOP 24                         /* the top bar */
 #define TITLE 22                       /* a window's title bar */
 #define MAXWIN 32
@@ -149,7 +153,8 @@ static void mode_graphics(void)
   bga(3, 32);
   bga(4, 0x01 | 0x40 | 0x80);          /* enabled, linear, memory kept */
   bga(8, 0);
-  bga(9, FB_SKIP / (W * 4));           /* the picture starts past 256 KB */
+  fb_rows_skipped = (FB_SKIP + W * 4 - 1) / (W * 4);
+  bga(9, fb_rows_skipped);             /* the picture starts past 256 KB */
 }
 
 static void mode_text(void) { bga(4, 0); vga_restore(); }
@@ -313,7 +318,7 @@ static int order[MAXWIN], norder = 0;  /* bottom to top */
 static int next_id = 1;
 static int focus = -1;                 /* a window's slot */
 static int active = 0;                 /* the graphical session */
-static int px = W / 2, py = H / 2, pbuttons = 0;
+static int px = 512, py = 384, pbuttons = 0;
 static int dragging = -1, drag_dx, drag_dy;
 static int closing = -1;               /* the window whose close box is held */
 /* a window being resized by its grip: the size asked so far (an outline
@@ -814,11 +819,31 @@ static void spawn_program(const char * path)
 
 static void * keys_thread(void * arg);
 
-static void start_session(void)
+/* a size the video memory holds, past the text-mode memory kept: 0 if so */
+static const char * size_refused(int w, int h)
+{
+  unsigned long rows;
+  if (w < 800 || h < 600 || w > 4096 || h > 4096 || w % 8) return "from 800x600, a width multiple of 8";
+  rows = (FB_SKIP + w * 4 - 1) / (w * 4);
+  if ((rows + h) * (unsigned long)w * 4 > vram) return "more than the video memory holds";
+  return NULL;
+}
+
+static void start_session(int w, int h)
 {
   pthread_t t;
+  unsigned int * b;
   if (active) return;
+  if (w != W || h != H || !back) {
+    b = realloc(back, (size_t)w * h * 4);
+    if (!b) return;
+    back = b;
+    W = w; H = h;
+  }
   mode_graphics();
+  fb = vram_base + fb_rows_skipped * W;
+  if (px > W - 1) px = W - 1;            /* the pointer stays where it was, */
+  if (py > H - 1) py = H - 1;            /* on the screen */
   active = 1;
   menu_open = 0;
   compose(0, 0, W, H);
@@ -1330,6 +1355,9 @@ static const wire_request_doc requests[] = {
   { 0, "resizable", "(window:I,min_width:I,min_height:I)", "U",
     "Let the user resize a window (a grip, a double click on the title to maximize), "
     "down to this size; 0: not resizable." },
+  { 0, "start_at", "(width:I,height:I)", "U",
+    "Start the graphical session with the screen at this size (from 800x600, a width "
+    "multiple of 8, within the video memory)." },
 };
 
 static void describe(int ch)
@@ -1490,7 +1518,18 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     BAR_CHANGED();
     break;
   }
-  case 7: END(); start_session(); reply_unit(ch); break;   /* start */
+  case 7: END(); start_session(1024, 768); reply_unit(ch); break;   /* start */
+  case 13: {                                       /* start_at */
+    int ww = wire_get_int(&r), hh = wire_get_int(&r);
+    const char * why;
+    END();
+    if (active) { reply_unit(ch); break; }
+    if ((why = size_refused(ww, hh))) { reply_error(ch, why); break; }
+    start_session(ww, hh);
+    if (W != ww || H != hh) reply_error(ch, "no memory for the screen");
+    else reply_unit(ch);
+    break;
+  }
   case 8:                                          /* wait_session */
     END();
     if (!active || nwaiters == 16) { reply_unit(ch); break; }
@@ -1577,13 +1616,19 @@ int main(void)
     mynos_log("displayd: no Bochs VGA (QEMU's standard VGA): no graphics\n");
     return 0;                 /* by choice: init does not start it again */
   }
-  base = mynos_mapPhysical(lfb, (FB_SKIP + W * H * 4) / 4096);
+  /* the video memory, all of it (its size in 64 KB, register 10; 8 MB
+     if it does not say), so that any size it holds can be shown */
+  vram = (unsigned long)bga_get(10) * 65536;
+  if (vram < 4UL << 20 || vram > 64UL << 20) vram = 8UL << 20;
+  base = mynos_mapPhysical(lfb, vram / 4096);
   back = malloc(W * H * 4);
   if (!base || !back) {
     mynos_log("displayd: cannot map the frame buffer\n");
     return 1;
   }
-  fb = (unsigned int *)((char *)base + FB_SKIP);
+  vram_base = (unsigned int *)base;
+  fb_rows_skipped = (FB_SKIP + W * 4 - 1) / (W * 4);
+  fb = vram_base + fb_rows_skipped * W;
 
   /* the mouse: PS/2 on IRQ 12, and vmmouse if there is one */
   sem = mynos_driverRegister("mouse", 12, NULL, NULL);
@@ -1614,7 +1659,8 @@ int main(void)
     mynos_log("displayd: cannot register (%d)\n", port);
     return 1;
   }
-  mynos_log("displayd: %dx%d, frame buffer at 0x%lx, %s%s\n", W, H, lfb,
+  mynos_log("displayd: %dx%d (up to %lu MB of video memory), frame buffer at 0x%lx, %s%s\n",
+            W, H, vram >> 20, lfb,
 	    vmmouse ? "vmmouse (absolute)" : "PS/2 mouse",
 	    packet == 4 ? ", wheel" : "");
 

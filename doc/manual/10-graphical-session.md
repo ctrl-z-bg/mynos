@@ -22,6 +22,16 @@ ends. The display server, `displayd`, needs QEMU's standard VGA card,
 which `tools/run-demo.sh` gives; without it, `gui` says `gui: no display
 service (displayd: QEMU's standard VGA is needed)`.
 
+**A bigger screen.** `gui 1280x800` (or `1600x900`, `1920x1080`...)
+starts the session with the screen at that size, and keeps it in
+`/disk/.display` for the next `gui`; `gui 1600x900 once` does not keep
+it. A width is a multiple of 8, from 800 x 600 up to what the video
+memory holds (QEMU's standard VGA has 16 MB: 1920 x 1080 fits; displayd
+tells its memory in the log). A size it cannot show is refused, and the
+session starts at 1024 x 768. Windows keep their sizes; the resizable
+ones grow when maximized. The font stays 8 x 16 pixels, so a bigger
+screen shows more, not bigger.
+
 ![Figure 10-1. The graphical session as it starts](../screenshots/welcome.png)
 
 *Figure 10-1. The welcome window.*

@@ -41,6 +41,7 @@ type _ request =
   | Move : int * int * int -> unit request
   | Resize_to : int * int * int -> unit request
   | Resizable : int * int * int -> unit request
+  | Start_at : int * int -> unit request
 
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
 
