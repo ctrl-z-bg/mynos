@@ -1572,4 +1572,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   all the video memory (BGA register 10) and checks a size against it;
   the picture's offset past the text-mode memory rounded up to whole
   rows. 1280x800 and 1920x1080 tried in QEMU.
+- **2026-11-22** — GAV in OCaml (mynos-0ns), package `gav`: GPL Arcade
+  Volleyball's physics, players and computer players ported from the
+  C++ (github.com/ctrl-z-bg/gav), its classic pictures in
+  `third_party/gav`; 1 or 2 players a side, keyboard or computer; steps
+  of 20 ms; tones through the sound service; `GAV_DEBUG=1` logs the
+  ball. Test: the seventh boot installs it (its pictures read).
 

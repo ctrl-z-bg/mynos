@@ -843,6 +843,10 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     # df: the file systems' space, each asked (fs/1 space); clip: the
     # clipboard service, set and read back
     tools/type-keys.py "$tmp/mon7" 'df; X=ok; clip clip-$X; clip\n'; sleep 5
+    # GAV (mynos-0ns): installed with its pictures, which it reads before
+    # it asks for a window (none in text mode)
+    tools/type-keys.py "$tmp/mon7" 'pkg install gav; gav\n'
+    waitfor "gav.byte: no graphical session" 60
     # the Z-machine interpreter, in the terminal (no session), against
     # Czech's tests (tests/zmachine)
     tools/type-keys.py "$tmp/mon7" 'pkg install zmachine; echo | zmachine /disk/czech.z5 > /tmp/cz.txt; grep Failed /tmp/cz.txt\n'
@@ -1141,6 +1145,8 @@ if [ -f system/ramdisk.dsk ]; then
     expect "Directions: north, south"                 # minotaur
     expect "%  /disk"                                 # df
     expect "clip-ok"                                  # clip, the clipboard service
+    expect "pkg: gav 1.0 installed"                   # GAV...
+    expect "gav.byte: no graphical session"           # ... its pictures read first
     expect "soundd: Sound Blaster 16 (DSP 4.05)"
     expect "play: soundd describes sound/1 as sound.ml does"
     if [ -n "$sound_ok" ]; then
