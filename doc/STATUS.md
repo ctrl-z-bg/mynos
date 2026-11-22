@@ -1495,3 +1495,6 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   Applications, Log, Agent, Tour, and the packages manual, wiki, feeds,
   view. System, Recordings, Services and the games stay fixed. Test: the
   graphical session drags tests/keys's grip and maximizes it.
+- **2026-11-22** — The manual's timeline (4.4) has 21 and 22 November:
+  the packages, httpd's uploads, KVM, key releases, faster disk writes,
+  sound, resizable windows.

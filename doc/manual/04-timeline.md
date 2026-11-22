@@ -75,7 +75,8 @@ authors' direction. The first days, in outline (each line is detailed in
 | 2026-11-18 | The agent and recordings windows, the System window, `kill`, the Tour, services restarted by `init`, files, registry and console over typed IPC (every service typed), OCaml threads. The period toolchain retired. The manual's appendices, and the kernel bugs they found: the FPU state, write protection, unchecked pointers. |
 | 2026-11-19 | C's stdio over the file services, one recording at a time, the log inside MyNOS, UTF-8 in the editor. A bootable ISO, the first release, and MyNOS in the browser. The manual's user's and programmer's guides, and the bugs they found. |
 | 2026-11-20 | What of OCaml's distribution runs, measured: Str and Num added to the runtime, `Sys.time`, `getuid` and `O_EXCL` fixed. OCaml's `Graphics`, written again on the toolkit. Packages: `pkg`, its repository on GitHub, and the Packages window; 2048 and the agent's tree in the wind as the first packages. |
-| 2026-11-21 | Small fixes before the printed manual: connections bounded in time, `httpd` after a restart of the network, services that end cleanly without their hardware. |
+| 2026-11-21 | Small fixes before the printed manual: connections bounded in time, `httpd` after a restart of the network, services that end cleanly without their hardware. Twenty-one packages more: commands (`utils`, `calc`, `scheme`, the manual itself), windows (Wikipedia, feeds, images, painting), games, a Z-machine with Zork I to III, a Game Boy. `httpd` receives files, the menu's Applications, KVM in the start scripts. Key releases for the windows, and disk writes six times faster. |
+| 2026-11-22 | Sound: a DMA area from the kernel, `soundd` for a Sound Blaster 16, `play`. Resizable windows, and a terminal that grows with its window. |
 
 The work followed the plan of 2002 (chapter 2.2) and kept its code
 where it worked: the kernel of 2002–2004 is still the kernel. What was
