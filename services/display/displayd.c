@@ -365,6 +365,7 @@ static const struct menu_item menu[] = {
   { "Log", "/log_window.byte" },
   { "Packages", "/packages.byte" },
   { "Applications", "/apps.byte" },
+  { "Text", "/text.byte" },
   { NULL, NULL },
   { "Exit", NULL },
   { "Shut down", "/shutdown.byte" },
@@ -1074,21 +1075,25 @@ static int utf8_put(unsigned int u, char * out)
   out[2] = 0x80 | ((u >> 6) & 0x3F); out[3] = 0x80 | (u & 0x3F); return 4;
 }
 
-/* a release (ESC [ n ; 1:3 final, CONSOLE_RELEASES): the text its key's
-   press sent, into text; 0 if the key is not a release */
+/* a release (ESC [ n ; mod:3 final, CONSOLE_RELEASES): the text its key's
+   press sent, into text; 0 if the key is not a release. mod 1: none, 2:
+   Shift (an arrow, Home, End: ESC [ 1 ; 2 A...) */
 static int release_text(const unsigned char * s, int n, char * text)
 {
   unsigned int num = 0;
-  int i = 2;
+  int i = 2, mod;
   char final = s[n - 1];
-  if (n < 8 || s[0] != 0x1B || s[1] != '[' || memcmp(s + n - 5, ";1:3", 4)) return 0;
+  if (n < 8 || s[0] != 0x1B || s[1] != '[' || s[n - 5] != ';' || s[n - 3] != ':' ||
+      s[n - 2] != '3' || s[n - 4] < '1' || s[n - 4] > '9') return 0;
+  mod = s[n - 4] - '0';
   for (; i < n - 5; i++) {
     if (s[i] < '0' || s[i] > '9') return 0;
     num = num * 10 + (s[i] - '0');
   }
-  if (final == 'u') text[utf8_put(num, text)] = 0;
-  else if (final == '~') snprintf(text, 32, "\033[%u~", num);
-  else if (final >= 'A' && final <= 'H') snprintf(text, 32, "\033[%c", final);
+  if (mod == 1 && final == 'u') text[utf8_put(num, text)] = 0;
+  else if (mod == 1 && final == '~') snprintf(text, 32, "\033[%u~", num);
+  else if (mod == 1 && final >= 'A' && final <= 'H') snprintf(text, 32, "\033[%c", final);
+  else if (final >= 'A' && final <= 'H') snprintf(text, 32, "\033[1;%d%c", mod, final);
   else return 0;
   return 1;
 }

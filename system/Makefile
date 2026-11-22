@@ -35,7 +35,7 @@ NUM_CMI = $(addprefix ../third_party/num/, num.cmi big_int.cmi nat.cmi ratio.cmi
 
 FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo netd displayd soundd ../httpd/httpd.byte \
 	../gui/gui.byte ../gui/welcome.byte ../gui/clock.byte ../gui/services.byte ../gui/terminal.byte \
-	../gui/agent_window.byte ../gui/recordings.byte ../gui/system.byte ../gui/files.byte \
+	../gui/agent_window.byte ../gui/text.byte ../gui/recordings.byte ../gui/system.byte ../gui/files.byte \
 	../gui/tour.byte ../gui/tour.txt \
 	../third_party/fonts/terminus16.psf ../third_party/fonts/terminus16-bold.psf \
 	../gui/mynos-logo.pgm ../gui/mynos-logo-2x.pgm \
@@ -60,7 +60,7 @@ FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo n
 	../mynos-lib/ocaml/tracer.cmi ../mynos-lib/ocaml/json.cmi ../mynos-lib/ocaml/http.cmi \
 	../mynos-lib/ocaml/llm.cmi ../mynos-lib/ocaml/tools.cmi \
 	../mynos-lib/ocaml/gfx.cmi ../mynos-lib/ocaml/display.cmi ../mynos-lib/ocaml/gui.cmi \
-	../mynos-lib/ocaml/sound.cmi \
+	../mynos-lib/ocaml/sound.cmi ../mynos-lib/ocaml/textarea.cmi \
 	../mynos-lib/ocaml/power.cmi ../mynos-lib/ocaml/agent.cmi \
 	../tests/hello/hello.byte ../tests/spawn/child.byte \
 	../tests/ramdisk/AUTOEXEC.BAT

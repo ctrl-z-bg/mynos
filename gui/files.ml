@@ -186,7 +186,12 @@ let () =
       (match st.mode with
        | Viewing (path, what) ->
          if Gui.button ui (list_x + list_w - 80) (list_y + 2) 72 "Back" then st.mode <- Browse
-         else begin
+         else if (match what with `Text _ -> true | _ -> false)
+              && Gui.button ui (list_x + list_w - 160) (list_y + 2) 72 "Edit" then begin
+           (* the text editor of the session, on this file *)
+           Gui.spawn ~args:[ path ] "/text.byte";
+           st.message <- "opened in Text: " ^ path
+         end else begin
            ignore (Gfx.text ~bold:true ~max:70 g (list_x + 4) (list_y + 6) path Gui.foreground);
            Gui.scroll ui 2 list_x (list_y + 32) list_w (list_h - 32) (fun top ->
                match what with

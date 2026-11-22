@@ -71,6 +71,8 @@
 /* a Unicode character from a layout (other values: ASCII, control
    characters, or a key's scan code << 8) */
 #define UNI 0x1000000
+/* an arrow, Home or End with Shift (selecting text: ESC [ 1 ; 2 A...) */
+#define SHIFTED 0x2000000
 
 /* the line being edited (keyboard thread only) */
 static char line[LINE_MAX];
@@ -375,6 +377,18 @@ static void raw_key(unsigned int c)
 {
   const char * seq = NULL;
   char b;
+  if (c & SHIFTED) {                   /* as xterm: the modifier 2 */
+    switch (c & ~SHIFTED) {
+    case KEY_UP:    seq = "\033[1;2A"; break;
+    case KEY_DOWN:  seq = "\033[1;2B"; break;
+    case KEY_RIGHT: seq = "\033[1;2C"; break;
+    case KEY_LEFT:  seq = "\033[1;2D"; break;
+    case KEY_HOME:  seq = "\033[1;2H"; break;
+    case KEY_END:   seq = "\033[1;2F"; break;
+    }
+    if (seq) queue_input(seq, strlen(seq), 0);
+    return;
+  }
   switch (c) {
   case KEY_UP:     seq = "\033[A"; break;
   case KEY_DOWN:   seq = "\033[B"; break;
@@ -408,8 +422,8 @@ static void raw_key(unsigned int c)
 
 /* ---- key releases (CONSOLE_RELEASES), queued under input_lock ---- */
 
-/* ESC [ num ; 1:3 final, without the C library (the keyboard thread) */
-static void queue_release(unsigned int num, char final)
+/* ESC [ num ; mod:3 final, without the C library (the keyboard thread) */
+static void queue_release_mod(unsigned int num, int mod, char final)
 {
   char s[24], digits[12];
   int n = 0, d = 0;
@@ -417,16 +431,34 @@ static void queue_release(unsigned int num, char final)
   s[n++] = '[';
   do { digits[d++] = '0' + num % 10; num /= 10; } while (num > 0);
   while (d > 0) s[n++] = digits[--d];
-  memcpy(s + n, ";1:3", 4);
-  n += 4;
+  s[n++] = ';';
+  s[n++] = '0' + mod;
+  s[n++] = ':';
+  s[n++] = '3';
   s[n++] = final;
   queue_input(s, n, 0);
+}
+
+static void queue_release(unsigned int num, char final)
+{
+  queue_release_mod(num, 1, final);
 }
 
 /* the release of a key whose press was c (as raw_key got it) */
 static void release_key(unsigned int c)
 {
   if (canon || !releases) return;
+  if (c & SHIFTED) {
+    switch (c & ~SHIFTED) {
+    case KEY_UP:    queue_release_mod(1, 2, 'A'); return;
+    case KEY_DOWN:  queue_release_mod(1, 2, 'B'); return;
+    case KEY_RIGHT: queue_release_mod(1, 2, 'C'); return;
+    case KEY_LEFT:  queue_release_mod(1, 2, 'D'); return;
+    case KEY_HOME:  queue_release_mod(1, 2, 'H'); return;
+    case KEY_END:   queue_release_mod(1, 2, 'F'); return;
+    }
+    return;
+  }
   switch (c) {
   case KEY_UP:     queue_release(1, 'A'); return;
   case KEY_DOWN:   queue_release(1, 'B'); return;
@@ -487,6 +519,7 @@ static void key_typed(unsigned int c)
     raw_key(c);
     return;
   }
+  c &= ~SHIFTED;                       /* line editing: an arrow is an arrow */
   if (c == KEY_UP || c == CTRL_P) {
     history_move(-1);
   } else if (c == KEY_DOWN || c == CTRL_N) {
@@ -604,6 +637,9 @@ static void * keyboard_thread(void * arg)
     ext = extended;
     extended = 0;
     outportb(0x20, 0x20);
+    if ((control_keys & CK_SHIFT) && (c == KEY_UP || c == KEY_DOWN || c == KEY_LEFT ||
+                                      c == KEY_RIGHT || c == KEY_HOME || c == KEY_END))
+      c |= SHIFTED;
     /* a key let go: its release, if its press sent something */
     if (key & 0x80) {
       unsigned int was = pressed[ext][key & 0x7F];

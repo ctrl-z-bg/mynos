@@ -100,6 +100,12 @@ sound.cmi: sound.mli ipc.cmi
 sound.cmo: sound.ml sound.cmi
 	$(OCAMLC) -c sound.ml
 
+textarea.cmi: textarea.mli gui.cmi
+	$(OCAMLC) -c textarea.mli
+
+textarea.cmo: textarea.ml textarea.cmi
+	$(OCAMLC) -c textarea.ml
+
 gui.cmi: gui.mli display.cmi
 	$(OCAMLC) -c gui.mli
 
@@ -118,7 +124,7 @@ tracer.cmi: tracer.mli
 tracer.cmo: tracer.ml tracer.cmi
 	$(OCAMLC) -c tracer.ml
 
-MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo fs.cmo console.cmo registry.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo tracer.cmo agent.cmo gfx.cmo display.cmo gui.cmo power.cmo sound.cmo
+MODULES = mynos.cmo wire.cmo ipc.cmo block.cmo fs.cmo console.cmo registry.cmo net.cmo json.cmo http.cmo llm.cmo tools.cmo tracer.cmo agent.cmo gfx.cmo display.cmo gui.cmo textarea.cmo power.cmo sound.cmo
 
 # every module but Mynos uses Mynos: a change in mynos.mli recompiles them
 $(filter-out mynos.cmo,$(MODULES)) $(filter-out mynos.cmi,$(MODULES:.cmo=.cmi)): mynos.cmi

@@ -8,7 +8,7 @@ MYNOS = ../mynos-lib/ocaml/mynos.cmi ../mynos-lib/ocaml/mynos.cma \
 PROGRAMS = gui.byte welcome.byte clock.byte services.byte terminal.byte recordings.byte files.byte \
 	tour.byte log_window.byte \
 	system.byte \
-	agent_window.byte
+	agent_window.byte text.byte
 
 all: $(PROGRAMS)
 

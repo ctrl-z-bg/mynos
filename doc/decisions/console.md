@@ -94,6 +94,9 @@ driver sends SIGINT to the foreground program:
   a terminal on the serial port sends no releases, so its keys are
   released at once. displayd asks for them and turns them into `key_up`
   events: games know which keys are held, several at once.
+- Shift with the arrows, Home and End (2026-11-22, selecting in text
+  boxes): xterm's sequences, `ESC [ 1 ; 2 A`..., and their releases with
+  the modifier, `ESC [ 1 ; 2:3 A`.
 
 ## Not now
 

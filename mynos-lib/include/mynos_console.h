@@ -52,7 +52,8 @@
                             ESC [ code ; 1:3 u for a character (code: the
                             Unicode code point its press sent: 13 Enter,
                             127 Backspace, 27 Escape), ESC [ 1 ; 1:3 A..D,
-                            H, F for the arrows, Home, End, ESC [ n ; 1:3 ~
+                            H, F for the arrows, Home, End (ESC [ 1 ; 2:3 A
+                            with Shift, sent as ESC [ 1 ; 2 A), ESC [ n ; 1:3 ~
                             for the keys sent as ESC [ n ~ (displayd) */
 
 /* the screen (the kernel's terminal, VT100-like) */

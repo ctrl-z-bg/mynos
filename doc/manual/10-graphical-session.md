@@ -72,6 +72,7 @@ Click **MyNOS**, top left. The menu opens:
 | Log | the kernel's log, its messages and the services', followed as it grows (`log -f` in a window) |
 | Packages | the packages: demos and programs to install from the web (10.14) |
 | Applications | the installed packages that open a window; a click starts one (10.14) |
+| Text | the text editor (10.9) |
 | Exit | ends the session: back to the text console (10.16) |
 | Shut down | turns the machine off (10.16) |
 
@@ -259,6 +260,14 @@ folders and the files that fit are listed (here `.trc` and `.trace`);
 chooses a file; a second click, Open or Enter picks it; Cancel or Escape
 gives up. While the picker is open, the rest of the window does not
 react.
+
+**Text, the text editor.** The menu's **Text**, or **Edit** over a text
+file Files shows, or `text FILE` in a Terminal, opens a file in an
+editor of its own: New, Open (the picker), Save, Save as, Find. The
+keys of an editor: the arrows, Home, End, Page Up and Down (with Shift
+to select), Ctrl-A, Ctrl-C, Ctrl-X, Ctrl-V (a clipboard of the
+window's), Ctrl-Z and Ctrl-Y, Ctrl-S to save, Ctrl-F to find. OCaml
+files are coloured. The window is resizable.
 
 ## 10.10 Recordings
 

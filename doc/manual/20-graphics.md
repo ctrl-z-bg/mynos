@@ -205,6 +205,13 @@ drawing it, and uses it at the next frame; `scroll_to_end ui id` keeps a
 log or a conversation at its end. `Gui.hovered ui x y w h` tells
 whether the pointer is over a rectangle, for widgets of one's own.
 
+A multi-line text box is module `Textarea` (the text editor, `text`, is
+made of one): `Textarea.create ?highlight s`, then `Textarea.frame ui
+id t x y w h` in each frame draws it and gives it the keys and the mouse
+(selection, undo, copy and paste, colours: `Textarea.ocaml`); `text`,
+`replace_lines`, `find`, `goto` and marks under ranges (errors) are for
+the program.
+
 A window with a field, a list and a scroll box. It opens with the
 counter at 0, an empty field, `red` selected in the list on the left and
 an empty box on the right; each click on the button adds a line to the

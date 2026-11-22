@@ -457,8 +457,15 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     # repository /disk/pkg/url names (the host's copy)
     click 20 10; sleep 1; click 40 259; sleep 15
     mon "screendump $tmp/gui22.ppm"
-    click 20 10; sleep 1; click 30 325; sleep 4    # the MyNOS menu, Exit
-    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt; ls /disk\n'; sleep 3
+    # Text, the session's text editor (the menu's thirteenth item, mynos-y87):
+    # a line typed, Ctrl-S, the name it offers (/disk/untitled.txt) taken;
+    # the file is read back from text mode
+    click 20 10; sleep 1; click 40 303; sleep 6
+    tools/type-keys.py "$tmp/mon-g" 'typed-in-text'; sleep 1
+    mon "sendkey ctrl-s"; sleep 1
+    tools/type-keys.py "$tmp/mon-g" '\n'; sleep 3
+    click 20 10; sleep 1; click 30 347; sleep 4    # the MyNOS menu, Exit
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /disk/untitled.txt; ls /disk\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too
     tools/type-keys.py "$tmp/mon-g" 'ps\n'; sleep 3
@@ -1219,6 +1226,7 @@ PY
     fi
     expect "gui: displayd describes display/1 as display.ml does"
     expect "graphics: all checks passed"
+    expect "typed-in-text"                             # Text saved a file
     expect "keys: size 340x110"                        # a grip dragged
     expect "keys: size 1022x720"                       # maximized
     expect "keys: down x, held ESC[C x"                # two keys held at once

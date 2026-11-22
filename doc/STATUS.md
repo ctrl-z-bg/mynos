@@ -1505,3 +1505,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   (`NAME-VERSION-HASH.tar`, tools/pkg-build.sh), and
   `tools/pkg-publish.sh` publishes into a clone keeping the previous
   index's archives: a cached index finds its own. pkg is unchanged.
+- **2026-11-22** — Text and its text box (mynos-y87.1, .2,
+  `doc/decisions/studio.md`): module `Textarea` in mynos.cma (lines,
+  selection by mouse and Shift, undo/redo, clipboard, find, colours with
+  OCaml's built in, marks, ranges read and replaced); `text` on the RAM
+  disk, the MyNOS menu's Text, Files' Edit. consoled sends Shift with the
+  arrows, Home and End as xterm does (`ESC [ 1 ; 2 A`), released with the
+  modifier. Test: the graphical session types in Text and saves.
+  Next: MyNOS Studio, a package (the epic mynos-y87).
