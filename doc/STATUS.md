@@ -1587,4 +1587,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   mutes. The music checked offline: the spectrogram of Tobu Tobu Girl's
   first 25 s shows notes (G1, G2, G3, D2, C5...). GAV 1.1: its tones
   from a thread too.
+- **2026-11-22** — A web browser, phase 1 (mynos-asr), package
+  `browser`: a tolerant HTML tokenizer (entities, Latin-1 and
+  Windows-1252 converted), a layout as lines of styled spans (headings,
+  lists, quotes, tables as rows, pre, links), http/https/file/about,
+  redirections, history, fetches in a thread; `browser --dump URL`.
+  Tried on text.npr.org and Wikipedia over HTTPS. Not yet: pictures,
+  forms that send, cookies, CSS.
 

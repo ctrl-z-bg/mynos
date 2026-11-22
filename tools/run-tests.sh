@@ -847,6 +847,10 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     # it asks for a window (none in text mode)
     tools/type-keys.py "$tmp/mon7" 'pkg install gav; gav\n'
     waitfor "gav.byte: no graphical session" 60
+    # the browser (mynos-asr), as text: a page of the disk, its entities,
+    # its link made absolute; the start page
+    tools/type-keys.py "$tmp/mon7" "pkg install browser; echo '<title>T</title><h1>T&eacute;st</h1><p>a <a href=x.html>link</a> &copy; 2026</p>' > /tmp/t.html; browser --dump /tmp/t.html; browser --dump about:start > /tmp/start.txt; grep -c ocaml.org /tmp/start.txt; X=done; echo browser-\$X\n"
+    waitfor "browser-done" 90
     # the Z-machine interpreter, in the terminal (no session), against
     # Czech's tests (tests/zmachine)
     tools/type-keys.py "$tmp/mon7" 'pkg install zmachine; echo | zmachine /disk/czech.z5 > /tmp/cz.txt; grep Failed /tmp/cz.txt\n'
@@ -1147,6 +1151,9 @@ if [ -f system/ramdisk.dsk ]; then
     expect "clip-ok"                                  # clip, the clipboard service
     expect "pkg: gav 1.1 installed"                   # GAV...
     expect "gav.byte: no graphical session"           # ... its pictures read first
+    expect "Tést"                                     # the browser: entities,
+    expect "a link © 2026"                            # inline text,
+    expect "1. file:/tmp/x.html"                      # links made absolute
     expect "soundd: Sound Blaster 16 (DSP 4.05)"
     expect "play: soundd describes sound/1 as sound.ml does"
     if [ -n "$sound_ok" ]; then

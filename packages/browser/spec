@@ -1,0 +1,11 @@
+# The package browser (tools/pkg-build.sh): a simple web browser, phase 1
+# (text and links)
+NAME=browser
+VERSION=1.0
+DESCRIPTION='A simple web browser: HTML as text and links, http and https, no JavaScript; browser --dump URL prints a page'
+LICENSE=GPL-2.0-or-later
+LIBRARIES=threads
+SRC=packages/browser
+SOURCES='html.ml layout.ml browser.ml'
+RUN=browser
+DOC=packages/browser/README.md
