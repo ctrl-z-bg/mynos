@@ -20,7 +20,7 @@
  * interrupt (IRQ 5) at the end of each says which half to fill again,
  * with the next BLOCK bytes of the mix. The output is 22050 Hz, 16-bit,
  * stereo; programs send that (module Sound converts WAV files). When
- * nothing plays for a while the DMA pauses, and resumes with the next
+ * nothing plays for 20 s the DMA pauses, and resumes with the next
  * sound.
  *
  * Protocol "sound/1" (typed IPC): info, open a stream, write samples to
@@ -59,7 +59,11 @@
 #define QUEUE (RATE)               /* a stream holds up to a second */
 #define MAXSTREAM 8
 #define MAXTONE 4
-#define IDLE_BLOCKS 11             /* half a second of silence: pause */
+/* 20 s of silence: pause. Not less: under QEMU with a real audio
+   backend (PipeWire...) each pause and resume opens and closes the
+   host's stream, and the machine stood still a moment each time (a
+   game's beeps, a second apart) */
+#define IDLE_BLOCKS 430
 
 /* ---- the card ---- */
 
@@ -291,8 +295,8 @@ static void * irq_thread(void * arg)
     inportb(DSP_ACK16);                           /* the card's interrupt, seen */
     pthread_mutex_lock(&lock);
     if (playing) {
-      /* the half just played is filled again; after half a second of
-         silence the card pauses (on silence it fills) */
+      /* the half just played is filled again; after 20 s of silence the
+         card pauses (on silence it fills) */
       if (mix(half)) idle = 0;
       else if (++idle >= IDLE_BLOCKS) {
         dsp_write(0xD5);                          /* pause 16-bit DMA */

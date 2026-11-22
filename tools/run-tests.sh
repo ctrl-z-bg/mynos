@@ -1149,7 +1149,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "Directions: north, south"                 # minotaur
     expect "%  /disk"                                 # df
     expect "clip-ok"                                  # clip, the clipboard service
-    expect "pkg: gavml 1.1 installed"                 # GavML (GAV)...
+    expect "pkg: gavml 1.2 installed"                 # GavML (GAV)...
     expect "gavml.byte: no graphical session"         # ... its pictures read first
     expect "Tést"                                     # the browser: entities,
     expect "a link © 2026"                            # inline text,

@@ -1600,4 +1600,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   the field's border, its font); `GAVML_DEBUG=1` logs frames and their cost.
   Measured: 50 frames a second with or without KVM, sound on file, none or
   PipeWire (each frame about 3 ms without KVM).
+- **2026-11-22** — soundd pauses the card after 20 s of silence (was
+  0.5 s: GavML froze at each beep under QEMU with PipeWire, as reported;
+  JOURNAL). gavml 1.2: M, or a button, turns its sounds off.
+  displayd asks soundd for the volume without its lock (the pointer and
+  the windows never wait for soundd).
 

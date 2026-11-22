@@ -8,7 +8,7 @@
 
      Left 1:  z c, x to jump        Right 1: the arrows, Up to jump
      Left 2:  h k, u to jump        Right 2: s f, e to jump
-     Escape: back to the players' choice.
+     Escape: back to the players' choice. M: the sounds off, and on.
 
    Points as in the original: only the side that serves scores; 15 to
    win, by two. The game runs in steps of 20 ms (GAV's 50 a second),
@@ -95,7 +95,10 @@ let () =
         if !ok then (try Sound.tone hz ms with _ -> ok := false)
       done) ())
 
+let muted = ref false
+
 let sound hz ms =
+  if not !muted then
   Mutex.protect sounds_lock (fun () ->
       if Queue.length sounds < 4 then Queue.push (hz, ms) sounds;
       Condition.signal sounds_ready)
@@ -547,9 +550,9 @@ let () =
        | Choosing ->
          centre g 40 "GPL ARCADE VOLLEYBALL";
          (* the game's look: black, the field's grey border, its font *)
-         Gfx.fill g 104 80 432 256 0x000000;
-         Gfx.rect g 104 80 432 256 0xA8A8A8;
-         Gfx.rect g 106 82 428 252 0xA8A8A8;
+         Gfx.fill g 104 80 432 276 0x000000;
+         Gfx.rect g 104 80 432 276 0xA8A8A8;
+         Gfx.rect g 106 82 428 272 0xA8A8A8;
          text g 128 94 "WHO PLAYS";
          let row i label y =
            text g 128 (y + 5) label;
@@ -565,8 +568,12 @@ let () =
          let start = Gui.button ui 136 280 120 "Play"
                      || List.exists (fun k -> k = "\r" || k = "\n" || k = " ") ui.Gui.keys in
          Gui.label ~colour:0x9A9A9A ui 270 289 "Enter plays; Escape stops a game";
+         if Gui.button ui 136 312 120 (if !muted then "Sounds: off" else "Sounds: on") then
+           muted := not !muted;
+         Gui.label ~colour:0x9A9A9A ui 270 317 "M, in a game, too";
          if start then st.screen <- Playing (new_game st.places sprites)
        | Playing game ->
+         if List.exists (fun k -> k = "m" || k = "M") ui.Gui.keys then muted := not !muted;
          if List.mem "\027" ui.Gui.keys then st.screen <- Choosing
          else begin
            (* the game's time: steps of 20 ms, as many as have passed *)

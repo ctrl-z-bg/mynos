@@ -3087,3 +3087,28 @@ world to join.
 **Lesson.** In MyNOS a domain is for work that runs in parallel and is
 worth its cost at every collection; something that waits is a thread.
 
+## 2026-11-22 — GavML stood still at each beep
+
+**Symptom.** Under QEMU with the host's audio (PipeWire), GavML froze a
+moment at every bounce and every hit, and QEMU printed "audio: Writing
+to disabled voice sb16" again and again.
+
+**Diagnosis.** Not reproduced here: with KVM or without, sound to a
+file, to "none" or to PipeWire with MyNOS's volume at 0, GavML drew 50
+frames a second, each in about 3 ms (`GAVML_DEBUG=1`). The messages did
+appear, 19 in a minute. GavML plays a short tone at each bounce and hit;
+soundd paused the card after half a second of silence and resumed it
+with the next sound.
+
+**Cause (probable).** Each pause and resume of the SB16's DMA makes
+QEMU turn its audio voice off and on, which with a real backend opens
+and closes the host's stream; the machine waits meanwhile.
+
+**Fix.** soundd pauses after 20 s of silence, not half a second: a
+game's beeps keep the card running. GavML turns its sounds off with M
+(or a button). Without any sound: `run-mynos.sh --no-sound`, or
+`SOUND= tools/run-demo.sh`.
+
+**Lesson.** An emulated device's cost is the host's too: what is cheap
+on the card (pausing it) may be dear for the emulator.
+

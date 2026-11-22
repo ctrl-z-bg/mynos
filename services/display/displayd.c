@@ -1278,7 +1278,7 @@ static void * keys_thread(void * arg)
    times a second at most. */
 static void * timer_thread(void * arg)
 {
-  int last_second = -1;
+  int last_second = -1, ask_volume = 0;
   (void)arg;
   for (;;) {
     int i;
@@ -1307,18 +1307,24 @@ static void * timer_thread(void * arg)
       compose(W - 8 * 8 - 12, 0, W, TOP);          /* the clock */
       /* the volume, every five seconds: soundd may have come, gone, or
          been changed by another program */
-      if (last_second % 5 == 0 && !volume_drag) {
-        int v = sound_volume(-1);
-        if (v != volume_level) {
-          int was = volume_level;
-          volume_level = v;
-          if (v < 0) volume_open = 0;
-          if ((was < 0) != (v < 0)) compose(0, 0, W, TOP + VP_H + 2);   /* the tabs too */
-          else VOLUME_CHANGED();
-        }
-      }
+      if (last_second % 5 == 0 && !volume_drag) ask_volume = 1;
     }
     pthread_mutex_unlock(&lock);
+    /* asked without the lock: soundd may take its time (up to half a
+       second), and the pointer and the windows must not wait for it */
+    if (ask_volume) {
+      int v = sound_volume(-1);
+      ask_volume = 0;
+      pthread_mutex_lock(&lock);
+      if (v != volume_level && !volume_drag) {
+        int was = volume_level;
+        volume_level = v;
+        if (v < 0) volume_open = 0;
+        if ((was < 0) != (v < 0)) compose(0, 0, W, TOP + VP_H + 2);   /* the tabs too */
+        else VOLUME_CHANGED();
+      }
+      pthread_mutex_unlock(&lock);
+    }
   }
   return NULL;
 }
