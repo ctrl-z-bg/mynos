@@ -54,9 +54,9 @@ __asm__ (".pushsection .text\n" \
 uint32_t timerTicks = 0;
 void pit_handler() {
   timerTicks++;
-  /* the CPU time of the process this tick found running (not the idle
-     process, slot 0) */
-  if (currProcess && processTable[currProcess])
+  /* the CPU time of the process this tick found running; slot 0's (the
+     kernel's idle thread) is the idle time, which sysmonitor shows */
+  if (processTable[currProcess])
     processTable[currProcess]->cpuTicks++;
   random_event(0);
 

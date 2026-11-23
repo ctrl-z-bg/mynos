@@ -191,6 +191,26 @@ int _mynos_syscall_faults(int32_t pid, uint32_t buf) {
   return 0;
 }
 
+/* a process's statistics (native 38, sysmonitor): 6 words, its CPU
+   ticks, page faults allocated on use and copy-on-write, pages in memory,
+   threads, and the clock's ticks since boot. pid 0: the kernel, whose
+   ticks are the idle time, and its pages are all those of the RAM. */
+extern uint32_t __OS_residentPages(process_descriptor_t * p);
+extern uint32_t __total_phy_pages;
+int _mynos_syscall_procstat(int32_t pid, uint32_t buf) {
+  uint32_t e[6];
+  process_descriptor_t * p = pid >= 0 ? processTable[PSLOT(pid)] : NULL;
+  if (p == NULL || !p->isAlive || p->pid != (pid_t)pid) return MYNOS_ERR_INVALID;
+  e[0] = p->cpuTicks;
+  e[1] = p->faultsAlloc;
+  e[2] = p->faultsCow;
+  e[3] = pid == 0 ? __total_phy_pages : __OS_residentPages(p);
+  e[4] = p->numThreads;
+  e[5] = timerTicks;
+  if (copy_to_user((char *)buf, e, sizeof e)) return MYNOS_ERR_INVALID;
+  return 0;
+}
+
 int _mynos_syscall_processes(uint32_t buf, uint32_t max) {
   uint32_t i, n = 0;
   for (i = 0; i < numProcess && n < max; i++) {

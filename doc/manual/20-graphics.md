@@ -191,7 +191,7 @@ top left):
 | `paragraph ?colour ui x y width s` | the height used: `s` wrapped at words |
 | `panel ?colour ui x y w h` | `unit`: a white box with a border |
 | `button ?h ui x y w s` | `true` in the frame it is clicked (pressed and released on it) |
-| `text_field ui id x y w value` | the value, edited by this frame's keys if the field has them |
+| `text_field ui id x y w value` | the value, edited by this frame's keys if the field has them, at its cursor (a click places it; Left, Right, Home, End, Backspace, Delete) |
 | `list_item ui x y w ~selected s` | `true` when clicked |
 | `scroll ?colour ui id x y w h content` | `unit`: a box whose `content top` draws, clipped, and returns its height |
 | `file_picker ui id` | `Some (Picked path)` or `Some Cancelled` once answered (open it with `open_file_picker`) |

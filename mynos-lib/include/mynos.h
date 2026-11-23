@@ -170,6 +170,12 @@ int mynos_klog(unsigned int from, char * buf, unsigned int max);
    (pid 0): out[0] pages allocated on use, out[1] copy-on-write; 0 or an
    error */
 int mynos_faults(int pid, unsigned int out[2]);
+/* a process's statistics (native 38): out[0] its CPU ticks (10 ms), [1]
+   and [2] its page faults (allocated on use, copy-on-write), [3] its pages
+   in memory, [4] its threads, [5] the clock's ticks since boot; pid 0:
+   the kernel, whose ticks are the idle time and whose pages are the
+   RAM's; 0 or an error */
+int mynos_procstat(int pid, unsigned int out[6]);
 
 /* THE EXTERNAL PAGER (native 37; doc/manual/appendix-b-memory.md, B.14) */
 #define MYNOS_PAGER_REGISTER 0

@@ -56,3 +56,8 @@ int mynos_pagerSupply(int pid, void * addr, void * src) {
   return __mynos_syscall(37, MYNOS_PAGER_SUPPLY, pid, (int)addr, (int)src, 0);
 }
 
+/* a process's statistics (native 38) */
+int mynos_procstat(int pid, unsigned int out[6]) {
+  return __mynos_syscall(38, pid, (int)out, 0, 0, 0);
+}
+

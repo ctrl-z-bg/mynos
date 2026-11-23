@@ -421,8 +421,9 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     # a recording of another boot (tests/greeter/old-boot.trc: greeter was
     # pid 14, which is gui here) in the System window (its tab, the sixth):
     # greeter, which served a call, a ghost among the services
+    # (a click places the field's cursor: End first, then erase)
     click 850 12; sleep 2; click 100 119; sleep 1
-    tools/type-keys.py "$tmp/mon-g" '{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}/disk/old-boot.trc'
+    tools/type-keys.py "$tmp/mon-g" '{end}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}{backspace}/disk/old-boot.trc'
     click 364 117; sleep 5
     mon "screendump $tmp/gui17.ppm"
     # Files (the menu's eighth item, at 40,70): /tmp, aw.txt (the agent's),

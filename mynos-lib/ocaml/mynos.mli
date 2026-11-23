@@ -140,6 +140,21 @@ val faults : int -> int * int
     copy-on-write copies. Raises {!Error} for a process that is not
     there. *)
 
+type process_stats = {
+  cpu_ticks : int;      (** the clock's ticks (10 ms) that found it running *)
+  faults_alloc : int;   (** page faults: pages allocated at first use *)
+  faults_cow : int;     (** page faults: pages copied on a write *)
+  resident : int;       (** its pages in memory (4 KB; the RAM disk's apart) *)
+  s_threads : int;
+  clock_ticks : int;    (** the clock's ticks since boot *)
+}
+
+val process_stats : int -> process_stats
+(** A process's statistics (system call 38), for sysmonitor; pid 0 is the
+    kernel, whose CPU ticks are the idle time and whose [resident] is all
+    the RAM's pages. Raises {!Error} for a
+    process that is not there. *)
+
 val kill : int -> unit
 (** End a process, as killed (its parent's [wait] sees [Signaled 9]).
     Not init, and not a process with privileges the caller lacks (only a

@@ -553,6 +553,19 @@ CAMLprim value caml_mynos_faults(value pid)
   CAMLreturn(r);
 }
 
+/* a process's statistics (native 38): a tuple of 6 ints */
+CAMLprim value caml_mynos_procstat(value pid)
+{
+  CAMLparam1(pid);
+  CAMLlocal1(r);
+  unsigned int out[6];
+  int e = mynos_procstat(Int_val(pid), out), i;
+  if (e < 0) mynos_error("procstat", e);
+  r = caml_alloc_tuple(6);
+  for (i = 0; i < 6; i++) Store_field(r, i, Val_long(out[i]));
+  CAMLreturn(r);
+}
+
 /* ---- the external pager (native 37, module Pager) ---- */
 
 CAMLprim value caml_mynos_pager_register(value unit)

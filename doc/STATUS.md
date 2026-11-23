@@ -1675,4 +1675,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   asked Studio's service for a build, whose thread waited for ocamlc. Now
   each waiting thread waits on its own private semaphore, and a child's
   end wakes them all. A check in tests/abi.
+- **2026-11-23** — Gui's one-line fields have a cursor (the agent's
+  question, Find, names): a click places it, Left, Right, Home, End,
+  Ctrl-A, Ctrl-E move it, Backspace and Delete erase around it; until now
+  only the end could be erased. A new package, `sysmonitor`: CPU and
+  memory with two minutes of graphs, the file systems, the processes
+  (CPU, memory, threads, faults a second, services), ending one; the
+  kernel gives a process's statistics (native 38: CPU ticks, faults,
+  resident pages, threads) and counts the idle process's ticks (slot 0),
+  which were not counted.
 

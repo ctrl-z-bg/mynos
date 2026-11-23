@@ -114,6 +114,10 @@ Every window has a title bar, with a close box at its right:
   Ctrl-C, Ctrl-X, Ctrl-V in the text boxes and fields; in a Terminal a
   right click pastes. From `sh`, the package `utils`'s `clip` prints it
   or copies (`ls | clip`).
+- **Editing a field.** A one-line field (the agent's question, Find,
+  a file's name) has a cursor: a click places it, Left and Right move
+  it, Home and End (or Ctrl-A, Ctrl-E) go to its ends, Backspace and
+  Delete erase around it, and what is typed or pasted goes there.
 - **Selecting with the mouse.** In a Terminal, and in the windows that
   show text (Log, the agent, Services, Recordings, Studio's panes, the
   manual, Wiki, Feeds, a story of zmachine...), dragging selects, in

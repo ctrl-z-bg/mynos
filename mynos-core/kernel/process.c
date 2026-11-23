@@ -725,6 +725,28 @@ static int isRamdiskPT(uint32_t frame) {
 #define isRamdiskPT(frame) 0
 #endif
 
+/* a live process's pages in memory: present user pages of its own
+   page tables (the RAM disk's, shared by all, apart), for sysmonitor
+   (native 38) */
+uint32_t __OS_residentPages(process_descriptor_t * p) {
+  uint32_t * w, saved, unused, i, j, n = 0;
+  uint32_t pdFrame;
+  if (p == NULL || !p->isAlive || p->tss == NULL) return 0;
+  pdFrame = ((uint32_t)p->tss->pgdir) >> 12;
+  w = __mem_mapFrame(pdFrame, &saved);
+  for (i = _asm_last_kernel_page_dir_entry_used + 1; i < LAST_PDPT_INDEX; i++) {
+    uint32_t pde;
+    w = __mem_mapFrame(pdFrame, &unused);
+    pde = w[i];
+    if (!(pde & PF_PRESENT) || isRamdiskPT(pde >> 12)) continue;
+    w = __mem_mapFrame(pde >> 12, &unused);
+    for (j = 0; j < PDPT_ENTRIES; j++)
+      if ((w[j] & (PF_PRESENT | PF_USER)) == (PF_PRESENT | PF_USER)) n++;
+  }
+  __mem_unmapFrame(saved);
+  return n;
+}
+
 /* whether [start, start + len) in the current process touches the RAM
    disk's page tables, shared by every process (munmap must leave them
    alone: mynos-q5b) */

@@ -93,6 +93,15 @@ let processes () =
 external kill : int -> unit = "caml_mynos_kill"
 
 external faults_raw : int -> int * int = "caml_mynos_faults"
+
+type process_stats = {
+  cpu_ticks : int; faults_alloc : int; faults_cow : int;
+  resident : int; s_threads : int; clock_ticks : int;
+}
+external procstat_raw : int -> int * int * int * int * int * int = "caml_mynos_procstat"
+let process_stats pid =
+  let cpu_ticks, faults_alloc, faults_cow, resident, s_threads, clock_ticks = procstat_raw pid in
+  { cpu_ticks; faults_alloc; faults_cow; resident; s_threads; clock_ticks }
 let faults pid = faults_raw pid
 
 external wait_raw : int -> int * int = "caml_mynos_wait"

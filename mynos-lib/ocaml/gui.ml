@@ -256,51 +256,88 @@ let button ?(h = 26) ui x y w text =
   let px, py = ui.press in
   ui.clicked && over && px >= x && py >= y && px < x + w && py < y + h
 
+(* each field's cursor (a byte offset in its text), its first character
+   shown, and the text it gave last: a text the program changed (cleared
+   after Enter, a line recalled) puts the cursor at its end *)
+let field_state : (int, int * int * string) Hashtbl.t = Hashtbl.create 8
+
+let utf8_prev s i =
+  let i = ref (i - 1) in
+  while !i > 0 && Char.code s.[!i] land 0xC0 = 0x80 do decr i done;
+  max 0 !i
+
+let utf8_next s i =
+  let n = String.length s in
+  if i >= n then n
+  else begin
+    let i = ref (i + 1) in
+    while !i < n && Char.code s.[!i] land 0xC0 = 0x80 do incr i done;
+    !i
+  end
+
+(* the byte offset of the k-th character *)
+let utf8_offset s k =
+  let i = ref 0 and c = ref 0 in
+  while !c < k && !i < String.length s do i := utf8_next s !i; incr c done;
+  !i
+
 let text_field ui id x y w value =
   let h = 22 in
+  let room = max 1 ((w - 12) / Gfx.char_w) in
+  let cur, first =
+    match Hashtbl.find_opt field_state id with
+    | Some (c, f, last) when last = value -> (ref (min c (String.length value)), f)
+    | Some (_, f, _) -> (ref (String.length value), f)
+    | None -> (ref (String.length value), 0) in
   if ui.clicked && not (blocked ())
      && (let px, py = ui.press in px >= x && py >= y && px < x + w && py < y + h)
-  then ui.field <- id;
+  then begin
+    ui.field <- id;
+    (* the cursor where the click was *)
+    let px, _ = ui.press in
+    cur := utf8_offset value (first + max 0 ((px - x - 6 + Gfx.char_w / 2) / Gfx.char_w))
+  end;
   let focused = ui.field = id in
   let value =
     if not focused || blocked () then value
     else List.fold_left (fun v k ->
+        let n = String.length v and c = !cur in
+        let insert t = cur := c + String.length t; String.sub v 0 c ^ t ^ String.sub v c (n - c) in
         match k with
-        | "\127" | "\b" ->               (* Backspace: a whole character *)
-          let n = String.length v in
-          if n = 0 then v
-          else begin
-            let i = ref (n - 1) in
-            while !i > 0 && Char.code v.[!i] land 0xC0 = 0x80 do decr i done;
-            String.sub v 0 !i
-          end
-        (* the clipboard (the system's): Ctrl-V pastes its first line,
-           Ctrl-C copies the field, Ctrl-X cuts it *)
+        | "\127" | "\b" ->               (* Backspace: the character before *)
+          if c = 0 then v
+          else (let p = utf8_prev v c in cur := p; String.sub v 0 p ^ String.sub v c (n - c))
+        | "\027[3~" ->                    (* Delete: the character after *)
+          if c >= n then v else (let q = utf8_next v c in String.sub v 0 c ^ String.sub v q (n - q))
+        | "\027[D" -> cur := (if c = 0 then 0 else utf8_prev v c); v
+        | "\027[C" -> cur := utf8_next v c; v
+        | "\027[H" | "\001" -> cur := 0; v              (* Home, Ctrl-A *)
+        | "\027[F" | "\005" -> cur := n; v              (* End, Ctrl-E *)
+        (* the clipboard (the system's): Ctrl-V pastes its first line at
+           the cursor, Ctrl-C copies the field, Ctrl-X cuts it *)
         | "\022" ->
-          (match String.split_on_char '\n' (Clipboard.get ()) with l :: _ -> v ^ l | [] -> v)
+          (match String.split_on_char '\n' (Clipboard.get ()) with l :: _ -> insert l | [] -> v)
         | "\003" -> Clipboard.set v; v
-        | "\021" -> ""                                   (* Ctrl-U: all of it gone *)
-        | "\024" -> Clipboard.set v; ""
+        | "\021" -> cur := 0; ""                        (* Ctrl-U: all of it gone *)
+        | "\024" -> Clipboard.set v; cur := 0; ""
         | k when String.length k > 0 && (k.[0] = '\027' || k.[0] < ' ') -> v
-        | k -> v ^ k) value ui.keys in
+        | k -> insert k) value ui.keys in
+  let cur = min !cur (String.length value) in
+  (* the first character shown: the cursor in view, the field full *)
+  let at = Gfx.cells (String.sub value 0 cur) and total = Gfx.cells value in
+  let first = ref first in
+  if at < !first then first := at;
+  if at > !first + room - 1 then first := at - room + 1;
+  if total - !first < room - 1 then first := total - room + 1;
+  let first = max 0 !first in
+  Hashtbl.replace field_state id (cur, first, value);
   Gfx.fill ui.g x y w h 0xFFFFFF;
   Gfx.rect ui.g x y w h (if focused then accent else 0xB8C2CC);
-  let room = (w - 12) / Gfx.char_w in
-  let n = Gfx.cells value in
-  let shown =                              (* its end, when it is long *)
-    if n <= room then value
-    else begin
-      let skip = ref (n - room) and i = ref 0 in
-      while !skip > 0 do
-        incr i;
-        while !i < String.length value && Char.code value.[!i] land 0xC0 = 0x80 do incr i done;
-        decr skip
-      done;
-      String.sub value !i (String.length value - !i)
-    end in
-  ignore (Gfx.text ui.g (x + 6) (y + 3) shown foreground);
+  let a = utf8_offset value first in
+  let b = utf8_offset value (first + room) in
+  ignore (Gfx.text ui.g (x + 6) (y + 3) (String.sub value a (b - a)) foreground);
   if focused then
-    Gfx.fill ui.g (x + 6 + Gfx.cells shown * Gfx.char_w) (y + 4) 2 14 accent;
+    Gfx.fill ui.g (x + 6 + (at - first) * Gfx.char_w) (y + 4) 2 14 accent;
   value
 
 let list_item ui x y w ~selected label =
