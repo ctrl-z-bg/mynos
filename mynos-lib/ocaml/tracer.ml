@@ -336,6 +336,9 @@ let describe r e =
   | Recv -> Printf.sprintf "%d bytes" e.size
   | Irq -> Printf.sprintf "IRQ %d" e.arg
   | Mark -> e.data
+  (* page numbers: an address would not fit in 31 bits *)
+  | Other 10 -> Printf.sprintf "page fault at 0x%x000, for the pager" e.arg
+  | Other 11 -> Printf.sprintf "page 0x%x000 given" e.arg
   | Free | Other _ -> ""
 
 let print_events oc r =
@@ -369,6 +372,8 @@ let print_events oc r =
       | Free -> line "" "" (Printf.sprintf "free channel %d" e.channel)
       | Irq -> line "!" other (Printf.sprintf "IRQ %d (interrupted %s)" e.arg other)
       | Mark -> line "#" "" e.data
+      | Other 10 -> line "!" other (describe r e)
+      | Other 11 -> line "->" other (describe r e)
       | Other k -> line "?" "" (Printf.sprintf "event %d" k))
     r.events
 

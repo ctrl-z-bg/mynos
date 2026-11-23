@@ -99,6 +99,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .mynos_klog\n"\
 	 "   cmpl $36, %eax\n"\
 	 "   je .mynos_faults\n"\
+	 "   cmpl $37, %eax\n"\
+	 "   je .mynos_pager\n"\
 	 "   cmpl $31, %eax\n"\
 	 "   je .mynos_log\n"\
 	 "   cmpl $100, %eax\n"\
@@ -274,6 +276,15 @@ __asm__ (".pushsection .text\n" \
 	 "   pushl %ebx\n"\
 	 "   call _mynos_syscall_klog\n"\
 	 "   addl $12, %esp\n"\
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_pager:\n"\
+	 "   pushl %edi\n"\
+	 "   pushl %esi\n"\
+	 "   pushl %edx\n"\
+	 "   pushl %ecx\n"\
+	 "   pushl %ebx\n"\
+	 "   call _mynos_syscall_pager\n"\
+	 "   addl $20, %esp\n"\
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_faults:\n"\
 	 "   pushl %ecx\n"\

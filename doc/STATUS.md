@@ -1651,4 +1651,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   kernel's kmemcpy and kmemset copy and fill four bytes at a time (rep
   movsl, rep stosl); a fault 0.92 µs under KVM (was 2.85), a copy on write
   1.18 µs (was 3.0).
+- **2026-11-23** — The external pager, phases 1 to 3 of mynos-vzp
+  (doc/decisions/pager.md, appendix B.14): the page fault handler keeps
+  EAX on the stack, not at address 0, and may wait; entries not present
+  with bit 9 belong to the pager, with a token; native call 37 (register,
+  region, next, supply), told like a driver of its IRQ; fork keeps those
+  entries, system calls and messages refuse them, the pager's end ends who
+  waits. `pagerd` (OCaml, pager/1, module Pager) maps files read-only,
+  each page read when first touched; `mapcat` (-c compares, -t times, -s
+  stats). Tests: eleven pager checks in tests/abi, mapcat in the seventh
+  boot.
 

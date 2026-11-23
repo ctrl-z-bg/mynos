@@ -76,6 +76,144 @@ static void * cow_receiver(void * unused) {
   return NULL;
 }
 
+
+/* the external pager (mynos-vzp): this program is its own pager, in a
+   thread; the pages it gives hold their token in the first word, and a
+   letter of it in the rest */
+#define FAIL_TOKEN 500          /* answered with no page */
+#define SLOW_TOKEN 300          /* answered after 200 ms */
+static volatile int pager_stop, pager_served;
+static int pager_sem;
+
+static void * pager_thread(void * unused) {
+  char * page = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  mynos_pager_fault_t f;
+  while (1) {
+    mynos_P(pager_sem);
+    if (pager_stop) break;
+    while (mynos_pagerNext(&f) == 1) {
+      pager_served++;
+      if (f.token == FAIL_TOKEN) { mynos_pagerSupply(f.pid, (void *)f.addr, NULL); continue; }
+      if (f.token == SLOW_TOKEN) mynos_sleep(200000);
+      memset(page, 'A' + f.token % 26, 4096);
+      *(unsigned *)page = f.token;
+      mynos_pagerSupply(f.pid, (void *)f.addr, page);
+    }
+  }
+  return NULL;
+}
+
+static volatile unsigned slow_seen[2];
+static char * slow_region;
+static void * slow_reader(void * i) {
+  slow_seen[(long)i] = *(volatile unsigned *)slow_region;
+  return NULL;
+}
+
+/* a page's first word, read in a child: its exit status, 255 if killed */
+static int child_reads(volatile unsigned * at, unsigned * value) {
+  int st = 0;
+  pid_t pid = fork();
+  if (pid == 0) _exit(*at == *value ? 0 : 1);
+  waitpid(pid, &st, 0);
+  return WIFEXITED(st) ? WEXITSTATUS(st) : 255;
+}
+
+static void pager_checks(void) {
+  char * r, * w;
+  pthread_t t, s1, s2;
+  int st, served;
+  unsigned v;
+
+  /* the pager ends while a process waits for its page: that process ends
+     (C waits for a page of a region that P, the pager, gives it) */
+  {
+    int port1 = mynos_allocPort(), port2 = mynos_allocPort(), ch1, ch2;
+    pid_t c, p;
+    mynos_msg_t * m;
+    if ((c = fork()) == 0) {
+      int ch = mynos_connectToPort(port2);
+      volatile char * at;
+      if (mynos_recv(ch, &m, 0, 0) < 0) _exit(2);
+      at = *(char **)m->start;
+      (void)*at;                        /* waits; the pager never answers */
+      _exit(0);
+    }
+    if ((p = fork()) == 0) {
+      int ch = mynos_connectToPort(port1);
+      char * at;
+      if (mynos_pagerRegister() < 0) _exit(2);
+      at = mynos_pagerRegion(c, 1, 900, 0);
+      mynos_send(ch, &at, sizeof at, 0);
+      mynos_sleep(300000);              /* C is waiting by now */
+      _exit(at ? 0 : 3);
+    }
+    ch1 = mynos_listenPort(port1);
+    ch2 = mynos_listenPort(port2);
+    if (mynos_recv(ch1, &m, 0, 0) >= 0) {
+      mynos_send(ch2, m->start, m->size, 0);
+      mynos_freeMsg(&m);
+    }
+    waitpid(c, &st, 0);
+    check("pager: its end ends who waits for it", WIFSIGNALED(st));
+    waitpid(p, &st, 0);
+    check("pager: a region of another process", WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    mynos_freeChannel(ch1); mynos_freeChannel(ch2);
+    mynos_freePort(port1); mynos_freePort(port2);
+  }
+
+  pager_sem = mynos_pagerRegister();
+  check("pager: register", pager_sem >= 0);
+  if (pager_sem < 0) return;
+  pthread_create(&t, NULL, pager_thread, NULL);
+
+  r = mynos_pagerRegion(getpid(), 4, 100, 0);
+  check("pager: a region", r != NULL);
+  if (r == NULL) return;
+  v = *(volatile unsigned *)(r + 2 * 4096);
+  check("pager: a page given at its first use",
+        v == 102 && r[2 * 4096 + 100] == 'A' + 102 % 26 && pager_served == 1);
+  v = *(volatile unsigned *)(r + 2 * 4096 + 8);
+  check("pager: once given, no more faults", pager_served == 1);
+  v = 103;
+  check("pager: a child asks too (fork keeps the region)",
+        child_reads((volatile unsigned *)(r + 3 * 4096), &v) == 0 && pager_served == 2);
+  {
+    pid_t pid = fork();
+    if (pid == 0) { r[0] = 1; _exit(0); }          /* read-only */
+    waitpid(pid, &st, 0);
+    check("pager: a write to a read-only region ends the process",
+          WIFSIGNALED(st) && pager_served == 2);
+  }
+  {
+    char * f = mynos_pagerRegion(getpid(), 1, FAIL_TOKEN, 0);
+    v = FAIL_TOKEN;
+    check("pager: no page given ends the process",
+          f && child_reads((volatile unsigned *)f, &v) == 255);
+  }
+  w = mynos_pagerRegion(getpid(), 2, 200, 1);
+  if (w) w[4096 + 5] = 'z';
+  check("pager: a writable region", w && *(unsigned *)(w + 4096) == 201 &&
+        w[4096 + 5] == 'z' && w[4096 + 6] == 'A' + 201 % 26);
+  slow_region = mynos_pagerRegion(getpid(), 1, SLOW_TOKEN, 0);
+  served = pager_served;
+  pthread_create(&s1, NULL, slow_reader, (void *)0);
+  pthread_create(&s2, NULL, slow_reader, (void *)1);
+  pthread_join(s1, NULL); pthread_join(s2, NULL);
+  check("pager: two threads, one page asked once",
+        slow_seen[0] == SLOW_TOKEN && slow_seen[1] == SLOW_TOKEN && pager_served == served + 1);
+  {
+    pid_t pid = fork();
+    if (pid == 0) _exit(mynos_pagerRegister() == MYNOS_ERR_BUSY ? 0 : 1);
+    waitpid(pid, &st, 0);
+    check("pager: one at a time", WIFEXITED(st) && WEXITSTATUS(st) == 0);
+  }
+  check("pager: munmap a region", munmap(r, 4 * 4096) == 0);
+  pager_stop = 1;
+  mynos_V(pager_sem);
+  pthread_join(t, NULL);
+}
+
 int main(int argc, char ** argv) {
   long r;
   int sem;
@@ -272,6 +410,8 @@ int main(int argc, char ** argv) {
     mynos_trace(MYNOS_TRACE_STOP, NULL, 0);
     mynos_trace(MYNOS_TRACE_FREE, NULL, 0);
   }
+
+  pager_checks();
 
   printf("abi: %s\n", failures ? "SOME CHECKS FAILED" : "all checks passed");
   return failures;

@@ -124,8 +124,9 @@ disk. `init` (`init/init.ml`) reads `system/init.rc` and starts its
 lines in order:
 
 ```
-driver consoled          start tmpfs.byte         driver ata.byte
-start fatfs.byte         driver netd              driver displayd
+driver consoled          start tmpfs.byte         start clipboard.byte
+driver ata.byte          start fatfs.byte         driver pagerd.byte
+driver netd              driver displayd          driver soundd
 start llmd.byte          start httpd.byte         respawn sh.byte
 ```
 
@@ -160,7 +161,7 @@ name and gets a new port. `Ipc` clients look the name up again (E.2),
 and so does libmynos: when a connection fails it forgets that port in
 all its caches and sends the undelivered request to the port the
 registry now gives (`fs_request`, `mynos-lib/src/fileio.c`). `init` is
-a service too: one of its domains serves **power/1** (E.16).
+a service too: one of its domains serves **power/1** (E.17).
 
 ## E.4 The running system
 
@@ -174,6 +175,7 @@ a service too: one of its domains serves **power/1** (E.16).
 | `clipboard` | `services/clipboard/clipboard_service.ml` | OCaml | — | `start` | clipboard/1: `get`, `set` (the text copied last, for every program) |
 | `ata0` | `services/ata/ata.ml` | OCaml | io | `driver` | block/1 |
 | `fatfs` | `services/fatfs/fatfs.ml` | OCaml | — | `start` | fs/1 |
+| `pager` | `services/pager/pagerd.ml` | OCaml | io | `driver` | pager/1: files mapped into memory, the external pager (E.16) |
 | `net` | `services/net/netd.c` | C | io | `driver` | net/1 |
 | `display` | `services/display/displayd.c` | C | io | `driver` | display/1 |
 | `sound` | `services/sound/soundd.c` | C | io | `driver` | sound/1 |
@@ -593,7 +595,37 @@ the music is the card's: a program writes a second at a time and waits.
 `play` (chapter 13) plays WAV files and tones; module `Sound` converts a
 WAV file's rate and format on the way.
 
-## E.16 power: init as a service
+## E.16 pagerd: files mapped by the pager
+
+`pagerd` (`services/pager/pagerd.ml`, OCaml) is the external pager of
+appendix B.14: `init` starts it as a driver, since becoming the pager
+needs the `io` privilege, and it registers as `pager`, protocol
+**pager/1** (`mynos-lib/ocaml/pager.ml`):
+
+| Case | Name | Request | Reply | Safe |
+|---|---|---|---|---|
+| 0 | `map` | `(path:S,offset:I,length:I)` | `(page:I,length:I)` | no |
+| 1 | `unmap` | `page:I` | `U` | no |
+| 2 | `stats` | `U` | `(regions:I,given:I,refused:I)` | yes |
+
+`map` opens the file, takes a range of tokens, and asks the kernel for
+a read-only region of that many pages in the caller's memory (a page
+number: OCaml's integers have 31 bits, an address 32). Two threads: one
+serves pager/1, the other waits for faults (`Pager.wait`), reads the
+page from the file, and gives it (`Pager.supply`), or refuses it if the
+file cannot be read. A mapping lasts until its owner unmaps it or ends.
+
+```
+  a program touches m.{i} ──fault──► kernel ──V──► pagerd (its pages thread)
+                                                       │ reads the page:
+                                                       └──fs/1──► memrofs, tmpfs, fatfs
+  the program goes on ◄──the page, moved── kernel ◄──supply── pagerd
+```
+
+`mapcat FILE` writes files out through it, `mapcat -c` compares each
+mapping with the file read as usual, `mapcat -s` asks `stats`.
+
+## E.17 power: init as a service
 
 **power/1** (`mynos-lib/ocaml/power.ml`) is served by `init` itself, as
 `power`: case 0 `shutdown` and case 1 `reboot`, both `U` → `U`. `init`
@@ -608,7 +640,7 @@ user.
 > happens to be `init`. The service explorer or a language model's tool
 > can send it the same way, and it describes itself like any other.
 
-## E.17 2002 and 2026
+## E.18 2002 and 2026
 
 The last commit of the original project (tag `legacy-2008`) had four
 services, all in C, each with its own struct protocol: the
@@ -639,7 +671,7 @@ displayd are C, living with C libraries (lwIP, mbedTLS) and interrupt
 threads; ata shows that a driver can be an ordinary OCaml bytecode
 program with the `io` privilege.
 
-## E.18 Known limits
+## E.19 Known limits
 
 - fatfs and ata answer one request at a time: two programs reading
   `/disk` wait for each other (mynos-cui). So does consoled, whose main

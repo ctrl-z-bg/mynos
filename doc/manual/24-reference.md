@@ -458,7 +458,7 @@ return once `init` has the request; it ends the graphical session, then
 acts (ACPI, or the keyboard controller's reset line). Any process may
 ask.
 
-**SEE ALSO** — appendix E.16.
+**SEE ALSO** — appendix E.17.
 
 ---
 

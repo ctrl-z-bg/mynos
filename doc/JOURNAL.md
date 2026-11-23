@@ -3162,3 +3162,49 @@ brought the two faults to 2,600 and 3,200 cycles (0.97 and 1.18 µs).
 **Lesson.** Measure before guessing, and read the macro before blaming
 it: the CR3 reload was in the source, but not in the build.
 
+## 2026-11-23 — A page fault that waits
+
+**Symptom.** None yet: a design constraint, found reading the handler
+before the external pager (mynos-vzp). Its entry began with `movl %eax,
+(0)` and ended with `movl (0), %eax`: EAX kept at physical address 0,
+since the error code was popped into EAX before `pushal`.
+
+**Diagnosis.** It worked because the handler never waited: a fault was
+resolved, or the process ended, with interrupts off, before anything
+else could fault. A thread that waits for the pager inside the handler
+lets another thread fault meanwhile, and the second fault overwrites the
+first's EAX at 0: the first thread would resume with the other's
+register.
+
+**Cause.** A shortcut of 2002 that needed the handler to be atomic.
+
+**Fix.** `pushal` first, the error code read from above the registers
+(`32(%ebx)`), dropped with `addl $4, %esp` before `iret`; `copy_user`'s
+fix-up finds EIP at `frame[9]`, past the error code.
+
+**Lesson.** A handler that may block keeps its state where the thread
+keeps it: on its own kernel stack.
+
+## 2026-11-23 — The pager's pages in the places that read entries
+
+**Symptom.** None: an audit before marking pages that are not present
+with a meaning of their own (bit 9, `PF_PAGER`, and a token).
+
+**Diagnosis.** Every reader of page table entries was checked. The
+processor ignores a non-present entry but for bit 0; the kernel does
+not: `releasePages` (munmap) wanted `PRESENT` or `LOGICAL_PRESENT` and
+refused the region; fork's `copy_page_table` copied only those two, so a
+child lost its mappings; `__mapPageTo` tested `PF_SHARED` first and
+would have copied a page that is not there; `__IS_PAGE_PRESENT` would
+have called the region's pages free. The teardown frees only present
+frames, and `__mem_userArea` refuses entries without those bits: both
+right as they were.
+
+**Fix.** `IS_PAGER_ENTRY`: munmap accepts it, fork copies it (the child
+asks the pager with the same tokens), messages refuse it, and the free
+page search counts it as used.
+
+**Lesson.** Giving a meaning to a bit the hardware ignores means reading
+every line that looks at it; the tests (eleven checks in tests/abi) are
+the second half of the audit.
+

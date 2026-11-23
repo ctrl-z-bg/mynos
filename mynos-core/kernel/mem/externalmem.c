@@ -227,6 +227,15 @@ int32_t __OS_mapPagesTo(pid_t pid, uint32_t lpage,
   uint32_t i;
   // the area should be checked before this function
 
+  /* a page the external pager has not given yet cannot be sent: the
+     kernel does not wait for the pager in a system call */
+  for (i = 0; i < npages; i++) {
+    uint32_t a = (lpage + i) << 12;
+    if (IS_PAGER_ENTRY(*(uint32_t*)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(a),
+                                                          __ADDRESS_PT_INDEX(a))))
+      return MYNOS_ERR_INVALID;
+  }
+
   // alloc a new area in the receiver linear space
   newLPage = __lmt_allocArea(&(proc(pid)->lmemmap),
 			     npages);
@@ -239,5 +248,19 @@ int32_t __OS_mapPagesTo(pid_t pid, uint32_t lpage,
     __mapPageTo(pid, lpage + i, newLPage + i, mode);
 
   return newLPage;
+}
+
+/* another process's page table entries, for the external pager (pager.c,
+   mynos-vzp): read one, or write one (making its page table if needed).
+   Through the kernel's one window: the pointer is good until the window
+   is used again. */
+uint32_t * __mem_externalPTE(pid_t pid, uint32_t laddr) {
+  if (__mapProcessPT(pid, __ADDRESS_PD_INDEX(laddr)) != 0) return NULL;
+  return (uint32_t *)__EXTERNAL_VMSPACE_PAGE + __ADDRESS_PT_INDEX(laddr);
+}
+
+void __mem_setExternalPTE(pid_t pid, uint32_t laddr, uint32_t entry) {
+  __setExternalProcessPage(pid, __ADDRESS_PD_INDEX(laddr),
+                           __ADDRESS_PT_INDEX(laddr), entry >> 12, entry & 0xFFF);
 }
 

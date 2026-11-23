@@ -33,7 +33,9 @@
 #include <caml/callback.h>
 #include <caml/signals.h>
 
+#include <caml/bigarray.h>
 #include <mynos.h>
+#include <sys/mman.h>
 
 static void mynos_error(const char * fn, int code)
 {
@@ -549,6 +551,87 @@ CAMLprim value caml_mynos_faults(value pid)
   Store_field(r, 0, Val_long(out[0]));
   Store_field(r, 1, Val_long(out[1]));
   CAMLreturn(r);
+}
+
+/* ---- the external pager (native 37, module Pager) ---- */
+
+CAMLprim value caml_mynos_pager_register(value unit)
+{
+  int r = mynos_pagerRegister();
+  if (r < 0) mynos_error("pager_register", r);
+  return Val_int(r);
+}
+
+/* a region of pid's memory: its first page's number (addresses do not fit
+   in OCaml's 31-bit ints) */
+CAMLprim value caml_mynos_pager_region(value pid, value npages, value token, value writable)
+{
+  void * a = mynos_pagerRegion(Int_val(pid), Long_val(npages), Long_val(token),
+                               Bool_val(writable));
+  if (a == NULL) mynos_error("pager_region", MYNOS_ERR_INVALID);
+  return Val_long((unsigned long)a >> 12);
+}
+
+/* the next page waited for: (pid, page, token, write); waits on the
+   pager's semaphore, letting other threads run */
+CAMLprim value caml_mynos_pager_wait(value sem)
+{
+  CAMLparam1(sem);
+  CAMLlocal1(r);
+  mynos_pager_fault_t f;
+  while (mynos_pagerNext(&f) != 1) {
+    caml_enter_blocking_section();
+    mynos_P(Int_val(sem));
+    caml_leave_blocking_section();
+  }
+  r = caml_alloc_tuple(4);
+  Store_field(r, 0, Val_int(f.pid));
+  Store_field(r, 1, Val_long(f.addr >> 12));
+  Store_field(r, 2, Val_long(f.token));
+  Store_field(r, 3, Val_bool(f.write));
+  CAMLreturn(r);
+}
+
+/* a page for pid at page: the bytes of data (at most 4096, then zeros),
+   moved through a page of ours that the kernel gives away (and makes
+   fresh again); data None: no page, that process ends */
+static char * pager_page;
+CAMLprim value caml_mynos_pager_supply(value pid, value page, value data)
+{
+  int r;
+  void * at = (void *)((unsigned long)Long_val(page) << 12);
+  if (Is_none(data)) r = mynos_pagerSupply(Int_val(pid), at, NULL);
+  else {
+    value s = Some_val(data);
+    size_t n = caml_string_length(s);
+    if (n > 4096) n = 4096;
+    if (pager_page == NULL &&
+        (pager_page = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)) == MAP_FAILED) {
+      pager_page = NULL;
+      caml_raise_out_of_memory();
+    }
+    memcpy(pager_page, String_val(s), n);
+    memset(pager_page + n, 0, 4096 - n);
+    r = mynos_pagerSupply(Int_val(pid), at, pager_page);
+  }
+  if (r < 0) mynos_error("pager_supply", r);
+  return Val_unit;
+}
+
+/* npages of our memory from page on, as bytes (a region the pager gives) */
+CAMLprim value caml_mynos_pager_bytes(value page, value npages)
+{
+  return caml_ba_alloc_dims(CAML_BA_UINT8 | CAML_BA_C_LAYOUT | CAML_BA_EXTERNAL, 1,
+                            (void *)((unsigned long)Long_val(page) << 12),
+                            (intnat)Long_val(npages) * 4096);
+}
+
+CAMLprim value caml_mynos_pager_unmap(value page, value npages)
+{
+  if (munmap((void *)((unsigned long)Long_val(page) << 12), Long_val(npages) * 4096) != 0)
+    mynos_error("munmap", MYNOS_ERR_INVALID);
+  return Val_unit;
 }
 
 /* the recorder's state: 9 words, as a 36-byte string */

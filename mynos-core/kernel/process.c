@@ -625,6 +625,7 @@ static void endProcess(process_descriptor_t * self, int status, uint32_t pgdir) 
   __OS_sem_freeSemaphore(self->childSem);
   __OS_sem_freeProcessSemaphores(self->pid);
   __OS_irq_processEnded(self->pid);
+  __pager_processEnded(self->pid);
 
   /* the children become orphans: nobody will wait for them */
   for (i = 1; i < (int)numProcess; i++) {

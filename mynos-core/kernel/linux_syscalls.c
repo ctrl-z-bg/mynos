@@ -885,7 +885,9 @@ static uint32_t copy_page_table(uint32_t ptp, uint32_t * ptc) {
 	}
       } else  // logical allocated
 	ptc[i] = flags;
-    } else
+    } else if (IS_PAGER_ENTRY(*pte))
+      ptc[i] = *pte;   /* the external pager's: the child asks it too */
+    else
       ptc[i] = 0;
   }
   return 1;

@@ -669,6 +669,30 @@ with the size (in bytes below 10,000, else in KB, `397K`) or `dir`.
 
 ---
 
+### MAPCAT
+
+**Purpose** Writes files out through the external pager.
+
+**Syntax** `mapcat FILE...`, `mapcat -c FILE...`, `mapcat -t FILE`,
+`mapcat -s`
+
+**Type** Program (`/mapcat.byte`).
+
+**Description** Maps each file into memory (module `Pager`, the service
+`pagerd`) and writes it out: every page is read from the file by
+`pagerd` when `mapcat` first touches it, as a page fault the kernel
+hands to that service. `-c` compares each mapping with the file read as
+usual and says `the same` or `DIFFERENT`, with its size in bytes and
+pages; `-t` times a page through the pager and a page read as usual (to
+the 10 ms of MyNOS's clock); `-s` prints what `pagerd` has done:
+mappings open, pages given and refused.
+
+**Examples** `mapcat /AUTOEXEC.BAT`, `mapcat -c /ocamlc.byte`
+
+**See also** PS (`ps -f`); appendices B.14 and E.16.
+
+---
+
 ### MKDIR
 
 **Purpose** Makes directories.

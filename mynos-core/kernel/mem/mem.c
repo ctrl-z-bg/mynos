@@ -371,7 +371,7 @@ void * __OS_releasePages(void *pageaddr, unsigned int npages,
     
     /* check if the page is an allocated user page */
     if (check &&
-	(!(*pte & (PF_PRESENT | PF_LOGICAL_PRESENT)) ||
+	(!((*pte & (PF_PRESENT | PF_LOGICAL_PRESENT)) || IS_PAGER_ENTRY(*pte)) ||
 	 !(*pte & PF_USER)))
       return NULL;
     
@@ -455,18 +455,16 @@ extern void _page_fault_handler_TRAP();
 __asm__ (".pushsection .text\n" \
 	 ".globl _page_fault_handler_TRAP \n"\
 	 "_page_fault_handler_TRAP:       \n"\
-	 "   movl %eax, (0)               \n"\
-	 "   popl %eax                    \n"  /* retrieve error code */\
-         "   pushal                       \n"  /* save all registers */\
-	 "   movl %esp, %ebx              \n"  /* the frame: registers, eip */\
+	 "   pushal                       \n"  /* save all registers */\
+	 "   movl %esp, %ebx              \n"  /* the frame: registers, error code, eip */\
 	 "   pushl %ebx                   \n"\
-	 "   pushl %eax                   \n"  /* push error code */\
+	 "   pushl 32(%ebx)               \n"  /* push error code */\
 	 "   movl %cr2, %eax              \n"\
 	 "   pushl %eax                   \n"  /* push faulting address */\
 	 "   call _page_fault_handler     \n"  /* call the ISR handler */\
 	 "   addl $12, %esp               \n"  /* address, error code, frame */\
 	 "   popal                        \n"\
-	 "   movl (0), %eax               \n"\
+	 "   addl $4, %esp                \n"  /* the error code */\
 	 "   iret                         \n"\
 	 ".popsection\n");
 
@@ -652,14 +650,14 @@ int copy_from_user(void * kernel, const void * user, uint32_t n) {
 }
 
 /* a fault in copy_user: resume at its fix-up (frame: pushal's registers,
-   then eip) */
+   the error code, then eip) */
 static int copy_user_fixup(uint32_t * frame) {
-  if (frame[8] != (uint32_t)copy_user_insn) return 0;
-  frame[8] = (uint32_t)copy_user_fault;
+  if (frame[9] != (uint32_t)copy_user_insn) return 0;
+  frame[9] = (uint32_t)copy_user_fault;
   return 1;
 }
 
-static void __userSegfault(uint32_t addr) {
+void __mem_userSegfault(uint32_t addr) {
   printk("process ");
   print_ulong(currProcess);
   printk(" killed: invalid memory access at ");
@@ -708,11 +706,11 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode, uint32_t * frame) {
   /* check if the page table is allocated */
   if ((*(uint32_t*)__GET_PAGE_DIR_ENTRY(__ADDRESS_PD_INDEX(addr)) &
        PF_PRESENT) == 0) {
-    if (errcode & 4) __userSegfault(addr);
+    if (errcode & 4) __mem_userSegfault(addr);
     if (copy_user_fixup(frame)) return;
     /* the kernel, in a system call, on a bad pointer of the process: end
        the process, not the system */
-    if (addr >= USER_AREA_START && addr < USER_AREA_END) __userSegfault(addr);
+    if (addr >= USER_AREA_START && addr < USER_AREA_END) __mem_userSegfault(addr);
     kernel_on_screen = 1;
     printk("kernel page fault at ");
     print_ulong_hex(addr);
@@ -731,20 +729,28 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode, uint32_t * frame) {
     printk("but the page is tagged as COPY-ON_WRITE\n");
 #endif
 
+  /* a page of a region given to the external pager: the thread waits
+     for it (pager.c). A system call's access to one ends below, as an
+     invalid one (copy_user fails): the kernel does not wait in a call. */
+  if (IS_PAGER_ENTRY(*pte) && (errcode & 4)) {
+    __pager_fault(*pte, addr, errcode);
+    return;
+  }
+
   if (!((*pte) & PF_LOGICAL_PRESENT) &&
       !((*pte) & PF_COW)) { // not allocated & not cow
-    if (errcode & 4) __userSegfault(addr);
+    if (errcode & 4) __mem_userSegfault(addr);
     if ((errcode & 3) == 3) {   /* the kernel wrote on a read-only page */
       printk("kernel write to a read-only page at ");
       print_ulong_hex(addr);
       printk(", pte ");
       print_ulong_hex(*pte);
       printk(", eip ");
-      print_ulong_hex(frame[8]);
+      print_ulong_hex(frame[9]);
       print_char('\n');
     }
     if (copy_user_fixup(frame)) return;
-    if (addr >= USER_AREA_START && addr < USER_AREA_END) __userSegfault(addr);
+    if (addr >= USER_AREA_START && addr < USER_AREA_END) __mem_userSegfault(addr);
     kernel_on_screen = 1;
     printk("kernel page fault at ");
     print_ulong_hex(addr);

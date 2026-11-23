@@ -81,6 +81,7 @@ make -C sh
 make -C init
 make -C services/tmpfs
 make -C services/clipboard
+make -C services/pager
 make -C tests/libs
 make -C services/ata
 make -C services/fatfs

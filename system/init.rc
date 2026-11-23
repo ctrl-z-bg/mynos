@@ -11,6 +11,7 @@ start tmpfs.byte
 start clipboard.byte
 driver ata.byte
 start fatfs.byte
+driver pagerd.byte
 driver netd
 driver displayd
 driver soundd

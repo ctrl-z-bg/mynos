@@ -171,6 +171,30 @@ int mynos_klog(unsigned int from, char * buf, unsigned int max);
    error */
 int mynos_faults(int pid, unsigned int out[2]);
 
+/* THE EXTERNAL PAGER (native 37; doc/manual/appendix-b-memory.md, B.14) */
+#define MYNOS_PAGER_REGISTER 0
+#define MYNOS_PAGER_REGION   1
+#define MYNOS_PAGER_NEXT     2
+#define MYNOS_PAGER_SUPPLY   3
+/* a page a process waits for */
+typedef struct {
+  int pid;
+  unsigned int addr;       /* the page's address in that process */
+  unsigned int token;      /* the region's token, plus the page's index */
+  int write;               /* the first access was a write */
+} mynos_pager_fault_t;
+/* become the pager (the io privilege): a semaphore of ours, V'd once for
+   each page waited for; or an error */
+int mynos_pagerRegister(void);
+/* npages of pid's memory, waiting for us, tokens from token on, writable
+   or not: the first page's address, or 0 (no room, or an error) */
+void * mynos_pagerRegion(int pid, unsigned int npages, unsigned int token, int writable);
+/* the next page waited for: 1, or 0 for none */
+int mynos_pagerNext(mynos_pager_fault_t * f);
+/* our page at src (page-aligned) moves to pid at addr; src NULL: none,
+   that process ends; 0 or an error */
+int mynos_pagerSupply(int pid, void * addr, void * src);
+
 /* PROCESSES */
 /* start the ELF program in file path as a child process, with arguments
    and environment (NULL-terminated; argv may be NULL, envp NULL means our

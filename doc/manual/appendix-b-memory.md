@@ -218,12 +218,13 @@ three:
 |---|---|---|
 | 11 (`0x800`) | `PF_LOGICAL_PRESENT` | reserved: no frame yet, one on the first access |
 | 10 (`0x400`) | `PF_COW` | copy-on-write: shared, read-only until written |
-| 9 (`0x200`) | `PF_SHARED` | shared on purpose: copy-on-write leaves it alone |
+| 9 (`0x200`) | `PF_SHARED` | shared on purpose: copy-on-write leaves it alone; in an entry not present, `PF_PAGER`: a page of the external pager (B.14) |
 
 The page fault handler (`_page_fault_handler`, `mem.c`; vector 14, an
 interrupt gate) decides by the entry of the faulting address:
 
 ```
+  the external pager's entry, in user mode ──► wait for the pager (B.14)
   page table missing, or entry neither reserved nor copy-on-write
       ├─ fault in user mode ──────────────► the process ends (SIGSEGV)
       ├─ fault at copy_user's instruction ─► the copy returns -1 (B.10)
@@ -426,11 +427,81 @@ descriptor and the pid remain until the parent collects the status.
 | kernel heap classes | 32 B – 2 KB (header included), pages above | `class_size`, `dynalloc.c` |
 | physical memory | what multiboot reports, up to 4 GB | `init_memory` |
 
-## B.14 Known limits
+## B.14 The external pager
+
+The kernel resolves every fault of B.7 by itself, with one exception
+(since November 2026, mynos-vzp): pages a process in user space, the
+**pager**, has been given. It decides what they hold; the kernel only
+moves them. This is Mach's external pager and L4's pager, kept to the
+small part that a microkernel needs: the kernel keeps the page tables,
+the frames and every fault of its own regions, and only the regions
+given to the pager wait for it.
+
+**The entries.** An entry that is not present is ignored by the
+processor, but for its bit 0. One with bit 9 set (`PF_PAGER`, the same
+bit as `PF_SHARED`, which is only used on present pages) and neither
+`PF_LOGICAL_PRESENT` nor `PF_COW` belongs to the pager: bits 12–31 hold
+its **token**, the number the pager names that page by; `PF_READWRITE`
+says whether the region may be written.
+
+**The calls** (native 37, `mynos_pager*` in `mynos.h`; `Pager` in OCaml):
+
+| Operation | Who | What it does |
+|---|---|---|
+| `register` | a process with the `io` privilege | becomes the pager (one at a time); gets a semaphore of its own |
+| `region (pid, npages, token, writable)` | the pager | reserves `npages` of `pid`'s linear space, entries marked with tokens `token`, `token+1`...: the first page's address |
+| `next` | the pager | the next page waited for: pid, address, token, write |
+| `supply (pid, address, src)` | the pager | its own page at `src` moves (not copied) to `pid` at that address; its address gets a fresh page at its next use. `src` 0: no page |
+
+**A fault** on a pager's entry, in user mode (`mem/pager.c`):
+
+```
+  a write to a read-only region, or no pager ──► the process ends (SIGSEGV)
+  the page already asked for (another thread) ─► wait with it
+  otherwise ─► an entry in the table of waits (64), V the pager's semaphore,
+               wait on the entry's semaphore
+  answered with a page ──► the instruction runs again, and finds it
+  answered with none ────► the process ends
+```
+
+The pager is told as a driver is told of its IRQ (A.7): the kernel does
+V on its semaphore, and the pager asks `next`. The waiting thread is
+blocked as on a semaphore of its own (`__OS_sem_P`); so the fault
+handler, which until then never waited, must keep nothing in fixed
+places: its entry saved EAX at address 0, which a second thread's fault
+would have overwritten, and saves it on the thread's kernel stack now.
+
+**What the kernel does not wait for.** A system call that touches a
+page the pager has not given yet fails as for an invalid pointer
+(`copy_user`), and a message cannot carry one (`mapPagesTo` refuses
+it): the kernel never waits for a process in a call. `fork` copies the
+entries as they are: the child's faults reach the pager with the
+child's pid and the same tokens. `munmap` frees a region like any
+other area.
+
+**When the pager ends,** every thread waiting for it ends with its
+process; its regions' pages already given stay. When a waiting
+process ends, its waits are freed.
+
+**pagerd** (`services/pager/pagerd.ml`, started by `init` as a driver)
+is the pager of MyNOS: it maps files, read-only (`Pager.map_file` in
+OCaml, `mapcat` in the shell; appendix E.16). Each page is read from the
+file when it is first touched. Measured under KVM (`tests/bench/bench`,
+`mapcat -t`): a fault resolved by the kernel costs about 1 µs, an IPC
+round trip between two processes 5.5 µs; a page given by `pagerd`, read
+from the RAM disk, 10 to 20 µs.
+
+> **THE MyNOS FACTOR — A page fault is a message.** With the pager, the
+> most hidden event of a virtual memory becomes a request between two
+> processes, which the event recorder sees (`TRACE_FAULT`, `TRACE_PAGE`)
+> and a program in OCaml answers.
+
+## B.15 Known limits
 
 - **No swap.** When physical memory runs out, an allocation on use or a
-  copy-on-write stops the system ("full memory!"). Paging to disk through
-  an external pager is mynos-vzp.
+  copy-on-write stops the system ("full memory!"). The external pager
+  (B.14) maps files; anonymous memory written to a disk through it is
+  the rest of mynos-vzp.
 - `__mem_userArea` checks that a pointer is in the process's user pages,
   not that a page it accepts for writing is writable: a system call
   writing into the RAM disk now ends the process (the write faults)
@@ -443,6 +514,5 @@ descriptor and the pid remain until the parent collects the status.
   address and flags (mynos-51c).
 - Program text is not shared between processes running the same program
   (B.12).
-- One processor (mynos-awn): the single kernel window of B.11 and the
-  page fault handler, which saves EAX at address 0, assume nothing else
-  runs in the kernel.
+- One processor (mynos-awn): the single kernel window of B.11 assumes
+  nothing else runs in the kernel.

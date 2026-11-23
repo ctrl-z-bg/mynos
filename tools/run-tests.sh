@@ -843,6 +843,10 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     # df: the file systems' space, each asked (fs/1 space); clip: the
     # clipboard service, set and read back
     tools/type-keys.py "$tmp/mon7" 'df; X=ok; clip clip-$X; clip; ps -f\n'; sleep 5
+    # the external pager (mynos-vzp): files mapped, each page read by pagerd
+    # at its first touch, compared with the files read as usual
+    tools/type-keys.py "$tmp/mon7" 'mapcat -c /disk/czech.z5 /AUTOEXEC.BAT; mapcat -s; X=done; echo mapcat-$X\n'
+    waitfor "mapcat-done" 60
     # GAV (mynos-0ns): installed with its pictures, which it reads before
     # it asks for a window (none in text mode)
     tools/type-keys.py "$tmp/mon7" 'pkg install gavml; gavml\n'
@@ -1150,6 +1154,9 @@ if [ -f system/ramdisk.dsk ]; then
     expect "%  /disk"                                 # df
     expect "clip-ok"                                  # clip, the clipboard service
     expect "      since boot "                        # ps -f: page faults counted
+    expect "mapcat: /disk/czech.z5: the same (13312 bytes, 4 pages)"  # the external pager
+    expect "mapcat: /AUTOEXEC.BAT: the same (59 bytes, 1 pages)"
+    expect "0 mappings, 5 pages given, 0 refused"       # mapcat -s: both unmapped
     expect "pkg: gavml 1.3 installed"                 # GavML (GAV)...
     expect "gavml.byte: no graphical session"         # ... its pictures read first
     expect "Tést"                                     # the browser: entities,

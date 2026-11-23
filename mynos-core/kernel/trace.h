@@ -39,7 +39,12 @@ enum {
   TRACE_FREE,          /* pid, peer: the other side, channel */
   TRACE_IRQ,           /* pid: the driver, peer: the process interrupted,
 			  arg: the IRQ */
-  TRACE_MARK           /* pid, data: a label the program gave (its phases) */
+  TRACE_MARK,          /* pid, data: a label the program gave (its phases) */
+  TRACE_FAULT,         /* pid: the process, peer: the external pager,
+			  arg: the page it waits for, its number
+			  (mem/pager.c) */
+  TRACE_PAGE           /* pid: the pager, peer: the process, size: 4096,
+			  arg: the page given, its number */
 };
 
 /* trace system call operations */
@@ -67,6 +72,7 @@ int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2);
 #define PROCESS_ENTRY 32
 int _mynos_syscall_processes(uint32_t buf, uint32_t max);
 int _mynos_syscall_faults(int32_t pid, uint32_t buf);
+int _mynos_syscall_pager(uint32_t op, uint32_t a, uint32_t b, uint32_t c, uint32_t d);
 
 /* a process's name from its argv (base name; for "ocamlrun X.byte", X) */
 void trace_setName(char * name, char ** argv);

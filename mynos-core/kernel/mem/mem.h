@@ -34,6 +34,13 @@
 #define PF_LOGICAL_PRESENT 0x800    /* one of the available bits */
 #define PF_COW             0x400    /* one of the available bits */
 #define PF_SHARED          0x200    /* one of the available bits */
+/* the same bit in an entry that is not present (the processor ignores
+   every other bit of those): a page of a region given to the external
+   pager (pager.c, mynos-vzp), its token in bits 12-31; PF_READWRITE says
+   whether the region may be written */
+#define PF_PAGER           PF_SHARED
+#define IS_PAGER_ENTRY(E) \
+  (((E) & (PF_PRESENT | PF_PAGER | PF_LOGICAL_PRESENT | PF_COW)) == PF_PAGER)
 #define PF_PRESENT         0x1
 #define PF_NOTPRESENT      0x0
 
@@ -126,7 +133,7 @@
 		     ((*((uint32_t*)__GET_PAGE_TABLE_ENTRY( \
                                       __PAGE_PD_INDEX(ENTRY), \
 				      __PAGE_PT_INDEX(ENTRY)))) & \
-                                         (PF_LOGICAL_PRESENT | PF_PRESENT))
+                                         (PF_LOGICAL_PRESENT | PF_PRESENT | PF_PAGER))
 
 #define __IS_PAGE_FREE(ENTRY) (!__IS_PAGE_PRESENT(ENTRY))
 
@@ -253,6 +260,13 @@ void __mem_allocateOnUse(uint32_t addr);
    read or write for it? user pages, allocated or to be allocated on use;
    no wrap around; never the kernel's */
 int __mem_userArea(const void * start, uint32_t size);
+/* end the current process for an invalid access at addr */
+void __mem_userSegfault(uint32_t addr);
+/* pager.c: a user thread's fault on a page given to the external pager
+   (entry: its page table entry); returns once the page is there */
+void __pager_fault(uint32_t entry, uint32_t addr, uint32_t errcode);
+/* pager.c: a process has ended (the pager itself, or one that waited) */
+void __pager_processEnded(pid_t pid);
 
 /* copies to and from a process's memory: 0, or -1 if the address is not
    the process's or faults (the process goes on) */
