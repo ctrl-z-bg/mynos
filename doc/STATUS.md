@@ -1647,4 +1647,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   about 60 µs; without KVM about 5 to 10 times more. Faults cost two thirds
   more than they should: pages zeroed and copied a byte at a time
   (mynos-4d6).
+- **2026-11-23** — Page faults three times faster (mynos-4d6): the
+  kernel's kmemcpy and kmemset copy and fill four bytes at a time (rep
+  movsl, rep stosl); a fault 0.92 µs under KVM (was 2.85), a copy on write
+  1.18 µs (was 3.0).
 

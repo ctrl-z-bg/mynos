@@ -21,23 +21,31 @@
 #include "kutils.h"
 #include "video.h"
 
+/* copies and fills four bytes at a time (rep movsl, rep stosl), then the
+   rest: a page fault zeroes or copies a whole page (mynos-4d6: a byte at
+   a time, they were two thirds of its cost). Forward only, as before:
+   not for overlapping areas. */
 void* kmemcpy(void* dst, const void* src, size_t count) {
-  register char *d=dst;
-  register const char *s=src;
-  ++count;
-  while (--count) {
-    *d = *s;
-    ++d; ++s;
-  }
+  int d0, d1, d2;
+  __asm__ volatile ("rep movsl\n\t"
+                    "movl %4, %%ecx\n\t"
+                    "rep movsb"
+                    : "=&c"(d0), "=&D"(d1), "=&S"(d2)
+                    : "0"(count / 4), "g"(count & 3), "1"(dst), "2"(src)
+                    : "memory");
   return dst;
 }
 
 void* kmemset(void * dst, int s, size_t count) {
-    register char * a = dst;
-    count++;
-    while (--count)
-	*a++ = s;
-    return dst;
+  int d0, d1;
+  uint32_t v = (s & 0xFF) * 0x01010101u;
+  __asm__ volatile ("rep stosl\n\t"
+                    "movl %3, %%ecx\n\t"
+                    "rep stosb"
+                    : "=&c"(d0), "=&D"(d1)
+                    : "0"(count / 4), "g"(count & 3), "1"(dst), "a"(v)
+                    : "memory");
+  return dst;
 }
 
 void kbzero(void *s, size_t n) {
