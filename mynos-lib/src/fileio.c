@@ -39,6 +39,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <termios.h>
 #include <mynos.h>
 #include <mynos_console.h>
@@ -507,7 +508,9 @@ static int resolve(const char * path, char * name)
 }
 
 /* open files: service and its descriptor; used = 0 for a free slot */
-static struct { int used, service, fd; } files[FD_MAX];
+/* each open file: its service, its descriptor there, and its path, made
+   absolute (for mmap: pagerd opens it again) */
+static struct { int used, service, fd; char * path; } files[FD_MAX];
 
 static int file_slot(int fd)
 {
@@ -725,6 +728,13 @@ int open(const char * path, int flags, ...)
   files[slot].used = 1;
   files[slot].service = s;
   files[slot].fd = (int)fd;
+  files[slot].path = NULL;
+  if (path[0] == '/') files[slot].path = strdup(path);
+  else {
+    char cwd[512];
+    if (getcwd(cwd, sizeof cwd) != NULL && (files[slot].path = malloc(strlen(cwd) + strlen(path) + 2)))
+      sprintf(files[slot].path, "%s%s%s", cwd, cwd[strlen(cwd) - 1] == '/' ? "" : "/", path);
+  }
   return FD_BASE + slot;
 }
 
@@ -741,6 +751,8 @@ int close(int fd)
 
   if (slot < 0) return result(sys3(6 /* close */, fd, 0, 0));
   files[slot].used = 0;
+  free(files[slot].path);
+  files[slot].path = NULL;
   {
     wire_writer w;
     fs_start(&w, FS_CLOSE);
@@ -1097,3 +1109,110 @@ int closedir(DIR * d)
   free(d);
   return 0;
 }
+
+/* ---- mmap of a file: through the external pager (pagerd, pager/1) ----
+
+   The kernel maps memory (MAP_ANONYMOUS); a file is mapped by pagerd,
+   which gives the pages a region of our memory waits for, each read from
+   the file when first touched (appendix B.14). Read-only; with PROT_WRITE,
+   MAP_SHARED writes back to the file (msync, munmap), MAP_PRIVATE keeps
+   the changes ours. A mapping's address is pagerd's choice: addr is a
+   hint MyNOS does not take. */
+
+extern void * __mmap(void *, size_t, int, int, int, off_t);
+extern int __munmap(void *, size_t);
+
+#define PAGER_PROTOCOL "pager/1"
+#define PAGER_MAPS 64
+static struct svc pager_cache = { -2, 0 };
+static struct { char * at; size_t len; long page; } pmaps[PAGER_MAPS];
+
+/* a pager/1 request: on Ok, r reads its value (the caller frees *msg) */
+static int pager_request(wire_writer * w, wire_reader * r, mynos_msg_t ** msg)
+{
+  int port = service_port("pager", &pager_cache), ret;
+  if (w->error || port < 0) { wire_writer_free(w); errno = port < 0 ? ENODEV : ENOMEM; return -1; }
+  ret = call(port, w->buf, w->len, msg, NULL);
+  wire_writer_free(w);
+  if (ret < 0) { errno = EIO; return -1; }
+  wire_reader_init(r, (*msg)->start, (*msg)->size);
+  if (wire_get_int(r) != 0) { mynos_freeMsg(msg); errno = EINVAL; return -1; }
+  return 0;
+}
+
+static int pager_page_call(int kind, long page)
+{
+  wire_writer w;
+  wire_reader r;
+  mynos_msg_t * msg;
+  wire_writer_init(&w);
+  wire_put_cstring(&w, PAGER_PROTOCOL);
+  wire_put_int(&w, kind);
+  wire_put_int(&w, page);
+  if (pager_request(&w, &r, &msg) < 0) return -1;
+  mynos_freeMsg(&msg);
+  return 0;
+}
+
+static int pager_map_of(const void * a)
+{
+  int i;
+  for (i = 0; i < PAGER_MAPS; i++)
+    if (pmaps[i].at != NULL && (const char *)a >= pmaps[i].at && (const char *)a < pmaps[i].at + pmaps[i].len)
+      return i;
+  return -1;
+}
+
+void * mmap(void * addr, size_t len, int prot, int flags, int fd, off_t off)
+{
+  wire_writer w;
+  wire_reader r;
+  mynos_msg_t * msg;
+  int slot, i, mode;
+  long page, length;
+  if ((flags & MAP_ANONYMOUS) || fd < 0) return __mmap(addr, len, prot, flags, fd, off);
+  if (fd < FD_BASE || fd >= FD_BASE + FD_MAX || !files[fd - FD_BASE].used) { errno = EBADF; return MAP_FAILED; }
+  slot = fd - FD_BASE;
+  if (files[slot].path == NULL || len == 0 || (off & 4095)) { errno = EINVAL; return MAP_FAILED; }
+  for (i = 0; i < PAGER_MAPS && pmaps[i].at != NULL; i++) ;
+  if (i == PAGER_MAPS) { errno = ENOMEM; return MAP_FAILED; }
+  mode = !(prot & PROT_WRITE) ? 0 : (flags & MAP_SHARED) ? 1 : 2;
+  wire_writer_init(&w);
+  wire_put_cstring(&w, PAGER_PROTOCOL);
+  wire_put_int(&w, 0);                               /* map */
+  wire_put_cstring(&w, files[slot].path);
+  wire_put_int(&w, off);
+  wire_put_int(&w, len);
+  wire_put_int(&w, mode);
+  if (pager_request(&w, &r, &msg) < 0) return MAP_FAILED;
+  page = wire_get_int(&r);
+  length = wire_get_int(&r);
+  mynos_freeMsg(&msg);
+  if (r.error) { errno = EIO; return MAP_FAILED; }
+  (void)length;          /* the file may be shorter: the pages past it fault */
+  pmaps[i].at = (char *)((unsigned long)page << 12);
+  pmaps[i].len = len;
+  pmaps[i].page = page;
+  return pmaps[i].at;
+}
+
+int munmap(void * addr, size_t len)
+{
+  int i = pager_map_of(addr);
+  if (i >= 0) {
+    pager_page_call(1, pmaps[i].page);               /* unmap: written back first */
+    addr = pmaps[i].at;
+    len = pmaps[i].len;
+    pmaps[i].at = NULL;
+  }
+  return __munmap(addr, len);
+}
+
+int msync(void * addr, size_t len, int flags)
+{
+  int i = pager_map_of(addr);
+  (void)len; (void)flags;
+  if (i < 0) return 0;                              /* memory of the kernel's */
+  return pager_page_call(4, pmaps[i].page);         /* sync */
+}
+

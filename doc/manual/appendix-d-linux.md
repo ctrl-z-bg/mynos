@@ -126,7 +126,7 @@ There is no `execve`: a program starts another with the native `spawn`
 
 | No. | Call | On MyNOS |
 |---|---|---|
-| 192 | `mmap2` | anonymous memory: fresh, zeroed pages, allocated on first use; the address hint, protection, flags, file and offset are ignored; `-ENOMEM` when there is no room |
+| 192 | `mmap2` | anonymous memory: fresh, zeroed pages, allocated on first use; the address hint, protection, flags, file and offset are ignored; `-ENOMEM` when there is no room. A file is mapped by libmynos, through the external pager (B.14), before the call is made |
 | 90 | `mmap` | the same, with the arguments in a structure in the caller's memory (the old i386 form) |
 | 91 | `munmap` | gives the pages back |
 | 125 | `mprotect` | accepted, and nothing is done: pages are read-write |
@@ -470,7 +470,8 @@ service learns that a client went away when its channel breaks
 ## D.9 Known limits
 
 - The calls are a subset, and some are partial: `mmap` gives anonymous
-  memory only, `mprotect` does nothing, the signal calls are accepted
+  memory only (libmynos maps a file through the external pager, B.14;
+  a static binary of another libc cannot), `mprotect` does nothing, the signal calls are accepted
   without effect, `kill` reaches only oneself. The CPU time is
   sampled at each tick, not measured, and is all user time.
   The gaps are collected in mynos-51c.

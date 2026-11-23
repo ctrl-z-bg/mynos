@@ -3265,3 +3265,29 @@ as a browser drops a cyclic one.
 **Lesson.** A tool's core that is plain OCaml can run on the host: the
 loop was found in a minute there, not by booting MyNOS again.
 
+
+## 2026-11-23 — The swap wrote pages that had nothing to keep
+
+**Symptom.** The first run of `mapcat -a 64 16` (64 pages of pagerd's
+memory, a budget of 16) read every page back right, but counted 112
+pages written to the swap for 64 read from it: more writes than pages.
+
+**Diagnosis.** The test writes each page, then reads them all. A page
+taken back during the reading pass had been read back from the swap and
+not written since, yet went to the swap again; a page of zeros never
+touched would have gone too.
+
+**Cause.** pagerd sent every page of memory it took back to the swap,
+whatever the Dirty bit said. The kernel's `query` reported it (4), and
+the pager did not look.
+
+**Fix.** A page goes to the swap only if written since it was last
+supplied (Dirty): one never written reads again as zeros, one read from
+the swap and not changed still has its slot, which is kept until the
+region goes. The same rule already held for shared mappings (written
+back to the file only if dirty). The same test now writes 64 pages to
+the swap and reads 64 back.
+
+**Lesson.** A pager's cost is its writes: the processor keeps the bit
+that says which pages have changed, and a policy that ignores it does
+twice the work the measurement then shows.

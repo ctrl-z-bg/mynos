@@ -609,6 +609,17 @@ CAMLprim value caml_mynos_pager_wait(value sem)
    moved through a page of ours that the kernel gives away (and makes
    fresh again); data None: no page, that process ends */
 static char * pager_page;
+static char * pager_buffer(void)
+{
+  if (pager_page == NULL &&
+      (pager_page = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)) == MAP_FAILED) {
+    pager_page = NULL;
+    caml_raise_out_of_memory();
+  }
+  return pager_page;
+}
+
 CAMLprim value caml_mynos_pager_supply(value pid, value page, value data)
 {
   int r;
@@ -618,18 +629,41 @@ CAMLprim value caml_mynos_pager_supply(value pid, value page, value data)
     value s = Some_val(data);
     size_t n = caml_string_length(s);
     if (n > 4096) n = 4096;
-    if (pager_page == NULL &&
-        (pager_page = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
-                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)) == MAP_FAILED) {
-      pager_page = NULL;
-      caml_raise_out_of_memory();
-    }
+    pager_buffer();
     memcpy(pager_page, String_val(s), n);
     memset(pager_page + n, 0, 4096 - n);
     r = mynos_pagerSupply(Int_val(pid), at, pager_page);
   }
   if (r < 0) mynos_error("pager_supply", r);
   return Val_unit;
+}
+
+/* a page given: 0 (not there), else 1 | 2 (used) | 4 (written) */
+CAMLprim value caml_mynos_pager_query(value pid, value page)
+{
+  return Val_int(mynos_pagerQuery(Int_val(pid), (void *)((unsigned long)Long_val(page) << 12)));
+}
+
+/* a page given, taken back (its next use faults to us again, with token):
+   its bytes */
+CAMLprim value caml_mynos_pager_evict(value pid, value page, value token, value writable)
+{
+  int r;
+  pager_buffer();
+  r = mynos_pagerEvict(Int_val(pid), (void *)((unsigned long)Long_val(page) << 12),
+                       pager_page, Long_val(token), Bool_val(writable));
+  if (r < 0) mynos_error("pager_evict", r);
+  return caml_alloc_initialized_string(4096, pager_page);
+}
+
+/* a page given, copied (its writes forgotten): its bytes */
+CAMLprim value caml_mynos_pager_copy(value pid, value page)
+{
+  int r;
+  pager_buffer();
+  r = mynos_pagerCopy(Int_val(pid), (void *)((unsigned long)Long_val(page) << 12), pager_page);
+  if (r < 0) mynos_error("pager_copy", r);
+  return caml_alloc_initialized_string(4096, pager_page);
 }
 
 /* npages of our memory from page on, as bytes (a region the pager gives) */

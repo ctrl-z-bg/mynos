@@ -3,9 +3,10 @@
 - **Issue:** mynos-vzp (phase 0: mynos-0ho; mynos-4d6 on the way)
 - **Date:** 2026-11-23
 - **Status:** accepted (2026-11-23: phases 0 to 3 of the plan: measure,
-  the kernel's prerequisites, the mechanism, files mapped by `pagerd`);
-  implemented the same day. Anonymous memory and swap (phase 4) and
-  writable mappings (phase 5) are not done.
+  the kernel's prerequisites, the mechanism, files mapped by `pagerd`;
+  then phases 4 and 5: memory that goes to a swap, writable mappings);
+  implemented the same day. The kernel asking `pagerd` for frames (a
+  swap for all of memory) is left out, by choice.
 
 ## The question
 
@@ -75,8 +76,37 @@ each page read from the file when first touched. In OCaml, a mapping is
 a Bigarray over the region; addresses go as page numbers, since OCaml's
 integers have 31 bits.
 
+### 8. Taking a page back: query, evict, copy
+
+Phases 4 and 5 add three operations, all on a page the pager gave and
+the process holds alone: `query` reads and clears the processor's
+Accessed bit (and reports Dirty), `evict` moves the frame back to the
+pager and makes the entry the pager's again, with a token, `copy`
+copies the page and clears Dirty. The policy is all in `pagerd`: a
+budget of resident pages, the clock (second chance on Accessed), the
+swap in a file of `/disk/swap`, write-back of shared mappings at
+`sync`, `unmap` and eviction. A page shared after a `fork` is refused
+by the three: the pager leaves it in memory, where the kernel's
+copy-on-write handles it.
+
+### 9. Only pagerd's memory goes to the disk
+
+The swap holds the pages of `pagerd`'s regions (`Pager.alloc`, private
+mappings), not the kernel's memory: a heap, a stack or a program still
+cannot be paged out, and a machine out of frames still stops. Making
+the kernel ask the pager for frames would put `pagerd` (and the file
+services it reads through) on the path of every allocation: left out,
+by choice, for now.
+
+### 10. C's mmap of a file through pagerd
+
+libmynos keeps the path of each open file and maps a file by asking
+`pagerd` (pager/1, the same protocol as OCaml): read-only, `MAP_SHARED`
+(changes to the file at `msync`, `munmap`) or `MAP_PRIVATE`. Anonymous
+memory still comes from the kernel's `mmap`.
+
 ## What it does not do
 
-No swap of anonymous memory, no writable mappings, no pages given
-before they are asked for, no fault waiting inside a system call. The
-plan for the rest is in mynos-vzp.
+No swap for the kernel's memory, no pages given before they are asked
+for, no fault waiting inside a system call, no write-back of a shared
+mapping when its program ends without `sync` or `unmap`.

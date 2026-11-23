@@ -452,6 +452,9 @@ says whether the region may be written.
 | `region (pid, npages, token, writable)` | the pager | reserves `npages` of `pid`'s linear space, entries marked with tokens `token`, `token+1`...: the first page's address |
 | `next` | the pager | the next page waited for: pid, address, token, write |
 | `supply (pid, address, src)` | the pager | its own page at `src` moves (not copied) to `pid` at that address; its address gets a fresh page at its next use. `src` 0: no page |
+| `query (pid, address)` | the pager | a page it gave: 0 if not there any more, else 1, 2 if used since the last query, 4 if written since the last copy; its use forgotten (the processor's Accessed bit) |
+| `evict (pid, address, dst, token, writable)` | the pager | that page taken back: its frame moves to the pager's page at `dst`, and `pid`'s entry is the pager's again, with `token`: its next use faults to the pager |
+| `copy (pid, address, dst)` | the pager | that page copied into the pager's at `dst`, its writes forgotten (the Dirty bit) |
 
 **A fault** on a pager's entry, in user mode (`mem/pager.c`):
 
@@ -483,10 +486,41 @@ other area.
 process; its regions' pages already given stay. When a waiting
 process ends, its waits are freed.
 
+`query`, `evict` and `copy` refuse a page that is not the process's
+alone (copy-on-write after a `fork`, shared): the pager then leaves it
+where it is. They act on another process, which is not running while
+the pager is (one processor): no stale translation of it is cached.
+
 **pagerd** (`services/pager/pagerd.ml`, started by `init` as a driver)
-is the pager of MyNOS: it maps files, read-only (`Pager.map_file` in
-OCaml, `mapcat` in the shell; appendix E.16). Each page is read from the
-file when it is first touched. Measured under KVM (`tests/bench/bench`,
+is the pager of MyNOS (appendix E.16). It gives:
+
+- **files mapped** (`Pager.map_file` in OCaml, `mmap` of a file in C,
+  `mapcat` in the shell): read-only; **shared**, whose changes go back
+  to the file (`sync`, `unmap`, C's `msync` and `munmap`); or
+  **private**, whose changes stay the program's. Each page is read from
+  the file when first touched.
+- **memory** (`Pager.alloc`): pages of zeros, which may go to the disk.
+
+It keeps at most a **budget** of its pages in memory, all its regions
+together (2048 by default, `Pager.set_budget`). To give one more, it
+takes one back, chosen by the **clock**: the pages in the order they
+were given; one used since the last look (`query`) gets a second chance
+and goes to the back. A page taken back goes where it can be read
+again, if it was changed: memory and a private mapping's pages to the
+**swap**, `/disk/swap`, in slots of 4 KB; a shared mapping's pages to
+their file; a page never written, nowhere (it reads again as zeros, or
+as the file has it).
+
+```
+  a fault on its page ─► pagerd: room?  no ─► the clock: query the oldest
+                                               used ─► to the back
+                                               not ─► evict ─► swap or file
+                         read it: the swap, the file, or zeros ─► supply
+```
+
+The swap is pagerd's: only its regions go there. The rest of memory
+(programs, heaps, stacks) stays the kernel's, and a machine out of
+frames still stops (B.15). Measured under KVM (`tests/bench/bench`,
 `mapcat -t`): a fault resolved by the kernel costs about 1 µs, an IPC
 round trip between two processes 5.5 µs; a page given by `pagerd`, read
 from the RAM disk, 10 to 20 µs.
@@ -498,10 +532,13 @@ from the RAM disk, 10 to 20 µs.
 
 ## B.15 Known limits
 
-- **No swap.** When physical memory runs out, an allocation on use or a
-  copy-on-write stops the system ("full memory!"). The external pager
-  (B.14) maps files; anonymous memory written to a disk through it is
-  the rest of mynos-vzp.
+- **No swap for the kernel's memory.** When physical memory runs out,
+  an allocation on use or a copy-on-write stops the system ("full
+  memory!"). Only the memory of the external pager (B.14) goes to the
+  disk; the kernel asking it for frames when it has none is not done.
+- A shared mapping's changes reach the file at `sync` or `unmap` (or
+  when pagerd takes the page back): a program that ends without either
+  loses those still in memory.
 - `__mem_userArea` checks that a pointer is in the process's user pages,
   not that a page it accepts for writing is writable: a system call
   writing into the RAM disk now ends the process (the write faults)

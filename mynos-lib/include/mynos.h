@@ -182,6 +182,9 @@ int mynos_procstat(int pid, unsigned int out[6]);
 #define MYNOS_PAGER_REGION   1
 #define MYNOS_PAGER_NEXT     2
 #define MYNOS_PAGER_SUPPLY   3
+#define MYNOS_PAGER_QUERY    4
+#define MYNOS_PAGER_EVICT    5
+#define MYNOS_PAGER_COPY     6
 /* a page a process waits for */
 typedef struct {
   int pid;
@@ -200,6 +203,15 @@ int mynos_pagerNext(mynos_pager_fault_t * f);
 /* our page at src (page-aligned) moves to pid at addr; src NULL: none,
    that process ends; 0 or an error */
 int mynos_pagerSupply(int pid, void * addr, void * src);
+/* a page given to pid at addr: 0 if it is not there (or not given), else
+   1 | 2 if used since the last query | 4 if written since the last copy;
+   its use forgotten */
+int mynos_pagerQuery(int pid, void * addr);
+/* that page taken back: its frame moves to our page at dst, and pid's
+   entry waits for us again, with token (writable or not); 0 or an error */
+int mynos_pagerEvict(int pid, void * addr, void * dst, unsigned int token, int writable);
+/* that page copied into ours at dst, its writes forgotten; 0 or an error */
+int mynos_pagerCopy(int pid, void * addr, void * dst);
 
 /* PROCESSES */
 /* start the ELF program in file path as a child process, with arguments

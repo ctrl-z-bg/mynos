@@ -15,6 +15,7 @@
    boot): /disk/stdio-test, then a typed line; and with a pipe. */
 
 #include <stdio.h>
+#include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -71,6 +72,29 @@ int main(void)
     struct stat st;
     check("fstat(1): the console, or the file",
           fstat(1, &st) == 0 && (isatty(1) ? S_ISCHR(st.st_mode) : S_ISREG(st.st_mode)));
+  }
+
+  /* mmap of a file: through the external pager, pagerd (mynos-vzp) */
+  {
+    const char * path = "/disk/mm-test.txt";
+    FILE * mf = fopen(path, "w");
+    char * m, back[64] = "";
+    int fd, ok;
+    if (mf) { fputs("mapped file: hello\n", mf); fclose(mf); }
+    fd = open(path, O_RDWR);
+    m = mmap(NULL, 19, PROT_READ, MAP_PRIVATE, fd, 0);
+    check("mmap of a file, read-only", m != MAP_FAILED && memcmp(m, "mapped file: hello", 18) == 0);
+    if (m != MAP_FAILED) munmap(m, 19);
+    m = mmap(NULL, 19, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    ok = m != MAP_FAILED;
+    if (ok) {
+      memcpy(m + 13, "HELLO", 5);
+      ok = msync(m, 19, MS_SYNC) == 0;
+      munmap(m, 19);
+    }
+    close(fd);
+    if ((mf = fopen(path, "r")) != NULL) { if (!fgets(back, sizeof back, mf)) back[0] = 0; fclose(mf); }
+    check("mmap MAP_SHARED: the change written to the file", ok && strcmp(back, "mapped file: HELLO\n") == 0);
   }
 
   /* standard input: the console, or what the shell redirected */

@@ -47,7 +47,7 @@ The OCaml runtime gets the same functions, so the standard library's
 |---|---|---|
 | The C library | strings, `malloc` (on `mmap`), `printf`, maths, `time`, `getenv` | musl, unchanged |
 | stdio | `fopen`, `fprintf`, `fgets`, `fseek`, `fclose`, `stdin`, `stdout` | musl, with its five I/O functions and `fopen` taken from `libmynos` (`mynos-lib/src/stdio.c`) |
-| Files | `open`, `read`, `write`, `lseek`, `close`, `stat`, `fstat`, `lstat`, `unlink`, `rename`, `mkdir`, `rmdir`, `opendir`, `readdir`, `rewinddir`, `closedir`, `chdir`, `getcwd` | `libmynos` (`fileio.c`), over the file services (chapter 18) |
+| Files | `open`, `read`, `write`, `lseek`, `close`, `stat`, `fstat`, `lstat`, `unlink`, `rename`, `mkdir`, `rmdir`, `opendir`, `readdir`, `rewinddir`, `closedir`, `chdir`, `getcwd`; `mmap`, `msync`, `munmap` of a file (read-only, `MAP_SHARED`, `MAP_PRIVATE`) | `libmynos` (`fileio.c`), over the file services (chapter 18) and the external pager (B.14) |
 | The terminal | `tcgetattr`, `tcsetattr`, the window size (`ioctl`) | `libmynos`'s `ioctl`, over the console service |
 | Threads | `pthread_create`, mutexes, condition variables | musl, on the kernel's `clone` and `futex` (chapter 15) |
 | Processes | `mynos_spawn`, `waitpid`, `mynos_kill`, `fork`, `getpid` | `mynos.h` and the kernel (chapter 15) |

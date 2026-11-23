@@ -846,8 +846,10 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" 'df; X=ok; clip clip-$X; clip; ps -f\n'; sleep 5
     # the external pager (mynos-vzp): files mapped, each page read by pagerd
     # at its first touch, compared with the files read as usual
-    tools/type-keys.py "$tmp/mon7" 'mapcat -c /disk/czech.z5 /AUTOEXEC.BAT; mapcat -s; X=done; echo mapcat-$X\n'
-    waitfor "mapcat-done" 60
+    # memory of the pager past its budget (16 pages: through /disk/swap), a
+    # shared mapping written to its file, a private one that must not be
+    tools/type-keys.py "$tmp/mon7" 'mapcat -c /disk/czech.z5 /AUTOEXEC.BAT; mapcat -a 64 16; echo 12345 file to map > /disk/mw.txt; mapcat -w /disk/mw.txt HOWDY; mapcat -p /disk/mw.txt; cat /disk/mw.txt; mapcat -s; X=done; echo mapcat-$X\n'
+    waitfor "mapcat-done" 90
     # GAV (mynos-0ns): installed with its pictures, which it reads before
     # it asks for a window (none in text mode)
     tools/type-keys.py "$tmp/mon7" 'pkg install gavml; gavml\n'
@@ -1157,7 +1159,12 @@ if [ -f system/ramdisk.dsk ]; then
     expect "      since boot "                        # ps -f: page faults counted
     expect "mapcat: /disk/czech.z5: the same (13312 bytes, 4 pages)"  # the external pager
     expect "mapcat: /AUTOEXEC.BAT: the same (59 bytes, 1 pages)"
-    expect "0 mappings, 5 pages given, 0 refused"       # mapcat -s: both unmapped
+    expect "mapcat: 64 pages of memory: the same (swap:"  # past the budget, through the swap
+    expect "mapcat: /disk/mw.txt: written through the mapping"
+    expect "mapcat: /disk/mw.txt: changed in memory, not in the file"
+    expect "HOWDY file to map"                          # the file, changed by the shared one
+    expect "0 mappings, "                                # mapcat -s: all unmapped
+    expect "stdio: mmap MAP_SHARED: the change written to the file ok"  # C's mmap of a file
     expect "pkg: gavml 1.3 installed"                 # GavML (GAV)...
     expect "gavml.byte: no graphical session"         # ... its pictures read first
     expect "Tést"                                     # the browser: entities,

@@ -1718,3 +1718,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   150 ms (1 s before an index of the rules and of each element's classes).
   Not published yet: tried with PKG=local first.
 
+- **2026-11-23** — The external pager, phases 4 and 5 of mynos-vzp: the
+  kernel gives the pager three more operations (native 37: query, evict,
+  copy; the Accessed and Dirty bits). `pagerd` keeps a budget of resident
+  pages (2048, `Pager.set_budget`), takes pages back by the clock, keeps
+  memory (`Pager.alloc`) and private mappings' changes in `/disk/swap`,
+  writes shared mappings' changes back to their files (`sync`, `unmap`,
+  eviction). C's `mmap`, `msync`, `munmap` of a file go through it
+  (libmynos remembers each open file's path). The kernel's own memory
+  still has no swap, by choice. Tests: five more pager checks in
+  tests/abi, `mapcat -a/-w/-p` in the seventh boot, C's mmap in stdio.

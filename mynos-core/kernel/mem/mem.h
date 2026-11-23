@@ -42,6 +42,8 @@
 #define IS_PAGER_ENTRY(E) \
   (((E) & (PF_PRESENT | PF_PAGER | PF_LOGICAL_PRESENT | PF_COW)) == PF_PAGER)
 #define PF_PRESENT         0x1
+#define PF_ACCESSED        0x20     /* set by the processor at a use */
+#define PF_DIRTY           0x40     /* set by the processor at a write */
 #define PF_NOTPRESENT      0x0
 
 /* this is used to allocate kernel pages in user space */

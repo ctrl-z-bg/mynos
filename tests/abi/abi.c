@@ -84,6 +84,9 @@ static void * cow_receiver(void * unused) {
 #define SLOW_TOKEN 300          /* answered after 200 ms */
 static volatile int pager_stop, pager_served;
 static int pager_sem;
+/* a page taken back (evicted), given again as it was */
+static unsigned char saved_page[4096];
+static volatile unsigned saved_token = 0xFFFFFFFF;
 
 static void * pager_thread(void * unused) {
   char * page = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -94,6 +97,11 @@ static void * pager_thread(void * unused) {
     while (mynos_pagerNext(&f) == 1) {
       pager_served++;
       if (f.token == FAIL_TOKEN) { mynos_pagerSupply(f.pid, (void *)f.addr, NULL); continue; }
+      if (f.token == saved_token) {
+        memcpy(page, saved_page, 4096);
+        mynos_pagerSupply(f.pid, (void *)f.addr, page);
+        continue;
+      }
       if (f.token == SLOW_TOKEN) mynos_sleep(200000);
       memset(page, 'A' + f.token % 26, 4096);
       *(unsigned *)page = f.token;
@@ -209,6 +217,54 @@ static void pager_checks(void) {
     check("pager: one at a time", WIFEXITED(st) && WEXITSTATUS(st) == 0);
   }
   check("pager: munmap a region", munmap(r, 4 * 4096) == 0);
+
+  /* a page used, written, seen (query), copied, taken back (evict) and
+     given again as it was: a child's, since the pager does not look at
+     its own pages */
+  {
+    int port = mynos_allocPort(), ch, q1, q2, q3, q4, cp, ev;
+    pid_t c;
+    mynos_msg_t * m;
+    char * at;
+    char * b1 = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    char * b2 = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((c = fork()) == 0) {
+      int k = mynos_connectToPort(port);
+      char * p;
+      if (mynos_recv(k, &m, 0, 0) < 0) _exit(2);
+      p = *(char **)m->start;
+      mynos_freeMsg(&m);
+      strcpy(p + 10, "written");            /* a fault, the page given, written */
+      mynos_send(k, "w", 1, 0);
+      if (mynos_recv(k, &m, 0, 0) < 0) _exit(3);   /* taken back meanwhile */
+      mynos_freeMsg(&m);
+      _exit(strcmp(p + 10, "written") == 0 && *(unsigned *)p == 700 ? 0 : 1);
+    }
+    ch = mynos_listenPort(port);
+    at = mynos_pagerRegion(c, 1, 700, 1);
+    mynos_send(ch, &at, sizeof at, 0);
+    if (mynos_recv(ch, &m, 0, 0) >= 0) mynos_freeMsg(&m);
+    q1 = mynos_pagerQuery(c, at);
+    q2 = mynos_pagerQuery(c, at);
+    cp = mynos_pagerCopy(c, at, b1);
+    q3 = mynos_pagerQuery(c, at);
+    memcpy(saved_page, b1, 4096);
+    saved_token = 700;
+    ev = mynos_pagerEvict(c, at, b2, 700, 1);
+    q4 = mynos_pagerQuery(c, at);
+    check("pager: query: there, used, written", q1 == 7);
+    check("pager: query again: its use forgotten", q2 == 5);
+    check("pager: copy: the page, its writes forgotten",
+          cp == 0 && strcmp(b1 + 10, "written") == 0 && q3 == 1);
+    check("pager: evict: taken back, the frame ours",
+          ev == 0 && strcmp(b2 + 10, "written") == 0 && q4 == 0);
+    mynos_send(ch, "g", 1, 0);
+    waitpid(c, &st, 0);
+    check("pager: given again as it was", WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    check("pager: not its own pages", mynos_pagerQuery(getpid(), b1) == 0);
+    mynos_freeChannel(ch);
+    mynos_freePort(port);
+  }
   pager_stop = 1;
   mynos_V(pager_sem);
   pthread_join(t, NULL);

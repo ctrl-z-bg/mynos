@@ -176,7 +176,7 @@ a service too: one of its domains serves **power/1** (E.17).
 | `clipboard` | `services/clipboard/clipboard_service.ml` | OCaml | — | `start` | clipboard/1: `get`, `set` (the text copied last, for every program) |
 | `ata0` | `services/ata/ata.ml` | OCaml | io | `driver` | block/1 |
 | `fatfs` | `services/fatfs/fatfs.ml` | OCaml | — | `start` | fs/1 |
-| `pager` | `services/pager/pagerd.ml` | OCaml | io | `driver` | pager/1: files mapped into memory, the external pager (E.16) |
+| `pager` | `services/pager/pagerd.ml` | OCaml | io | `driver` | pager/1: files mapped and memory that may go to the swap, the external pager (E.16) |
 | `net` | `services/net/netd.c` | C | io | `driver` | net/1 |
 | `display` | `services/display/displayd.c` | C | io | `driver` | display/1 |
 | `sound` | `services/sound/soundd.c` | C | io | `driver` | sound/1 |
@@ -596,35 +596,44 @@ the music is the card's: a program writes a second at a time and waits.
 `play` (chapter 13) plays WAV files and tones; module `Sound` converts a
 WAV file's rate and format on the way.
 
-## E.16 pagerd: files mapped by the pager
+## E.16 pagerd: memory from the pager
 
 `pagerd` (`services/pager/pagerd.ml`, OCaml) is the external pager of
 appendix B.14: `init` starts it as a driver, since becoming the pager
 needs the `io` privilege, and it registers as `pager`, protocol
-**pager/1** (`mynos-lib/ocaml/pager.ml`):
+**pager/1** (`mynos-lib/ocaml/pager.ml`; libmynos speaks it too, for
+C's `mmap` of a file):
 
 | Case | Name | Request | Reply | Safe |
 |---|---|---|---|---|
-| 0 | `map` | `(path:S,offset:I,length:I)` | `(page:I,length:I)` | no |
+| 0 | `map` | `((path:S,offset:I,length:I),mode:I)` | `(page:I,length:I)` | no |
 | 1 | `unmap` | `page:I` | `U` | no |
-| 2 | `stats` | `U` | `(regions:I,given:I,refused:I)` | yes |
+| 2 | `stats` | `U` | eight counts (below) | yes |
+| 3 | `alloc` | `pages:I` | `I` (the first page) | no |
+| 4 | `sync` | `page:I` | `U` | no |
+| 5 | `budget` | `pages:I` | `U` | no |
 
-`map` opens the file, takes a range of tokens, and asks the kernel for
-a read-only region of that many pages in the caller's memory (a page
-number: OCaml's integers have 31 bits, an address 32). Two threads: one
-serves pager/1, the other waits for faults (`Pager.wait`), reads the
-page from the file, and gives it (`Pager.supply`), or refuses it if the
-file cannot be read. A mapping lasts until its owner unmaps it or ends.
+`map`'s mode is 0 read-only, 1 shared (changes to the file), 2 private.
+A region's place is a page number (OCaml's integers have 31 bits, an
+address 32). `stats` gives the regions open, the pages given and
+refused, those in memory and the budget, the pages swapped out and in,
+and those written back to their files.
+
+Two threads: one serves pager/1; the other waits for faults
+(`Pager.wait`), makes room if the budget is reached (the clock of B.14:
+`query`, `evict`), reads the page (from the swap, the file, or zeros)
+and gives it (`Pager.supply`), or refuses it if the file cannot be
+read. A region lasts until its owner unmaps it or ends.
 
 ```
   a program touches m.{i} ──fault──► kernel ──V──► pagerd (its pages thread)
-                                                       │ reads the page:
-                                                       └──fs/1──► memrofs, tmpfs, fatfs
+                                         ◄──evict── │ the budget reached: the clock
+                                                    │ reads the page:
+                                                    └──fs/1──► /disk/swap, or its file
   the program goes on ◄──the page, moved── kernel ◄──supply── pagerd
 ```
 
-`mapcat FILE` writes files out through it, `mapcat -c` compares each
-mapping with the file read as usual, `mapcat -s` asks `stats`.
+`mapcat` (chapter 13) tries all of it from the shell.
 
 ## E.17 power: init as a service
 

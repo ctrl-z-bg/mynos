@@ -35,6 +35,7 @@
 #include "../sem.h"
 #include "../trace.h"
 #include "../video.h"
+#include "../kutils.h"
 #include "mynos.h"
 
 #define PAGER_WAITS 64             /* pages waited for at once */
@@ -231,12 +232,91 @@ static int pagerSupply(pid_t pid, uint32_t addr, uint32_t src) {
   return 0;
 }
 
+/* ---- the pages given, seen and taken back (phases 4 and 5) ---- */
+
+/* a page the pager gave, in pid at addr: its entry, if it is a page of
+   that process's own (present, user, not shared with another process:
+   not copy-on-write, not PF_SHARED, one reference) */
+static uint32_t * givenPage(pid_t pid, uint32_t addr) {
+  process_descriptor_t * p = proc(pid);
+  uint32_t * e;
+  if (!p || !p->isAlive || p->pid != pid || pid == CURRPID) return NULL;
+  e = __mem_externalPTE(pid, addr);
+  if (e == NULL) return NULL;
+  if ((*e & (PF_PRESENT | PF_USER)) != (PF_PRESENT | PF_USER)) return NULL;
+  if (*e & (PF_COW | PF_SHARED)) return NULL;
+  if (pmem_countref(*e >> 12) != 1) return NULL;
+  return e;
+}
+
+/* whether a page is there, used since the last query, written since the
+   last copy: bits 0, 1, 2; its use forgotten (the clock's second chance).
+   The process is not running now (one processor: the pager is), so no
+   stale translation of it is cached. */
+static int pagerQuery(pid_t pid, uint32_t addr) {
+  uint32_t * e;
+  int r;
+  if (pagerPid != CURRPID) return MYNOS_ERR_DENY;
+  e = givenPage(pid, addr);
+  if (e == NULL) return 0;
+  r = 1 | ((*e & PF_ACCESSED) ? 2 : 0) | ((*e & PF_DIRTY) ? 4 : 0);
+  *e &= ~PF_ACCESSED;
+  return r;
+}
+
+/* the pager's page at dst: its own, present, its frame to replace */
+static uint32_t * pagerOwnPage(uint32_t dst) {
+  uint32_t * pte;
+  if ((dst & 0xFFF) || !__mem_userArea((void *)dst, PAGE_SIZE)) return NULL;
+  pte = (uint32_t *)__GET_PAGE_TABLE_ENTRY(__ADDRESS_PD_INDEX(dst), __ADDRESS_PT_INDEX(dst));
+  if (*pte & PF_LOGICAL_PRESENT) __mem_allocateOnUse(dst);
+  else if (*pte & PF_COW) __mem_cowManager(dst);
+  if (!(*pte & PF_PRESENT) || (*pte & PF_SHARED)) return NULL;
+  return pte;
+}
+
+/* the page at pid's addr taken back: its frame moves to the pager at dst
+   (the frame there freed), and pid's entry is the pager's again, with
+   token and writable: its next use faults to the pager */
+static int pagerEvict(pid_t pid, uint32_t addr, uint32_t dst, uint32_t tokenw) {
+  uint32_t * e, * mine, frame, token = tokenw >> 1;
+  if (pagerPid != CURRPID) return MYNOS_ERR_DENY;
+  if (token >= PAGER_TOKENS) return MYNOS_ERR_INVALID;
+  if ((mine = pagerOwnPage(dst)) == NULL) return MYNOS_ERR_INVALID;
+  if ((e = givenPage(pid, addr)) == NULL) return MYNOS_ERR_INVALID;
+  frame = *e >> 12;
+  *e = (token << 12) | PF_PAGER | PF_USER | ((tokenw & 1) ? PF_READWRITE : 0);
+  /* (pid's own entry is read again through the window: mine is ours) */
+  pmem_unset(*mine >> 12);
+  *mine = (frame << 12) | PF_PRESENT | PF_USER | PF_READWRITE;
+  INVALIDATE_THE_CACHE(dst);
+  TRACE(TRACE_PAGE, CURRPID, pid, -1, 0, addr >> 12, NULL, 0);
+  return 0;
+}
+
+/* a copy of the page at pid's addr into the pager's page at dst, and its
+   writes forgotten (written back to its file: clean again) */
+static int pagerCopy(pid_t pid, uint32_t addr, uint32_t dst) {
+  uint32_t * e, * mine, saved, * from;
+  if (pagerPid != CURRPID) return MYNOS_ERR_DENY;
+  if ((mine = pagerOwnPage(dst)) == NULL) return MYNOS_ERR_INVALID;
+  if ((e = givenPage(pid, addr)) == NULL) return MYNOS_ERR_INVALID;
+  *e &= ~PF_DIRTY;
+  from = __mem_mapFrame(*e >> 12, &saved);
+  kmemcpy((void *)dst, from, PAGE_SIZE);
+  __mem_unmapFrame(saved);
+  return 0;
+}
+
 int _mynos_syscall_pager(uint32_t op, uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
   switch (op) {
   case MYNOS_PAGER_REGISTER: return pagerRegister();
   case MYNOS_PAGER_REGION:   return pagerRegion((pid_t)a, b, c, d);
   case MYNOS_PAGER_NEXT:     return pagerNext(a);
   case MYNOS_PAGER_SUPPLY:   return pagerSupply((pid_t)a, b, c);
+  case MYNOS_PAGER_QUERY:    return pagerQuery((pid_t)a, b);
+  case MYNOS_PAGER_EVICT:    return pagerEvict((pid_t)a, b, c, d);
+  case MYNOS_PAGER_COPY:     return pagerCopy((pid_t)a, b, c);
   }
   return MYNOS_ERR_INVALID;
 }

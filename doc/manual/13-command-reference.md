@@ -671,23 +671,27 @@ with the size (in bytes below 10,000, else in KB, `397K`) or `dir`.
 
 ### MAPCAT
 
-**Purpose** Writes files out through the external pager.
+**Purpose** Tries the external pager.
 
 **Syntax** `mapcat FILE...`, `mapcat -c FILE...`, `mapcat -t FILE`,
+`mapcat -a PAGES [BUDGET]`, `mapcat -w FILE TEXT`, `mapcat -p FILE`,
 `mapcat -s`
 
 **Type** Program (`/mapcat.byte`).
 
-**Description** Maps each file into memory (module `Pager`, the service
-`pagerd`) and writes it out: every page is read from the file by
-`pagerd` when `mapcat` first touches it, as a page fault the kernel
-hands to that service. `-c` compares each mapping with the file read as
-usual and says `the same` or `DIFFERENT`, with its size in bytes and
-pages; `-t` times a page through the pager and a page read as usual (to
-the 10 ms of MyNOS's clock); `-s` prints what `pagerd` has done:
-mappings open, pages given and refused.
+**Description** Through `pagerd` (module `Pager`): with files, maps each
+into memory and writes it out, every page read from the file when first
+touched; `-c` compares each mapping with the file read as usual (`the
+same` or `DIFFERENT`); `-t` times a page through the pager and read as
+usual. `-a` asks for memory of so many pages (and sets `pagerd`'s
+budget first), writes each page and reads them all back: with more
+pages than the budget they go through `/disk/swap`. `-w` writes TEXT at
+the start of FILE through a shared mapping, `-p` changes a private one
+(the file must not change). `-s` prints what `pagerd` has done:
+mappings, pages given and refused, in memory and the budget, swapped
+out and in, written back.
 
-**Examples** `mapcat /AUTOEXEC.BAT`, `mapcat -c /ocamlc.byte`
+**Examples** `mapcat -c /ocamlc.byte`, `mapcat -a 1000 64`, `mapcat -s`
 
 **See also** PS (`ps -f`); appendices B.14 and E.16.
 

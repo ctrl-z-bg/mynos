@@ -61,3 +61,16 @@ int mynos_procstat(int pid, unsigned int out[6]) {
   return __mynos_syscall(38, pid, (int)out, 0, 0, 0);
 }
 
+int mynos_pagerQuery(int pid, void * addr) {
+  return __mynos_syscall(37, MYNOS_PAGER_QUERY, pid, (int)addr, 0, 0);
+}
+
+int mynos_pagerEvict(int pid, void * addr, void * dst, unsigned int token, int writable) {
+  return __mynos_syscall(37, MYNOS_PAGER_EVICT, pid, (int)addr, (int)dst,
+                         (int)((token << 1) | (writable ? 1 : 0)));
+}
+
+int mynos_pagerCopy(int pid, void * addr, void * dst) {
+  return __mynos_syscall(37, MYNOS_PAGER_COPY, pid, (int)addr, (int)dst, 0);
+}
+
