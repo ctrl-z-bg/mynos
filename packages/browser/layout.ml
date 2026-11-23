@@ -112,118 +112,6 @@ let hides decls =
   let d = squeeze decls in
   Html.contains d "display:none" || Html.contains d "visibility:hidden"
 
-(* whether a media query holds for a screen [px] pixels wide: a list of
-   queries (any one), each "[not|only] TYPE [and (FEATURE)]..." or just
-   features; widths in px (or em, 16 px); a feature not known does not hold
-   (forced-colors, hover...). Print does not. *)
-let media_holds ~px query =
-  let one q =
-    let q = String.lowercase_ascii (String.trim q) in
-    let neg, q =
-      if String.starts_with ~prefix:"not " q then (true, String.sub q 4 (String.length q - 4))
-      else if String.starts_with ~prefix:"only " q then (false, String.sub q 5 (String.length q - 5))
-      else (false, q) in
-    let parts =                                    (* split at " and " *)
-      let b = Buffer.create (String.length q) and i = ref 0 and n = String.length q in
-      while !i < n do
-        if !i + 5 <= n && String.sub q !i 5 = " and " then (Buffer.add_char b '\001'; i := !i + 5)
-        else (Buffer.add_char b q.[!i]; incr i)
-      done;
-      List.map String.trim (String.split_on_char '\001' (Buffer.contents b)) in
-    let length v =
-      let v = String.trim v in
-      let num s = try Some (float_of_string (String.trim s)) with _ -> None in
-      if String.ends_with ~suffix:"px" v then num (String.sub v 0 (String.length v - 2))
-      else if String.ends_with ~suffix:"em" v then
-        Option.map (fun f -> f *. 16.) (num (String.sub v 0 (String.length v - 2)))
-      else num v in
-    let holds part =
-      match part with
-      | "" | "all" | "screen" -> true
-      | "print" | "speech" | "tv" | "handheld" | "projection" -> false
-      | f when String.length f > 2 && f.[0] = '(' && f.[String.length f - 1] = ')' ->
-        let f = String.sub f 1 (String.length f - 2) in
-        (match String.index_opt f ':' with
-         | Some i ->
-           let name = String.trim (String.sub f 0 i)
-           and v = String.sub f (i + 1) (String.length f - i - 1) in
-           (match name, length v with
-            | "max-width", Some w -> float px <= w
-            | "min-width", Some w -> float px >= w
-            | "orientation", _ -> String.trim v = "landscape"
-            | "prefers-color-scheme", _ -> String.trim v = "light"
-            | "prefers-reduced-motion", _ -> String.trim v = "no-preference"
-            | _ -> false)
-         | None -> f = "color")
-      | _ -> false in
-    let r = List.for_all holds parts in
-    if neg then not r else r in
-  List.exists one (String.split_on_char ',' query)
-
-(* the simple selectors of rules that hide: (tag, class, id), any may be
-   ""; the rules of @media blocks only if they hold for a window [px]
-   wide; other @ blocks (fonts, animations, @supports) skipped *)
-let hiding_rules ?(px = 880) css =
-  let css = (* without comments *)
-    let b = Buffer.create (String.length css) and i = ref 0 and n = String.length css in
-    while !i < n do
-      if !i + 1 < n && css.[!i] = '/' && css.[!i + 1] = '*' then begin
-        i := !i + 2;
-        while !i + 1 < n && not (css.[!i] = '*' && css.[!i + 1] = '/') do incr i done;
-        i := !i + 2
-      end else begin Buffer.add_char b css.[!i]; incr i end
-    done;
-    Buffer.contents b in
-  let n = String.length css in
-  let selectors prelude =
-    List.filter_map (fun sel ->
-        let sel = String.trim sel in
-        if sel = "" || String.exists (fun c -> c = ' ' || c = ':' || c = '[' || c = '>'
-                                                 || c = '+' || c = '~' || c = '*') sel then None
-        else begin
-          let cut c s = match String.index_opt s c with
-            | Some j -> (String.sub s 0 j, String.sub s (j + 1) (String.length s - j - 1))
-            | None -> (s, "") in
-          let rest, id = cut '#' sel in
-          let tag, cls = cut '.' rest in
-          if String.contains cls '.' then None
-          else Some (String.lowercase_ascii tag, cls, id)
-        end) (String.split_on_char ',' prelude) in
-  (* past the block that starts at i (just after its '{') *)
-  let rec skip_block i depth =
-    if i >= n then n
-    else match css.[i] with
-      | '{' -> skip_block (i + 1) (depth + 1)
-      | '}' -> if depth = 0 then i + 1 else skip_block (i + 1) (depth - 1)
-      | _ -> skip_block (i + 1) depth in
-  let out = ref [] in
-  (* the rules from i to the end of the enclosing block *)
-  let rec rules i active =
-    let j = ref i in
-    while !j < n && css.[!j] <> '{' && css.[!j] <> '}' && css.[!j] <> ';' do incr j done;
-    if !j >= n then n
-    else if css.[!j] = '}' then !j + 1                       (* the block ends *)
-    else begin
-      let prelude = String.trim (String.sub css i (!j - i)) in
-      if css.[!j] = ';' then rules (!j + 1) active           (* @import, @charset *)
-      else if String.length prelude > 0 && prelude.[0] = '@' then begin
-        let lower = String.lowercase_ascii prelude in
-        if String.starts_with ~prefix:"@media" lower then begin
-          let cond = String.sub prelude 6 (String.length prelude - 6) in
-          rules (rules (!j + 1) (active && media_holds ~px cond)) active
-        end else rules (skip_block (!j + 1) 0) active
-      end else begin
-        let k = ref (!j + 1) in
-        while !k < n && css.[!k] <> '}' do incr k done;
-        let decls = String.sub css (!j + 1) (!k - !j - 1) in
-        if active && hides decls then out := !out @ selectors prelude;
-        rules (min n (!k + 1)) active
-      end
-    end in
-  let i = ref 0 in
-  while !i < n do i := rules !i true done;
-  !out
-
 let named_colours = [ "black", 0x000000; "red", 0xC00000; "green", 0x007000; "blue", 0x0000C0;
                       "maroon", 0x800000; "navy", 0x000080; "purple", 0x800080; "teal", 0x008080;
                       "olive", 0x707000; "gray", 0x606060; "grey", 0x606060; "darkred", 0x8B0000;
@@ -231,18 +119,21 @@ let named_colours = [ "black", 0x000000; "red", 0xC00000; "green", 0x007000; "bl
 
 (* a colour, if it reads on white (not too light) *)
 let readable_colour v =
+  match Css.colour v with
+  | Some c when Css.luminance c < 150 -> Some c
+  | _ -> None
+
+(* a CSS length in pixels (px, em and rem as 16 px, pt); none for %, auto *)
+let css_px v =
   let v = String.trim (String.lowercase_ascii v) in
-  let hex s = int_of_string_opt ("0x" ^ s) in
-  let c = if String.length v = 7 && v.[0] = '#' then hex (String.sub v 1 6)
-    else if String.length v = 4 && v.[0] = '#' then
-      Option.map (fun x -> let r = (x lsr 8) land 15 and g = (x lsr 4) land 15 and b = x land 15 in
-                   (r * 17) lsl 16 lor (g * 17) lsl 8 lor (b * 17)) (hex (String.sub v 1 3))
-    else List.assoc_opt v named_colours in
-  match c with
-  | Some c ->
-    let r = c lsr 16 and g = (c lsr 8) land 255 and b = c land 255 in
-    if (299 * r + 587 * g + 114 * b) / 1000 < 150 then Some c else None
-  | None -> None
+  let num s = float_of_string_opt (String.trim s) in
+  let cut k = String.sub v 0 (String.length v - k) in
+  if v = "0" then Some 0.
+  else if String.ends_with ~suffix:"px" v then num (cut 2)
+  else if String.ends_with ~suffix:"rem" v then Option.map (fun f -> f *. 16.) (num (cut 3))
+  else if String.ends_with ~suffix:"em" v then Option.map (fun f -> f *. 16.) (num (cut 2))
+  else if String.ends_with ~suffix:"pt" v then Option.map (fun f -> f *. 4. /. 3.) (num (cut 2))
+  else None
 
 let style_value attrs prop =
   match Html.attr "style" attrs with
@@ -296,6 +187,37 @@ let table_rows toks =
   close_row ();
   List.rev !rows
 
+(* an open element, as its CSS lays it out (Css.apply's "x-css") *)
+type open_el = {
+  oname : string;
+  oattrs : (string * string) list;
+  mode : [ `Normal | `Inline | `Block ];  (* a block shown inline, or the other way *)
+  mutable pushed : bool;                  (* its CSS pushed a style, to pop *)
+  mutable made_pre : bool;                (* white-space: pre *)
+}
+
+let css_blocks = block_tags @ [ "li"; "dt"; "dd"; "ul"; "ol"; "blockquote"; "pre";
+                                "h1"; "h2"; "h3"; "h4"; "h5"; "h6" ]
+let css_inlines = [ "a"; "span"; "b"; "strong"; "i"; "em"; "label"; "small"; "code"; "font";
+                    "cite"; "abbr"; "time"; "u"; "s"; "big"; "kbd"; "samp"; "var"; "mark"; "q" ]
+
+let css_mode name attrs =
+  match Option.map (fun v -> String.lowercase_ascii (String.trim v)) (Css.get attrs "display") with
+  | Some ("inline" | "inline-block" | "inline-flex" | "inline-grid" | "contents")
+    when List.mem name css_blocks -> `Inline
+  | Some ("block" | "flex" | "grid" | "list-item" | "table" | "flow-root")
+    when List.mem name css_inlines -> `Block
+  | _ -> `Normal
+
+let lower_trim v = String.lowercase_ascii (String.trim v)
+
+(* a margin worth a blank line: 16 px (1 em) or more *)
+let css_space attrs side =
+  match Option.bind (Css.get attrs ("margin-" ^ side)) css_px with Some f -> f >= 16. | None -> false
+
+let css_zero attrs side =
+  match Option.bind (Css.get attrs ("margin-" ^ side)) css_px with Some f -> f = 0. | None -> false
+
 let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
   let width = max 20 width in
   let lines = ref [] and anchors = ref [] and title = ref "" and base = ref None in
@@ -304,9 +226,22 @@ let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
   let pending_space = ref false in
   let blank_wanted = ref 0 in                   (* empty lines due before the next text *)
   let line_count () = List.length !lines in
+  let elstack : open_el list ref = ref [] in
+  let line_align = ref "" in
   let push_line ?(rule = false) () =
-    lines := { spans = List.rev !cur; rule; bar = !bars; picture = None } :: !lines;
-    cur := []; col := 0; pending_space := false in
+    let spans = List.rev !cur in
+    (* text-align: center or right, of the element its first word is in *)
+    let spans = match !line_align, spans with
+      | ("center" | "right" | "end" as a), _ :: _ when not rule ->
+        let left = List.fold_left (fun m (sp : span) -> min m sp.col) max_int spans
+        and right = List.fold_left (fun m (sp : span) -> max m (sp.col + cells sp.text)) 0 spans in
+        let avail = width - !indent and used = right - left in
+        let target = !indent + (if a = "center" then (avail - used) / 2 else avail - used) in
+        let shift = target - left in
+        if shift > 0 then List.map (fun (sp : span) -> { sp with col = sp.col + shift }) spans else spans
+      | _ -> spans in
+    lines := { spans; rule; bar = !bars; picture = None } :: !lines;
+    cur := []; col := 0; pending_space := false; line_align := "" in
   let new_line () = if !cur <> [] then push_line () in
   let want_blank n =
     new_line ();
@@ -317,7 +252,10 @@ let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
       if !lines <> [] then
         for _ = 1 to !blank_wanted do push_line () done;
       blank_wanted := 0;
-      col := !indent
+      col := !indent;
+      line_align := (match !elstack with
+          | e :: _ -> (match Css.get e.oattrs "text-align" with Some v -> lower_trim v | None -> "")
+          | [] -> "")
     end in
   let add_word style w =
     let w_cells = cells w in
@@ -348,7 +286,27 @@ let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
   (* the style stack: each open element's style *)
   let styles = ref [ ("", plain) ] in
   let style () = snd (List.hd !styles) in
-  let push name st = styles := (name, st) :: !styles in
+  (* a style, with the CSS of the element it is for (colour, weight,
+     decoration) *)
+  let with_css name st =
+    match !elstack with
+    | e :: _ when e.oname = name && Html.attr "x-css" e.oattrs <> None ->
+      let g = Css.get e.oattrs in
+      let st = match Option.bind (g "color") readable_colour with
+        | Some c -> { st with colour = c } | None -> st in
+      let st = match Option.map lower_trim (g "font-weight") with
+        | Some ("bold" | "bolder" | "600" | "700" | "800" | "900") -> { st with bold = true }
+        (* a heading stays bold: its size, which says it is one, cannot be shown *)
+        | Some ("normal" | "lighter" | "100" | "200" | "300" | "400" | "500")
+          when not (List.mem name [ "h1"; "h2"; "h3"; "h4"; "h5"; "h6" ]) -> { st with bold = false }
+        | _ -> st in
+      (match Option.map lower_trim (g "text-decoration") with
+       | Some d when Html.contains d "none" -> { st with underline = false; strike = false }
+       | Some d -> { st with underline = st.underline || Html.contains d "underline";
+                             strike = st.strike || Html.contains d "line-through" }
+       | None -> st)
+    | _ -> st in
+  let push name st = styles := (name, with_css name st) :: !styles in
   let pop name =
     if List.exists (fun (n, _) -> n = name) !styles then begin
       let rec drop = function
@@ -391,6 +349,14 @@ let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
   let lists = ref [] in                          (* (ordered, counter) for each open list *)
   let table_cell = ref 0 in
   let text s =
+    let s = match !elstack with
+      | e :: _ -> (match Option.map lower_trim (Css.get e.oattrs "text-transform") with
+          | Some "uppercase" -> String.uppercase_ascii s
+          | Some "lowercase" -> String.lowercase_ascii s
+          | Some "capitalize" ->
+            String.mapi (fun i c -> if i = 0 || s.[i - 1] = ' ' then Char.uppercase_ascii c else c) s
+          | _ -> s)
+      | [] -> s in
     if !in_title then title := !title ^ s
     else if !skip > 0 then ()
     else if !pre > 0 then begin
@@ -418,14 +384,7 @@ let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
     end in
   let heading_level n = match n with
     | "h1" -> 1 | "h2" -> 2 | "h3" -> 3 | "h4" -> 4 | "h5" -> 5 | "h6" -> 6 | _ -> 0 in
-  let css = Buffer.create 256 and in_style = ref false in
-  let rules = ref [] in
   let handle = (function
-      | Html.Text s when !in_style -> Buffer.add_string css s
-      | Html.Start ("style", _) -> in_style := true; incr skip
-      | Html.End "style" ->
-        in_style := false; if !skip > 0 then decr skip;
-        rules := hiding_rules ~px:(width * 8) (Buffer.contents css)
       | Html.Text s ->
         (match !in_textarea, !in_select, !in_button with
          | Some (_, _, b), _, _ -> Buffer.add_string b s
@@ -461,12 +420,16 @@ let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
           | "li" ->
             new_line ();
             let mark = match !lists with
+              | _ when Option.map lower_trim (Css.get attrs "list-style-type") = Some "none" -> ""
               | (true, n) :: _ -> incr n; string_of_int !n ^ "."
               | _ -> "\xe2\x80\xa2" in
-            start_text ();
-            let c = max 0 (!indent - 2) in
-            cur := { col = c; text = mark; style = { st with colour = muted }; widget = None } :: !cur;
-            col := max !col (c + cells mark + 1)
+            (* no mark (list-style: none): nothing on the line yet *)
+            if mark <> "" then begin
+              start_text ();
+              let c = max 0 (!indent - 2) in
+              cur := { col = c; text = mark; style = { st with colour = muted }; widget = None } :: !cur;
+              col := max !col (c + cells mark + 1)
+            end
           | "dt" -> new_line (); push name { st with bold = true }
           | "dd" -> new_line (); indent := !indent + 4
           | "tr" -> new_line (); table_cell := 0
@@ -629,18 +592,8 @@ let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
   (* is an element hidden (the hidden attribute, its style, a rule)? *)
   let hidden name attrs =
     List.mem_assoc "hidden" attrs
-    || (match Html.attr "style" attrs with Some s -> hides s | None -> false)
-    || (!rules <> []
-        (* its own style showing it wins over a rule (style="display:block") *)
-        && not (match Html.attr "style" attrs with
-            | Some st -> Html.contains (String.concat "" (String.split_on_char ' ' (String.lowercase_ascii st))) "display:"
-            | None -> false) &&
-        let classes = match Html.attr "class" attrs with
-          | Some c -> String.split_on_char ' ' c | None -> [] in
-        let id = Option.value (Html.attr "id" attrs) ~default:"" in
-        List.exists (fun (t, c, i) ->
-            (t = "" || t = name) && (c = "" || List.mem c classes) && (i = "" || i = id)
-            && (t <> "" || c <> "" || i <> "")) !rules) in
+    || (Html.attr "x-css" attrs = None
+        && (match Html.attr "style" attrs with Some s -> hides s | None -> false)) in
   (* a simple table, as a grid: its columns as wide as their words need,
      narrowed to fit *)
   let grid toks =
@@ -716,6 +669,48 @@ let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
         let toks, after = table_end rest in
         if simple_table toks then begin grid toks; run after end
         else begin handle t; run rest end
+      | None, (Html.Start (name, attrs) as t) when not (List.mem name void) ->
+        let e = { oname = name; oattrs = attrs; mode = css_mode name attrs; pushed = false; made_pre = false } in
+        elstack := e :: !elstack;
+        let depth = List.length !styles in
+        (match e.mode with
+         | `Inline ->                         (* a block laid out inline *)
+           if !skip = 0 then begin
+             pending_space := true;
+             let st = style () in
+             push name (if heading_level name > 0 then { st with bold = true } else st);
+             e.pushed <- true
+           end
+         | `Block -> new_line (); handle t
+         | `Normal -> handle t);
+        if !skip = 0 && e.mode <> `Inline then begin
+          if css_space attrs "top" then want_blank 1
+          else if name = "p" && css_zero attrs "top" then blank_wanted := 0;
+          (match Option.map lower_trim (Css.get attrs "white-space") with
+           | Some ("pre" | "pre-wrap" | "pre-line" | "break-spaces") when name <> "pre" && name <> "listing" ->
+             incr pre; e.made_pre <- true
+           | _ -> ());
+          (* a style of its own, if its handler pushed none *)
+          if not e.pushed && List.length !styles = depth
+             && (Css.get attrs "color" <> None || Css.get attrs "font-weight" <> None
+                 || Css.get attrs "text-decoration" <> None) then begin
+            push name (style ()); e.pushed <- true
+          end
+        end;
+        run rest
+      | None, (Html.End name as t) when (match !elstack with e :: _ -> e.oname = name | [] -> false) ->
+        let e = List.hd !elstack in
+        (match e.mode with
+         | `Inline -> if e.pushed then pop name; pending_space := true
+         | `Block -> handle t; if e.pushed then pop name; new_line ()
+         | `Normal -> handle t; if e.pushed then pop name);
+        if e.made_pre && !pre > 0 then decr pre;
+        if !skip = 0 && e.mode <> `Inline then begin
+          if css_space e.oattrs "bottom" then want_blank 1
+          else if name = "p" && css_zero e.oattrs "bottom" then blank_wanted := 0
+        end;
+        elstack := List.tl !elstack;
+        run rest
       | None, t -> handle t; run rest in
   run tokens;
   new_line ();

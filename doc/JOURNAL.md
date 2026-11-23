@@ -3244,3 +3244,24 @@ one V on each one's own semaphore, so no V waits for another.
 anything, not even a lock; and "a V for an event" wakes one thread,
 which is a broadcast only when one thread can wait.
 
+## 2026-11-23 — The browser stood still on Wikipedia's style sheets
+
+**Symptom.** With CSS (browser 1.6), Wikipedia's window stayed empty;
+`browser --dump` printed the first pass (the page's own `<style>`) and
+nothing after its two style sheets came.
+
+**Diagnosis.** The same page and sheets, through `css.ml` compiled on
+the host (the build container), hung too: reading the sheets took 24 ms,
+so it was the cascade. Its `var()` replaced a variable by its value and
+looked again: Wikipedia's variables name each other, and a pair that
+does so in a circle never ends.
+
+**Cause.** A substitution without a bound, in a language (CSS custom
+properties) that lets values refer to each other.
+
+**Fix.** At most 12 substitutions; past them the declaration is dropped,
+as a browser drops a cyclic one.
+
+**Lesson.** A tool's core that is plain OCaml can run on the host: the
+loop was found in a minute there, not by booting MyNOS again.
+

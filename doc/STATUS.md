@@ -1706,4 +1706,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   every package new, and PKG=local reinstalled them all). browser 1.5:
   the form fields edit at a cursor (a click, Left, Right, Home, End,
   Delete).
+- **2026-11-23** — browser 1.6, CSS "level A" (packages/browser/css.ml):
+  the page as a tree (the ends HTML leaves out added), its <style> blocks
+  and style sheets (fetched in parallel; the page shows first and takes
+  its style after), @media, selectors with combinators, the cascade with
+  an index by id, class and tag, var(); display, visibility and the
+  "visually hidden", colour, weight, decoration, text-align, white-space,
+  text-transform, list-style, margins as blank lines. Measured first:
+  Markup.ml and Lambda Soup parse 13 times slower than the browser's own
+  tokenizer (tmp/soup-bench). Wikipedia under KVM: 938 rules, the cascade
+  150 ms (1 s before an index of the rules and of each element's classes).
+  Not published yet: tried with PKG=local first.
 

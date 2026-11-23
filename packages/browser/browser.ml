@@ -89,6 +89,7 @@ type doc = {
   url : string;                     (* after redirections *)
   tokens : Html.token list;
   status : string;                  (* "200 OK", or what happened *)
+  mutable styled : (int * Html.token list) option;   (* its CSS applied, for a width *)
 }
 
 let user_agent = "MyNOS-browser/1.0 (text; no JavaScript)"
@@ -187,8 +188,50 @@ let cookie_headers url =
   | [] -> []
   | cs -> [ ("Cookie", String.concat "; " (List.rev_map (fun (_, n, v) -> n ^ "=" ^ v) cs)) ]
 
-let fetch ?body url : doc =
-  let page u tokens status = { url = u; tokens; status } in
+(* the style sheets fetched (<link rel=stylesheet>), by URL, for the
+   session: a page's are fetched with it, by its thread *)
+let sheets : (string, string) Hashtbl.t = Hashtbl.create 16
+let sheets_lock = Mutex.create ()
+
+let sheet_of base href =
+  Mutex.protect sheets_lock (fun () -> Hashtbl.find_opt sheets (resolve base href))
+
+(* a page's style sheets not fetched yet, each by a thread of its own:
+   true if some came *)
+let fetch_sheets (d : doc) =
+  let todo = List.sort_uniq compare (List.filter_map (fun href ->
+      let u = fst (strip_fragment (resolve d.url href)) in
+      if Mutex.protect sheets_lock (fun () -> Hashtbl.mem sheets u) then None else Some u)
+      (Css.links ~px:1024 d.tokens)) in
+  let one u = begin
+        let css = match scheme_of u with
+          | Some ("http" | "https") ->
+            (match Http.get ~timeout:15000
+                     ~headers:(("User-Agent", user_agent) :: ("Accept", "text/css,*/*;q=0.1")
+                               :: cookie_headers u) u with
+             | r when r.Http.status = 200 && String.length r.body <= 2_000_000 -> r.body
+             | _ -> ""
+             | exception _ -> "")
+          | Some "file" ->
+            (try In_channel.with_open_bin (String.sub u 5 (String.length u - 5)) In_channel.input_all
+             with _ -> "")
+          | _ -> "" in
+        Mutex.protect sheets_lock (fun () -> Hashtbl.replace sheets u css)
+      end in
+  List.iter Thread.join (List.map (fun u -> Thread.create one u) todo);
+  todo <> []
+
+(* the page's tokens with its CSS applied, for a window [px] wide *)
+let styled (d : doc) px =
+  match d.styled with
+  | Some (w, t) when w = px -> t
+  | _ ->
+    let t = Css.apply ~px ~sheet:(sheet_of d.url) d.tokens in
+    d.styled <- Some (px, t);
+    t
+
+let fetch ?body ?(px = 880) url : doc =
+  let page u tokens status = { url = u; tokens; status; styled = None } in
   let of_body u ct body status =
     let body = if Html.charset ~content_type:ct body = `Latin1 then Html.latin1_to_utf8 body else body in
     if is_html u ct then page u (Html.tokens body) status
@@ -231,13 +274,29 @@ let fetch ?body url : doc =
     | Some s -> page u (Html.tokens (message_page "Not a web address"
                                        ("The browser does not open " ^ s ^ ": addresses."))) s
     | None -> go ?body (of_typed u) n in
-  go ?body url 0
+  let d = go ?body url 0 in
+  (* its CSS, with the sheets known so far, here in the fetching thread *)
+  ignore (styled d px);
+  d
 
 (* ---- --dump: the page as text ---- *)
 
 let dump url =
-  let d = fetch (of_typed url) in
-  let p = Layout.layout ~width:78 d.tokens in
+  let t0 = Unix.gettimeofday () in
+  let d = fetch ~px:(78 * 8) (of_typed url) in
+  let t1 = Unix.gettimeofday () in
+  if fetch_sheets d then d.styled <- None;
+  let t2 = Unix.gettimeofday () in
+  ignore (styled d (78 * 8));
+  let t = Unix.gettimeofday () in
+  (* BROWSER_TIMES=1: where the time went, on the error output *)
+  if Sys.getenv_opt "BROWSER_TIMES" <> None then
+    Printf.eprintf "browser: page %.0f ms, %d style sheets %.0f ms, CSS %.0f ms (%d tokens)\n%!"
+      ((t1 -. t0) *. 1000.) (List.length (Css.links ~px:1024 d.tokens)) ((t2 -. t1) *. 1000.)
+      ((t -. t2) *. 1000.) (List.length d.tokens);
+  let p = Layout.layout ~width:78 (styled d (78 * 8)) in
+  if Sys.getenv_opt "BROWSER_TIMES" <> None then
+    Printf.eprintf "browser: layout %.0f ms\n%!" ((Unix.gettimeofday () -. t) *. 1000.);
   if p.Layout.title <> "" then Printf.printf "%s\n\n" p.title;
   print_string (Layout.to_text p);
   (* its links, numbered as lynx does *)
@@ -304,6 +363,7 @@ type picture = Loading | Ready of Image.t | Failed
 
 let pictures : (string, picture) Hashtbl.t = Hashtbl.create 32
 let pictures_done = Atomic.make 0              (* a picture came: lay out again *)
+let sheets_done = Atomic.make 0                (* a page's style sheets came: style it again *)
 let scaled : (string * int * int, Gfx.t) Hashtbl.t = Hashtbl.create 32
 
 (* the bytes of a URL: file:, http:, https: (redirections followed) *)
@@ -372,6 +432,7 @@ let () =
   | [ "--dump"; url ] -> dump url
   | args ->
     let first = match args with u :: _ -> of_typed u | [] -> "about:start" in
+    let last_cols = ref 110 in             (* the page's width when last laid out *)
     let st = { doc = fetch "about:start"; laid = None; address = first; back = []; forward = [];
                loading = None; want_scroll = None; offset = 0; hover = None;
                values = Hashtbl.create 8; focus = None;
@@ -382,8 +443,10 @@ let () =
       st.loading <- Some (url, n);
       st.address <- url;
       ignore (Thread.create (fun () ->
-          let d = fetch ?body url in
-          Mutex.protect lock (fun () -> fetched := Some (n, d))) ()) in
+          let d = fetch ?body ~px:(!last_cols * 8) url in
+          Mutex.protect lock (fun () -> fetched := Some (n, d));
+          (* shown already; styled again when its sheets come *)
+          if fetch_sheets d then begin d.styled <- None; Atomic.incr sheets_done end) ()) in
     let go ?body url =
       st.back <- (st.doc.url, st.offset) :: st.back;
       st.forward <- [];
@@ -400,7 +463,7 @@ let () =
           | Some i -> String.sub action 0 i | None -> action in
         go (no_query ^ "?" ^ data) in
     if first <> "about:start" then go first;
-    let pictures_seen = ref 0 in
+    let pictures_seen = ref 0 and sheets_seen = ref 0 in
     Gui.run ~title:"Browser" ~tick:0.1 ~resizable:(480, 320) 900 640 st (fun ui st ->
         let g = ui.Gui.g and width = Gui.width ui and height = Gui.height ui in
         (* a page fetched: shown, at its fragment if it has one *)
@@ -446,6 +509,8 @@ let () =
         (* a picture came: the page laid out again, with its size *)
         let done_now = Atomic.get pictures_done in
         if done_now <> !pictures_seen then begin pictures_seen := done_now; st.laid <- None end;
+        let sheets_now = Atomic.get sheets_done in
+        if sheets_now <> !sheets_seen then begin sheets_seen := sheets_now; st.laid <- None end;
         let size src attr =
           match picture_of (resolve st.doc.url src) with
           | Some (Ready img) -> Some (img.Image.width, img.height)
@@ -454,7 +519,8 @@ let () =
         let page = match st.laid with
           | Some (w, p) when w = cols -> p
           | _ ->
-            let p = Layout.layout ~size ~width:cols st.doc.tokens in
+            last_cols := cols;
+            let p = Layout.layout ~size ~width:cols (styled st.doc (cols * 8)) in
             st.laid <- Some (cols, p);
             (* its pictures, to fetch *)
             fetch_pictures (Array.to_list p.lines |> List.filter_map (fun (l : Layout.line) ->
