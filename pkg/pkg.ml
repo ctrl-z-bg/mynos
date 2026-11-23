@@ -10,6 +10,9 @@
      pkg remove NAME...        uninstall
      pkg update                read the index again
      pkg upgrade               read it, install the newer versions it has
+                               (or the same version built again)
+     pkg boot                  pkg upgrade if /disk/pkg/autoupgrade is there
+                               (init.rc; PKG=local tools/run-demo.sh)
 
    The index (index.json) and the packages (tar archives) are files of a
    repository on the web, by default ctrl-z-bg/mynos-packages on GitHub;
@@ -243,7 +246,7 @@ let rec install ~source ?(chain = []) name =
     else if List.for_all (( = ) `Bytecode) hows then "its bytecode"
     else if List.for_all (( = ) `Compiled) hows then "compiled from its sources"
     else "bytecode and sources" in
-  write (Filename.concat dir "installed") (e.version ^ "\n" ^ how ^ "\n");
+  write (Filename.concat dir "installed") (e.version ^ "\n" ^ how ^ "\n" ^ e.hash ^ "\n");
   Printf.printf "pkg: %s %s installed (%s)%s\n%!" name e.version how
     (match m.commands, m.progs with
      | [], [] -> ""
@@ -260,17 +263,31 @@ let remove name =
   rm_rf dir;
   Printf.printf "pkg: %s removed\n%!" name
 
-(* the index read again, then every installed package it has a newer
-   version of *)
+(* the index read again, then every installed package it has another
+   version of, or the same version built again (another archive: a
+   repository of packages being made, PKG=local tools/run-demo.sh) *)
 let upgrade () =
   update ();
   let index = index () in
   let old = List.filter_map (fun n ->
       match installed n, List.find_opt (fun e -> e.name = n) index with
-      | Some (v, _), Some e when v <> e.version -> Some n
+      | Some (v, _), Some e when v <> e.version || installed_hash n <> e.hash -> Some n
       | _ -> None) (installed_names ()) in
-  if old = [] then print_endline "pkg: every installed package is the index's version"
+  if old = [] then print_endline "pkg: every installed package is the index's"
   else List.iter (fun n -> install ~source:false n) old
+
+(* at boot (init.rc): pkg upgrade, if /disk/pkg/autoupgrade is there
+   (PKG=local tools/run-demo.sh puts it, with a repository on the host);
+   the network may take a few seconds to come up *)
+let boot () =
+  if Sys.file_exists (root ^ "/autoupgrade") then begin
+    let rec go n =
+      match upgrade () with
+      | () -> ()
+      | exception Fail m when n > 0 -> ignore m; Mynos.sleep 2.; go (n - 1)
+      | exception Fail m -> Mynos.log ("pkg boot: " ^ m) in
+    go 10
+  end
 
 let search word =
   let w = String.lowercase_ascii word in
@@ -334,6 +351,7 @@ let () =
     | "remove" :: names -> each remove names
     | [ "update" ] -> update ()
     | [ "upgrade" ] -> upgrade ()
+    | [ "boot" ] -> boot ()
     | [ "search"; word ] -> search word
     | _ -> usage ()
   with

@@ -253,6 +253,7 @@ VERBOSE=1 tools/run-demo.sh                   kernel messages stay on the screen
 | `KVM` | `1`, with `/dev/kvm` | the host's processor runs MyNOS's; `KVM=` emulates it |
 | `SOUND` | the host's audio (`pipewire`, `pa`, `alsa`, `coreaudio`) | a Sound Blaster 16 heard through this QEMU audio backend; `wav:FILE` records it; `SOUND=` none |
 | `QEMU_DISPLAY` | `sdl` with sound (if QEMU has it), QEMU's own otherwise | QEMU's window (`gtk`, `sdl`, ... as `qemu-system-i386 -display help` lists them). With a sound card QEMU's GTK window froze while the card played, hence SDL. A `-display` after `--` wins. |
+| `PKG` | not set | `PKG=local`: the packages just built (`tmp/packages`) from this machine instead of GitHub, the installed ones upgraded at boot (appendix H.9) |
 | `UDP` | not set | with `NET`, this UDP port of the host forwarded to the same port of MyNOS, from any address: `UDP=7145` for GavML's network game |
 | `DISK` | `system/disk.img`, if it exists | the disk image |
 | `VERBOSE` | not set | `verbose` on the kernel's command line |

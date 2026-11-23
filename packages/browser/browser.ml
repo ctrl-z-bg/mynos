@@ -103,9 +103,13 @@ let message_page title body =
 let start_page = {|<title>MyNOS browser</title>
 <h1>The MyNOS browser</h1>
 <p>A simple browser, written in OCaml for MyNOS: it reads HTML and shows
-its text and links. No JavaScript, no style sheets, no pictures yet: the
+its text, links, pictures and forms. No JavaScript, little CSS: the
 pages that do not need them read well. Type an address above (Enter
 goes), or follow a link.</p>
+<h2>Searching</h2>
+<ul>
+<li><a href="https://lite.duckduckgo.com/lite/">DuckDuckGo lite</a>: a search without JavaScript (Google's needs it)</li>
+</ul>
 <h2>Pages that read well</h2>
 <ul>
 <li><a href="https://en.m.wikipedia.org/wiki/OCaml">OCaml, on Wikipedia</a> (the mobile edition)</li>

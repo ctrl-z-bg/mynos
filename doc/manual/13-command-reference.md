@@ -835,7 +835,10 @@ its program in `/disk/bin`, on `PATH`: the bytecode it holds if this
 MyNOS can run it, otherwise (or with `-s`) the program compiled from its
 sources by `ocamlc`; the packages it needs come first, and its commands
 (scripts of one line, `#!PROGRAM`) go beside it. `remove` deletes them.
-`upgrade` reads the index and installs the newer versions; `search`
+`upgrade` reads the index and installs the newer versions (and a
+version built again, another archive); `boot`, run by `init`, upgrades
+when `/disk/pkg/autoupgrade` is there (`PKG=local tools/run-demo.sh`,
+appendix H.9); `search`
 looks in names and descriptions. `list` marks the installed
 packages, with their version when it is older than the index's;
 `list -i` lists the installed packages only, from `/disk`, without the

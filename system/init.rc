@@ -17,4 +17,5 @@ driver displayd
 driver soundd
 start llmd.byte
 start httpd.byte
+start pkg.byte boot
 respawn sh.byte

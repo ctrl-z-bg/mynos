@@ -16,6 +16,9 @@
 # port: doc/decisions/console.md), with the host's copy and paste,
 # scrollback and fonts; QEMU's window shows the same. Ctrl-C goes to MyNOS:
 # close the window, or type Ctrl-A then X, to stop QEMU.
+# PKG=local serves the packages just built (tmp/packages) to MyNOS from
+# this machine, and MyNOS upgrades the installed ones at boot: packages
+# tried before they are published.
 # (The system as it was in 2004-2008: git checkout legacy-last, see
 # doc/STATUS.md.)
 #
@@ -41,6 +44,38 @@ if [ -f llm.env ] && [ -n "${DISK:-}" ]; then
     else
         tools/in-container.sh dev mcopy -o -i "$DISK" llm.env ::/llm.env
     fi && echo "run-demo.sh: llm.env copied to /disk/llm.env" >&2
+fi
+# PKG=local: the packages just built (tools/build-all.sh, tmp/packages)
+# served from this machine, before they are published: /disk/pkg/url
+# names them, and /disk/pkg/autoupgrade makes MyNOS upgrade the installed
+# ones at boot (pkg boot), the same versions built again too. Without
+# PKG=local, those two files are taken away if they name such a server.
+# (mtools never read the terminal: mmd on a folder that exists asks
+# what to do, and waited there for ever)
+mt() { if command -v mcopy >/dev/null; then "$@" </dev/null
+       else tools/in-container.sh dev "$@" </dev/null; fi; }
+pkg_server=
+pkg_port=${PKG_PORT:-47120}
+if [ -n "${DISK:-}" ]; then
+    tmpd=$(mktemp -d)
+    if [ "${PKG:-}" = local ]; then
+        if [ ! -f tmp/packages/index.json ]; then
+            echo "run-demo.sh: PKG=local: no tmp/packages/index.json (tools/build-all.sh builds it)" >&2
+            exit 1
+        fi
+        printf 'http://10.0.2.2:%s\n' "$pkg_port" > "$tmpd/url"
+        printf 'PKG=local tools/run-demo.sh\n' > "$tmpd/autoupgrade"
+        mt mdir -i "$DISK" ::/pkg >/dev/null 2>&1 || mt mmd -i "$DISK" ::/pkg
+        mt mcopy -o -i "$DISK" "$tmpd/url" ::/pkg/url
+        mt mcopy -o -i "$DISK" "$tmpd/autoupgrade" ::/pkg/autoupgrade
+        python3 tools/net-peer.py files "$pkg_port" tmp/packages >/dev/null 2>&1 &
+        pkg_server=$!
+        echo "run-demo.sh: packages from tmp/packages (http://10.0.2.2:$pkg_port), upgraded at boot" >&2
+    elif mt mtype -i "$DISK" ::/pkg/url 2>/dev/null | grep -q '^http://10\.0\.2\.2:'; then
+        mt mdel -i "$DISK" ::/pkg/url ::/pkg/autoupgrade 2>/dev/null || true
+        echo "run-demo.sh: packages from GitHub again (PKG=local for this machine's)" >&2
+    fi
+    rm -rf "$tmpd"
 fi
 # the network, and the host's port 8080 to httpd if it is free
 export NET=${NET-1}
@@ -92,9 +127,13 @@ if [ -n "${SERIAL:-}" ]; then
         -serial chardev:term -mon chardev=term,mode=readline "$@"
     echo "run-demo.sh: this terminal is MyNOS's console (Ctrl-A X stops QEMU)" >&2
 fi
-MEM=${MEM:-2048} exec tools/run-qemu.sh \
+[ -n "$pkg_server" ] || exec_=exec
+status=0
+${exec_:-} env MEM=${MEM:-2048} tools/run-qemu.sh \
     "$ocamlrun" \
     services/registry/registry \
     services/fs/memrofs/memrofsd \
     system/ramdisk.dsk \
-    -- "$@"
+    -- "$@" || status=$?
+[ -n "$pkg_server" ] && kill "$pkg_server" 2>/dev/null
+exit $status

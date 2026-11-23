@@ -446,6 +446,18 @@ cache for five minutes: a cached index must still find the archives it
 names, and a new archive, having its hash in its name, was never cached. A package whose sources changed gets
 a new `VERSION`, so that `pkg list` shows the installed one as older.
 
+**Trying packages before publishing them.** `PKG=local tools/run-demo.sh`
+serves `tmp/packages` (what `tools/build-all.sh` just built) to MyNOS
+from the host, on port 47120 (`PKG_PORT` another), and writes on the
+disk `/disk/pkg/url`, which names it, and `/disk/pkg/autoupgrade`. At
+boot `init` runs `pkg boot`, which then does a `pkg upgrade`: every
+installed package whose archive is not the index's (a new version, or
+the same version built again: `installed` keeps the archive's hash) is
+installed again. So: change a package, `tools/build-all.sh`, `PKG=local
+tools/run-demo.sh`, and the installed one is the new one; new packages
+with `pkg install`. Without `PKG=local`, `run-demo.sh` takes those two
+files away, and `pkg` reads GitHub again.
+
 A package's documentation may have pictures: `packages/NAME/images/`,
 named in its README as `images/FILE.png`. Its page in `mynos-packages`
 is then a folder, `docs/NAME/` (the README and the pictures); the archive

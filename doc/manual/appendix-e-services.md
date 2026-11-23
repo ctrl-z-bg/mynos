@@ -127,7 +127,8 @@ lines in order:
 driver consoled          start tmpfs.byte         start clipboard.byte
 driver ata.byte          start fatfs.byte         driver pagerd.byte
 driver netd              driver displayd          driver soundd
-start llmd.byte          start httpd.byte         respawn sh.byte
+start llmd.byte          start httpd.byte         start pkg.byte boot
+respawn sh.byte
 ```
 
 | Keyword | Meaning |

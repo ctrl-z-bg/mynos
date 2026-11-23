@@ -1690,4 +1690,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   skipped; an element's own `display` beats a hiding rule. Packages built
   before the field cursor keep the old Gui (they link it): browser rebuilt
   with it. Google's search itself needs JavaScript.
+- **2026-11-23** — Packages tried before publishing: `PKG=local
+  tools/run-demo.sh` serves tmp/packages from the host (port 47120) and
+  writes /disk/pkg/url and /disk/pkg/autoupgrade; `pkg boot` (init.rc)
+  upgrades then at boot; `pkg upgrade` reinstalls a package whose archive
+  changed with the same version (`installed` keeps its hash). Without
+  PKG=local the two files go. Tried on a clean disk: install, a rebuilt
+  package upgraded at boot, back to GitHub. browser 1.4: DuckDuckGo lite
+  on the start page.
 

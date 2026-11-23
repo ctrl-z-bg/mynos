@@ -65,6 +65,14 @@ let installed name =
   | _ -> None
   | exception Sys_error _ -> None
 
+(* the hash of the archive installed ("" if it was not kept: installed
+   before pkg kept it) *)
+let installed_hash name =
+  match String.split_on_char '\n' (read (Printf.sprintf "%s/%s/installed" root name)) with
+  | _ :: _ :: h :: _ -> String.trim h
+  | _ -> ""
+  | exception Sys_error _ -> ""
+
 (* the copy of the index on /disk, if there is one *)
 let cached_index () =
   try entries (read index_file) with Fail _ | Sys_error _ -> []
