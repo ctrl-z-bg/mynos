@@ -50,15 +50,15 @@ struct tms {
 #define USER(P, N) do { if (!__mem_userArea((P), (N))) return -14; } while (0)
 
 /* times (43): the process's CPU time, all of it counted as user time, in
-   ticks (Linux's USER_HZ is 100, the PIT's frequency); the children's is
-   not kept. Returns the ticks since boot. */
+   Linux's USER_HZ ticks (100 a second; the PIT's are 1000); the
+   children's is not kept. Returns the ticks since boot. */
 int _linux_syscall_times(struct tms *buf) {
   if (buf) {
     USER(buf, sizeof *buf);
-    buf->tms_utime = processTable[currProcess]->cpuTicks;
+    buf->tms_utime = USER_TICKS(processTable[currProcess]->cpuTicks);
     buf->tms_stime = buf->tms_cutime = buf->tms_cstime = 0;
   }
-  return timerTicks;
+  return USER_TICKS(timerTicks);
 }
 
 /* getrusage (77): the same CPU time; RUSAGE_CHILDREN (-1) gets zero, and

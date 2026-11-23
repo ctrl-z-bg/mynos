@@ -37,5 +37,6 @@ tss_t * timerQueueNext();
 tss_t * timerQueueExtractThread(tss_t * t);
 uint32_t timerQueueNElem();
 tss_t * timerQueueExtractExpired();
+int timerQueueDue();
 
 #endif

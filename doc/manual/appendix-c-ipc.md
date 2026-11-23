@@ -161,7 +161,7 @@ the description `msg` and the short buffer are the caller's memory, locks
 its end (`MYNOS_ERR_BUSY` if another thread is receiving on it), and
 takes the oldest message. If there is none and the other side has freed
 the channel, it returns `MYNOS_ERR_BROKEN`; otherwise it sleeps, for at
-most `timeout` milliseconds if `timeout` is not 0 (counted in 10 ms timer
+most `timeout` milliseconds if `timeout` is not 0 (counted in 1 ms timer
 ticks), and returns `MYNOS_ERR_EXPIRED` if nothing came. It wakes a
 sender waiting for this message, then writes the description:
 

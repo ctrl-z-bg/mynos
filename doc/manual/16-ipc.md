@@ -88,7 +88,7 @@ to a program:
   first, because the garbage collector may move it.
 
 `recv` waits for the next message. Its last argument is a timeout in
-milliseconds (0: wait for ever), counted in 10 ms ticks; when it passes,
+milliseconds (0: wait for ever), counted in 1 ms ticks; when it passes,
 `recv` returns `MYNOS_ERR_EXPIRED`. Only one thread may receive on an end
 at a time (`MYNOS_ERR_BUSY`). In C the message comes as a description:
 

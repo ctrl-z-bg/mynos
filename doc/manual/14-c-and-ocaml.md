@@ -53,7 +53,7 @@ The OCaml runtime gets the same functions, so the standard library's
 | Processes | `mynos_spawn`, `waitpid`, `mynos_kill`, `fork`, `getpid` | `mynos.h` and the kernel (chapter 15) |
 | IPC | ports, channels, messages, the registry, semaphores | `mynos.h`, `mynos_registry.h` (chapter 16) |
 | Typed IPC | the wire format: writer, reader, replies | `mynos_wire.h` |
-| Time | `mynos_sleep`, `nanosleep`, `clock_gettime`: 10 ms ticks | the kernel |
+| Time | `mynos_sleep`, `nanosleep`, `clock_gettime`: 1 ms ticks | the kernel |
 | The log | `mynos_log(fmt, ...)`: a line on the log port (COM2) | `libmynos` |
 
 What is not there: `execve` (a program starts another with

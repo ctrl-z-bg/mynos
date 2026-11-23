@@ -14,6 +14,7 @@
 #include "trace.h"
 #include "process.h"
 #include "kutils.h"
+#include "pit.h"
 #include "mem/mem.h"
 #include "mem/dynalloc.h"
 #include "mynos.h"
@@ -147,9 +148,9 @@ int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2) {
     w[2] = dropped;
     w[3] = start_tsc_lo;
     w[4] = start_tsc_hi;
-    w[5] = start_ticks;
+    w[5] = USER_TICKS(start_ticks);
     rdtsc(&w[6], &w[7]);
-    w[8] = timerTicks;
+    w[8] = USER_TICKS(timerTicks);
     return 0;
   }
   case TRACE_MARK_OP: {
@@ -201,12 +202,12 @@ int _mynos_syscall_procstat(int32_t pid, uint32_t buf) {
   uint32_t e[6];
   process_descriptor_t * p = pid >= 0 ? processTable[PSLOT(pid)] : NULL;
   if (p == NULL || !p->isAlive || p->pid != (pid_t)pid) return MYNOS_ERR_INVALID;
-  e[0] = p->cpuTicks;
+  e[0] = USER_TICKS(p->cpuTicks);
   e[1] = p->faultsAlloc;
   e[2] = p->faultsCow;
   e[3] = pid == 0 ? __total_phy_pages : __OS_residentPages(p);
   e[4] = p->numThreads;
-  e[5] = timerTicks;
+  e[5] = USER_TICKS(timerTicks);
   if (copy_to_user((char *)buf, e, sizeof e)) return MYNOS_ERR_INVALID;
   return 0;
 }

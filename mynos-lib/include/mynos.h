@@ -113,7 +113,7 @@ void mynos_threadExit(void * retval);
 int mynos_threadSelf();
 
 /* TIMER */
-/* block the calling thread for at least usec microseconds (10 ms ticks) */
+/* block the calling thread for at least usec microseconds (1 ms ticks) */
 int mynos_sleep(unsigned long usec);
 int mynos_setTimer(unsigned long usec);  /* old name of mynos_sleep */
 

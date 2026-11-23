@@ -29,12 +29,21 @@
 /* PIT input frequency */
 #define PIT_INPUT_Hz     1193181
 
-/* PIT right frequency */
+/* PIT right frequency: 1000 Hz since 2026 (mynos-zeu; it was 100 Hz,
+   and a wait of 1 ms lasted 20) */
 //#define PIT_FREQ 18.21
-#define PIT_FREQ 100
+#define PIT_FREQ 1000
 
 /* msec corresponding to one tick */
 #define ONE_TICK_TIME (1000/PIT_FREQ)
+
+/* the scheduler's quantum, in ticks: 10 ms, as at 100 Hz; a tick in
+   between schedules only to wake a sleeper or to leave the idle thread */
+#define SCHED_TICKS (PIT_FREQ/100)
+
+/* what the system calls report as ticks (times, native 38, the
+   recorder's header) stays in 10 ms units, Linux's USER_HZ of 100 */
+#define USER_TICKS(t) ((t) / (PIT_FREQ/100))
 
 /* PIT ports */
 #define PIT_CHANNEL_0    0x40

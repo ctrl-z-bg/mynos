@@ -61,6 +61,9 @@ void pit_handler() {
   random_event(0);
 
   outportb(0x20, 0x20);
-  
-  sched();
+
+  /* a new round every SCHED_TICKS; in between, only to wake a thread
+     whose sleep is over, or when the idle thread runs */
+  if (timerTicks % SCHED_TICKS == 0 || currThread->pid == 0 || timerQueueDue())
+    sched();
 }

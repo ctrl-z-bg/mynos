@@ -115,7 +115,8 @@ When no recording is on, the cost is one test of a global flag
 processor cycles. Its rate is unknown to the kernel, so it also notes the
 timer's tick count when the recording starts; the reader compares both at
 the end (G.5, operation 3) and computes the counter's rate in kHz from
-the elapsed ticks at 100 Hz. Times in recordings are milliseconds since
+the elapsed ticks, which the kernel reports at 100 Hz (in 10 ms
+units, whatever the timer's rate). Times in recordings are milliseconds since
 the first event.
 
 ## G.5 The system calls

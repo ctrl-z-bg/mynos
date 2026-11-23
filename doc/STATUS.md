@@ -1736,3 +1736,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   musl's allocator straight, which locks by itself after pthread_create.
   2 million malloc/free: 1.61 s, now 0.09 s (Linux 0.08 s). NetSurf work
   resumed (mynos-1g0).
+- **2026-11-23** — The timer at 1000 Hz (mynos-zeu; it was 100 Hz): a
+  sleep of 1 ms lasted 20, now 2; the clocks have 1 ms resolution. The
+  scheduler keeps its 10 ms quantum (a round every 10 ticks, or sooner
+  to wake a sleeper or leave the idle thread); `times`, native 38 and
+  the recorder still report ticks of 10 ms. NetSurf loads a saved
+  Wikipedia page in 0.68 s (4.28 s at 100 Hz; Linux 0.23 s). Without
+  KVM the faster timer costs about 5% of computing; the suite's lanes
+  last the same (e 662 s, d 469 s at 1000 Hz; 665 and 470 at 100 Hz):
+  the whole run is about 11 minutes, not the 4.5 noted before.

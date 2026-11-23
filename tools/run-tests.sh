@@ -3,7 +3,7 @@
 # to COM2) and check the expected output. Build first with tools/build-all.sh.
 #
 # Usage: tools/run-tests.sh            exit status 0 if all checks pass
-# The boots run in five lanes at once (about 4.5 minutes in all):
+# The boots run in five lanes at once (about 11 minutes in all, lane e):
 #   a  the first boots: bytecode, effects, the ATA disk, FAT, domains
 #   b  the library, files, the kernel stress test, spawning, the console
 #   c  without COM2, and restarting again and again

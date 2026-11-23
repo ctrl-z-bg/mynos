@@ -17,8 +17,9 @@
 /*
  * Time: the monotonic clock is the PIT tick counter (timerTicks, PIT_FREQ
  * per second); the wall clock is the CMOS real-time clock read once at boot
- * plus the ticks since then. Sleeping uses the timer queue that sched()
- * checks on every tick.
+ * plus the ticks since then. Sleeping uses the timer queue, checked at
+ * every tick (1 ms); a sleep lasts at least what was asked, at most a
+ * tick more. The counter is 32 bits: it wraps after 49.7 days.
  *
  * Only 32-bit divisions here: 64-bit ones would need libgcc, which the
  * kernel does not link.

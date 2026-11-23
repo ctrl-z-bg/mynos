@@ -59,7 +59,7 @@ its `argv`.
 3. prepares the process table and the scheduler's queues;
 4. programs the two 8259 interrupt controllers (IRQs 0–7 at vectors
    `0x20`–`0x27`, 8–15 at `0x28`–`0x2F`) and loads the IDT;
-5. measures a delay loop, then starts the 8253 timer at 100 Hz;
+5. measures a delay loop, then starts the 8253 timer at 1000 Hz;
 6. reads the clock (`time_init`: the CMOS clock once, then timer ticks),
    seeds the random number pool (`random_init`), and creates the
    semaphore table;
@@ -195,9 +195,10 @@ yet (mynos-awn).
 ## A.5 The scheduler
 
 The scheduler (`kernel/sched.c`) is a **round robin** over one queue of
-ready threads, from every process. It runs on every timer tick (100 Hz,
-so a thread runs at most 10 ms before the next one) and whenever a thread
-blocks. Each time it:
+ready threads, from every process. It runs every ten timer ticks (the
+timer runs at 1000 Hz: a thread runs at most 10 ms before the next one),
+at any tick when a sleeper is due or the idle thread is running, and
+whenever a thread blocks. Each time it:
 
 1. wakes the threads whose sleep has ended: a second queue, ordered by
    time to wake, holds the sleepers;
@@ -345,7 +346,7 @@ generation.
 | semaphores | 4,096 | `MAXSEM`, `sem.c` |
 | channels | 4,096 | appendix C |
 | kernel stack per thread | 4 pages (16 KB) | `KERNEL_STACK_NPAGES`, `global.h` |
-| timer | 100 Hz | `PIT_FREQ`, `pit.h` |
+| timer | 1000 Hz (100 Hz until November 2026); the scheduler's quantum 10 ticks | `PIT_FREQ`, `SCHED_TICKS`, `pit.h` |
 | processors | 1 | mynos-awn |
 
 ## A.11 Known limits

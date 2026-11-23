@@ -115,7 +115,7 @@ The kernel answers the 55 call numbers below. Every other number gets
 | 122 | `uname` | `MyNOS`, `mynos`, the version (`2026.11-71dc1d2`: the build's year and month and its commit), `#1`, `i386` |
 | 64 | `getppid` | the parent's pid |
 | 29 | `pause` | waits forever: no signal can end the wait |
-| 43 | `times` | the process's CPU time in ticks of 10 ms, all of it as user time; the children's is not kept (0); returns the ticks since boot |
+| 43 | `times` | the process's CPU time in ticks of 10 ms (Linux's `USER_HZ`, whatever the timer's rate), all of it as user time; the children's is not kept (0); returns the ticks since boot |
 | 77 | `getrusage` | the same CPU time, as user time; `RUSAGE_CHILDREN` and the other fields (memory, faults, switches) get 0 |
 | 24, 47, 49, 50, 199-202 | `getuid`, `getgid`, `geteuid`, `getegid` and their 32-bit forms | 0: MyNOS has no users (`doc/decisions/identity-and-permissions.md`) |
 
@@ -156,9 +156,9 @@ services.
 | 197 | `fstat64` | the same, whatever the descriptor |
 | 54 | `ioctl` | `TIOCGWINSZ` on descriptors 0-2: 25 rows, 80 columns (musl's `isatty` asks it); anything else `-ENOTTY` |
 
-**Time.** The clocks come from `kernel/time.c`: timer ticks at 100 Hz,
+**Time.** The clocks come from `kernel/time.c`: timer ticks at 1000 Hz,
 plus, for `CLOCK_REALTIME`, the CMOS clock read once at boot. Their
-resolution is therefore 10 ms. The CPU-time clocks
+resolution is therefore 1 ms. The CPU-time clocks
 (`CLOCK_PROCESS_CPUTIME_ID`, `CLOCK_THREAD_CPUTIME_ID`) give the
 process's CPU time: the timer ticks that found it running, kept in its
 descriptor (`cpuTicks`); a thread's is its process's. Any other clock
@@ -484,6 +484,7 @@ service learns that a client went away when its channel breaks
   system without file services every `open` and `stat` finds module 1.
 - The initial stack must fit in one page; the auxiliary vector is empty.
 - Futexes: 256 waiters in all; no priority inheritance or robust lists.
-- The clocks tick at 100 Hz: no time is finer than 10 ms, and a sleep
-  lasts at least one tick.
+- The clocks tick at 1000 Hz: no time is finer than 1 ms, and a sleep
+  lasts what it asked plus up to a tick. The tick counter has 32 bits:
+  the clocks since boot wrap after 49.7 days.
 - Threads share one processor (mynos-awn).

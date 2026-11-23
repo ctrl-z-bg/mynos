@@ -103,7 +103,7 @@ val console_foreground : int -> unit
 
 **DESCRIPTION** — Thin bindings to libmynos. *Time*: `uptime` is
 seconds since boot, `time` seconds since 1970 (UTC, from the clock read
-at boot), `sleep s` blocks the calling thread at least `s` seconds (10 ms
+at boot), `sleep s` blocks the calling thread at least `s` seconds (1 ms
 resolution). `log` writes a line to the kernel log (the serial log port,
 and the kernel's 64 KB ring); `log_position ()` is how many bytes have
 been logged since boot, `log_read from max` the logged bytes from a
@@ -1145,7 +1145,7 @@ int  mynos_consoleForeground(int pid);
 ```
 
 **DESCRIPTION** — `sleep` blocks the calling thread at least `usec`
-microseconds, in 10 ms ticks. `log` writes a formatted line to the kernel
+microseconds, in 1 ms ticks. `log` writes a formatted line to the kernel
 log (the serial log port). `consoleMode` sets the console's input mode
 (as `tcsetattr` does); `consoleForeground` names the program Ctrl-C ends
 (0: none).

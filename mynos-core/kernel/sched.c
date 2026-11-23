@@ -93,6 +93,12 @@ uint32_t timerQueueNElem() {
   return pqNElem(&timerQueue);
 }
 
+/* a sleeper to wake at this tick */
+int timerQueueDue() {
+  return !pqEmpty(&timerQueue) &&
+    ((tss_t *)(timerQueue.head->elem))->timeToWake < timerTicks;
+}
+
 tss_t * timerQueueExtractExpired() {
   tss_t * ret;
   if (pqEmpty(&timerQueue))
@@ -152,7 +158,7 @@ void sched() {
   currThread = readyQueueNext();
   /* the idle thread (process 0) runs only when no other thread is ready:
      it keeps the CPU until the next timer tick, and every IPC exchange
-     that reached it in the round robin waited up to 10 ms */
+     that reached it in the round robin waited up to a tick */
   if (currThread->pid == 0 && readyQueueNElem() > 1)
     currThread = readyQueueNext();
   currProcess = PSLOT(currThread->pid);

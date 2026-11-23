@@ -307,9 +307,9 @@ restarts MyNOS three times), with different sets of modules and RAM
 disks, and check what each boot did.
 The boots run in five **lanes** at once, each lane a subshell running its
 boots one after the other; lanes share nothing (each has its own files,
-monitor sockets and host ports). The script's header gives about 4.5
-minutes for the whole run; one after the other, the boots took 10 to 11
-(journal, 2026-11-18).
+monitor sockets and host ports). The whole run lasts as long as its
+longest lane: lane e, about 11 minutes without KVM (measured on
+2026-11-23: a 127 s, b 65 s, c 33 s, d 470 s, e 665 s).
 
 | Lane | Boots |
 |---|---|

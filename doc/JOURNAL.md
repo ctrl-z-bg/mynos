@@ -3316,3 +3316,34 @@ functions call musl's directly. 0.09 s for the test; NetSurf's page from
 **Lesson.** A layer written for one library outlives it: when the C
 library changed, what it protected against should have been checked
 again, and it costs every program, every time.
+
+## 2026-11-23 — A wait of 1 ms lasted 20
+
+**Symptom.** NetSurf, in MyNOS, loaded a saved Wikipedia page in 4.3 s,
+0.23 s on Linux, though computing and memory measured as fast as there.
+Sampling the processor's EIP from QEMU's monitor during the load found
+it mostly in the kernel's idle loop: NetSurf was waiting, not working.
+
+**Diagnosis.** NetSurf works in scheduled steps (each fetch, each style
+sheet), and waits between them, for a few milliseconds. A test of
+nanosleep and select from 0 to 20 ms: on Linux each lasts what it asked
+plus 0.2 ms; in MyNOS a wait of 0 lasted 10 ms, of 1 to 10 ms lasted 20,
+of 11 to 20 lasted 30. `select` is not there at all (it fails at once).
+
+**Cause.** The timer ran at 100 Hz, as in 2002. A sleep is rounded up to
+whole ticks, and wakes at the tick after its last (`timeToWake <
+timerTicks`), so that it lasts at least what was asked: a tick more
+than the rounding. With 10 ms ticks, every short wait cost 10 to 20 ms;
+the clocks, made of the same ticks, could not even measure it.
+
+**Fix.** The timer at 1000 Hz (`PIT_FREQ`). The scheduler keeps its
+10 ms quantum (`SCHED_TICKS`): between two rounds a tick schedules only
+to wake a sleeper whose time has come, or when the idle thread runs.
+What the system calls report as ticks (`times`, native 38, the
+recorder's header) stays in 10 ms units, so sysmonitor and the recorder
+read the same numbers. Waits now last what they ask plus 1 ms; the page
+loads in 0.68 s.
+
+**Lesson.** A program's speed is also how fast it is woken: the first
+measure of NetSurf counted computing and memory, which were fine, and
+the idle loop held the answer.
