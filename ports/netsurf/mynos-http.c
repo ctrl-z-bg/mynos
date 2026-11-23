@@ -24,6 +24,7 @@
 #include <string.h>
 #include <strings.h>
 #include <pthread.h>
+#include <time.h>
 #include <libwapcaplet/libwapcaplet.h>
 
 #include "utils/nsurl.h"
@@ -323,6 +324,13 @@ static void feed(struct reader *rd, const char *p, size_t n)
 	body(rd, p, n);
 }
 
+static double now_ms(void)
+{
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return t.tv_sec * 1e3 + t.tv_nsec / 1e6;
+}
+
 static void *worker(void *arg)
 {
 	struct mhttp *c = arg;
@@ -332,6 +340,8 @@ static void *worker(void *arg)
 	struct reader rd;
 	bool free_now;
 
+	double t0 = now_ms(), t_conn = 0, t_sent = 0, t_first = 0;
+	size_t bytes = 0;
 	memset(&rd, 0, sizeof rd);
 	rd.c = c;
 	rd.remaining = -1;
@@ -359,12 +369,14 @@ static void *worker(void *arg)
 		}
 	}
 
+	t_conn = now_ms();
 	if (s >= 0 && !c->aborted) {
 		net_start(&w, N_TIMEOUT);
 		wire_put_int(&w, s);
 		wire_put_int(&w, 30000);
 		net_int(&w, err, sizeof err);
 		if (sock_send((int)s, c->request, c->request_len, err, sizeof err) == 0) {
+			t_sent = now_ms();
 			while (!c->aborted && !rd.done) {
 				wire_reader r;
 				mynos_msg_t *msg;
@@ -381,6 +393,8 @@ static void *worker(void *arg)
 					else if (err[0] == '\0') snprintf(err, sizeof err, "the connection closed early");
 					break;
 				}
+				if (t_first == 0) t_first = now_ms();
+				bytes += n;
 				feed(&rd, d, n);
 				mynos_freeMsg(&msg);
 			}
@@ -394,6 +408,11 @@ static void *worker(void *arg)
 	}
 	if (rd.done) push(c, I_DONE, 0, NULL, 0);
 	else if (!c->aborted) push(c, I_ERROR, 0, err[0] ? err : "fetch failed", strlen(err[0] ? err : "fetch failed"));
+	if (getenv("NSFB_DEBUG") != NULL && mynos_log != NULL)
+		mynos_log("nsfb time: %s %s:%d start %.0f connect %.0f send %.0f first %.0f end %.0f bytes %u\n",
+			  c->tls ? "tls" : "tcp", c->host, c->port, t0,
+			  t_conn - t0, t_sent ? t_sent - t_conn : 0,
+			  t_first ? t_first - t_sent : 0, now_ms() - t0, (unsigned)bytes);
 	if (!rd.done && getenv("NSFB_DEBUG") != NULL && mynos_log != NULL)
 		mynos_log("nsfb http: %s:%d: %s%s\n", c->host, c->port,
 			  c->aborted ? "aborted " : "", err[0] ? err : "fetch failed");
