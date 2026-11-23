@@ -1,0 +1,10 @@
+--- a/netsurf/content/fetchers/Makefile
++++ b/netsurf/content/fetchers/Makefile
+@@ -1,6 +1,6 @@
+ # Content fetchers sources
+ 
+-S_FETCHERS_YES := data.c resource.c
++S_FETCHERS_YES := data.c resource.c mynos_http.c
+ S_FETCHERS_NO :=
+ S_FETCHERS_$(NETSURF_USE_CURL) += curl.c
+ 

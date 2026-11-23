@@ -1,0 +1,18 @@
+--- a/netsurf/frontends/framebuffer/fetch.c
++++ b/netsurf/frontends/framebuffer/fetch.c
+@@ -54,7 +54,14 @@
+ 	if (strcmp(path, "favicon.ico") == 0)
+ 		path = "favicon.png";
+ 
+-	netsurf_path_to_nsurl(filepath_sfind(respaths, buf, path), &url);
++	{
++		char *found = filepath_sfind(respaths, buf, path);
++		int k;
++		for (k = 0; respaths != NULL && respaths[k] != NULL && k < 8; k++)
++			NSLOG(netsurf, INFO, "(mynos) respath %d: %s", k, respaths[k]);
++		NSLOG(netsurf, INFO, "(mynos) resource %s -> %s", path, found ? found : "(none)");
++		netsurf_path_to_nsurl(found, &url);
++	}
+ 
+ 	return url;
+ }

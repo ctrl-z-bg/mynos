@@ -1745,3 +1745,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   KVM the faster timer costs about 5% of computing; the suite's lanes
   last the same (e 662 s, d 469 s at 1000 Hz; 665 and 470 at 100 Hz):
   the whole run is about 11 minutes, not the 4.5 noted before.
+- **2026-11-23** — NetSurf ported (ports/netsurf, doc/decisions/netsurf.md,
+  mynos-1g0): its sources downloaded (version and SHA-256 fixed),
+  patched, built in a container of its own (tools/containers/netsurf).
+  Two pieces of MyNOS's: a libnsfb surface, a window of displayd
+  (display/1), and an HTTP fetcher over netd's sockets (net/1, TLS by
+  netd); ten patches in all. In MyNOS: links, the keyboard, the address bar, JavaScript, and
+  Wikipedia's article on OCaml over HTTPS in about 10 s, without images.
+  How it reaches users is not decided yet.

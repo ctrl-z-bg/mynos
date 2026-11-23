@@ -1,0 +1,51 @@
+--- a/netsurf/utils/filepath.c
++++ b/netsurf/utils/filepath.c
+@@ -31,6 +31,7 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <unistd.h>
++#include <fcntl.h>
+ #include <string.h>
+ 
+ #include "utils/dirent.h" /** \todo why is this necessary for atari to get PATH_MAX and is there a better way */
+@@ -41,6 +42,40 @@
+ /** maximum number of elements in the resource vector */
+ #define MAX_RESPATH 128
+ 
++/* (MyNOS, mynos-6e0) musl's realpath reads /proc/self/fd, which MyNOS
++   has not: the path made absolute and checked, without resolving links
++   (MyNOS's file systems have none) */
++static char *ns_realpath(const char *path, char *out)
++{
++	struct stat st;
++	char tmp[PATH_MAX];
++	if (path[0] == '/') {
++		if (strlen(path) >= PATH_MAX) return NULL;
++		strcpy(tmp, path);
++	} else {
++		if (getcwd(tmp, sizeof tmp) == NULL) return NULL;
++		if (strlen(tmp) + 1 + strlen(path) >= PATH_MAX) return NULL;
++		strcat(tmp, "/");
++		strcat(tmp, path);
++	}
++	if (stat(tmp, &st) != 0) return NULL;
++	if (out == NULL) return strdup(tmp);
++	strcpy(out, tmp);
++	return out;
++}
++#define realpath ns_realpath
++
++/* (MyNOS) access() is not there either: readable if it opens */
++static int ns_access(const char *path, int mode)
++{
++	int fd = open(path, O_RDONLY);
++	(void)mode;
++	if (fd < 0) return -1;
++	close(fd);
++	return 0;
++}
++#define access ns_access
++
+ /* exported interface documented in filepath.h */
+ char *filepath_vsfindfile(char *str, const char *format, va_list ap)
+ {

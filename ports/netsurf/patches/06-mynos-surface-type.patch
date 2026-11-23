@@ -1,0 +1,10 @@
+--- a/libnsfb/include/libnsfb.h
++++ b/libnsfb/include/libnsfb.h
+@@ -42,6 +42,7 @@
+     NSFB_SURFACE_LINUX, /**< Linux framebuffer surface */
+     NSFB_SURFACE_ABLE, /**< ABLE framebuffer surface */
+     NSFB_SURFACE_RAM, /**< RAM surface */
++    NSFB_SURFACE_MYNOS, /**< a window of MyNOS's display service */
+     NSFB_SURFACE_COUNT, /**< The number of surface kinds */
+ };
+ 

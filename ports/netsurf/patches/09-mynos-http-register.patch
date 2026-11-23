@@ -1,0 +1,23 @@
+--- a/netsurf/content/fetch.c
++++ b/netsurf/content/fetch.c
+@@ -58,6 +58,8 @@
+ #include "content/fetchers/curl.h"
+ #endif
+ #include "content/fetchers/data.h"
++/* (MyNOS) http and https through netd: content/fetchers/mynos_http.c */
++nserror fetch_mynos_http_register(void);
+ #include "content/fetchers/file/file.h"
+ #include "javascript/fetcher.h"
+ #include "content/urldb.h"
+@@ -299,6 +301,11 @@
+ 	if (ret != NSERROR_OK) {
+ 		return ret;
+ 	}
++
++	ret = fetch_mynos_http_register();
++	if (ret != NSERROR_OK) {
++		return ret;
++	}
+ 
+ 	ret = fetch_file_register();
+ 	if (ret != NSERROR_OK) {

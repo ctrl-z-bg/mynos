@@ -3347,3 +3347,24 @@ loads in 0.68 s.
 **Lesson.** A program's speed is also how fast it is woken: the first
 measure of NetSurf counted computing and memory, which were fine, and
 the idle loop held the answer.
+
+## 2026-11-23 — NetSurf's own log made it look slow
+
+**Symptom.** With the timer at 1000 Hz, NetSurf's verbose log (`-v`)
+still put Wikipedia's parse at 1.3 s in MyNOS against 0.19 s on Linux,
+and "DOM to box" at 0.6 s against 0.03 s.
+
+**Diagnosis.** A measure without the log (NetSurf writes the time when
+it stops its throbber, `NSFB_TIME=1`) gave 0.68 s for the whole page
+against 0.23 s on Linux: the gap was a third of what the log showed.
+
+**Cause.** On Linux the log went to a file; in MyNOS to the console,
+each of its 340 lines a request to the console service and the screen.
+The measure measured the measuring.
+
+**Fix.** The load time from inside the program, with nothing else on
+(`ports/netsurf/patches/04-load-time.patch`); the log only to see the
+order of events.
+
+**Lesson.** Before comparing two systems, the instrument has to cost
+the same on both: a log is cheap where it goes to a file.

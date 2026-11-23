@@ -1,0 +1,7 @@
+# NetSurf's build for MyNOS (ports/netsurf): the dev image, with what
+# NetSurf's build needs besides (parser generators, pkg-config, the full
+# perl). Build it with tools/containers/build-image.sh netsurf.
+FROM localhost/mynos-dev
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends flex bison gperf pkg-config libpng-dev zlib1g-dev perl \
+ && rm -rf /var/lib/apt/lists/*

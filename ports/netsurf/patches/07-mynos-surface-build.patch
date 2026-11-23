@@ -1,0 +1,11 @@
+--- a/libnsfb/src/surface/Makefile
++++ b/libnsfb/src/surface/Makefile
+@@ -1,7 +1,7 @@
+ # Sources
+ 
+ # Common surface code and heap based surface handler
+-SURFACE_HANDLER_yes := surface.c ram.c
++SURFACE_HANDLER_yes := surface.c ram.c mynos.c
+ 
+ # optional surface handlers
+ SURFACE_HANDLER_$(NSFB_SDL_AVAILABLE) += sdl.c

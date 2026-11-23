@@ -1,0 +1,12 @@
+--- a/netsurf/frontends/framebuffer/gui.c
++++ b/netsurf/frontends/framebuffer/gui.c
+@@ -533,7 +533,8 @@
+ 		}
+ 	}
+ 
+-	if (optind < argc) {
++	/* (MyNOS) an empty argument, as a script's empty $1: the home page */
++	if (optind < argc && argv[optind][0] != '\0') {
+ 		feurl = argv[optind];
+ 	}
+ 

@@ -1,0 +1,35 @@
+--- a/netsurf/frontends/framebuffer/gui.c
++++ b/netsurf/frontends/framebuffer/gui.c
+@@ -1,3 +1,5 @@
++#include <time.h>
++extern double nsfb_time_start;
+ /*
+  * Copyright 2008, 2014 Vincent Sanders <vince@netsurf-browser.org>
+  *
+@@ -2061,6 +2063,13 @@
+ static void
+ gui_window_stop_throbber(struct gui_window *gw)
+ {
++	/* (MyNOS experiment) NSFB_TIME: the time the page took, to stderr */
++	if (getenv("NSFB_TIME") != NULL) {
++		struct timespec t;
++		clock_gettime(CLOCK_MONOTONIC, &t);
++		fprintf(stderr, "nsfb-time: loaded at %.3f s\n",
++			t.tv_sec + t.tv_nsec / 1e9 - nsfb_time_start);
++	}
+ 	gw->throbber_index = -1;
+ 	fbtk_set_bitmap(gw->throbber, &throbber0);
+ 
+@@ -2176,9 +2185,12 @@
+  * /param argv The argument string vector.
+  * /return The return code to the OS
+  */
++double nsfb_time_start;
++
+ int
+ main(int argc, char** argv)
+ {
++	{ struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); nsfb_time_start = t.tv_sec + t.tv_nsec / 1e9; }
+ 	struct browser_window *bw;
+ 	char *options;
+ 	char *messages;
