@@ -21,9 +21,14 @@
 #include "../include/mynos.h"
 #include "syscall.h"
 
+/* set once a native thread exists: malloc takes its lock from then on
+   (safe_alloc.c); musl locks by itself only after a pthread_create */
+int __mynos_native_threads;
+
 int mynos_threadCreate(void * (*start_routine)(void *), 
 		       void * arg, void * stack, unsigned int flags) {
   int ret;
+  __mynos_native_threads = 1;
   /* set the argument for the thread function */
   stack -= sizeof(void*);
   *(unsigned int *)(stack) = (unsigned int)arg;

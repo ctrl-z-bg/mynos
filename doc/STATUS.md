@@ -1728,3 +1728,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   (libmynos remembers each open file's path). The kernel's own memory
   still has no swap, by choice. Tests: five more pager checks in
   tests/abi, `mapcat -a/-w/-p` in the seventh boot, C's mmap in stdio.
+- **2026-11-23** — malloc 18 times faster for C programs (mynos-a0w):
+  libmynos's wrapper of malloc, free and realloc (safe_alloc.c, 2002, for
+  dietlibc) took a kernel semaphore at every call, two system calls. Now
+  it takes it only in a process that made native threads
+  (mynos_threadCreate), which musl does not know of; the others call
+  musl's allocator straight, which locks by itself after pthread_create.
+  2 million malloc/free: 1.61 s, now 0.09 s (Linux 0.08 s). NetSurf work
+  resumed (mynos-1g0).

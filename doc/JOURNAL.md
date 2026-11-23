@@ -3291,3 +3291,28 @@ the swap and reads 64 back.
 **Lesson.** A pager's cost is its writes: the processor keeps the bit
 that says which pages have changed, and a policy that ignores it does
 twice the work the measurement then shows.
+
+## 2026-11-23 — malloc made two system calls
+
+**Symptom.** NetSurf, compiled for MyNOS, laid out a saved Wikipedia page
+in 5 s, 25 times slower than on Linux on the same processor. A test
+program of 2 million small malloc and free took 1.61 s in MyNOS, 0.08 s
+on Linux; computing and large blocks took the same time on both.
+
+**Diagnosis.** The same test linked with musl's allocator called
+directly, skipping libmynos's malloc, ran in 0.08 s in MyNOS too.
+
+**Cause.** libmynos replaces malloc, free and realloc with versions that
+take a kernel semaphore around musl's (`safe_alloc.c`, 2002): dietlibc's
+allocator was not safe with threads. Each call made two system calls (P
+and V). musl's allocator is safe with threads, but it learns of them
+from `pthread_create` only: MyNOS's native threads (`mynos_threadCreate`)
+still need the lock.
+
+**Fix.** `mynos_threadCreate` sets a flag; until it is set, the three
+functions call musl's directly. 0.09 s for the test; NetSurf's page from
+5.0 to 4.2 s (the rest is the timer: see mynos-zeu).
+
+**Lesson.** A layer written for one library outlives it: when the C
+library changed, what it protected against should have been checked
+again, and it costs every program, every time.
