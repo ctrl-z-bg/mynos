@@ -219,7 +219,8 @@ let css_zero attrs side =
   match Option.bind (Css.get attrs ("margin-" ^ side)) css_px with Some f -> f = 0. | None -> false
 
 let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
-  let width = max 20 width in
+  (* (a table's cell may be narrow: words longer than it are cut) *)
+  let width = max 4 width in
   let lines = ref [] and anchors = ref [] and title = ref "" and base = ref None in
   let cur = ref [] and col = ref 0 in           (* the line being made: spans, reversed *)
   let indent = ref 0 and bars = ref 0 in
@@ -619,6 +620,19 @@ let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
               if s = 1 && j < ncols then begin
                 col_max.(j) <- max col_max.(j) (natural ts);
                 col_min.(j) <- max col_min.(j) (min 20 (longest_word ts))
+              end;
+              j + s) 0 r)) rows;
+      (* a cell over several columns: they are as wide as it needs, the
+         last of them taking what is missing *)
+      List.iter (fun r ->
+          ignore (List.fold_left (fun j (_, s, ts) ->
+              let j1 = min ncols (j + s) in
+              if s > 1 && j < ncols then begin
+                let have a = let w = ref (gap * (j1 - j - 1)) in
+                  for k = j to j1 - 1 do w := !w + a.(k) done; !w in
+                let need_max = natural ts and need_min = min 20 (longest_word ts) in
+                if need_max > have col_max then col_max.(j1 - 1) <- col_max.(j1 - 1) + need_max - have col_max;
+                if need_min > have col_min then col_min.(j1 - 1) <- col_min.(j1 - 1) + need_min - have col_min
               end;
               j + s) 0 r)) rows;
       let sum a = Array.fold_left ( + ) 0 a in
