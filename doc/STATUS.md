@@ -1635,4 +1635,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
 - **2026-11-23** — Docs: the manual's table of run-demo.sh's variables (5.5)
   and appendix H list `UDP` and `QEMU_DISPLAY`; GUI's entry in chapter 13
   has `gui WxH [once]` and `gui sizes`; the release README has `--udp`.
+- **2026-11-23** — Docs: the timeline's 22 November in full, and a line for
+  the 23rd; the README describes the graphical session of now and the
+  packages; the book built again at 160x235 mm, the printer's format.
 

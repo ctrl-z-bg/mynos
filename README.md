@@ -83,9 +83,11 @@ The text console: the shell, written in OCaml, and its processes.
 |---|---|
 | [`mynos-core/`](mynos-core/) | The microkernel: multiboot boot, paging, processes and threads, copy-on-write fork, scheduler, semaphores, port/channel IPC, user-space IRQ delivery, native (`int 0x90`) and Linux-compatible (`int 0x80`) syscalls |
 | [`mynos-lib/`](mynos-lib/) | User-space library for the native syscalls (`include/mynos.h`), and the OCaml library `Mynos` (`ocaml/`) |
-| [`services/`](services/) | User-space servers: name registry, console (keyboard, layouts, line editing, the serial port as a terminal), file systems (`memrofs`, `tmpfs`, `fatfs`), the ATA disk driver, the network (`netd`: lwIP, TLS), language models (`llmd`) |
+| [`services/`](services/) | User-space servers: name registry, console (keyboard, layouts, line editing, the serial port as a terminal), file systems (`memrofs`, `tmpfs`, `fatfs`), the ATA disk driver, the network (`netd`: lwIP, TLS), the display (`displayd`), sound (`soundd`, a Sound Blaster 16), the clipboard, language models (`llmd`) |
 | [`mynos-runtime/`](mynos-runtime/) | The OCaml 5.5 bytecode runtime for MyNOS: the upstream runtime, unchanged, plus a MyNOS `main()` |
 | [`init/`](init/) | `init`, in OCaml: starts the services and the shell listed in `init.rc` |
+| [`gui/`](gui/) | The graphical session's programs: the welcome window, Terminal, Text, Files, Log, Services, System, Agent, Ask MyNOS, the Tour |
+| [`packages/`](packages/) | The sources of the packages that `pkg` installs (published in [mynos-packages](https://github.com/ctrl-z-bg/mynos-packages)) |
 | [`shell/`](shell/) | The shell: the OCaml toplevel, with a few commands (`ls`, `cat`, `run`) and the MyNOS API |
 | [`system/`](system/) | The system RAM disk: init, its configuration, services, the shell, programs |
 | [`doc/STATUS.md`](doc/STATUS.md) | Architecture overview and current state of the project |
@@ -209,6 +211,32 @@ Files browses `/`, `/tmp` and `/disk` (and says which service
 serves each); `PROGRAM &` leaves one running, `kill PID` (or the name of
 its service) ends it. The top bar has a tab for each window.
 
+**The graphical session.** Windows can be moved, resized and maximized
+(a double click on the title). Text is selected with the mouse in every
+window and goes to a clipboard shared by all programs; the Terminal
+pastes with the right button, text fields with Ctrl-V. Text is a text
+editor, and a window with unsaved work asks before closing. Ask MyNOS
+is a language model that speaks as the system itself, in the first
+person, and looks at its live state to answer. `gui 1600x900` starts
+the session on a bigger screen (kept for the next time; `gui sizes`
+lists the usual sizes). The top bar has the volume of the sound card,
+which `tools/run-demo.sh` connects to the host's audio.
+
+## Packages
+
+`pkg list` lists the packages, `pkg install NAME` installs one on
+`/disk` (also from the Packages window of the graphical session, and
+the menu's Applications opens them). They are published, each with its
+documentation, in [ctrl-z-bg/mynos-packages](https://github.com/ctrl-z-bg/mynos-packages),
+and built from [`packages/`](packages/). Among them: MyNOS Studio (an
+editor for OCaml programs inside MyNOS, with completion from the
+modules and from the running services), a web browser (pictures,
+forms, simple tables), a Game Boy with its sound, GavML (Arcade
+Volleyball, two against two, also over the network), a Z-machine with
+Zork, Wikipedia and feeds readers, an image viewer, Paint, a Scheme,
+the manual itself, and Unix-like commands (`utils`: `grep`, `sort`,
+`df`...).
+
 ## Status
 
 Development stopped at the end of 2004, after the IPC, threads, copy-on-write
@@ -216,7 +244,8 @@ and the bytecode interpreter port were in place. In 2026 the project was taken
 up again with the help of AI (Claude, through Claude Code): the original system
 was rebuilt, ported to a modern toolchain and moved to OCaml 5.5; it runs
 again in QEMU, and boots into a command shell, with the OCaml toplevel, an
-editor and the OCaml compiler inside. Services are written in OCaml too
+editor and the OCaml compiler inside, and a graphical session with windows,
+sound and packages. Services are written in OCaml too
 (the disk driver, the FAT file system, a web server, the language model
 service), over typed IPC; the network has TCP, UDP and TLS. The current
 state, known issues and a work log are kept in
