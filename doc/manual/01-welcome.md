@@ -63,7 +63,7 @@ an emulator, on one processor, for one user.
 - A PC or a Mac with **QEMU** (`qemu-system-i386`): MyNOS runs in it.
 - To build it from its sources, **podman**: the build runs in a
   container that holds the whole toolchain (chapter 5).
-- 256 MB of memory for the emulator (what `tools/run-demo.sh` gives it), and a few hundred MB of disk.
+- Memory for the emulator: `tools/run-demo.sh` gives it 2 GB, of which QEMU takes from the host only what MyNOS uses (about 80 MB after the boot); and a few hundred MB of disk.
 - Optionally, a key for a language model service (Anthropic's or any
   OpenAI-compatible one) for the agent (chapter 12).
 

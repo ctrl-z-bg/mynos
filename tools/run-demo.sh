@@ -92,7 +92,7 @@ if [ -n "${SERIAL:-}" ]; then
         -serial chardev:term -mon chardev=term,mode=readline "$@"
     echo "run-demo.sh: this terminal is MyNOS's console (Ctrl-A X stops QEMU)" >&2
 fi
-MEM=${MEM:-256} exec tools/run-qemu.sh \
+MEM=${MEM:-2048} exec tools/run-qemu.sh \
     "$ocamlrun" \
     services/registry/registry \
     services/fs/memrofs/memrofsd \

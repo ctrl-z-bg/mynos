@@ -1661,4 +1661,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   each page read when first touched; `mapcat` (-c compares, -t times, -s
   stats). Tests: eleven pager checks in tests/abi, mapcat in the seventh
   boot.
+- **2026-11-23** — 2 GB of memory by default (run-demo.sh, run-mynos.sh;
+  was 256 MB). Tried with 512 MB to 4 GB: MyNOS uses up to 3071 MB (32-bit,
+  no PAE; above 3 GB QEMU puts the devices), and three processes filled
+  700 MB each and read them back with 3 GB. About 80 MB in use after a
+  boot; QEMU takes from the host only what is touched. The browser
+  version (v86) keeps 256 MB.
 

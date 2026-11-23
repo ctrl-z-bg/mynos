@@ -11,7 +11,7 @@
 #   --no-net      no network card
 #   --http PORT   the host port forwarded to MyNOS's web server (default
 #                 8080, if it is free; 0: none)
-#   --mem MB      the memory (default 256)
+#   --mem MB      the memory (default 2048; MyNOS uses at most 3072)
 #   --no-kvm      emulate the processor even if KVM (/dev/kvm) is there
 #   --no-sound    no sound card (by default a Sound Blaster 16, through
 #                 the host's audio: pipewire, pulseaudio, alsa, coreaudio)
@@ -29,7 +29,7 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$here"
 
-serial= net=1 http=8080 http_given= mem=256 reset= kvm=1 sound=1 ui= udp=
+serial= net=1 http=8080 http_given= mem=2048 reset= kvm=1 sound=1 ui= udp=
 while [ $# -gt 0 ]; do
     case "$1" in
         --serial) serial=1 ;;

@@ -76,7 +76,7 @@ takes the options of `run-demo.sh` (5.5), spelled as options:
 | `--serial` | this terminal is a console of MyNOS too, as `SERIAL=1` |
 | `--no-net` | no network card |
 | `--http PORT` | the host port forwarded to the web server (default 8080, if free; 0: none) |
-| `--mem MB` | the memory (default 256) |
+| `--mem MB` | the memory (default 2048; MyNOS uses at most 3072) |
 | `--reset-disk` | `/disk` empty again (`disk.img` replaced) |
 | `--no-kvm` | the processor emulated, even with KVM |
 | `--no-sound` | no sound card (by default a Sound Blaster 16, through the host's audio) |
@@ -249,7 +249,7 @@ VERBOSE=1 tools/run-demo.sh                   kernel messages stay on the screen
 | `SERIAL` | not set | `SERIAL=1`: the terminal you started it from becomes a second console of MyNOS, with your terminal's copy and paste and scrollback (6.11). Ctrl-C then goes to MyNOS; Ctrl-A then X stops QEMU. |
 | `NET` | `1` | the network card (NE2000) on QEMU's user network: MyNOS is 10.0.2.15, the host 10.0.2.2. `NET=` (empty) boots without it. |
 | `HTTP` | `8080`, if free | the host port (on 127.0.0.1 only) forwarded to MyNOS's web server |
-| `MEM` | `256` | memory, in MB |
+| `MEM` | `2048` | memory, in MB. QEMU takes from the host only what MyNOS uses. MyNOS, 32-bit without PAE, uses at most 3072: above, the addresses up to 4 GB are the devices' |
 | `KVM` | `1`, with `/dev/kvm` | the host's processor runs MyNOS's; `KVM=` emulates it |
 | `SOUND` | the host's audio (`pipewire`, `pa`, `alsa`, `coreaudio`) | a Sound Blaster 16 heard through this QEMU audio backend; `wav:FILE` records it; `SOUND=` none |
 | `QEMU_DISPLAY` | `sdl` with sound (if QEMU has it), QEMU's own otherwise | QEMU's window (`gtk`, `sdl`, ... as `qemu-system-i386 -display help` lists them). With a sound card QEMU's GTK window froze while the card played, hence SDL. A `-display` after `--` wins. |

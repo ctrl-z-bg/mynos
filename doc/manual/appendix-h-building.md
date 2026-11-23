@@ -259,7 +259,7 @@ tests. Its environment:
 `netd`, `displayd`, `llmd`, `httpd`, and `sh`, started again whenever it
 ends. The script sets:
 
-- `MEM=256`, and `DISK=system/disk.img` if the image exists;
+- `MEM=2048` (2 GB; MyNOS uses at most 3 GB), and `DISK=system/disk.img` if the image exists;
 - `NET=1` unless `NET` is set (`NET=` boots without a network card);
 - `KVM=1` if `/dev/kvm` can be used, unless `KVM` is set (`KVM=`
   emulates the processor);

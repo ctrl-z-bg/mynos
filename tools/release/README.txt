@@ -30,7 +30,7 @@ Options (./run-mynos.sh --help):
   --http PORT    the host port for MyNOS's web server (default 8080;
                  if QEMU stops at once because the port is taken, use
                  another, or --http 0 for none)
-  --mem MB       memory (default 256)
+  --mem MB       memory (default 2048; MyNOS uses at most 3072)
   --no-kvm       emulate the processor even if KVM is there
   --no-sound     no sound card (by default one, through the host's audio)
   --udp PORT     this machine's UDP port forwarded to MyNOS's (GavML's
