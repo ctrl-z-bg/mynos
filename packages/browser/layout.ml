@@ -112,8 +112,58 @@ let hides decls =
   let d = squeeze decls in
   Html.contains d "display:none" || Html.contains d "visibility:hidden"
 
-(* the simple selectors of rules that hide: (tag, class, id), any may be "" *)
-let hiding_rules css =
+(* whether a media query holds for a screen [px] pixels wide: a list of
+   queries (any one), each "[not|only] TYPE [and (FEATURE)]..." or just
+   features; widths in px (or em, 16 px); a feature not known does not hold
+   (forced-colors, hover...). Print does not. *)
+let media_holds ~px query =
+  let one q =
+    let q = String.lowercase_ascii (String.trim q) in
+    let neg, q =
+      if String.starts_with ~prefix:"not " q then (true, String.sub q 4 (String.length q - 4))
+      else if String.starts_with ~prefix:"only " q then (false, String.sub q 5 (String.length q - 5))
+      else (false, q) in
+    let parts =                                    (* split at " and " *)
+      let b = Buffer.create (String.length q) and i = ref 0 and n = String.length q in
+      while !i < n do
+        if !i + 5 <= n && String.sub q !i 5 = " and " then (Buffer.add_char b '\001'; i := !i + 5)
+        else (Buffer.add_char b q.[!i]; incr i)
+      done;
+      List.map String.trim (String.split_on_char '\001' (Buffer.contents b)) in
+    let length v =
+      let v = String.trim v in
+      let num s = try Some (float_of_string (String.trim s)) with _ -> None in
+      if String.ends_with ~suffix:"px" v then num (String.sub v 0 (String.length v - 2))
+      else if String.ends_with ~suffix:"em" v then
+        Option.map (fun f -> f *. 16.) (num (String.sub v 0 (String.length v - 2)))
+      else num v in
+    let holds part =
+      match part with
+      | "" | "all" | "screen" -> true
+      | "print" | "speech" | "tv" | "handheld" | "projection" -> false
+      | f when String.length f > 2 && f.[0] = '(' && f.[String.length f - 1] = ')' ->
+        let f = String.sub f 1 (String.length f - 2) in
+        (match String.index_opt f ':' with
+         | Some i ->
+           let name = String.trim (String.sub f 0 i)
+           and v = String.sub f (i + 1) (String.length f - i - 1) in
+           (match name, length v with
+            | "max-width", Some w -> float px <= w
+            | "min-width", Some w -> float px >= w
+            | "orientation", _ -> String.trim v = "landscape"
+            | "prefers-color-scheme", _ -> String.trim v = "light"
+            | "prefers-reduced-motion", _ -> String.trim v = "no-preference"
+            | _ -> false)
+         | None -> f = "color")
+      | _ -> false in
+    let r = List.for_all holds parts in
+    if neg then not r else r in
+  List.exists one (String.split_on_char ',' query)
+
+(* the simple selectors of rules that hide: (tag, class, id), any may be
+   ""; the rules of @media blocks only if they hold for a window [px]
+   wide; other @ blocks (fonts, animations, @supports) skipped *)
+let hiding_rules ?(px = 880) css =
   let css = (* without comments *)
     let b = Buffer.create (String.length css) and i = ref 0 and n = String.length css in
     while !i < n do
@@ -124,23 +174,55 @@ let hiding_rules css =
       end else begin Buffer.add_char b css.[!i]; incr i end
     done;
     Buffer.contents b in
-  List.concat_map (fun rule ->
-      match String.index_opt rule '{' with
-      | Some i when hides (String.sub rule (i + 1) (String.length rule - i - 1)) ->
-        List.filter_map (fun sel ->
-            let sel = String.trim sel in
-            if sel = "" || String.exists (fun c -> c = ' ' || c = ':' || c = '[' || c = '>'
-                                                     || c = '+' || c = '~' || c = '*') sel then None
-            else begin
-              let cut c s = match String.index_opt s c with
-                | Some j -> (String.sub s 0 j, String.sub s (j + 1) (String.length s - j - 1))
-                | None -> (s, "") in
-              let rest, id = cut '#' sel in
-              let tag, cls = cut '.' rest in
-              if String.contains cls '.' then None
-              else Some (String.lowercase_ascii tag, cls, id)
-            end) (String.split_on_char ',' (String.sub rule 0 i))
-      | _ -> []) (String.split_on_char '}' css)
+  let n = String.length css in
+  let selectors prelude =
+    List.filter_map (fun sel ->
+        let sel = String.trim sel in
+        if sel = "" || String.exists (fun c -> c = ' ' || c = ':' || c = '[' || c = '>'
+                                                 || c = '+' || c = '~' || c = '*') sel then None
+        else begin
+          let cut c s = match String.index_opt s c with
+            | Some j -> (String.sub s 0 j, String.sub s (j + 1) (String.length s - j - 1))
+            | None -> (s, "") in
+          let rest, id = cut '#' sel in
+          let tag, cls = cut '.' rest in
+          if String.contains cls '.' then None
+          else Some (String.lowercase_ascii tag, cls, id)
+        end) (String.split_on_char ',' prelude) in
+  (* past the block that starts at i (just after its '{') *)
+  let rec skip_block i depth =
+    if i >= n then n
+    else match css.[i] with
+      | '{' -> skip_block (i + 1) (depth + 1)
+      | '}' -> if depth = 0 then i + 1 else skip_block (i + 1) (depth - 1)
+      | _ -> skip_block (i + 1) depth in
+  let out = ref [] in
+  (* the rules from i to the end of the enclosing block *)
+  let rec rules i active =
+    let j = ref i in
+    while !j < n && css.[!j] <> '{' && css.[!j] <> '}' && css.[!j] <> ';' do incr j done;
+    if !j >= n then n
+    else if css.[!j] = '}' then !j + 1                       (* the block ends *)
+    else begin
+      let prelude = String.trim (String.sub css i (!j - i)) in
+      if css.[!j] = ';' then rules (!j + 1) active           (* @import, @charset *)
+      else if String.length prelude > 0 && prelude.[0] = '@' then begin
+        let lower = String.lowercase_ascii prelude in
+        if String.starts_with ~prefix:"@media" lower then begin
+          let cond = String.sub prelude 6 (String.length prelude - 6) in
+          rules (rules (!j + 1) (active && media_holds ~px cond)) active
+        end else rules (skip_block (!j + 1) 0) active
+      end else begin
+        let k = ref (!j + 1) in
+        while !k < n && css.[!k] <> '}' do incr k done;
+        let decls = String.sub css (!j + 1) (!k - !j - 1) in
+        if active && hides decls then out := !out @ selectors prelude;
+        rules (min n (!k + 1)) active
+      end
+    end in
+  let i = ref 0 in
+  while !i < n do i := rules !i true done;
+  !out
 
 let named_colours = [ "black", 0x000000; "red", 0xC00000; "green", 0x007000; "blue", 0x0000C0;
                       "maroon", 0x800000; "navy", 0x000080; "purple", 0x800080; "teal", 0x008080;
@@ -343,7 +425,7 @@ let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
       | Html.Start ("style", _) -> in_style := true; incr skip
       | Html.End "style" ->
         in_style := false; if !skip > 0 then decr skip;
-        rules := hiding_rules (Buffer.contents css)
+        rules := hiding_rules ~px:(width * 8) (Buffer.contents css)
       | Html.Text s ->
         (match !in_textarea, !in_select, !in_button with
          | Some (_, _, b), _, _ -> Buffer.add_string b s
@@ -548,7 +630,11 @@ let rec layout ?(size = fun _ _ -> None) ?(pictures = true) ~width tokens =
   let hidden name attrs =
     List.mem_assoc "hidden" attrs
     || (match Html.attr "style" attrs with Some s -> hides s | None -> false)
-    || (!rules <> [] &&
+    || (!rules <> []
+        (* its own style showing it wins over a rule (style="display:block") *)
+        && not (match Html.attr "style" attrs with
+            | Some st -> Html.contains (String.concat "" (String.split_on_char ' ' (String.lowercase_ascii st))) "display:"
+            | None -> false) &&
         let classes = match Html.attr "class" attrs with
           | Some c -> String.split_on_char ' ' c | None -> [] in
         let id = Option.value (Html.attr "id" attrs) ~default:"" in

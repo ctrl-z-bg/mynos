@@ -1684,4 +1684,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   kernel gives a process's statistics (native 38: CPU ticks, faults,
   resident pages, threads) and counts the idle process's ticks (slot 0),
   which were not counted.
+- **2026-11-23** — browser 1.3: `@media` blocks of `<style>` evaluated for
+  the window's width (their rules were applied always: Google's cookie
+  notice hid its own buttons, a rule for narrow screens), other @ blocks
+  skipped; an element's own `display` beats a hiding rule. Packages built
+  before the field cursor keep the old Gui (they link it): browser rebuilt
+  with it. Google's search itself needs JavaScript.
 
