@@ -866,13 +866,16 @@ volume 50
 
 **Purpose** Lists the processes.
 
-**Syntax** `ps`
+**Syntax** `ps [-f]`
 
 **Type** Built in.
 
 **Description** One line per process: pid, parent, threads, `io` for a
 process with the hardware privilege, its name, and the names it
-registered (its services).
+registered (its services). `ps -f` lists instead the page faults the
+kernel resolved for each process: pages allocated at their first use
+(`alloc`) and pages copied on a write (`cow`); the last line counts
+them for the whole system since boot (appendix B.7).
 
 **See also** KILL, SYSTEM; chapter 11, 11.1.
 

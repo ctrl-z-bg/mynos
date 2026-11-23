@@ -166,6 +166,10 @@ int mynos_trace(int op, void * arg1, unsigned int arg2);
    them. buf NULL: the position now (bytes ever logged); otherwise copies
    the bytes from position `from` (the oldest kept, if older): how many */
 int mynos_klog(unsigned int from, char * buf, unsigned int max);
+/* the page faults resolved (native 36): pid's, or the system's since boot
+   (pid 0): out[0] pages allocated on use, out[1] copy-on-write; 0 or an
+   error */
+int mynos_faults(int pid, unsigned int out[2]);
 
 /* PROCESSES */
 /* start the ELF program in file path as a child process, with arguments

@@ -134,6 +134,12 @@ type process = {
 val processes : unit -> process list
 (** The live processes, by slot. *)
 
+val faults : int -> int * int
+(** [faults pid]: the page faults the kernel resolved for that process
+    (0: for the whole system, since boot), as pages allocated on use and
+    copy-on-write copies. Raises {!Error} for a process that is not
+    there. *)
+
 val kill : int -> unit
 (** End a process, as killed (its parent's [wait] sees [Signaled 9]).
     Not init, and not a process with privileges the caller lacks (only a

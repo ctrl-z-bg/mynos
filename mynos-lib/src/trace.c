@@ -33,3 +33,7 @@ int mynos_klog(unsigned int from, char * buf, unsigned int max) {
   return __mynos_syscall(35, (int)from, (int)buf, (int)max, 0, 0);
 }
 
+/* the page faults resolved (native 36) */
+int mynos_faults(int pid, unsigned int out[2]) {
+  return __mynos_syscall(36, pid, (int)out, 0, 0, 0);
+}

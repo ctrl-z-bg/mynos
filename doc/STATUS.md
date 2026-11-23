@@ -1638,4 +1638,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
 - **2026-11-23** — Docs: the timeline's 22 November in full, and a line for
   the 23rd; the README describes the graphical session of now and the
   packages; the book built again at 160x235 mm, the printer's format.
+- **2026-11-23** — Phase 0 of the external pager (mynos-0ho, for
+  mynos-vzp): the kernel counts the page faults it resolves, by process and
+  kind (system call 36, `Mynos.faults`, `ps -f`); `tests/bench/bench`
+  measures a fault, a system call, a thread switch, an IPC round trip
+  between processes (4 bytes, a page) and a 4 KB file read. Under KVM: a
+  fault 2.9 µs, an IPC round trip 5.5 µs, a 4 KB read from fatfs or tmpfs
+  about 60 µs; without KVM about 5 to 10 times more. Faults cost two thirds
+  more than they should: pages zeroed and copied a byte at a time
+  (mynos-4d6).
 

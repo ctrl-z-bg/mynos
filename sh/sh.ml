@@ -666,6 +666,17 @@ let rec builtin name args c out =
          Printf.fprintf out "%5d %5d %3d %-3s %-15s %s\n" p.Mynos.p_pid p.parent p.threads
            (if p.p_io then "io" else "") p.name (String.concat " " (List.sort compare own)))
        (Mynos.processes ())
+   | "ps", [ "-f" ] ->
+     (* the page faults the kernel resolved for each process, and in all *)
+     Printf.fprintf out "%5s %-15s %9s %9s\n" "pid" "name" "alloc" "cow";
+     List.iter (fun p ->
+         if p.Mynos.p_pid > 0 then       (* 0 asks for the whole system's *)
+         match Mynos.faults p.Mynos.p_pid with
+         | a, c -> Printf.fprintf out "%5d %-15s %9d %9d\n" p.Mynos.p_pid p.name a c
+         | exception Mynos.Error _ -> ())
+       (Mynos.processes ());
+     let a, c = Mynos.faults 0 in
+     Printf.fprintf out "%5s %-15s %9d %9d\n" "" "since boot" a c
    | "ifconfig", [] ->
      ok := with_net (fun n ->
          let c = Net.call n Net.Config in

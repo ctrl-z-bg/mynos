@@ -264,6 +264,17 @@ page") before the process ends or the kernel stops. Before WP was set,
 those writes silently went through: into a frame shared with another
 process, or into the RAM disk.
 
+**Counting.** The handler counts the faults it resolves, for each process
+and for the system since boot, by kind: allocated on use and copied on
+write. `ps -f` lists them (system call 36, `mynos_faults`;
+`Mynos.faults` in OCaml). A boot to the shell resolves about 8,000
+faults of the first kind and 1,600 of the second; the graphical session
+with a Terminal about 4,500 and 1,200 more; compiling a small program
+with `ocamlc`, 4,700 and 1,000. `tests/bench/bench` measures what each
+costs: under KVM about 2.9 µs (7,600 cycles) for a page allocated on use
+and 3 µs for a copy, two thirds of it zeroing or copying the page a byte
+at a time (mynos-4d6); without KVM, about 13 µs each.
+
 ## B.8 What the C library sees
 
 musl calls the Linux interface (appendix D), and the kernel answers:

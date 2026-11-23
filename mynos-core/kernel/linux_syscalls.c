@@ -991,6 +991,8 @@ int _linux_syscall_fork() {
   processTable[PSLOT(new_pid)]->isAlive = 1;
   processTable[PSLOT(new_pid)]->exitStatus = 0;
   processTable[PSLOT(new_pid)]->cpuTicks = 0;
+  processTable[PSLOT(new_pid)]->faultsAlloc = 0;
+  processTable[PSLOT(new_pid)]->faultsCow = 0;
   processTable[PSLOT(new_pid)]->reaped = 0;
   processTable[PSLOT(new_pid)]->childSem = __OS_sem_allocateSemaphore(0);
   processTable[PSLOT(new_pid)]->deadThreads = NULL;   /* the parent's are its own */

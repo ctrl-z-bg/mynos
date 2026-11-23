@@ -33,6 +33,7 @@ services/serial/seriald
 *.byte
 *.dsk
 tests/abi/abi
+tests/bench/bench
 tests/stress/stress
 build/
 mynos-runtime/ocamlrun

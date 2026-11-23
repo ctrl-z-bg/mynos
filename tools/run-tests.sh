@@ -842,7 +842,7 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" "echo '#!/sh.byte' > /disk/bin/hi; echo 'echo script-\$1' >> /disk/bin/hi; hi ran\n"; sleep 4
     # df: the file systems' space, each asked (fs/1 space); clip: the
     # clipboard service, set and read back
-    tools/type-keys.py "$tmp/mon7" 'df; X=ok; clip clip-$X; clip\n'; sleep 5
+    tools/type-keys.py "$tmp/mon7" 'df; X=ok; clip clip-$X; clip; ps -f\n'; sleep 5
     # GAV (mynos-0ns): installed with its pictures, which it reads before
     # it asks for a window (none in text mode)
     tools/type-keys.py "$tmp/mon7" 'pkg install gavml; gavml\n'
@@ -1149,6 +1149,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "Directions: north, south"                 # minotaur
     expect "%  /disk"                                 # df
     expect "clip-ok"                                  # clip, the clipboard service
+    expect "      since boot "                        # ps -f: page faults counted
     expect "pkg: gavml 1.3 installed"                 # GavML (GAV)...
     expect "gavml.byte: no graphical session"         # ... its pictures read first
     expect "Tést"                                     # the browser: entities,

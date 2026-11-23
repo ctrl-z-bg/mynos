@@ -92,6 +92,9 @@ let processes () =
 
 external kill : int -> unit = "caml_mynos_kill"
 
+external faults_raw : int -> int * int = "caml_mynos_faults"
+let faults pid = faults_raw pid
+
 external wait_raw : int -> int * int = "caml_mynos_wait"
 let decode s = if s land 0x7f = 0 then Exited ((s lsr 8) land 0xff)
                else Signaled (s land 0x7f)

@@ -96,6 +96,9 @@ typedef struct {
   /* CPU time: the timer ticks that found this process running (getrusage,
      times, the CPU-time clocks) */
   uint32_t cpuTicks;
+  /* page faults resolved for it (mynos-0ho): fresh pages allocated on
+     use, copy-on-write copies (or a last reference made writable) */
+  uint32_t faultsAlloc, faultsCow;
 } process_descriptor_t;
 
 extern process_descriptor_t * processTable[];

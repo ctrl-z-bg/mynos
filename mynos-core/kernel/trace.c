@@ -172,6 +172,25 @@ int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2) {
   return MYNOS_ERR_INVALID;
 }
 
+/* the page faults resolved (native 36, mynos-0ho): a process's (pid), or
+   the system's since boot (pid 0), as two words, allocated on use and
+   copy-on-write */
+extern uint32_t mem_faultsAlloc, mem_faultsCow;
+int _mynos_syscall_faults(int32_t pid, uint32_t buf) {
+  uint32_t e[2];
+  if (pid == 0) {
+    e[0] = mem_faultsAlloc;
+    e[1] = mem_faultsCow;
+  } else {
+    process_descriptor_t * p = pid > 0 ? processTable[PSLOT(pid)] : NULL;
+    if (p == NULL || !p->isAlive || p->pid != (pid_t)pid) return MYNOS_ERR_INVALID;
+    e[0] = p->faultsAlloc;
+    e[1] = p->faultsCow;
+  }
+  if (copy_to_user((char *)buf, e, sizeof e)) return MYNOS_ERR_INVALID;
+  return 0;
+}
+
 int _mynos_syscall_processes(uint32_t buf, uint32_t max) {
   uint32_t i, n = 0;
   for (i = 0; i < numProcess && n < max; i++) {

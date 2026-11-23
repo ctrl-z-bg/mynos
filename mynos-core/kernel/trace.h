@@ -66,6 +66,7 @@ int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2);
    bytes), into buf, at most max: how many */
 #define PROCESS_ENTRY 32
 int _mynos_syscall_processes(uint32_t buf, uint32_t max);
+int _mynos_syscall_faults(int32_t pid, uint32_t buf);
 
 /* a process's name from its argv (base name; for "ocamlrun X.byte", X) */
 void trace_setName(char * name, char ** argv);

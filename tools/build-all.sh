@@ -28,6 +28,7 @@
 #   system/ramdisk.dsk               the system RAM disk: init, consoled, the shell
 #                                    (the OCaml toplevel), programs
 #   tests/abi/abi                    system call checks
+#   tests/bench/bench                page faults, system calls, IPC: their costs
 #   tests/fpu/fpu                    the FPU state of each thread
 #   tests/stdio/stdio                C stdio over libmynos
 #   tests/stress/stress, ramdisk.dsk kernel stress test
@@ -53,6 +54,7 @@ make -C services
 make -C mynos-runtime
 make -C third_party/num
 make -C tests/abi
+make -C tests/bench
 make -C tests/fpu
 make -C tests/stdio
 make -C tests/stress

@@ -537,6 +537,20 @@ CAMLprim value caml_mynos_processes(value unit)
   CAMLreturn(r);
 }
 
+/* the page faults resolved: a process's, or the system's (pid 0) */
+CAMLprim value caml_mynos_faults(value pid)
+{
+  CAMLparam1(pid);
+  CAMLlocal1(r);
+  unsigned int out[2];
+  int e = mynos_faults(Int_val(pid), out);
+  if (e < 0) mynos_error("faults", e);
+  r = caml_alloc_tuple(2);
+  Store_field(r, 0, Val_long(out[0]));
+  Store_field(r, 1, Val_long(out[1]));
+  CAMLreturn(r);
+}
+
 /* the recorder's state: 9 words, as a 36-byte string */
 CAMLprim value caml_mynos_trace_info(value unit)
 {

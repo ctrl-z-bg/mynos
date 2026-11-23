@@ -669,6 +669,9 @@ static void __userSegfault(uint32_t addr) {
   sched();         /* switches to another process, never returns */
 }
 
+/* the faults resolved since boot, by kind (mynos-0ho) */
+uint32_t mem_faultsAlloc, mem_faultsCow;
+
 void _page_fault_handler(uint32_t addr, uint32_t errcode, uint32_t * frame) {
   uint32_t * pte;
 
@@ -755,8 +758,12 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode, uint32_t * frame) {
 
   if ((*pte) & PF_LOGICAL_PRESENT) { /* ALLOCATE ON USE */
     __allocateOnUse(pte, addr);
+    mem_faultsAlloc++;
+    processTable[currProcess]->faultsAlloc++;
   } else if ((*pte) & PF_COW) {      /* COPY ON WRITE */
     __cowManager(pte, addr);
+    mem_faultsCow++;
+    processTable[currProcess]->faultsCow++;
   } else KPANIC("MEMORY ERROR: NOT COW OR LOGICAL");
 }
 

@@ -286,6 +286,7 @@ The native calls:
 | 33 | `processes`: the list of live processes | A.4 |
 | 34 | `kill` | A.9 |
 | 35 | `klog`: the kernel's log, the last 64 KB of its messages (`printk`, call 31), from a position | A.2 |
+| 36 | `faults`: the page faults resolved for a process, or for the system since boot (`ps -f`) | B.7 |
 | 100, 101 | `enableIrq`, `disableIrq` | A.7 |
 | 200, 201, 202 | `createThread`, `exitThread`, `selfThread` | A.4 |
 | 300 | `setTimer` | A.5 |

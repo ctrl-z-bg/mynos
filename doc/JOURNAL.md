@@ -3140,3 +3140,25 @@ holding its lock (the pointer never waits for soundd).
 **Lesson.** "Everything froze but the sound goes on" points out of the
 guest: look at the emulator's threads before the system's.
 
+## 2026-11-23 — What a page fault costs, measured
+
+**Symptom.** To decide on an external pager (mynos-vzp) its costs were
+measured first (mynos-0ho, `tests/bench/bench`, rdtsc). Under KVM a page
+allocated on use took 7,600 cycles (2.85 µs), a copy-on-write 8,100:
+several times what a fault costs on Linux on the same machine.
+
+**Diagnosis.** The first guess was the TLB: `INVALIDATE_THE_CACHE` has a
+variant that reloads CR3, which empties it whole. It is not the one in
+use: `ARCH386` is off, so it is `invlpg`. The second was the work on the
+page: `kbzero` calls `kmemset`, and the copy `kmemcpy`, both loops a byte
+at a time. A trial with `rep stosl` and `rep movsl` for whole pages
+brought the two faults to 2,600 and 3,200 cycles (0.97 and 1.18 µs).
+
+**Cause.** The kernel's string functions of 2002, written for clarity, on
+4 KB at every fault.
+
+**Fix.** Not yet: the trial was reverted, the change is mynos-4d6.
+
+**Lesson.** Measure before guessing, and read the macro before blaming
+it: the CR3 reload was in the source, but not in the build.
+
