@@ -130,7 +130,8 @@ threads. The kernel describes it with a `process_descriptor_t`
   ├── tss ──► thread ──► thread ──► …   its threads
   ├── lmemmap                           its free linear space (appendix B)
   ├── portList, channelList             its IPC objects (appendix C)
-  ├── exitStatus, reaped, childSem      for the parent's wait
+  ├── exitStatus, reaped, childSem,
+  │   childWaiting                      for the parent's wait
   ├── cpuTicks                          its CPU time, in ticks (appendix D.3)
   └── deadThreads, nextZombie, …        for its end (A.9)
 ```
@@ -228,8 +229,10 @@ freed when the process ends.
 Every thread has a **private semaphore**, on which the kernel makes it
 wait: for a message (`recv`), for a connection (`listen`), for a child
 (`wait`), for a timeout. Waking a thread is a `V` on its private
-semaphore. Every process has one more, `childSem`, V'd once for every
-child that ends.
+semaphore. A thread waiting for a child (`wait4`) waits on its own
+too, listed in its process (`childWaiting`, 16 places; beyond them on
+the process's `childSem`): a child's end wakes every one of them, since
+each may wait for a different child.
 
 ## A.7 Interrupts and drivers
 
@@ -321,7 +324,9 @@ privilege its killer lacks). `endProcess` then:
    for a kill, is the killer). Clients waiting on its ports are woken with
    `MYNOS_ERR_BROKEN` (appendix C);
 3. forgets its futex waiters, frees its semaphores and its IRQ lines;
-4. makes its children orphans, and does a `V` on its parent's `childSem`;
+4. makes its children orphans, and wakes every thread of its parent
+   waiting for a child (a `V` on each one's private semaphore, and on the
+   parent's `childSem`);
 5. puts itself on the list of **zombies**.
 
 Its memory (pages, page tables, kernel stacks) cannot be freed at once:

@@ -479,6 +479,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   desc->exitStatus = 0;
   desc->cpuTicks = 0;
   desc->faultsAlloc = desc->faultsCow = 0;
+  kbzero(desc->childWaiting, sizeof desc->childWaiting);
   desc->reaped = 0;
   desc->childSem = __OS_sem_allocateSemaphore(0);
   desc->deadThreads = NULL;
@@ -639,8 +640,22 @@ static void endProcess(process_descriptor_t * self, int status, uint32_t pgdir) 
   /* tell the parent, which may be waiting for it */
   self->exitStatus = status;
   parent = proc(self->ppid);
-  if (self->ppid != 0 && parent && parent->isAlive)
+  if (self->ppid != 0 && parent && parent->isAlive) {
+    /* every thread of the parent that waits, not one: woken alone, a
+       thread waiting for another child went back to sleep with the
+       wakeup, and the one waiting for this child slept on (JOURNAL
+       2026-11-23). One V each on its own semaphore: two V on one
+       semaphore make the second wait for the first's thread to run, and
+       an ending process is not run again. */
+    int k;
+    for (k = 0; k < CHILD_WAITERS; k++) {
+      tss_t * t = parent->childWaiting[k];
+      if (t == NULL) continue;
+      parent->childWaiting[k] = NULL;
+      __OS_sem_V(t->privSem);
+    }
     __OS_sem_V(parent->childSem);
+  }
 
   /* the memory: later, from elsewhere */
   self->pgdirPhys = pgdir;

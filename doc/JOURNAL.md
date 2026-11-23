@@ -3208,3 +3208,39 @@ page search counts it as used.
 every line that looks at it; the tests (eleven checks in tests/abi) are
 the second half of the audit.
 
+## 2026-11-23 — Studio froze when its agent ran a program that used Studio
+
+**Symptom.** In Studio, the agent wrote and ran `ide_demo.ml`, a program
+calling Studio's own service (ide/1: files, read, find, build...). The
+agent never answered, and Studio stood still. Run by hand from a
+Terminal, the same program worked.
+
+**Diagnosis.** Two threads of one process, each waiting for a child:
+the agent's domain waited for `ide_demo` (`Mynos.wait`), and the domain
+serving ide/1, asked for a build, waited for `ocamlc`. A test in
+tests/abi with that shape (a thread waiting for a child of 1.5 s, the
+main thread for a child of 0.1 s) took 1390 ms for the quick one: it was
+not woken when its child ended. `wait4` slept on the process's
+`childSem`, which a child's end V'd once: the thread woken was the first
+to wait, the agent's; its child alive, it slept again with the wakeup,
+and the thread whose child had ended slept on. In Studio the other child
+was `ide_demo`, waiting for that very build: neither could end.
+
+A first fix, V'ing `childSem` once for each waiting thread, did not
+work, and a trace of the kernel showed why: the first V hands the
+semaphore's lock to the thread it wakes, the second V waits for that
+lock by giving up the processor, and the process that does it is ending:
+it is never run again, and the second V never comes.
+
+**Cause.** A wakeup meant for "whoever waits for this child" given to
+one waiter of the whole process, from the days of one thread a process.
+
+**Fix.** A thread waiting in `wait4` lists itself in its process
+(`childWaiting`, 16 places; beyond them `childSem` as before) and waits
+on its own private semaphore; a child's end wakes every listed thread,
+one V on each one's own semaphore, so no V waits for another.
+
+**Lesson.** Code that runs in an ending process must not wait for
+anything, not even a lock; and "a V for an event" wakes one thread,
+which is a broadcast only when one thread can wait.
+

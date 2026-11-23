@@ -1668,4 +1668,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   700 MB each and read them back with 3 GB. About 80 MB in use after a
   boot; QEMU takes from the host only what is touched. The browser
   version (v86) keeps 256 MB.
+- **2026-11-23** — A lost wakeup in wait4 fixed: two threads of a
+  process waiting for two different children; a child's end woke only one
+  thread (a V on the process's childSem), and if it was the other's, the
+  right one slept on. Studio froze so: its agent waited for a program that
+  asked Studio's service for a build, whose thread waited for ocamlc. Now
+  each waiting thread waits on its own private semaphore, and a child's
+  end wakes them all. A check in tests/abi.
 

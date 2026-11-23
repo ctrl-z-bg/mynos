@@ -76,6 +76,7 @@ void tsksw() {
   processTable[0]->tss = (tss_t*)kmalloc(sizeof(tss_t));
   kmemcpy(processTable[0]->name, "kernel", 7);
   processTable[0]->faultsAlloc = processTable[0]->faultsCow = 0;
+  kbzero(processTable[0]->childWaiting, sizeof processTable[0]->childWaiting);
   processTable[0]->tss->tls_base = 0;
   processTable[0]->tss->tls_limit = 0;
   processTable[0]->tss->tls_pages = 0;

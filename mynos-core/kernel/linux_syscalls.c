@@ -617,8 +617,17 @@ int _linux_syscall_wait4(int pid, int * status, int options, void * rusage) {
     }
     if (!children) return -ECHILD;
     if (options & WNOHANG) return 0;
-    /* V'd once for every child that ends: check again then */
-    __OS_sem_P(self->childSem);
+    /* woken when a child ends, with every other thread of ours that
+       waits (each may wait for another child): check again then */
+    {
+      int k;
+      for (k = 0; k < CHILD_WAITERS && self->childWaiting[k]; k++) ;
+      if (k < CHILD_WAITERS) {
+	self->childWaiting[k] = currThread;
+	__OS_sem_P(currThread->privSem);
+      } else
+	__OS_sem_P(self->childSem);
+    }
   }
 }
 
@@ -995,6 +1004,8 @@ int _linux_syscall_fork() {
   processTable[PSLOT(new_pid)]->cpuTicks = 0;
   processTable[PSLOT(new_pid)]->faultsAlloc = 0;
   processTable[PSLOT(new_pid)]->faultsCow = 0;
+  kbzero(processTable[PSLOT(new_pid)]->childWaiting,
+	 sizeof processTable[PSLOT(new_pid)]->childWaiting);
   processTable[PSLOT(new_pid)]->reaped = 0;
   processTable[PSLOT(new_pid)]->childSem = __OS_sem_allocateSemaphore(0);
   processTable[PSLOT(new_pid)]->deadThreads = NULL;   /* the parent's are its own */

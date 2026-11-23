@@ -214,6 +214,37 @@ static void pager_checks(void) {
   pthread_join(t, NULL);
 }
 
+
+/* two threads, each waiting for a child of its own: the end of one child
+   must wake its thread, whoever waits longer (a Studio's agent waited for
+   a program that asked Studio for a build, whose service thread waited
+   for ocamlc: a lost wakeup, both for ever) */
+static pid_t long_child;
+static void * wait_long(void * unused) {
+  int st;
+  waitpid(long_child, &st, 0);
+  return NULL;
+}
+
+static void wait_checks(void) {
+  pthread_t t;
+  pid_t quick;
+  int st;
+  struct timespec a, b;
+  long ms;
+  if ((long_child = fork()) == 0) { mynos_sleep(1500000); _exit(0); }
+  pthread_create(&t, NULL, wait_long, NULL);
+  mynos_sleep(100000);                    /* that thread waits first */
+  if ((quick = fork()) == 0) { mynos_sleep(100000); _exit(0); }
+  clock_gettime(CLOCK_MONOTONIC, &a);
+  waitpid(quick, &st, 0);
+  clock_gettime(CLOCK_MONOTONIC, &b);
+  ms = (b.tv_sec - a.tv_sec) * 1000 + (b.tv_nsec - a.tv_nsec) / 1000000;
+  printf("abi: the quick child waited for %ld ms\n", ms);
+  check("two threads waiting for two children: each is woken", ms < 1000);
+  pthread_join(t, NULL);
+}
+
 int main(int argc, char ** argv) {
   long r;
   int sem;
@@ -411,6 +442,7 @@ int main(int argc, char ** argv) {
     mynos_trace(MYNOS_TRACE_FREE, NULL, 0);
   }
 
+  wait_checks();
   pager_checks();
 
   printf("abi: %s\n", failures ? "SOME CHECKS FAILED" : "all checks passed");

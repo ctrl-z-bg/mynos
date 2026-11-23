@@ -99,6 +99,11 @@ typedef struct {
   /* page faults resolved for it (mynos-0ho): fresh pages allocated on
      use, copy-on-write copies (or a last reference made writable) */
   uint32_t faultsAlloc, faultsCow;
+  /* its threads waiting in wait4 for a child, each on its own private
+     semaphore: a child's end wakes them all (each may wait for another
+     child). Beyond CHILD_WAITERS, on childSem, one at a time. */
+#define CHILD_WAITERS 16
+  void * childWaiting[CHILD_WAITERS];
 } process_descriptor_t;
 
 extern process_descriptor_t * processTable[];
