@@ -3402,3 +3402,25 @@ an off-screen clip made an empty one; libsvgtiny's `q` and `t` fixed
 **Lesson.** When an error code comes from a call that cannot return it,
 look at what ran just before: a queue of deferred operations reports
 its failures on whoever empties it.
+
+## 2026-11-23 — Seven images "cannot resolve" a name that resolved
+
+**Symptom.** Loading Wikipedia's article on OCaml in NetSurf, seven
+fetches from thumb.wikimedia.org failed at once with "cannot resolve",
+while other fetches from the same host, a moment later, worked: the
+page had holes where images were.
+
+**Diagnosis.** The failures took 0 to 40 ms, too fast for a DNS query:
+netd refused them. They all started together, the page's thumbnails.
+
+**Cause.** lwIP's DNS keeps a table of names being resolved and, with
+LWIP_DNS_SECURE (its default), attaches a request for a name already
+being asked for to that name's entry, in a table of DNS_MAX_REQUESTS
+places; both default to 4. The fifth request for a host still being
+resolved got ERR_MEM, which netd reports as "cannot resolve".
+
+**Fix.** services/net/lwipopts.h: 16 names, 64 requests, their queries
+sharing at most 4 UDP ports (lwIP reuses one when it cannot open more).
+
+**Lesson.** A library's defaults are sized for a sensor, not a browser:
+the first program that asks many things at once finds them.

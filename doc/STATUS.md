@@ -1760,3 +1760,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   misread relative `q` and `t`, and a clip outside the window failed the
   next plot. Wikipedia's article on OCaml: its logo, the OCaml logo, the
   icons, in about 5 s.
+- **2026-11-23** — netd resolves many names at once: lwIP's DNS tables
+  (4 by default) refused the fifth request for a name being resolved, and
+  NetSurf lost seven of a page's images. NetSurf keeps its connections
+  open (4 per server): on Wikipedia's article on OCaml, 8 TLS handshakes
+  instead of 26, no fetch failed, 5.1 and 5.4 s (was 8.0); with 2 per
+  server 3.9 to 7.2 s. What is left is mostly stalls of about 1.5 s that
+  come from the NE2000 under QEMU (mynos-bix, open).

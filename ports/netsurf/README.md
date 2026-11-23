@@ -27,7 +27,7 @@ article on OCaml, over HTTPS, in about 10 s under KVM.
 | `build.sh` | download, check, unpack, patch; the container build |
 | `inside.sh` | the build in the `mynos-netsurf` container (`tools/containers/netsurf`): NetSurf and its libraries for Linux (its build runs tools it builds), then the program linked again for MyNOS (load address 0x40000000, libmynos before musl), staged |
 | `mynos-surface.c` | the libnsfb surface `mynos`: a window of `displayd`, its pixels a shared message, `damage` on each update; keys (UTF-8, VT100 sequences) on NetSurf's US keymap, the mouse, the wheel, close, resize. The calls to libmynos are weak: the same libnsfb links on Linux |
-| `mynos-http.c` | `http:` and `https:` through `netd` (net/1: TCP, TLS with the certificate checked): a thread per fetch makes the connection, sends an HTTP/1.1 request (cookies, POST) and reads the reply (chunked or not); NetSurf's poll passes on the status, headers, data, redirects, errors. No authentication, gzip or kept connections |
+| `mynos-http.c` | `http:` and `https:` through `netd` (net/1: TCP, TLS with the certificate checked): a thread per fetch sends an HTTP/1.1 request (cookies, POST) and reads the reply (chunked or not); NetSurf's poll passes on the status, headers, data, redirects, errors. Connections are kept open, at most 4 per server: a reply whose end is known leaves its connection for the next fetch (netd does one TLS handshake at a time, so each one saved shortens every fetch); a kept connection the server closed meanwhile is tried once more on a new one. `NSFB_DEBUG=1` logs each fetch's phases. No authentication or gzip |
 | `patches/01-fetch-without-curl.patch` | `fetch.c` included curl's header without curl |
 | `patches/02-realpath-access.patch` | `realpath` (musl's reads `/proc/self/fd`) and `access` replaced, for the resource paths |
 | `patches/03-frontend-realpath.patch` | the same in the front end's resource lookup |
@@ -55,6 +55,6 @@ MIT). Each patch follows the licence of the file it changes;
 `mynos-surface.c` is MyNOS's, GPL version 2 or later. A NetSurf program
 built from them is therefore distributed under version 2.
 
-**Not done** (mynos-1g0): faster pages (a TLS handshake for every
-resource: connections are not kept); WebP; how NetSurf reaches users
-(to be decided). Room left under the 4 MB limit: about 450 KB.
+**Not done** (mynos-1g0): WebP; how NetSurf reaches users (to be
+decided). Fetches still stall now and then for about 1.5 s, a matter
+of MyNOS's network card under QEMU, not of NetSurf (mynos-bix). Room left under the 4 MB limit: about 450 KB.

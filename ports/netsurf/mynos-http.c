@@ -17,6 +17,7 @@
  * The MyNOS calls are weak: on Linux this fetcher does not register.
  */
 
+#define _GNU_SOURCE             /* strcasestr */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -218,14 +219,19 @@ struct reader {
 	size_t line_len;
 	bool done;
 	bool no_body;
+	bool has_length;            /* a Content-Length */
+	bool conn_close;            /* the server closes: HTTP/1.0, Connection: close */
 };
 
 static void header_line(struct reader *rd, char *l)
 {
 	if (strncasecmp(l, "Transfer-Encoding:", 18) == 0 && strstr(l + 18, "chunked"))
 		rd->chunked = true;
-	else if (strncasecmp(l, "Content-Length:", 15) == 0)
+	else if (strncasecmp(l, "Content-Length:", 15) == 0) {
 		rd->remaining = atoll(l + 15);
+		rd->has_length = true;
+	} else if (strncasecmp(l, "Connection:", 11) == 0 && strcasestr(l + 11, "close"))
+		rd->conn_close = true;
 	push(rd->c, I_HEADER, 0, l, strlen(l));
 }
 
@@ -241,6 +247,7 @@ static void headers_done(struct reader *rd)
 		if (first) {
 			const char *sp = strchr(p, ' ');
 			code = sp ? atol(sp + 1) : 0;
+			if (strncmp(p, "HTTP/1.0", 8) == 0) rd->conn_close = true;
 			push(rd->c, I_CODE, code, NULL, 0);
 			first = false;
 		} else if (*p != '\0') {
@@ -331,33 +338,79 @@ static double now_ms(void)
 	return t.tv_sec * 1e3 + t.tv_nsec / 1e6;
 }
 
-static void *worker(void *arg)
+/* ---- connections kept open, by server ----
+ *
+ * At most PER_SERVER connections to a server (host, port, TLS) at once:
+ * a fetch takes one left open by an earlier fetch, or opens one if there
+ * are fewer, or waits. A reply whose end is known (a length, chunked, no
+ * body) leaves its connection open for the next; one the server closes,
+ * or read to its end, closes it. netd does one TLS handshake at a time:
+ * each one saved is time saved for all the fetches. */
+
+#define PER_SERVER 4
+#define IDLE_MS 20000           /* an open connection older is not reused */
+
+struct conn {
+	long long sock;
+	double since;
+	struct conn *next;
+};
+
+struct server {
+	char *host;
+	int port;
+	bool tls;
+	int open;                   /* connections, in use or idle */
+	struct conn *idle;
+	struct server *next;
+};
+
+static pthread_mutex_t pool_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t pool_cond = PTHREAD_COND_INITIALIZER;
+static struct server *servers = NULL;
+
+static struct server *server_of(struct mhttp *c)
 {
-	struct mhttp *c = arg;
-	char err[200] = "";
+	struct server *sv;
+	for (sv = servers; sv != NULL; sv = sv->next)
+		if (sv->port == c->port && sv->tls == c->tls && strcmp(sv->host, c->host) == 0)
+			return sv;
+	sv = calloc(1, sizeof *sv);
+	if (sv == NULL) return NULL;
+	sv->host = strdup(c->host);
+	sv->port = c->port;
+	sv->tls = c->tls;
+	sv->next = servers;
+	servers = sv;
+	return sv;
+}
+
+static void sock_close(long long s)
+{
+	wire_writer w;
+	char e[64];
+	net_start(&w, N_CLOSE);
+	wire_put_int(&w, s);
+	net_int(&w, e, sizeof e);
+}
+
+/* a new connection to c's server: its socket, or -1 */
+static long long open_conn(struct mhttp *c, char *err, size_t errlen)
+{
 	wire_writer w;
 	long long s = -1;
-	struct reader rd;
-	bool free_now;
-
-	double t0 = now_ms(), t_conn = 0, t_sent = 0, t_first = 0;
-	size_t bytes = 0;
-	memset(&rd, 0, sizeof rd);
-	rd.c = c;
-	rd.remaining = -1;
-
 	if (c->tls) {
 		net_start(&w, N_CONNECT_TLS);
 		wire_put_cstring(&w, c->host);
 		wire_put_int(&w, c->port);
-		s = net_int(&w, err, sizeof err);
+		s = net_int(&w, err, errlen);
 	} else {
 		wire_reader r;
 		mynos_msg_t *msg;
 		char addr[64];
 		net_start(&w, N_RESOLVE);
 		wire_put_cstring(&w, c->host);
-		if (net_call(&w, &r, &msg, err, sizeof err) == 0) {
+		if (net_call(&w, &r, &msg, err, errlen) == 0) {
 			unsigned int n;
 			const char *a = wire_get_string(&r, &n);
 			snprintf(addr, sizeof addr, "%.*s", (int)n, a ? a : "");
@@ -365,52 +418,160 @@ static void *worker(void *arg)
 			net_start(&w, N_CONNECT);
 			wire_put_cstring(&w, addr);
 			wire_put_int(&w, c->port);
-			s = net_int(&w, err, sizeof err);
-		}
-	}
-
-	t_conn = now_ms();
-	if (s >= 0 && !c->aborted) {
-		net_start(&w, N_TIMEOUT);
-		wire_put_int(&w, s);
-		wire_put_int(&w, 30000);
-		net_int(&w, err, sizeof err);
-		if (sock_send((int)s, c->request, c->request_len, err, sizeof err) == 0) {
-			t_sent = now_ms();
-			while (!c->aborted && !rd.done) {
-				wire_reader r;
-				mynos_msg_t *msg;
-				unsigned int n;
-				const char *d;
-				net_start(&w, N_RECV);
-				wire_put_int(&w, s);
-				wire_put_int(&w, CHUNK);
-				if (net_call(&w, &r, &msg, err, sizeof err) < 0) break;
-				d = wire_get_string(&r, &n);
-				if (d == NULL || n == 0) {          /* the end */
-					mynos_freeMsg(&msg);
-					if (rd.in_body && !rd.chunked) rd.done = true;
-					else if (err[0] == '\0') snprintf(err, sizeof err, "the connection closed early");
-					break;
-				}
-				if (t_first == 0) t_first = now_ms();
-				bytes += n;
-				feed(&rd, d, n);
-				mynos_freeMsg(&msg);
-			}
+			s = net_int(&w, err, errlen);
 		}
 	}
 	if (s >= 0) {
-		char e2[64];
-		net_start(&w, N_CLOSE);
+		char e[64];
+		net_start(&w, N_TIMEOUT);
 		wire_put_int(&w, s);
-		net_int(&w, e2, sizeof e2);
+		wire_put_int(&w, 30000);
+		net_int(&w, e, sizeof e);
 	}
+	return s;
+}
+
+/* a connection for c: one left open (*reused), or a new one */
+static long long acquire(struct mhttp *c, bool *reused, char *err, size_t errlen)
+{
+	struct server *sv;
+	long long s;
+	pthread_mutex_lock(&pool_lock);
+	sv = server_of(c);
+	if (sv == NULL) {
+		pthread_mutex_unlock(&pool_lock);
+		snprintf(err, errlen, "out of memory");
+		return -1;
+	}
+	for (;;) {
+		while (sv->idle != NULL) {
+			struct conn *k = sv->idle;
+			sv->idle = k->next;
+			s = k->sock;
+			if (now_ms() - k->since < IDLE_MS) {
+				free(k);
+				pthread_mutex_unlock(&pool_lock);
+				*reused = true;
+				return s;
+			}
+			free(k);                    /* too old: closed */
+			sv->open--;
+			pthread_mutex_unlock(&pool_lock);
+			sock_close(s);
+			pthread_mutex_lock(&pool_lock);
+		}
+		if (sv->open < PER_SERVER || c->aborted) break;
+		pthread_cond_wait(&pool_cond, &pool_lock);
+	}
+	sv->open++;
+	pthread_mutex_unlock(&pool_lock);
+	*reused = false;
+	if (c->aborted) s = -1;
+	else s = open_conn(c, err, errlen);
+	if (s < 0) {
+		pthread_mutex_lock(&pool_lock);
+		sv->open--;
+		pthread_cond_broadcast(&pool_cond);
+		pthread_mutex_unlock(&pool_lock);
+	}
+	return s;
+}
+
+/* a connection given back: kept open for the next, or closed */
+static void release(struct mhttp *c, long long s, bool keep)
+{
+	struct server *sv;
+	struct conn *k = keep ? malloc(sizeof *k) : NULL;
+	pthread_mutex_lock(&pool_lock);
+	sv = server_of(c);
+	if (k != NULL && sv != NULL) {
+		k->sock = s;
+		k->since = now_ms();
+		k->next = sv->idle;
+		sv->idle = k;
+	} else if (sv != NULL) {
+		sv->open--;
+	}
+	pthread_cond_broadcast(&pool_cond);
+	pthread_mutex_unlock(&pool_lock);
+	if (k == NULL) sock_close(s);
+}
+
+/* the request on socket s, the reply read into rd: 0 when it ended */
+static int exchange(struct mhttp *c, long long s, struct reader *rd,
+		    size_t *bytes, double *t_sent, double *t_first,
+		    char *err, size_t errlen)
+{
+	wire_writer w;
+	if (sock_send((int)s, c->request, c->request_len, err, errlen) < 0) return -1;
+	*t_sent = now_ms();
+	while (!c->aborted && !rd->done) {
+		wire_reader r;
+		mynos_msg_t *msg;
+		unsigned int n;
+		const char *d;
+		net_start(&w, N_RECV);
+		wire_put_int(&w, s);
+		wire_put_int(&w, CHUNK);
+		if (net_call(&w, &r, &msg, err, errlen) < 0) return -1;
+		d = wire_get_string(&r, &n);
+		if (d == NULL || n == 0) {          /* the server closed */
+			mynos_freeMsg(&msg);
+			rd->conn_close = true;
+			if (rd->in_body && !rd->chunked) { rd->done = true; return 0; }
+			snprintf(err, errlen, "the connection closed early");
+			return -1;
+		}
+		if (*t_first == 0) *t_first = now_ms();
+		*bytes += n;
+		feed(rd, d, n);
+		mynos_freeMsg(&msg);
+	}
+	return rd->done ? 0 : -1;
+}
+
+static void *worker(void *arg)
+{
+	struct mhttp *c = arg;
+	char err[200] = "";
+	struct reader rd;
+	bool free_now, reused = false;
+	long long s;
+	int attempt;
+	double t0 = now_ms(), t_conn = 0, t_sent = 0, t_first = 0;
+	size_t bytes = 0;
+
+	memset(&rd, 0, sizeof rd);
+	for (attempt = 0; attempt < 2; attempt++) {
+		int r;
+		memset(&rd, 0, sizeof rd);
+		rd.c = c;
+		rd.remaining = -1;
+		err[0] = '\0';
+		s = acquire(c, &reused, err, sizeof err);
+		t_conn = now_ms();
+		if (s < 0) break;
+		r = c->aborted ? -1 : exchange(c, s, &rd, &bytes, &t_sent, &t_first, err, sizeof err);
+		if (r == 0) {
+			bool keep = !rd.conn_close &&
+				(rd.no_body || rd.chunked || rd.has_length);
+			release(c, s, keep);
+			break;
+		}
+		release(c, s, false);
+		/* a connection kept open that the server had closed meanwhile:
+		   once more on a new one, if nothing came and it may be sent
+		   again */
+		if (!(reused && bytes == 0 && !c->post && !c->aborted)) break;
+		free(rd.hbuf);
+		rd.hbuf = NULL;
+	}
+
 	if (rd.done) push(c, I_DONE, 0, NULL, 0);
 	else if (!c->aborted) push(c, I_ERROR, 0, err[0] ? err : "fetch failed", strlen(err[0] ? err : "fetch failed"));
 	if (getenv("NSFB_DEBUG") != NULL && mynos_log != NULL)
-		mynos_log("nsfb time: %s %s:%d start %.0f connect %.0f send %.0f first %.0f end %.0f bytes %u\n",
-			  c->tls ? "tls" : "tcp", c->host, c->port, t0,
+		mynos_log("nsfb time: %s %s:%d%s start %.0f connect %.0f send %.0f first %.0f end %.0f bytes %u\n",
+			  c->tls ? "tls" : "tcp", c->host, c->port, reused ? " reused" : "", t0,
 			  t_conn - t0, t_sent ? t_sent - t_conn : 0,
 			  t_first ? t_first - t_sent : 0, now_ms() - t0, (unsigned)bytes);
 	if (!rd.done && getenv("NSFB_DEBUG") != NULL && mynos_log != NULL)
@@ -517,7 +678,7 @@ static void *mhttp_setup(struct fetch *parent, nsurl *url, bool only_2xx,
 	}
 	puts_(&req, "\r\nUser-Agent: ");
 	puts_(&req, user_agent_string());
-	puts_(&req, "\r\nAccept-Encoding: identity\r\nConnection: close\r\n");
+	puts_(&req, "\r\nAccept-Encoding: identity\r\n");
 	cookie = urldb_get_cookie(url, true);
 	if (cookie != NULL) {
 		puts_(&req, "Cookie: ");

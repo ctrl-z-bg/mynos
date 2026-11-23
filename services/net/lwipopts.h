@@ -19,6 +19,13 @@
 #define LWIP_DHCP               1
 #define LWIP_DHCP_DOES_ACD_CHECK 0
 #define LWIP_DNS                1
+/* DNS: names asked for at once. The defaults (4 in all) refused the
+   fifth request for a name still being resolved ("cannot resolve"):
+   a browser asks for one host's images all together. 16 names, 64
+   requests; their queries share at most 4 UDP ports */
+#define DNS_TABLE_SIZE          16
+#define DNS_MAX_REQUESTS        64
+#define DNS_MAX_SOURCE_PORTS    4
 #define LWIP_NETIF_STATUS_CALLBACK 1
 
 /* memory: lwIP's heap from malloc, its pools static */
