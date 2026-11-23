@@ -6,9 +6,11 @@ MyNOS (mynos-1g0). Its framebuffer front end draws in a window of
 MyNOS's display service through a surface written for MyNOS
 (`mynos-surface.c`, protocol display/1).
 
-The sources are not in this repository: `build.sh` downloads them (the
-version and the SHA-256 of each archive are fixed in it), applies the
-patches here, and builds in a container.
+The sources are not in this repository: `build.sh` downloads them, and
+those of zlib, libpng, libjpeg (IJG 9f) and expat (the version and the
+SHA-256 of each archive are fixed in it), applies the patches here, and
+builds in a container. Images: PNG, JPEG, GIF, BMP, ICO and SVG
+(libsvgtiny); not WebP.
 
 ```
 tools/build-all.sh               # libmynos first
@@ -34,12 +36,14 @@ article on OCaml, over HTTPS, in about 10 s under KVM.
 | `patches/06-mynos-surface-type.patch`, `07-mynos-surface-build.patch` | the `mynos` surface declared and built |
 | `patches/08-mynos-http-build.patch`, `09-mynos-http-register.patch` | the fetcher built and registered |
 | `patches/10-empty-url.patch` | an empty URL argument (the launcher's empty `$1`) opens the home page |
+| `patches/11-framebuffer-paths.patch` | the framebuffer front end drew no paths ("path unimplemented"), and SVG is drawn with nothing else: curves made line segments, filled a scan line at a time (non-zero winding), stroked; fill and stroke by colour, as `svg.c` leaves the plot types unset. A clip outside the surface is empty, not an error (the error fell on the next plot, an SVG, drawn as broken) |
+| `patches/12-svgtiny-quadratic.patch` | libsvgtiny: a relative `q` kept its control point relative, a relative `t` added the current point to its reflected one twice |
 | `try.sh` | a clean disk (never `system/disk.img`) with the stage in `/disk/ns` and a launcher, `/disk/ns/netsurf` |
 
-Built without: curl and OpenSSL (`netd` does the network and TLS), PNG,
-JPEG, WebP, SVG.
-The program is about 3.2 MB stripped: under MyNOS's limit of 4 MB for a
-program (one page table), so it is built for size (`-Os`, no unwind
+Built without: curl and OpenSSL (`netd` does the network and TLS), WebP.
+SVG gradients are not drawn (libsvgtiny).
+The program loads 3.75 MB (3.5 MB stripped): under MyNOS's limit of
+4 MB for a program (one page table), so it is built for size (`-Os`, no unwind
 tables, `--gc-sections`).
 
 **Measured** (a saved Wikipedia page, 346 KB, under KVM, `NSFB_TIME=1`):
@@ -51,6 +55,6 @@ MIT). Each patch follows the licence of the file it changes;
 `mynos-surface.c` is MyNOS's, GPL version 2 or later. A NetSurf program
 built from them is therefore distributed under version 2.
 
-**Not done** (mynos-1g0): images (PNG, JPEG, SVG); faster pages (a TLS
-handshake for every resource: connections are not kept); how NetSurf
-reaches users (to be decided).
+**Not done** (mynos-1g0): faster pages (a TLS handshake for every
+resource: connections are not kept); WebP; how NetSurf reaches users
+(to be decided). Room left under the 4 MB limit: about 450 KB.

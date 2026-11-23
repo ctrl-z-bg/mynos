@@ -54,6 +54,7 @@
 #pragma weak wire_reader_init
 #pragma weak wire_get_int
 #pragma weak wire_get_string
+#pragma weak mynos_log
 
 nserror fetch_mynos_http_register(void);
 
@@ -393,6 +394,9 @@ static void *worker(void *arg)
 	}
 	if (rd.done) push(c, I_DONE, 0, NULL, 0);
 	else if (!c->aborted) push(c, I_ERROR, 0, err[0] ? err : "fetch failed", strlen(err[0] ? err : "fetch failed"));
+	if (!rd.done && getenv("NSFB_DEBUG") != NULL && mynos_log != NULL)
+		mynos_log("nsfb http: %s:%d: %s%s\n", c->host, c->port,
+			  c->aborted ? "aborted " : "", err[0] ? err : "fetch failed");
 	free(rd.hbuf);
 
 	pthread_mutex_lock(&c->lock);

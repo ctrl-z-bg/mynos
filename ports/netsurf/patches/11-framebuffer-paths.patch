@@ -1,0 +1,249 @@
+--- a/netsurf/frontends/framebuffer/framebuffer.c
++++ b/netsurf/frontends/framebuffer/framebuffer.c
+@@ -53,6 +53,9 @@
+  *              operations within.
+  * \return NSERROR_OK on success else error code.
+  */
++/* (MyNOS) the last clip was outside the surface: nothing to draw */
++static bool fb_clip_empty = false;
++
+ static nserror
+ framebuffer_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
+ {
+@@ -62,9 +65,12 @@
+ 	nsfb_clip.x1 = clip->x1;
+ 	nsfb_clip.y1 = clip->y1;
+ 
+-	if (!nsfb_plot_set_clip(nsfb, &nsfb_clip)) {
+-		return NSERROR_INVALID;
+-	}
++	/* (MyNOS) a clip outside the surface (an element placed off the
++	 * screen, as pages do to hide one) is not an error: it was, and
++	 * the knockout plotters passed it to the next plot, an SVG's
++	 * path, whose image was then drawn as broken. Nothing is drawn
++	 * until the next clip. */
++	fb_clip_empty = !nsfb_plot_set_clip(nsfb, &nsfb_clip);
+ 	return NSERROR_OK;
+ }
+ 
+@@ -90,6 +96,7 @@
+ 	       const plot_style_t *style,
+ 	       int x, int y, int radius, int angle1, int angle2)
+ {
++	if (fb_clip_empty) return NSERROR_OK;
+ 	if (!nsfb_plot_arc(nsfb, x, y, radius, angle1, angle2, style->fill_colour)) {
+ 		return NSERROR_INVALID;
+ 	}
+@@ -114,6 +121,7 @@
+ 		const plot_style_t *style,
+ 		int x, int y, int radius)
+ {
++	if (fb_clip_empty) return NSERROR_OK;
+ 	nsfb_bbox_t ellipse;
+ 	ellipse.x0 = x - radius;
+ 	ellipse.y0 = y - radius;
+@@ -147,6 +155,7 @@
+ 		const plot_style_t *style,
+ 		const struct rect *line)
+ {
++	if (fb_clip_empty) return NSERROR_OK;
+ 	nsfb_bbox_t rect;
+ 	nsfb_plot_pen_t pen;
+ 
+@@ -194,6 +203,7 @@
+ 		     const plot_style_t *style,
+ 		     const struct rect *nsrect)
+ {
++	if (fb_clip_empty) return NSERROR_OK;
+ 	nsfb_bbox_t rect;
+ 	bool dotted = false;
+ 	bool dashed = false;
+@@ -244,6 +254,7 @@
+ 		   const int *p,
+ 		   unsigned int n)
+ {
++	if (fb_clip_empty) return NSERROR_OK;
+ 	if (!nsfb_plot_polygon(nsfb, p, n, style->fill_colour)) {
+ 		return NSERROR_INVALID;
+ 	}
+@@ -271,7 +282,155 @@
+ 		unsigned int n,
+ 		const float transform[6])
+ {
+-	NSLOG(netsurf, INFO, "path unimplemented");
++	if (fb_clip_empty) return NSERROR_OK;
++	/* (MyNOS, mynos-1g0) paths were not drawn here, and SVG is drawn
++	 * with nothing else. Curves become line segments; the subpaths
++	 * are filled as one polygon (each one closed, joined to the first
++	 * one's start and back, so that the joins cancel: libnsfb fills by
++	 * crossings), and stroked line by line. */
++	static int *pt = NULL;          /* the points, transformed, in pairs */
++	static unsigned int *sub = NULL; /* where each subpath starts, in pt */
++	static unsigned char *closed = NULL;
++	static unsigned int pt_cap = 0, sub_cap = 0, closed_cap = 0;
++	unsigned int np = 0, ns = 0, i = 0, k, j;
++	float cx = 0, cy = 0, sx = 0, sy = 0;   /* current point, subpath start */
++	int reopen = 0;     /* after a close, a line or curve starts a new subpath */
++	nsfb_plot_pen_t pen;
++
++#define PATH_GROW(arr, cap, need, type) do { \
++	if ((need) > (cap)) { \
++		unsigned int nc = (need) * 2; \
++		type *q = realloc(arr, nc * sizeof(type)); \
++		if (q == NULL) return NSERROR_NOMEM; \
++		arr = q; cap = nc; \
++	} } while (0)
++#define PATH_POINT(x, y) do { \
++	PATH_GROW(pt, pt_cap, (np + 1) * 2, int); \
++	pt[np * 2] = (int)(transform[0] * (x) + transform[2] * (y) + transform[4] + 0.5f); \
++	pt[np * 2 + 1] = (int)(transform[1] * (x) + transform[3] * (y) + transform[5] + 0.5f); \
++	np++; } while (0)
++
++	(void)ctx;
++	while (i < n) {
++		int cmd = (int)p[i];
++		if (cmd == PLOTTER_PATH_MOVE && i + 2 < n) {
++			PATH_GROW(sub, sub_cap, ns + 1, unsigned int);
++			PATH_GROW(closed, closed_cap, ns + 1, unsigned char);
++			sub[ns] = np;
++			closed[ns] = 0;
++			ns++;
++			cx = sx = p[i + 1]; cy = sy = p[i + 2];
++			reopen = 0;
++			PATH_POINT(cx, cy);
++			i += 3;
++		} else if (cmd == PLOTTER_PATH_LINE && i + 2 < n) {
++			if (ns == 0 || reopen) { PATH_GROW(sub, sub_cap, ns + 1, unsigned int); PATH_GROW(closed, closed_cap, ns + 1, unsigned char); sub[ns] = np; closed[ns] = 0; ns++; reopen = 0; PATH_POINT(cx, cy); }
++			cx = p[i + 1]; cy = p[i + 2];
++			PATH_POINT(cx, cy);
++			i += 3;
++		} else if (cmd == PLOTTER_PATH_BEZIER && i + 6 < n) {
++			float x1 = p[i + 1], y1 = p[i + 2], x2 = p[i + 3], y2 = p[i + 4];
++			float x3 = p[i + 5], y3 = p[i + 6];
++			/* segments by the control polygon's size on the screen */
++			float sc = (transform[0] < 0 ? -transform[0] : transform[0]) +
++				   (transform[3] < 0 ? -transform[3] : transform[3]) + 0.001f;
++			float len = ((x1 > cx ? x1 - cx : cx - x1) + (y1 > cy ? y1 - cy : cy - y1) +
++				     (x2 > x1 ? x2 - x1 : x1 - x2) + (y2 > y1 ? y2 - y1 : y1 - y2) +
++				     (x3 > x2 ? x3 - x2 : x2 - x3) + (y3 > y2 ? y3 - y2 : y2 - y3)) * sc / 2;
++			int segs = (int)(len / 3), s;
++			if (segs < 2) segs = 2;
++			if (segs > 32) segs = 32;
++			if (ns == 0 || reopen) { PATH_GROW(sub, sub_cap, ns + 1, unsigned int); PATH_GROW(closed, closed_cap, ns + 1, unsigned char); sub[ns] = np; closed[ns] = 0; ns++; reopen = 0; PATH_POINT(cx, cy); }
++			for (s = 1; s <= segs; s++) {
++				float t = (float)s / segs, u = 1 - t;
++				float a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
++				PATH_POINT(a * cx + b * x1 + c * x2 + d * x3,
++					   a * cy + b * y1 + c * y2 + d * y3);
++			}
++			cx = x3; cy = y3;
++			i += 7;
++		} else if (cmd == PLOTTER_PATH_CLOSE) {
++			if (ns > 0) {
++				closed[ns - 1] = 1;
++				cx = sx; cy = sy;   /* back to the subpath's start */
++				reopen = 1;
++			}
++			i += 1;
++		} else {
++			break;              /* malformed */
++		}
++	}
++	if (np < 2) return NSERROR_OK;
++
++	/* SVG's redraw (content/handlers/image/svg.c) sets the colours
++	 * only, not the plot types: transparent is none, as GTK's
++	 * plotter takes it */
++	if (pstyle->fill_colour != NS_TRANSPARENT) {
++		/* a scan line at a time: where it crosses every edge of every
++		 * subpath (each closed), with the edge's direction; filled
++		 * where the winding number is not 0 (SVG's default rule) */
++		static int *xs = NULL;
++		static signed char *dir = NULL;
++		static unsigned int xs_cap = 0, dir_cap = 0;
++		int ymin = pt[1], ymax = pt[1], y;
++		for (j = 0; j < np; j++) {
++			if (pt[j * 2 + 1] < ymin) ymin = pt[j * 2 + 1];
++			if (pt[j * 2 + 1] > ymax) ymax = pt[j * 2 + 1];
++		}
++		PATH_GROW(xs, xs_cap, np + 1, int);
++		PATH_GROW(dir, dir_cap, np + 1, signed char);
++		for (y = ymin; y < ymax; y++) {
++			unsigned int nx = 0, q;
++			int w;
++			for (k = 0; k < ns; k++) {
++				unsigned int a = sub[k], b = k + 1 < ns ? sub[k + 1] : np;
++				if (b - a < 2) continue;
++				for (j = a; j < b; j++) {
++					unsigned int e = j + 1 < b ? j + 1 : a;
++					int x0 = pt[j * 2], y0 = pt[j * 2 + 1];
++					int x1 = pt[e * 2], y1 = pt[e * 2 + 1];
++					/* the line's centre, y + 0.5, against [y0, y1) */
++					if ((y0 <= y && y1 > y) || (y1 <= y && y0 > y)) {
++						float t = ((float)y + 0.5f - y0) / (float)(y1 - y0);
++						int xi = (int)(x0 + t * (x1 - x0) + 0.5f);
++						/* insertion, by x */
++						for (q = nx; q > 0 && xs[q - 1] > xi; q--) {
++							xs[q] = xs[q - 1]; dir[q] = dir[q - 1];
++						}
++						xs[q] = xi; dir[q] = y1 > y0 ? 1 : -1;
++						nx++;
++					}
++				}
++			}
++			for (q = 0, w = 0; q + 1 < nx; q++) {
++				w += dir[q];
++				if (w != 0 && xs[q + 1] > xs[q]) {
++					nsfb_bbox_t r = { xs[q], y, xs[q + 1], y + 1 };
++					nsfb_plot_rectangle_fill(nsfb, &r, pstyle->fill_colour);
++				}
++			}
++		}
++	}
++
++	if (pstyle->stroke_colour != NS_TRANSPARENT && pstyle->stroke_width > 0) {
++		pen.stroke_type = NFSB_PLOT_OPTYPE_SOLID;
++		pen.stroke_colour = pstyle->stroke_colour;
++		pen.stroke_width = plot_style_fixed_to_int(pstyle->stroke_width);
++		if (pen.stroke_width < 1) pen.stroke_width = 1;
++		for (k = 0; k < ns; k++) {
++			unsigned int a = sub[k], b = k + 1 < ns ? sub[k + 1] : np;
++			for (j = a; j + 1 < b; j++) {
++				nsfb_bbox_t l = { pt[j * 2], pt[j * 2 + 1], pt[j * 2 + 2], pt[j * 2 + 3] };
++				nsfb_plot_line(nsfb, &l, &pen);
++			}
++			if (closed[k] && b - a > 2) {
++				nsfb_bbox_t l = { pt[(b - 1) * 2], pt[(b - 1) * 2 + 1], pt[a * 2], pt[a * 2 + 1] };
++				nsfb_plot_line(nsfb, &l, &pen);
++			}
++		}
++	}
++#undef PATH_POINT
++#undef PATH_GROW
+ 	return NSERROR_OK;
+ }
+ 
+@@ -309,6 +468,7 @@
+ 		  colour bg,
+ 		  bitmap_flags_t flags)
+ {
++	if (fb_clip_empty) return NSERROR_OK;
+ 	nsfb_bbox_t loc;
+ 	nsfb_bbox_t clipbox;
+ 	bool repeat_x = (flags & BITMAPF_REPEAT_X);
+@@ -417,6 +577,7 @@
+ 		const char *text,
+ 		size_t length)
+ {
++	if (fb_clip_empty) return NSERROR_OK;
+ 	uint32_t ucs4;
+ 	size_t nxtchr = 0;
+ 	FT_Glyph glyph;
+@@ -482,6 +643,7 @@
+ 		const char *text,
+ 		size_t length)
+ {
++	if (fb_clip_empty) return NSERROR_OK;
+     enum fb_font_style style = fb_get_font_style(fstyle);
+     int size = fb_get_font_size(fstyle);
+     const uint8_t *chrp;

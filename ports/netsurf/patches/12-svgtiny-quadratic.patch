@@ -1,0 +1,39 @@
+--- a/libsvgtiny/src/svgtiny.c
++++ b/libsvgtiny/src/svgtiny.c
+@@ -1092,14 +1092,17 @@
+                                 ALLOC_PATH_ELEMENTS(7);
+ 
+ 				p[i++] = svgtiny_PATH_BEZIER;
+-				last_quad_x = x1;
+-				last_quad_y = y1;
+ 				if (*command == 'q') {
+ 					x1 += last_x;
+ 					y1 += last_y;
+ 					x += last_x;
+ 					y += last_y;
+ 				}
++				/* (MyNOS) the control point kept absolute: it
++				   was kept before a relative one was made so,
++				   and a following T reflected the wrong point */
++				last_quad_x = x1;
++				last_quad_y = y1;
+ 				p[i++] = 1./3 * last_x + 2./3 * x1;
+ 				p[i++] = 1./3 * last_y + 2./3 * y1;
+ 				p[i++] = 2./3 * x1 + 1./3 * x;
+@@ -1119,13 +1122,14 @@
+                                 ALLOC_PATH_ELEMENTS(7);
+ 
+ 				p[i++] = svgtiny_PATH_BEZIER;
++				/* (MyNOS) the reflected control point is
++				   absolute already: only the end point of a
++				   't' is relative (it was added twice) */
+ 				x1 = last_x + (last_x - last_quad_x);
+ 				y1 = last_y + (last_y - last_quad_y);
+ 				last_quad_x = x1;
+ 				last_quad_y = y1;
+ 				if (*command == 't') {
+-					x1 += last_x;
+-					y1 += last_y;
+ 					x += last_x;
+ 					y += last_y;
+ 				}

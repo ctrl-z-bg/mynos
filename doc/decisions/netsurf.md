@@ -46,4 +46,5 @@ SHA-256 fixed. The build runs in its own container image
 
 - How NetSurf reaches users: it would be the first package with a C
   program. To be discussed with the user before it is done.
-- Images (libpng, libjpeg, an SVG library), kept connections, gzip.
+- Kept connections, gzip, WebP. Images are there (PNG, JPEG, SVG), at
+  3.75 MB of the 4 MB a program may take: what more goes in has to fit.

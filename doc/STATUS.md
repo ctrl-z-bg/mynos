@@ -1753,3 +1753,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   netd); ten patches in all. In MyNOS: links, the keyboard, the address bar, JavaScript, and
   Wikipedia's article on OCaml over HTTPS in about 10 s, without images.
   How it reaches users is not decided yet.
+- **2026-11-23** — NetSurf shows images (ports/netsurf, mynos-1g0): PNG,
+  JPEG (libpng, IJG libjpeg) and SVG (libsvgtiny over expat), built with
+  musl like the rest; the program loads 3.75 MB of its 4 MB. SVG needed
+  three fixes: the framebuffer front end drew no paths, libsvgtiny
+  misread relative `q` and `t`, and a clip outside the window failed the
+  next plot. Wikipedia's article on OCaml: its logo, the OCaml logo, the
+  icons, in about 5 s.

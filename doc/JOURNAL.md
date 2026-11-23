@@ -3368,3 +3368,37 @@ order of events.
 
 **Lesson.** Before comparing two systems, the instrument has to cost
 the same on both: a log is cheap where it goes to a file.
+
+## 2026-11-23 — NetSurf's SVG images: four faults in a row
+
+**Symptom.** With libsvgtiny built in, SVG images in NetSurf (Wikipedia's
+logo, a test circle) were not drawn at all; on Wikipedia the logo was a
+pink "broken object" box; once drawn, Wikipedia's tagline had lines
+across it, and shapes had borders they did not ask for.
+
+**Diagnosis.** One at a time, each on the host (NetSurf's Linux build,
+the "ram" surface writing a PPM) and then in MyNOS:
+1. The framebuffer front end's path plotter only logged "path
+   unimplemented"; libsvgtiny turns every shape into a path.
+2. A printout of the paths showed a curve with control points at x=316
+   in a 140-wide drawing, after relative `q` and `t` commands.
+3. `content/handlers/image/svg.c` sets a path's colours but not its fill
+   and stroke types, which held whatever was on the stack.
+4. The broken box: a log in svg.c showed the path call failing with
+   NSERROR_INVALID, which the new plotter never returns. The knockout
+   plotters flush their queue before a path, and a queued clip outside
+   the window had failed `nsfb_plot_set_clip`: the error was the clip's.
+
+**Cause.** NetSurf's framebuffer port never drew SVG; libsvgtiny 0.1.8
+kept a relative `q` control point relative and added the current point
+twice to a `t`'s; an element placed off the screen (Wikipedia hides
+links so) is an error to libnsfb.
+
+**Fix.** Paths drawn (curves as segments, a scan-line fill with the
+non-zero rule, strokes), fill and stroke chosen by colour as GTK does,
+an off-screen clip made an empty one; libsvgtiny's `q` and `t` fixed
+(ports/netsurf/patches/11, 12).
+
+**Lesson.** When an error code comes from a call that cannot return it,
+look at what ran just before: a queue of deferred operations reports
+its failures on whoever empties it.
