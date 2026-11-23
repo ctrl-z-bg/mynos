@@ -11,7 +11,7 @@
 #   --no-net      no network card
 #   --http PORT   the host port forwarded to MyNOS's web server (default
 #                 8080, if it is free; 0: none)
-#   --mem MB      the memory (default 2048; MyNOS uses at most 3072)
+#   --mem MB      the memory (default 2048; MyNOS uses at most 3583)
 #   --no-kvm      emulate the processor even if KVM (/dev/kvm) is there
 #   --no-sound    no sound card (by default a Sound Blaster 16, through
 #                 the host's audio: pipewire, pulseaudio, alsa, coreaudio)

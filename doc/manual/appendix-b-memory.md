@@ -425,7 +425,7 @@ descriptor and the pid remain until the parent collects the status.
 | user stack | 256 pages (1 MB) | `USER_STACK_NPAGES`, `global.h` |
 | kernel stack per thread | 4 pages | `KERNEL_STACK_NPAGES`, `global.h` |
 | kernel heap classes | 32 B – 2 KB (header included), pages above | `class_size`, `dynalloc.c` |
-| physical memory | what multiboot reports, up to 4 GB | `init_memory` |
+| physical memory | the RAM in one piece above 1 MB that multiboot reports (`mem_upper`): with QEMU, up to 3583 MB | `start.asm`, `init_memory` |
 
 ## B.14 The external pager
 
@@ -516,3 +516,11 @@ from the RAM disk, 10 to 20 µs.
   (B.12).
 - One processor (mynos-awn): the single kernel window of B.11 assumes
   nothing else runs in the kernel.
+- **Less than 4 GB of RAM.** Without PAE, physical addresses have 32
+  bits: 4 GB, which RAM shares with the devices (the frame buffer at
+  `0xFD000000`, the APICs, the BIOS). The kernel's tables could count a
+  frame anywhere in those 4 GB, but it takes the RAM from multiboot's
+  `mem_upper`, the part in one piece above 1 MB, not from its memory
+  map: RAM past a hole, or remapped above 4 GB, is not used. With QEMU:
+  up to `-m 3583` all of it; from `-m 3584`, QEMU keeps 3 GB below the
+  devices and puts the rest above 4 GB, and MyNOS uses 3 GB.
