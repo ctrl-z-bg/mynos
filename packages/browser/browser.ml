@@ -265,6 +265,8 @@ type st = {
   mutable hover : string option;
   values : (int * int, string * bool) Hashtbl.t;   (* the forms' fields, as changed *)
   mutable focus : (int * int) option;             (* the field that has the keys *)
+  mutable cursor : int;                           (* in it: the characters before *)
+  mutable first : int;                            (* the first character shown *)
 }
 
 (* application/x-www-form-urlencoded *)
@@ -372,7 +374,8 @@ let () =
     let first = match args with u :: _ -> of_typed u | [] -> "about:start" in
     let st = { doc = fetch "about:start"; laid = None; address = first; back = []; forward = [];
                loading = None; want_scroll = None; offset = 0; hover = None;
-               values = Hashtbl.create 8; focus = None } in
+               values = Hashtbl.create 8; focus = None;
+               cursor = 0; first = 0 } in
     let start_fetch ?body url =
       incr fetches;
       let n = !fetches in
@@ -471,25 +474,31 @@ let () =
         (match st.focus with
          | Some ((fi, k) as w) when fi < Array.length page.forms && k < Array.length page.forms.(fi).fields ->
            let f = page.forms.(fi).fields.(k) in
-           let v, c = value_of st f w in
-           let drop_last s =
-             if s = "" then s else begin
-               let j = ref (String.length s - 1) in
-               while !j > 0 && Char.code s.[!j] land 0xC0 = 0x80 do decr j done;
-               String.sub s 0 !j
-             end in
+           (* edited at the cursor (st.cursor characters before it) *)
            List.iter (fun key ->
+               let v, c = value_of st f w in
+               let n = Layout.cells v in
+               st.cursor <- max 0 (min st.cursor n);
+               let before, after = Layout.split_cells v st.cursor in
+               let set s cur = Hashtbl.replace st.values w (s, c); st.cursor <- cur in
                match key with
                | "\r" | "\n" -> submit page fi None
                | "\027" -> st.focus <- None
-               | "\127" | "\b" -> Hashtbl.replace st.values w (drop_last v, c)
-               | "\021" -> Hashtbl.replace st.values w ("", c)
+               | "\127" | "\b" ->
+                 if st.cursor > 0 then
+                   set (fst (Layout.split_cells before (st.cursor - 1)) ^ after) (st.cursor - 1)
+               | "\027[3~" ->
+                 if st.cursor < n then set (before ^ snd (Layout.split_cells after 1)) st.cursor
+               | "\027[D" -> st.cursor <- max 0 (st.cursor - 1)
+               | "\027[C" -> st.cursor <- min n (st.cursor + 1)
+               | "\027[H" | "\027[1~" | "\001" -> st.cursor <- 0
+               | "\027[F" | "\027[4~" | "\005" -> st.cursor <- n
+               | "\021" -> set "" 0
                | "\022" ->
                  let clip = match String.split_on_char '\n' (Clipboard.get ()) with l :: _ -> l | [] -> "" in
-                 Hashtbl.replace st.values w (v ^ clip, c)
+                 set (before ^ clip ^ after) (st.cursor + Layout.cells clip)
                | key when String.length key > 0 && key.[0] >= ' ' && key.[0] <> '\127' ->
-                 let v, _ = value_of st f w in
-                 Hashtbl.replace st.values w (v ^ key, c)
+                 set (before ^ key ^ after) (st.cursor + Layout.cells key)
                | _ -> ()) ui.Gui.keys;
            ui.Gui.keys <- []
          | _ -> st.focus <- None);
@@ -520,11 +529,22 @@ let () =
              Gfx.fill g x y (pw - 2) (line_h - 2) 0xFFFFFF;
              Gfx.rect g x y (pw - 2) (line_h - 2) (if focused then Gui.accent else 0x8A96A3);
              let shown = if f.kind = Password then String.make (Layout.cells v) '*' else v in
-             let room = cells - 2 in
-             let shown = if Layout.cells shown <= room then shown
-               else snd (Layout.split_cells shown (Layout.cells shown - room)) in
-             ignore (Gfx.text g (x + 6) (y + 1) shown Gui.foreground);
-             if focused then Gfx.fill g (x + 6 + Layout.cells shown * Gfx.char_w) (y + 2) 2 13 Gui.accent
+             let room = max 1 (cells - 2) and total = Layout.cells shown in
+             (* the part in view: the cursor in it, when focused; else the end *)
+             let first =
+               if not focused then max 0 (total - room)
+               else begin
+                 let cur = min st.cursor total in
+                 if cur < st.first then st.first <- cur;
+                 if cur > st.first + room - 1 then st.first <- cur - room + 1;
+                 if total - st.first < room - 1 then st.first <- max 0 (total - room + 1);
+                 st.first <- max 0 st.first;
+                 st.first
+               end in
+             let part = fst (Layout.split_cells (snd (Layout.split_cells shown first)) room) in
+             ignore (Gfx.text g (x + 6) (y + 1) part Gui.foreground);
+             if focused then
+               Gfx.fill g (x + 6 + (min st.cursor total - first) * Gfx.char_w) (y + 2) 2 13 Gui.accent
            | Submit ->
              Gfx.fill g x y (pw - 4) (line_h - 2) Gui.accent;
              let lw = Layout.cells f.label * Gfx.char_w in
@@ -603,7 +623,17 @@ let () =
              let f = form.fields.(k) in
              let v, c = value_of st f w in
              (match f.kind with
-              | Text | Password | Textarea -> st.focus <- Some w; ui.Gui.field <- 0
+              | Text | Password | Textarea ->
+                (* the cursor where the click was, in the part shown (a
+                   field without the keys shows its end) *)
+                let wx, ww = match List.find_opt hit !widgets with
+                  | Some (x, _, w, _, _) -> (x, w) | None -> (px, 0) in
+                let n = Layout.cells v in
+                let room = max 1 (ww / Gfx.char_w - 2) in
+                let first = if st.focus = Some w then st.first else max 0 (n - room) in
+                st.first <- first;
+                st.focus <- Some w; ui.Gui.field <- 0;
+                st.cursor <- min n (first + max 0 ((px - wx - 6 + Gfx.char_w / 2) / Gfx.char_w))
               | Checkbox -> Hashtbl.replace st.values w (v, not c)
               | Radio ->
                 Array.iteri (fun j (o : Layout.field) ->

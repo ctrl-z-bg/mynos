@@ -25,6 +25,17 @@
 
 open Pkgdb
 
+(* what pkg says: on its output, or, at boot (pkg boot, started by init
+   while sh shows its prompt), into the system's log (the Log window,
+   log), a line each, so that the console keeps its prompt *)
+let quiet = ref false
+let say fmt =
+  Printf.ksprintf (fun s ->
+      if not !quiet then (print_string s; flush stdout)
+      else List.iter (fun l -> if String.trim l <> "" then Mynos.log l)
+          (String.split_on_char '\n' s)) fmt
+let say_line s = say "%s\n" s
+
 (* {1 Files} *)
 
 let rec mkdir_p d =
@@ -61,7 +72,7 @@ let update () =
   let n = List.length (entries text) in
   mkdir_p root;
   write index_file text;
-  Printf.printf "pkg: %d packages in the index (%s)\n%!" n url
+  say "pkg: %d packages in the index (%s)\n%!" n url
 
 let index () =
   if not (Sys.file_exists index_file) then update ();
@@ -200,9 +211,9 @@ let rec install ~source ?(chain = []) name =
       match installed d with
       | Some (v, _) when v = (find d).version -> ()
       | _ ->
-        Printf.printf "pkg: %s needs %s\n%!" name d;
+        say "pkg: %s needs %s\n%!" name d;
         install ~source ~chain:(name :: chain) d) e.depends;
-  Printf.printf "pkg: %s %s: downloading %d bytes\n%!" e.name e.version e.size;
+  say "pkg: %s %s: downloading %d bytes\n%!" e.name e.version e.size;
   let data = download (base () ^ e.archive) in
   if String.length data <> e.size then
     fail "%s: %d bytes, the index says %d" e.archive (String.length data) e.size;
@@ -225,7 +236,7 @@ let rec install ~source ?(chain = []) name =
         write target (read bytecode);
         `Bytecode
       end else begin
-        Printf.printf "pkg: %s: compiling %s\n%!" (Filename.remove_extension p.file)
+        say "pkg: %s: compiling %s\n%!" (Filename.remove_extension p.file)
           (String.concat " " p.sources);
         compile (Filename.concat dir "src") p.sources m.libraries target;
         `Compiled
@@ -247,7 +258,7 @@ let rec install ~source ?(chain = []) name =
     else if List.for_all (( = ) `Compiled) hows then "compiled from its sources"
     else "bytecode and sources" in
   write (Filename.concat dir "installed") (e.version ^ "\n" ^ how ^ "\n" ^ e.hash ^ "\n");
-  Printf.printf "pkg: %s %s installed (%s)%s\n%!" name e.version how
+  say "pkg: %s %s installed (%s)%s\n%!" name e.version how
     (match m.commands, m.progs with
      | [], [] -> ""
      | [], ps -> ": " ^ String.concat " " (List.map (fun p -> Filename.remove_extension p.file) ps)
@@ -258,10 +269,10 @@ let remove name =
   if not (Sys.file_exists (Filename.concat dir "installed")) then fail "%s: not installed" name;
   (match needed_by name with
    | [] -> ()
-   | ns -> Printf.printf "pkg: %s was needed by %s\n%!" name (String.concat ", " ns));
+   | ns -> say "pkg: %s was needed by %s\n%!" name (String.concat ", " ns));
   Option.iter remove_programs (manifest name);
   rm_rf dir;
-  Printf.printf "pkg: %s removed\n%!" name
+  say "pkg: %s removed\n%!" name
 
 (* the index read again, then every installed package it has another
    version of, or the same version built again (another archive: a
@@ -273,13 +284,14 @@ let upgrade () =
       match installed n, List.find_opt (fun e -> e.name = n) index with
       | Some (v, _), Some e when v <> e.version || installed_hash n <> e.hash -> Some n
       | _ -> None) (installed_names ()) in
-  if old = [] then print_endline "pkg: every installed package is the index's"
+  if old = [] then say_line "pkg: every installed package is the index's"
   else List.iter (fun n -> install ~source:false n) old
 
 (* at boot (init.rc): pkg upgrade, if /disk/pkg/autoupgrade is there
    (PKG=local tools/run-demo.sh puts it, with a repository on the host);
    the network may take a few seconds to come up *)
 let boot () =
+  quiet := true;
   if Sys.file_exists (root ^ "/autoupgrade") then begin
     let rec go n =
       match upgrade () with
@@ -297,8 +309,8 @@ let search word =
     let rec go i = i + n <= String.length s && (String.sub s i n = w || go (i + 1)) in
     go 0 in
   match List.filter (fun e -> has e.name || has e.description) (index ()) with
-  | [] -> Printf.printf "pkg: no package about %s\n" word
-  | es -> List.iter (fun e -> Printf.printf "%-10s %-8s %s\n" e.name e.version e.description) es
+  | [] -> say "pkg: no package about %s\n" word
+  | es -> List.iter (fun e -> say "%-10s %-8s %s\n" e.name e.version e.description) es
 
 let list () =
   List.iter (fun e ->
@@ -306,7 +318,7 @@ let list () =
         | Some (v, _) when v = e.version -> "installed"
         | Some (v, _) -> "installed " ^ v
         | None -> "" in
-      Printf.printf "%-10s %-8s %-12s %s\n" e.name e.version mark e.description)
+      say "%-10s %-8s %-12s %s\n" e.name e.version mark e.description)
     (index ())
 
 (* the packages installed, from /disk/pkg alone; the index, if a copy is
@@ -319,21 +331,21 @@ let list_installed () =
           let newer = match List.find_opt (fun e -> e.name = name) index with
             | Some e when e.version <> v -> Printf.sprintf " (the index has %s)" e.version
             | _ -> "" in
-          Printf.printf "%-10s %-8s %s%s\n" name v how newer) (installed name)) names;
-  if names = [] then print_endline "pkg: no package is installed"
+          say "%-10s %-8s %s%s\n" name v how newer) (installed name)) names;
+  if names = [] then say_line "pkg: no package is installed"
 
 let info name =
   let e = find name in
-  Printf.printf "%s %s\n%s\nlicence: %s\narchive: %s, %d bytes\nbuilt on MyNOS %s\n"
+  say "%s %s\n%s\nlicence: %s\narchive: %s, %d bytes\nbuilt on MyNOS %s\n"
     e.name e.version e.description e.license e.archive e.size e.mynos;
-  if e.programs <> [] then Printf.printf "commands: %s\n" (String.concat " " e.programs);
-  if e.depends <> [] then Printf.printf "needs: %s\n" (String.concat " " e.depends);
+  if e.programs <> [] then say "commands: %s\n" (String.concat " " e.programs);
+  if e.depends <> [] then say "needs: %s\n" (String.concat " " e.depends);
   match installed name with
   | Some (v, how) ->
-    Printf.printf "installed: %s (%s)\n" v how;
+    say "installed: %s (%s)\n" v how;
     Option.iter (fun m -> Option.iter (fun d ->
-        Printf.printf "documentation: %s/%s/%s\n" root name d) m.doc) (manifest name)
-  | None -> print_endline "not installed"
+        say "documentation: %s/%s/%s\n" root name d) m.doc) (manifest name)
+  | None -> say_line "not installed"
 
 let usage () =
   prerr_endline "usage: pkg list [-i] | search WORD | info NAME | install [-s] NAME... | remove NAME... | update | upgrade";

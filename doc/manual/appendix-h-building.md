@@ -457,6 +457,11 @@ installed again. So: change a package, `tools/build-all.sh`, `PKG=local
 tools/run-demo.sh`, and the installed one is the new one; new packages
 with `pkg install`. Without `PKG=local`, `run-demo.sh` takes those two
 files away, and `pkg` reads GitHub again.
+What `pkg boot` installs goes to the system's log (the Log window,
+`log`), not to the console. A package built again the same, on a newer
+MyNOS, keeps its archive (`pkg-build.sh` compares it with the previous
+one but for its `"mynos"` field): only the packages that changed are
+installed again.
 
 A package's documentation may have pictures: `packages/NAME/images/`,
 named in its README as `images/FILE.png`. Its page in `mynos-packages`

@@ -1698,4 +1698,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   PKG=local the two files go. Tried on a clean disk: install, a rebuilt
   package upgraded at boot, back to GitHub. browser 1.4: DuckDuckGo lite
   on the start page.
+- **2026-11-23** — run-demo.sh PKG=local waited for ever on a disk with
+  /pkg (mtools' mmd asked what to do with the folder, on the terminal):
+  mtools read no terminal now. pkg boot writes to the system's log, not
+  the console (its lines hid sh's prompt). pkg-build keeps a package's
+  previous archive when only its "mynos" field changed (every commit made
+  every package new, and PKG=local reinstalled them all). browser 1.5:
+  the form fields edit at a cursor (a click, Left, Right, Home, End,
+  Delete).
 

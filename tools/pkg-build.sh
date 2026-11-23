@@ -43,10 +43,16 @@ root=$(pwd)
 # OUTDIR/packages holds only the archives of the specs: a package removed
 # or renamed leaves no archive behind
 mkdir -p "$out/packages" "$out/docs"
-rm -rf "$out"/packages/*.tar "$out"/docs/*
+# the previous archives, aside: a package built again the same, but on
+# another MyNOS (its "mynos" field, the commit), keeps its old archive, so
+# that its hash does not change and pkg upgrade (PKG=local) leaves it
+stage=$root/tmp/pkg-stage
+prev=$root/tmp/pkg-prev
+rm -rf "$prev"; mkdir -p "$prev"
+for f in "$out"/packages/*.tar; do [ -f "$f" ] && mv "$f" "$prev/"; done
+rm -rf "$out"/docs/*
 out=$(cd "$out" && pwd)
 mynos=$(cat VERSION 2>/dev/null || echo unknown)
-stage=$root/tmp/pkg-stage
 
 json() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 jlist() {
@@ -124,17 +130,39 @@ $pjson
 JSON
     tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner \
         --mtime=@0 -cf "$out/packages/.building.tar" -C "$d" .
+    # the same as the previous archive of this version but for its
+    # "mynos": that archive, and its "mynos"
+    pkg_mynos=$mynos
+    for old in "$prev/$NAME-$VERSION"-*.tar; do
+        [ -f "$old" ] || continue
+        o=$stage/.old
+        rm -rf "$o"; mkdir -p "$o"; tar -xf "$old" -C "$o"
+        same=yes
+        [ "$(cd "$o" && find . -type f | sort)" = "$(cd "$d" && find . -type f | sort)" ] || same=
+        if [ -n "$same" ]; then
+            for f in $(cd "$d" && find . -type f ! -name package.json); do
+                cmp -s "$o/$f" "$d/$f" || { same=; break; }
+            done
+        fi
+        [ -n "$same" ] &&
+            [ "$(sed '/"mynos":/d' "$o/package.json")" != "$(sed '/"mynos":/d' "$d/package.json")" ] && same=
+        if [ -n "$same" ]; then
+            cp "$old" "$out/packages/.building.tar"
+            pkg_mynos=$(sed -n 's/^ *"mynos": "\(.*\)"$/\1/p' "$o/package.json")
+        fi
+        rm -rf "$o"
+    done
     size=$(wc -c < "$out/packages/.building.tar" | tr -d ' ')
     hash=$(b2sum -l 256 "$out/packages/.building.tar" | cut -d' ' -f1)
     tar=packages/$NAME-$VERSION-$(printf '%s' "$hash" | cut -c1-12).tar
     mv "$out/packages/.building.tar" "$out/$tar"
     entry=$(printf '    {"name": "%s", "version": "%s", "description": "%s",\n     "license": "%s", "archive": "%s", "size": %s,\n     "blake2b-256": "%s", "mynos": "%s",\n     "depends": [%s], "programs": [%s]}' \
         "$(json "$NAME")" "$(json "$VERSION")" "$(json "$DESCRIPTION")" \
-        "$(json "$LICENSE")" "$tar" "$size" "$hash" "$(json "$mynos")" \
+        "$(json "$LICENSE")" "$tar" "$size" "$hash" "$(json "$pkg_mynos")" \
         "$(jlist "$DEPENDS")" "$(jlist "${COMMANDS:-$names}")")
     entries=${entries:+$entries,
 }$entry
     echo "pkg-build: $tar, $size bytes"
 done
-rm -rf "$stage"
+rm -rf "$stage" "$prev"
 printf '{\n  "format": 1,\n  "packages": [\n%s\n  ]\n}\n' "$entries" > "$out/index.json"
