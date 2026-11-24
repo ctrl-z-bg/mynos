@@ -46,5 +46,8 @@ SHA-256 fixed. The build runs in its own container image
 
 - How NetSurf reaches users: it would be the first package with a C
   program. To be discussed with the user before it is done.
-- Kept connections, gzip, WebP. Images are there (PNG, JPEG, SVG), at
-  3.75 MB of the 4 MB a program may take: what more goes in has to fit.
+- gzip, WebP. Images (PNG, JPEG, SVG) and real fonts (FreeType, DejaVu)
+  are there, at 3.92 MB of the 4 MB a program may take: WebP does not
+  fit; the limit, or JavaScript (Duktape, about 800 KB), would have to
+  give way. NetSurf 3.11's own limits (no CSS var(), gradients, grid)
+  stay.

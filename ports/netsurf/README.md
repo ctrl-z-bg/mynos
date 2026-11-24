@@ -7,8 +7,9 @@ MyNOS's display service through a surface written for MyNOS
 (`mynos-surface.c`, protocol display/1).
 
 The sources are not in this repository: `build.sh` downloads them, and
-those of zlib, libpng, libjpeg (IJG 9f) and expat (the version and the
-SHA-256 of each archive are fixed in it), applies the patches here, and
+those of zlib, libpng, libjpeg (IJG 9f), expat, FreeType 2.13.3 and the
+DejaVu fonts 2.37 (the version and the SHA-256 of each archive are fixed
+in it), applies the patches here, and
 builds in a container. Images: PNG, JPEG, GIF, BMP, ICO and SVG
 (libsvgtiny); not WebP.
 
@@ -42,9 +43,17 @@ article on OCaml, over HTTPS, in about 10 s under KVM.
 
 Built without: curl and OpenSSL (`netd` does the network and TLS), WebP.
 SVG gradients are not drawn (libsvgtiny).
-The program loads 3.75 MB (3.5 MB stripped): under MyNOS's limit of
+The program loads 3.92 MB (3.7 MB stripped): under MyNOS's limit of
 4 MB for a program (one page table), so it is built for size (`-Os`, no unwind
 tables, `--gc-sections`).
+
+**Text** is drawn by FreeType with the DejaVu fonts (sans, serif and
+mono, with their bold and italic faces), from `/disk/ns/fonts`
+(`NETSURF_FB_FONTPATH`); cursive and fantasy fall back to the sans. Not
+NetSurf's own bitmap font, which is monospaced: text took the wrong
+widths and large sizes were blocks. FreeType is built with only the
+modules a TrueType font needs, without font variations or compressed
+tables, to fit.
 
 **Measured** (a saved Wikipedia page, 346 KB, under KVM, `NSFB_TIME=1`):
 0.68 s in MyNOS, 0.23 s on Linux (`doc/JOURNAL.md`, 2026-11-23: the two
@@ -55,6 +64,7 @@ MIT). Each patch follows the licence of the file it changes;
 `mynos-surface.c` is MyNOS's, GPL version 2 or later. A NetSurf program
 built from them is therefore distributed under version 2.
 
-**Not done** (mynos-1g0): WebP; how NetSurf reaches users (to be
+**Not done** (mynos-1g0): WebP (BBC's images, for one; no room for it
+under 4 MB); how NetSurf reaches users (to be
 decided). Fetches still stall now and then for about 1.5 s, a matter
-of MyNOS's network card under QEMU, not of NetSurf (mynos-bix). Room left under the 4 MB limit: about 450 KB.
+of MyNOS's network card under QEMU, not of NetSurf (mynos-bix). Room left under the 4 MB limit: about 270 KB.

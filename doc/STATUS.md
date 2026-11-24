@@ -1775,3 +1775,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   gradients, no grid layout); the port's own: one bitmap monospace font,
   no WebP (BBC's images), network stalls (mynos-bix). QEMU's ne2000
   checked: a frame that finds the ring full is dropped, not held.
+- **2026-11-24** — NetSurf draws text with FreeType and the DejaVu fonts
+  (ports/netsurf: FreeType 2.13.3 with the TrueType modules only, eight
+  DejaVu faces in /disk/ns/fonts), not its bitmap monospaced font: Hacker
+  News, Wikipedia and ocaml.org look as they should, but for NetSurf's
+  own limits. The program loads 3.92 MB of its 4 MB.

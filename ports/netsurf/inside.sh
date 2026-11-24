@@ -33,12 +33,36 @@ if [ ! -f $inst/lib/libexpat.a ]; then
      --without-docbook --without-examples --without-tests --without-xmlwf --prefix=$inst >/dev/null &&
    make -s >/dev/null && make -s install >/dev/null)
 fi
+# FreeType, with the modules NetSurf needs only (TrueType fonts, their
+# tables, the smooth rasterizer, the cache): a program must fit in 4 MB
+if [ ! -f $inst/lib/libfreetype.a ]; then
+  (cd $w/freetype-2.13.3 &&
+   cat > modules.cfg <<'CFG'
+FONT_MODULES += truetype
+FONT_MODULES += sfnt
+HINTING_MODULES += autofit
+RASTER_MODULES += smooth
+AUX_MODULES += cache
+AUX_MODULES += psnames
+BASE_EXTENSIONS += ftbitmap.c
+BASE_EXTENSIONS += ftglyph.c
+BASE_EXTENSIONS += ftsynth.c
+CFG
+   # no font variations, no compressed (gzip, SVG) tables: DejaVu has none
+   sed -i -e 's|^#define FT_CONFIG_OPTION_USE_ZLIB|/* & */|' \
+          -e 's|^#define TT_CONFIG_OPTION_GX_VAR_SUPPORT|/* & */|' \
+          -e 's|^#define FT_CONFIG_OPTION_SVG|/* & */|' include/freetype/config/ftoption.h &&
+   ./configure --host=i686-linux-musl --disable-shared --enable-static --prefix=$inst \
+     --without-zlib --without-bzip2 --without-png --without-harfbuzz --without-brotli >/dev/null &&
+   make -s >/dev/null && make -s install >/dev/null)
+fi
 rm -f $inst/build-stamp
 cd $ns
 make -s TARGET=framebuffer \
   NETSURF_USE_CURL=NO NETSURF_USE_OPENSSL=NO NETSURF_USE_JPEG=YES NETSURF_USE_PNG=YES \
   NETSURF_USE_WEBP=NO NETSURF_USE_JPEGXL=NO NETSURF_USE_ROSPRITE=NO NETSURF_USE_HARU_PDF=NO \
-  NETSURF_FB_FONTLIB=internal NETSURF_USE_DUKTAPE=YES WITH_EXPAT_BINDING=yes \
+  NETSURF_FB_FONTLIB=freetype NETSURF_FB_FONTPATH=/disk/ns/fonts \
+  NETSURF_USE_DUKTAPE=YES WITH_EXPAT_BINDING=yes \
   NETSURF_USE_NSSVG=YES > $w/build.log 2>&1 || { tail -30 $w/build.log; exit 1; }
 
 # for MyNOS: its load address, libmynos before musl, the surface's calls
@@ -48,7 +72,7 @@ L=$inst/lib
 musl-gcc -o nsfb-mynos build/Linux-framebuffer/*.o \
   -static -Wl,-Ttext-segment=0x40000000 -Wl,-z,noseparate-code -Wl,--build-id=none -Wl,--gc-sections \
   -Wl,-u,__stdio_read -Wl,-u,__stdio_write -Wl,-u,__stdout_write -Wl,-u,__stdio_seek -Wl,-u,__stdio_close \
-  -L$L -Wl,--start-group -lsvgtiny -lcss -lparserutils -lwapcaplet -ldom -lexpat -lhubbub -lnsutils -lpng16 -ljpeg -lz -lutf8proc -lnsbmp -lnsgif -lnspsl -lnslog -Wl,--end-group -lm \
+  -L$L -Wl,--start-group -lfreetype -lsvgtiny -lcss -lparserutils -lwapcaplet -ldom -lexpat -lhubbub -lnsutils -lpng16 -ljpeg -lz -lutf8proc -lnsbmp -lnsgif -lnspsl -lnslog -Wl,--end-group -lm \
   -Wl,--whole-archive -lnsfb -Wl,--no-whole-archive \
   -Wl,-u,mynos_send,-u,mynos_recv,-u,mynos_freeMsg,-u,mynos_freeChannel,-u,mynos_connectToPort \
   -Wl,-u,mynos_registryLookUp,-u,mynos_log,-u,wire_writer_init,-u,wire_writer_free,-u,wire_put_int \
@@ -62,3 +86,10 @@ cp nsfb-mynos $s/nsfb && strip $s/nsfb
 (cd frontends/framebuffer/res && for f in *; do
    case $f in de|fr|it|ja|nl|zh_CN) ;; *) cp -rL "$f" $s/res/ ;; esac; done)
 printf 'enable_javascript:1\n' > $s/home/.netsurf/Choices
+# the fonts NetSurf looks for (NETSURF_FB_FONTPATH: /disk/ns/fonts)
+mkdir -p $s/fonts
+for f in DejaVuSans DejaVuSans-Bold DejaVuSans-Oblique DejaVuSans-BoldOblique \
+         DejaVuSerif DejaVuSerif-Bold DejaVuSansMono DejaVuSansMono-Bold; do
+  cp $w/dejavu-fonts-ttf-2.37/ttf/$f.ttf $s/fonts/
+done
+cp $w/dejavu-fonts-ttf-2.37/LICENSE $s/fonts/LICENSE

@@ -1,6 +1,7 @@
 #!/bin/sh
 # NetSurf 3.11 for MyNOS (ports/netsurf, mynos-1g0): its sources, and
-# those of zlib, libpng, libjpeg and expat (for SVG), fetched
+# those of zlib, libpng, libjpeg, expat (for SVG), FreeType and the
+# DejaVu fonts, fetched
 # (version and hashes fixed here), patched, built in the mynos-netsurf
 # container (static, musl, i386) and linked with libmynos. The work is in
 # build/netsurf; the result in build/netsurf/stage: the program (nsfb),
@@ -25,9 +26,15 @@ jpeg_sha=04705c110cb2469caa79fb71fba3d7bf834914706e9641a4589485c1f832565b
 expat=expat-2.6.4
 expat_url=https://github.com/libexpat/libexpat/releases/download/R_2_6_4/$expat.tar.gz
 expat_sha=fd03b7172b3bd7427a3e7a812063f74754f24542429b634e0db6511b53fb2278
+ft=freetype-2.13.3
+ft_url=https://download.savannah.gnu.org/releases/freetype/$ft.tar.xz
+ft_sha=0550350666d427c74daeb85d5ac7bb353acba5f76956395995311a9c6f063289
+dv=dejavu-fonts-ttf-2.37
+dv_url=https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/$dv.tar.bz2
+dv_sha=fa9ca4d13871dd122f61258a80d01751d603b4d3ee14095d65453b4e846e17d7
 
 mkdir -p $w
-[ -n "${FRESH:-}" ] && rm -rf $w/$ns $w/$z $w/$png $w/$jpeg $w/$expat $w/stage
+[ -n "${FRESH:-}" ] && rm -rf $w/$ns $w/$z $w/$png $w/$jpeg $w/$expat $w/$ft $w/$dv $w/stage
 
 fetch() {   # url file sha256
     [ -f "$w/$2" ] || { curl -fsSL -o "$w/$2.part" "$1" && mv "$w/$2.part" "$w/$2"; }
@@ -38,6 +45,8 @@ fetch $z_url $z.tar.gz $z_sha
 fetch $png_url $png.tar.gz $png_sha
 fetch $jpeg_url jpegsrc.v9f.tar.gz $jpeg_sha
 fetch $expat_url $expat.tar.gz $expat_sha
+fetch $ft_url $ft.tar.xz $ft_sha
+fetch $dv_url $dv.tar.bz2 $dv_sha
 
 if [ ! -d $w/$ns ]; then
     tar xzf $w/$ns.tar.gz -C $w
@@ -47,6 +56,8 @@ fi
 [ -d $w/$png ] || tar xzf $w/$png.tar.gz -C $w
 [ -d $w/$jpeg ] || tar xzf $w/jpegsrc.v9f.tar.gz -C $w
 [ -d $w/$expat ] || tar xzf $w/$expat.tar.gz -C $w
+[ -d $w/$ft ] || tar xJf $w/$ft.tar.xz -C $w
+[ -d $w/$dv ] || tar xjf $w/$dv.tar.bz2 -C $w
 # MyNOS's own files, new or changed since the tree was made
 copy() { cmp -s "ports/netsurf/$1" "$w/$ns/$2" || cp "ports/netsurf/$1" "$w/$ns/$2"; }
 copy mynos-surface.c libnsfb/src/surface/mynos.c
