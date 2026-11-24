@@ -1846,3 +1846,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   299 pages. The recorder named console/1's requests wrongly since
   2026-11-22 (a Write shown as Size): fixed, with net/1 Poll and
   console/1 Ready named.
+- **2026-11-24** — `top` in the package `utils` (1.2): the processes,
+  the busiest first (CPU %, memory, threads, page faults a second), the
+  processor's load and the memory in use, from native call 38 as
+  sysmonitor; on the console it redraws every second until `q`, `-b -n
+  N` prints N tables. Set aside on 2026-11-21 because the kernel kept no
+  CPU time or memory per process; it does since 2026-11-23. Tried in
+  MyNOS; not published yet.
