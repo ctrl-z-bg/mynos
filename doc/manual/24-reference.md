@@ -4,8 +4,9 @@ This chapter is the reference for programmers: one page per main module
 of the OCaml library `mynos.cma` (section 3; `Voice`, `Clipboard`,
 `Textarea`, `Sound` and `Pager` are in 21.7, 10.4, 20.4, E.15 and B.14),
 then the native calls as the
-C library `libmynos` exposes them (section 2), grouped by subject. The
-pages follow the old UNIX layout: NAME, SYNOPSIS, DESCRIPTION, then
+C library `libmynos` exposes them (section 2), grouped by subject. As in
+UNIX's manual, (2) marks a call into the kernel, (3) a library's
+function, which runs in the program itself. The pages follow the old UNIX layout: NAME, SYNOPSIS, DESCRIPTION, then
 RETURN VALUE or EXCEPTIONS, and SEE ALSO. The interfaces themselves,
 `mynos-lib/ocaml/*.mli` and `mynos-lib/include/*.h`, are the final word;
 the call numbers are in appendix A.8, the Linux calls MyNOS answers in
