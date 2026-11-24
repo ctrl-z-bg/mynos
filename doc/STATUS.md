@@ -1854,3 +1854,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   CPU time or memory per process; it does since 2026-11-23. Tried in
   MyNOS. Published to mynos-packages with manual 1.2, the chapters as
   the printed book has them.
+- **2026-11-24** — Up and Down in a terminal window's line mode: the
+  OCaml toplevel (and any program that reads lines) gets back its last
+  lines there too, as on the console. The window keeps the last 64 and
+  shares them with consoled through `/disk/.history`. The graphical
+  test checks it (`cat`, a line, Up, Enter).

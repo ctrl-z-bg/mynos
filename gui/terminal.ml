@@ -463,6 +463,69 @@ let serve port =
 
 (* ---- keys ---- *)
 
+(* the lines typed in line mode, as consoled keeps them: Up and Down (or
+   Ctrl-P and Ctrl-N) bring them back; they are shared with the console
+   through its file, read at the first Up and appended to *)
+let history_file = "/disk/.history"
+let lines_max = 64
+let lines : string array = Array.make lines_max ""
+let lines_count = ref 0               (* lines entered so far, all time *)
+let lines_pos = ref 0                 (* the one shown while browsing *)
+let lines_loaded = ref false
+let draft = ref ""                    (* the new line, kept while browsing *)
+
+let remember s =
+  if s <> "" && not (!lines_count > 0
+                     && lines.((!lines_count - 1) mod lines_max) = s) then begin
+    lines.(!lines_count mod lines_max) <- s;
+    incr lines_count;
+    true
+  end else false
+
+let load_history () =
+  if not !lines_loaded then begin
+    lines_loaded := true;
+    let typed = List.init (min !lines_count lines_max) (fun i ->
+        lines.((!lines_count - min !lines_count lines_max + i) mod lines_max)) in
+    lines_count := 0;
+    (try
+       In_channel.with_open_bin history_file (fun ic ->
+           let n = In_channel.length ic in
+           let skip = Int64.(max 0L (sub n 65536L)) in
+           In_channel.seek ic skip;
+           let all = String.split_on_char '\n' (In_channel.input_all ic) in
+           (* a line cut by the seek is dropped *)
+           let all = if skip > 0L then List.tl all else all in
+           List.iter (fun l -> ignore (remember l)) all)
+     with Sys_error _ | End_of_file -> ());
+    List.iter (fun l -> ignore (remember l)) typed
+  end;
+  lines_pos := !lines_count
+
+let append_history s =
+  try Out_channel.with_open_gen [ Open_wronly; Open_append; Open_creat ] 0o644
+        history_file (fun oc -> output_string oc (s ^ "\n"))
+  with Sys_error _ -> ()
+
+(* the line being typed replaced by [s], on the screen too *)
+let show_line s =
+  if !echo then begin
+    let old = Buffer.contents line in
+    String.iter (fun c -> if Char.code c land 0xC0 <> 0x80 then output "\b \b") old;
+    output s
+  end;
+  Buffer.clear line; Buffer.add_string line s
+
+let browse dir =
+  if not !lines_loaded then load_history ();
+  let oldest = max 0 (!lines_count - lines_max) in
+  let pos = !lines_pos + dir in
+  if pos >= oldest && pos <= !lines_count then begin
+    if !lines_pos = !lines_count then draft := Buffer.contents line;
+    lines_pos := pos;
+    show_line (if pos = !lines_count then !draft else lines.(pos mod lines_max))
+  end
+
 let key k =
   if k = "\003" && !isig && !foreground > 0 then begin
     (* Ctrl-C: the program sh waits for ends (no signals: killed) *)
@@ -475,7 +538,9 @@ let key k =
   if not !canon then begin
     Buffer.add_string input k;
     if !echo && k <> "" && k.[0] >= ' ' then output k
-  end else if k <> "" && k.[0] = '\027' then ()   (* no editing keys in line mode *)
+  end else if k = "\027[A" || k = "\027OA" || k = "\016" then browse (-1)
+  else if k = "\027[B" || k = "\027OB" || k = "\014" then browse 1
+  else if k <> "" && k.[0] = '\027' then ()   (* no other editing keys in line mode *)
   else begin
     let i = ref 0 in
     while !i < String.length k do
@@ -483,6 +548,9 @@ let key k =
       (match c with
        | '\r' | '\n' ->
          if !echo then output "\r\n";
+         let typed = Buffer.contents line in
+         if !echo && remember typed then append_history typed;
+         lines_pos := !lines_count;
          Buffer.add_buffer input line; Buffer.add_char input '\n'; Buffer.clear line
        | '\127' | '\b' ->
          let s = Buffer.contents line in

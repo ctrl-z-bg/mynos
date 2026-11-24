@@ -381,6 +381,10 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     to 160 166; mon "mouse_button 1"; mon "mouse_button 0"; mon "mouse_button 1"; mon "mouse_button 0"; sleep 1
     tools/type-keys.py "$tmp/mon-g" 'echo sel-'; mon "mouse_button 2"; mon "mouse_button 0"; sleep 1
     tools/type-keys.py "$tmp/mon-g" ' > /tmp/sel.txt\n'; sleep 3
+    # line mode in the terminal window: Up brings the last line back
+    tools/type-keys.py "$tmp/mon-g" 'cat > /tmp/hist.txt\n'; sleep 2
+    tools/type-keys.py "$tmp/mon-g" 'hist-up\n'; sleep 1
+    mon "sendkey up"; mon "sendkey ret"; sleep 1; mon "sendkey ctrl-d"; sleep 2
     # the agent window (the menu's fifth item, at 168,182): a task, the
     # confirmation it waits for, Allow (at the bottom of the window)
     click 20 10; sleep 1; click 40 127; sleep 10
@@ -478,7 +482,7 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     tools/type-keys.py "$tmp/mon-g" 'pkg install studio; studio &\n'; sleep 25
     click 265 91; sleep 20
     click 20 10; sleep 1; click 30 369; sleep 4    # the MyNOS menu, Exit
-    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /tmp/sel.txt /disk/untitled.txt; ls /disk /disk/studio\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /tmp/sel.txt /tmp/hist.txt /disk/untitled.txt; ls /disk /disk/studio\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too
     tools/type-keys.py "$tmp/mon-g" 'ps\n'; sleep 3
@@ -504,11 +508,12 @@ names = [r[4] if r[3] == "io" else r[3] for r in rows]
 assert names.count("sh") == 1 and "terminal" not in names, names
 PY
     python3 - "$tmp/logg" <<'PY' && files_ok=yes
-import sys
+import re, sys
 s = open(sys.argv[1], "rb").read().decode("latin-1")
 assert s.count("agentwin-ok") >= 2, "aw.txt copied to /disk by Files"
 assert "newdir" in s, "a folder made by Files"
 assert "ctrlc-137" in s, "Ctrl-C in the terminal window"
+assert re.search(r"hist-up\s+hist-up", s), "Up in the terminal window's line mode"
 PY
     grep -aq '"name": "windtree"' "$tmp/logg" && pkgwin_ok=yes
     cat "$tmp/logg" >> "$part"
@@ -1286,9 +1291,9 @@ PY
     expect "keys: up ESC[C, held"
     expect "keys: up q, held"
     if [ -n "$files_ok" ]; then
-        echo "ok    files: a file copied between services, a folder made; Ctrl-C in a terminal"
+        echo "ok    files: a file copied between services, a folder made; Ctrl-C and Up in a terminal"
     else
-        echo "FAIL  files: a file copied between services, a folder made; Ctrl-C in a terminal"; fail=1
+        echo "FAIL  files: a file copied between services, a folder made; Ctrl-C and Up in a terminal"; fail=1
     fi
     if [ -n "$pkgwin_ok" ]; then
         echo "ok    gui: the Packages window read the index through pkg"

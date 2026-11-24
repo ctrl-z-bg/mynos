@@ -3628,3 +3628,26 @@ so; `Ready` (case 6) and net/1's `Poll` (case 14) named too.
 the numbers it stands for, and say so: a name in the wrong slot is not
 an error anyone sees, only a wrong word in a recording.
 
+
+## 2026-11-24 — The toplevel had no history in a terminal window
+
+**Symptom.** Reported by the owner: in the OCaml toplevel, Up and Down
+did nothing. On the console they brought back the last phrases.
+
+**Diagnosis.** The toplevel reads lines in line mode, so its editing is
+the console service's. On the console that is consoled, which has had a
+history since 2026-11-16; in a terminal window it is `gui/terminal.ml`,
+whose line mode dropped every escape sequence ("no editing keys in line
+mode"). `sh` was not affected: it reads in raw mode and keeps its own.
+
+**Cause.** console/1 has two servers, written at different times; the
+second copied the first's protocol, not its line editing.
+
+**Fix.** The terminal window keeps the last 64 lines, as consoled does,
+and shares them with it through `/disk/.history` (read at the first Up,
+appended to at each line). Up/Down and Ctrl-P/Ctrl-N, the draft line
+kept while browsing.
+
+**Lesson.** Two servers of one protocol must be compared by what a user
+does with them, not only by their requests: line editing is not in the
+protocol, and is what the user sees.

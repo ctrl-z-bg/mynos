@@ -211,7 +211,7 @@ changed. Up again goes further back, Down forward again.
 lines of it when it starts, so the commands of earlier sessions come
 back too. The lines typed to other programs, the toplevel's phrases for
 example, have a history of their own, the last 64 lines, kept by
-`consoled` in `/disk/.history`. Without a disk, both live only until
+`consoled` and the terminal windows in `/disk/.history`. Without a disk, both live only until
 the machine stops.
 
 ## 6.8 Completing with Tab

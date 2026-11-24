@@ -443,7 +443,8 @@ one serves requests and never waits for input (a `read` with nothing to
 give is kept, with its channel, until a key comes: `decode` and `reply`
 of E.2), the other handles the display's events. `keymap` answers 0 and
 changes nothing: the keys reach displayd already translated by consoled.
-Closing the window kills `sh` and what it started.
+In line mode Up and Down bring back the lines of `/disk/.history`, the
+same as consoled's. Closing the window kills `sh` and what it started.
 
 ## E.12 netd: the network
 
