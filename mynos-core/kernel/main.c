@@ -42,7 +42,7 @@
 
 #include "services.h"
 
-#include "3parts/delay.h"
+#include "delay.h"
 
 #include "multiboot.h"
 
@@ -182,10 +182,10 @@ void mynos_main(multiboot_info_t *boot_info) {
   int i;
   int nmodules;
 
-  __asm__("cli");
+  arch_irq_disable();
 
   /* initialize the FPU, and record its clean state for new threads */
-  __asm__("finit");
+  arch_fpu_reset();
   fpu_init();
 
   /* prepare the modules informations */
@@ -349,11 +349,7 @@ void mynos_main(multiboot_info_t *boot_info) {
   /* CR0.WP: from now on the kernel's own writes respect read-only pages,
      so that a system call writing into a copy-on-write page copies it
      first (mynos-bvz) */
-  {
-    uint32_t cr0;
-    __asm__ volatile("movl %%cr0, %0" : "=r"(cr0));
-    __asm__ volatile("movl %0, %%cr0" :: "r"(cr0 | 0x10000));
-  }
+  arch_write_protect_kernel();
   tsksw();
 
   /* start the elf modules */
@@ -420,7 +416,7 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   // this is the idle process: wait for the next interrupt
   while(1) {
-    asm volatile("hlt");
+    arch_wait_interrupt();
     //printk("idle\n");
 #if 0
     // to try the softReset

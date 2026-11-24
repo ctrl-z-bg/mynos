@@ -452,22 +452,8 @@ void SEG_createStandardDescriptor(uint32_t * address,
 
 
 extern void _page_fault_handler_TRAP();
-__asm__ (".pushsection .text\n" \
-	 ".globl _page_fault_handler_TRAP \n"\
-	 "_page_fault_handler_TRAP:       \n"\
-	 "   cld                          \n"  /* the C code needs DF = 0 */\
-	 "   pushal                       \n"  /* save all registers */\
-	 "   movl %esp, %ebx              \n"  /* the frame: registers, error code, eip */\
-	 "   pushl %ebx                   \n"\
-	 "   pushl 32(%ebx)               \n"  /* push error code */\
-	 "   movl %cr2, %eax              \n"\
-	 "   pushl %eax                   \n"  /* push faulting address */\
-	 "   call _page_fault_handler     \n"  /* call the ISR handler */\
-	 "   addl $12, %esp               \n"  /* address, error code, frame */\
-	 "   popal                        \n"\
-	 "   addl $4, %esp                \n"  /* the error code */\
-	 "   iret                         \n"\
-	 ".popsection\n");
+/* the entry: arch/i386/entry.c */
+
 
 /* exported functions for special cases (cow, alloc-on-write) */
 
@@ -617,28 +603,8 @@ int __mem_userVector(char ** v, uint32_t max_entries, uint32_t max_len) {
  */
 int copy_user(void * to, const void * from, uint32_t n);
 extern char copy_user_insn[], copy_user_fault[];
-__asm__ (".pushsection .text\n"
-	 ".globl copy_user\n"
-	 "copy_user:\n"
-	 "   pushl %esi\n"
-	 "   pushl %edi\n"
-	 "   movl 12(%esp), %edi\n"
-	 "   movl 16(%esp), %esi\n"
-	 "   movl 20(%esp), %ecx\n"
-	 "   cld\n"
-	 ".globl copy_user_insn\n"
-	 "copy_user_insn:\n"
-	 "   rep movsb\n"
-	 "   xorl %eax, %eax\n"
-	 "copy_user_out:\n"
-	 "   popl %edi\n"
-	 "   popl %esi\n"
-	 "   ret\n"
-	 ".globl copy_user_fault\n"
-	 "copy_user_fault:\n"
-	 "   movl $-1, %eax\n"
-	 "   jmp copy_user_out\n"
-	 ".popsection\n");
+/* copy_user itself: arch/i386/entry.c */
+
 
 int copy_to_user(void * user, const void * kernel, uint32_t n) {
   if (!__mem_userArea(user, n)) return -1;

@@ -183,17 +183,8 @@
          __ADDRESS_OFFSET((uint32_t) (LADDRESS)))
 
 
-/* invalidate the cache: for 386 the cr3 must be reload */
-#ifdef ARCH386
-#define INVALIDATE_THE_CACHE(LADDR) \
-  __asm__ volatile ("pushl %eax\n"\
-		    "movl  %cr3, %eax\n"\
-		    "movl  %eax, %cr3\n"\
-		    "popl  %eax\n")
-#else
-#define INVALIDATE_THE_CACHE(LADDR) \
-  __asm__ volatile ("invlpg %0\n"::"m"(*((uint32_t*)(LADDR))))
-#endif
+/* a page's translation forgotten, after its entry changed */
+#define INVALIDATE_THE_CACHE(LADDR) arch_flush_page((unsigned int)(LADDR))
 
 
 

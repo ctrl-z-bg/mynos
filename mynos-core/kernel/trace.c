@@ -11,6 +11,7 @@
 
 /* The event recorder: see trace.h. */
 
+#include "arch.h"
 #include "trace.h"
 #include "process.h"
 #include "kutils.h"
@@ -52,9 +53,7 @@ extern uint32_t timerTicks;
 extern process_descriptor_t * processTable[];
 extern uint32_t numProcess;
 
-static void rdtsc(uint32_t * lo, uint32_t * hi) {
-  __asm__ volatile ("rdtsc" : "=a"(*lo), "=d"(*hi));
-}
+#define rdtsc arch_cycles
 
 void trace_event(int kind, int pid, int peer, int channel, uint32_t size,
 		 uint32_t arg, const void * data, uint32_t n) {

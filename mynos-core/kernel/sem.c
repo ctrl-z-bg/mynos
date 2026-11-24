@@ -18,6 +18,7 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include "arch.h"
 #include "global.h"
 #include "sem.h"
 #include "mem/dynalloc.h"
@@ -63,11 +64,7 @@ static struct semaphore_list {
 #endif
 
 static inline int __testnset(uint32_t *m) {
-    uint32_t result;
-
-    __asm__ volatile ("bts $1, %1; sbbl %0, %0"
-                      :"=r" (result):"m" (*m):"memory");
-    return(result);
+    return arch_test_and_set(m);
 }
 /*            __asm__ volatile(\
     	             "tns: lock bts $1, %0\n"\
@@ -80,7 +77,7 @@ static inline void __lock(uint32_t *m) {
 
 
 static inline void __unlock(uint32_t *m) {
-    __asm__ volatile("lock btr $1, %0\n"::"m" (*m):"memory");
+    arch_clear(m);
 }
 
 static int initSemaphore(int i) {

@@ -26,6 +26,7 @@
  */
 
 #include "random.h"
+#include "arch.h"
 #include "time.h"
 #include "video.h"
 
@@ -82,40 +83,15 @@ static void compress(uint32_t * st, const uint32_t * block) {
 
 static uint32_t tsc(void) {
   uint32_t lo, hi;
-  __asm__ volatile ("rdtsc" : "=a"(lo), "=d"(hi));
+  arch_cycles(&lo, &hi);
   return lo ^ (hi << 21);
 }
 
-static uint32_t save_cli(void) {
-  uint32_t flags;
-  __asm__ volatile ("pushfl; popl %0; cli" : "=r"(flags) : : "memory");
-  return flags;
-}
-
-static void restore(uint32_t flags) {
-  __asm__ volatile ("pushl %0; popfl" : : "r"(flags) : "memory", "cc");
-}
-
-static void cpuid(uint32_t leaf, uint32_t * b, uint32_t * c) {
-  uint32_t a = leaf, d;
-  __asm__ volatile ("cpuid" : "+a"(a), "=b"(*b), "=c"(*c), "=d"(d) : "c"(0));
-}
-
-/* RDRAND/RDSEED into eax (as bytes: old assemblers do not know them);
-   1 if the processor gave a value */
-static int rdrand(uint32_t * v) {
-  uint32_t x; ubyte_t ok;
-  __asm__ volatile (".byte 0x0f, 0xc7, 0xf0; setc %1" : "=a"(x), "=q"(ok) : : "cc");
-  *v = x;
-  return ok;
-}
-
-static int rdseed(uint32_t * v) {
-  uint32_t x; ubyte_t ok;
-  __asm__ volatile (".byte 0x0f, 0xc7, 0xf8; setc %1" : "=a"(x), "=q"(ok) : : "cc");
-  *v = x;
-  return ok;
-}
+#define save_cli arch_irq_save
+#define restore  arch_irq_restore
+#define cpuid    arch_cpuid
+#define rdrand   arch_rdrand
+#define rdseed   arch_rdseed
 
 /* ---- the pool ---- */
 

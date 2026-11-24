@@ -21,6 +21,8 @@
 #ifndef __GLOBAL_H__
 #define __GLOBAL_H__
 
+#include "arch.h"
+
 #define NULL (0x0)
 
 //#define ARCH386
@@ -40,9 +42,9 @@
 extern int kernel_on_screen;
 /* a kernel error it cannot go on from: print it and stop the machine
    (with interrupts off: other processes must not run on a broken kernel) */
-#define KPANIC(MSG) { __asm__ volatile ("cli"); kernel_on_screen = 1; \
+#define KPANIC(MSG) { arch_irq_disable(); kernel_on_screen = 1; \
                       printk("\nKERNEL PANIC: "); printk(MSG); \
-                      for (;;) __asm__ volatile ("hlt"); }
+                      arch_halt_forever(); }
 
 typedef char           byte_t;
 typedef unsigned char  ubyte_t;

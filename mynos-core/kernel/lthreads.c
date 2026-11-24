@@ -58,14 +58,8 @@ typedef struct {
 } clone_stack_t;
 
 void startClonedThread();
-__asm__ (".pushsection .text\n" ".globl startClonedThread \n" \
-	 "startClonedThread: \n"\
-	 "  popw %gs\n"\
-	 "  popw %fs\n"\
-	 "  popw %es\n"\
-	 "  popw %ds\n"\
-	 "  popal\n"\
-	 "  iret\n" ".popsection\n");
+/* startClonedThread: arch/i386/entry.c */
+
 
 /* ---- futex ---- */
 
