@@ -254,6 +254,7 @@ named becomes a tool, called `SERVICE_REQUEST` (`net_resolve`,
 | `registry` | the names | `list`... |
 | `console` | the console | modes, writing |
 | `power` | `init`'s power service | `shutdown`, `reboot` |
+| `clipboard`, `sound`, `pager` | the clipboard, sound, the external pager | ... |
 
 For example, `agent -s net,registry 'Which services are running?'` lets
 the model call `registry_list`. Give only what the task needs: a

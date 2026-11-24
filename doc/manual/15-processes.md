@@ -34,7 +34,8 @@ the kernel, which loads them as a new process (appendix A.9).
   gives `MYNOS_ERR_INVALID` in C and `Mynos.Error ("spawn", -3)` in OCaml
   (`error_name` says `"invalid"`).
 
-`fork` exists (appendix D.3), copying the caller copy-on-write, but with
+`fork` exists (appendix D.3), copying the caller copy-on-write (only its
+calling thread), but with
 no `execve` after it a forked child can only go on running the parent's
 program. It is useful for that and little else; `spawn` is the way to
 start a program.

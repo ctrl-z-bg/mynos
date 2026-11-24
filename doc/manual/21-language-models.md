@@ -233,7 +233,7 @@ let () =
 The loop is 21.4's, with at most ten model calls. The tools are only
 the three safe requests of `net/1` (`config`, `ping`, `resolve`), so the
 model can look but not connect anywhere. Run against the fake provider
-of the tests (21.7), which calls the first tool it is given:
+of the tests (21.8), which calls the first tool it is given:
 
 ```
 $ netask.byte What is my address?
@@ -248,8 +248,8 @@ A real model answers in words, after the same tool call.
 > Because protocols describe themselves, a model can use any typed
 > service of the system, the network, the disk driver, the display, the
 > language model service itself, without a line of code written for it:
-> `Tools.of_service "ata0"` gives `ata0_info`, `ata0_read` and
-> `ata0_write`, the last marked as changing things. The type checker
+> `Tools.of_service "ata0"` gives `ata0_info`, `ata0_read`, `ata0_write`
+> and `ata0_flush`, the last two marked as changing things. The type checker
 > keeps the OCaml side honest; the description keeps the model's.
 
 ## 21.6 The agent: module `Agent`
@@ -258,8 +258,8 @@ A real model answers in words, after the same tool call.
 `agent` command and the agent window use it. Its tools are its own
 (`run_command`, a line of `sh`; `run_ocaml`, a program type-checked by
 `ocamlc` before it runs; `build_ocaml`; `ocaml_signature`; `read_file`,
-`write_file`, `list_directory`) and the requests of the typed services
-it is given, through `Tools`. A program gives it two functions: `emit`,
+`write_file`, `list_directory`), those the installed packages add, and
+the requests of the typed services it is given, through `Tools`. A program gives it two functions: `emit`,
 told what happens, and `confirm`, asked before anything that changes
 things (a command, a write, a program, an unsafe request):
 

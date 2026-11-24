@@ -312,8 +312,8 @@ $ tools/run-qemu.sh mynos-runtime/ocamlrun hello.byte services/registry/registry
       "hello one two" -- -display none -serial null -serial file:hello.log
 ```
 
-The kernel keeps at most 127 characters of a module's command line,
-path included, and cuts the rest without a word
+The kernel keeps at most 255 characters of a module's command line,
+path included, and says so at boot when it cuts one
 (`mynos-core/kernel/main.c`, `MODULE_CMDLINE`): give modules short
 paths. The output of every process, and `mynos_log`'s lines, are in
 `hello.log`, the second serial port.
@@ -342,4 +342,4 @@ that second once.
   stdio output (14.3).
 - Bytecode linked against one `primitives` list needs a runtime with all
   of its names (appendix F.11).
-- A boot module's command line is cut at 127 characters (14.7).
+- A boot module's command line is cut at 255 characters (14.7).

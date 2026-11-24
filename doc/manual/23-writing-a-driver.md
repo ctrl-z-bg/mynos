@@ -160,11 +160,11 @@ message)`.
 
 ## 23.6 The worked example: the disk driver in OCaml
 
-`services/ata/ata.ml` (131 lines) drives the first ATA disk, the master
+`services/ata/ata.ml` (197 lines) drives the first ATA disk, the master
 of the primary IDE channel, in PIO mode, and serves it as `ata0`. It is
 started from `init.rc` as `driver ata.byte`. It reads in four parts.
 
-**The controller's registers** (`ata.ml:14-27`) are ports `0x1F0`–
+**The controller's registers** (`ata.ml:17-30`) are ports `0x1F0`–
 `0x1F7` and `0x3F6`:
 
 | Port | Read | Written |
@@ -173,10 +173,10 @@ started from `init.rc` as `driver ata.byte`. It reads in four parts.
 | `0x1F1` | error | |
 | `0x1F2`–`0x1F5` | | sector count, LBA bits 0–23 |
 | `0x1F6` | | drive and LBA bits 24–27 (`0xE0` = master, LBA) |
-| `0x1F7` | status: `BSY` 0x80, `DF` 0x20, `DRQ` 0x08, `ERR` 0x01 | command: `0x20` read, `0x30` write, `0xE7` flush, `0xEC` identify |
+| `0x1F7` | status: `BSY` 0x80, `DF` 0x20, `DRQ` 0x08, `ERR` 0x01 | command: `0x20` read, `0x30` write, `0xC5` write multiple, `0xE7` flush, `0xEC` identify |
 | `0x3F6` | alternate status | control (`0x02`: no interrupts) |
 
-**Waiting** (`ata.ml:31-47`). The controller needs 400 ns after a
+**Waiting** (`ata.ml:40-56`). The controller needs 400 ns after a
 command before its status is meaningful: `delay` reads the alternate
 status four times. `wait_not_busy` polls the status until `BSY` clears,
 and gives up after ten million reads; `wait_data` then requires `DRQ`
@@ -191,7 +191,7 @@ let wait_data () =
   else if s land st_drq = 0 then raise (Device "no data")
 ```
 
-**Sectors** (`ata.ml:49-74`). `select` writes the drive, the count and
+**Sectors** (`ata.ml:58-95`). `select` writes the drive, the count and
 the 28-bit address; reading is a command and, for each sector, a wait
 and 256 words:
 
@@ -204,21 +204,26 @@ let read_sectors lba count =
     (List.init count (fun _ -> wait_data (); Mynos.insw data 256))
 ```
 
-Writing sends each sector with `outsw` after its `DRQ`, then a cache
-flush (`0xE7`), so that a write that has been answered is on the disk.
+Writing sends the sectors with `outsw`, up to 16 for each `DRQ` when
+the disk takes WRITE MULTIPLE (`0xC5`). The drive's cache is flushed
+(`0xE7`) half a second after the last write, by a second domain, and on
+a `Flush` request, which `init` sends before the power goes: a flush
+after every write made QEMU sync the disk's file each time.
 The driver turns the controller's interrupts off and polls: in PIO the
 processor copies every word itself anyway, and a disk request in QEMU is
 answered in a millisecond (22.4).
 
-**Identify** (`ata.ml:77-95`) asks the disk its size. A status of 0 or
+**Identify** (`ata.ml:117-147`) asks the disk its size. A status of 0 or
 `0xFF` means no device on the channel; a signature in the LBA registers
 means an ATAPI device (a CD), not a disk; otherwise the 256 words of
-`IDENTIFY` come, and words 60–61 are the number of sectors addressable
-with LBA28.
+`IDENTIFY` come: words 60–61 are the number of sectors addressable
+with LBA28, word 47 the largest block WRITE MULTIPLE takes (set with
+`0xC6`).
 
-**The service** (`ata.ml:99-131`) is a `Block.handler`: a record with
+**The service** (`ata.ml:151-179`) is a `Block.handler`: a record with
 one polymorphic field, `handle`, whose type ties each request to its
-reply (`Info` returns an `int`, `Read` a `string`, `Write` a `unit`):
+reply (`Info` returns an `int`, `Read` a `string`, `Write` and `Flush` a
+`unit`); the lock keeps the ports to one domain at a time:
 
 ```ocaml
 let handle sectors : Block.handler = {
@@ -234,8 +239,10 @@ let handle sectors : Block.handler = {
       try f () with Device e ->
         Mynos.log (Printf.sprintf "ata: %s: %s" what e);
         failwith ("I/O error: " ^ e) in
+    Mutex.protect lock @@ fun () : a ->
     match r with
     | Block.Info -> sectors
+    | Block.Flush -> device "flush" flush_now
     | Block.Read (lba, count) ->
       check lba count;
       device "read" (fun () -> read_sectors lba count)
@@ -244,7 +251,9 @@ let handle sectors : Block.handler = {
         invalid_arg "write: not a whole number of sectors";
       let count = String.length bytes / Block.sector in
       check lba count;
-      device "write" (fun () -> write_sectors lba count bytes)
+      device "write" (fun () -> write_sectors lba count bytes);
+      dirty := true;
+      last_write := Mynos.uptime ()
 }
 ```
 
@@ -252,9 +261,10 @@ Every request is checked before a port is touched: a count outside 1 to
 32, an address beyond the disk, a write of a partial sector are refused
 with `invalid_arg`, whose message is the client's error. A controller
 error is logged and becomes `I/O error: ...`. The program's main
-(`ata.ml:125-131`) is short: identify; without a disk, log it and end with status 0 (so
-`init` does not restart it); with one, log its size and
-`Block.serve "ata0" (handle sectors)`.
+(`ata.ml:181-197`) is short: without the `io` privilege it refuses to
+run; identify; without a disk, log it and end with status 0 (so `init`
+does not restart it); with one, log its size, start the flushing domain
+and `Block.serve "ata0" (handle sectors)`.
 
 A client needs only `Block`:
 
@@ -279,7 +289,7 @@ ata0: sectors 32768..32768: the disk has 32768
 ```
 
 > **THE MyNOS FACTOR — A disk driver written in OCaml.**
-> `ata` is 131 lines of OCaml bytecode, run by the same `ocamlrun` as
+> `ata` is 197 lines of OCaml bytecode, run by the same `ocamlrun` as
 > the shell. It touches the hardware through four primitives, `inb`,
 > `outb`, `insw` and `outsw`, each one instruction; everything else (the
 > checks, the errors, the protocol) is typed code, and the type checker
@@ -409,6 +419,7 @@ the clock's driver of 23.7 added, the start of `init.rc` would read:
 ```
 driver consoled
 start tmpfs.byte
+start clipboard.byte
 driver ata.byte
 driver rtc.byte
 start fatfs.byte
@@ -432,13 +443,8 @@ driver typed at the prompt fails at its first `outb`.
 
 ## 23.9 Known limits
 
-- The `io` privilege is all or nothing: a driver may use every port and
-  every free interrupt line (a finer permission, port by port, is
-  mynos-37p).
-- No DMA: a process cannot learn the physical address of its memory.
-- No binding for `mapPhysical` in OCaml, and no PCI helpers: a driver
-  reads the PCI configuration space through ports itself.
-- Interrupt lines 0–15 of the two 8259 controllers only; no APIC, no
-  MSI.
-- `driver_register` also enters the name in the kernel's service table
-  of 2002, which nothing reads any more and nothing empties.
+- The `io` privilege is all or nothing: every port, every free
+  interrupt line (port by port is mynos-37p).
+- DMA only through the kernel's one 64 KB area below 16 MB
+  (`mynos_dmaArea`, in C). No `mapPhysical` in OCaml, no PCI helpers.
+- Interrupt lines 0–15 of the two 8259s only; no APIC, no MSI.

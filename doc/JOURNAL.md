@@ -3608,3 +3608,23 @@ before).
 **Lesson.** A readiness question must carry what the asker waits for;
 otherwise the service answers the wrong question quickly.
 
+## 2026-11-24 — The recorder called a Write a Size
+
+**Symptom.** Found by the book's review, not by a test: the recorder's
+player decodes console/1 requests by their case number, and its table
+listed `Read, Mode, Keymap, Size, Write, Foreground`. A `Write` (case 3)
+was shown as `console/1 Size`, a `Foreground` as `Write`, a `Size` as
+`Foreground`.
+
+**Cause.** `Size` was added on 2026-11-22 as case 5, after `Foreground`,
+in the protocol; in the player's table it was put after `Keymap`, where
+it read well, not where its number is. The table is a list indexed by
+position, so the order is the protocol.
+
+**Fix.** The table in the protocol's order, with a comment that says
+so; `Ready` (case 6) and net/1's `Poll` (case 14) named too.
+
+**Lesson.** A table indexed by position must be written in the order of
+the numbers it stands for, and say so: a name in the wrong slot is not
+an error anyone sees, only a wrong word in a recording.
+

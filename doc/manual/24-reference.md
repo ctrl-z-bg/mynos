@@ -1,7 +1,9 @@
 # 24. Reference pages
 
-This chapter is the reference for programmers: one page per module of
-the OCaml library `mynos.cma` (section 3), then the native calls as the
+This chapter is the reference for programmers: one page per main module
+of the OCaml library `mynos.cma` (section 3; `Voice`, `Clipboard`,
+`Textarea`, `Sound` and `Pager` are in 21.7, 10.4, 20.4, E.15 and B.14),
+then the native calls as the
 C library `libmynos` exposes them (section 2), grouped by subject. The
 pages follow the old UNIX layout: NAME, SYNOPSIS, DESCRIPTION, then
 RETURN VALUE or EXCEPTIONS, and SEE ALSO. The interfaces themselves,
@@ -60,6 +62,10 @@ val time : unit -> float
 val sleep : float -> unit
 type stats = { processes : int; threads : int; pid : int; ppid : int; free_pages : int }
 val stats : unit -> stats
+val faults : int -> int * int
+type process_stats = { cpu_ticks : int; faults_alloc : int; faults_cow : int;
+                       resident : int; s_threads : int; clock_ticks : int }
+val process_stats : int -> process_stats
 
 val alloc_port : unit -> int              val listen : int -> int
 val connect : int -> int                  val free_port : int -> unit
@@ -108,7 +114,9 @@ resolution). `log` writes a line to the kernel log (the serial log port,
 and the kernel's 64 KB ring); `log_position ()` is how many bytes have
 been logged since boot, `log_read from max` the logged bytes from a
 position (the oldest kept, if older). `version ()` is the system's
-version, as `uname` gives it (`2026.11-71dc1d2`).
+version, as `uname` gives it (`2026.11-71dc1d2`). `faults pid` and
+`process_stats pid` give a process's page faults (pid 0: the system's),
+CPU ticks (10 ms), resident pages and threads.
 
 *Ports and channels* (appendix C): a server allocates a port and
 `listen`s on it, getting a new channel per client; a client `connect`s
@@ -153,7 +161,8 @@ the program that Ctrl-C should end (0: none).
 `error_name code` is `"full"`, `"busy"`, `"invalid"`, `"deny"`,
 `"broken"` or `"expired"`. `recv ~timeout` raises `Error ("recv", -6)`
 when nothing came; `lookup` of an unknown name raises
-`Error ("registry_lookup", -3)`.
+`Error ("registry_lookup", -3)`; `wait` of no child of ours,
+`"invalid"`; `console_mode` without a console, `"broken"`.
 
 **SEE ALSO** — ipc(2), port(2), sem(2), process(2), driver(2);
 appendices A, C, F.4.
@@ -297,6 +306,7 @@ type _ request =
   | Seek : int * int * int -> int request     | List : string -> (string * int) list request
   | Remove : string -> unit request           | Mkdir : string -> unit request
   | Rmdir : string -> unit request            | Rename : string * string -> unit request
+  | Space : (int * int) request
 val o_write : int   val o_creat : int   val o_trunc : int   val o_append : int
 val o_excl : int
 val io_max : int
@@ -319,7 +329,8 @@ which speaks fs/1 for them; this module speaks it typed. `connect`
 takes a service name (`"memrofs"`, `"tmpfs"`, `"fatfs"`); paths are
 inside the service, without a leading slash (`"docs/a.txt"`). `Read`
 returns `""` at the end; at most `io_max` (16384) bytes per `Read` or
-`Write`. `List` gives names and sizes, -1 for a directory. A descriptor
+`Write`. `List` gives names and sizes, -1 for a directory; `Space` the
+service's size and free space, in KB. A descriptor
 belongs to the process that opened it. In a service, `fail code`
 answers with that error.
 
@@ -343,11 +354,13 @@ type _ request =
   | Info : int request
   | Read : int * int -> string request
   | Write : int * string -> unit request
+  | Flush : unit request
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
 type t
 val connect : ?service:string -> unit -> t
 val call : t -> 'a request -> 'a
 val sectors : t -> int
+val flush : t -> unit
 val read : t -> int -> int -> string
 val write : t -> int -> string -> unit
 type handler = { handle : 'a. Ipc.caller -> 'a request -> 'a }
@@ -360,8 +373,9 @@ val read_reply : string -> 'a request -> 'a
 **DESCRIPTION** — `connect ()` is the device `ata0` (or `service`).
 `Info` is its size in sectors; `Read (lba, count)` reads 1 to
 `max_count` sectors; `Write (lba, bytes)` writes a whole number of
-sectors, at most `max_count`. `read d lba count` and `write d lba bytes`
-take any length and split it. `serve` makes a driver (chapter 23).
+sectors, at most `max_count`; `Flush` writes the device's cache to its
+medium. `read d lba count` and `write d lba bytes` take any length and
+split it. `serve` makes a driver (chapter 23).
 
 **EXCEPTIONS** — `call`: `Ipc.Remote_error` when the driver refuses
 (out of the disk, a wrong size, `I/O error: ...`). `read`, `write`:
@@ -384,6 +398,7 @@ type _ request =
   | Keymap : int -> int request
   | Write : string -> unit request
   | Foreground : int -> unit request
+  | Size : (int * int) request                | Ready : bool request
 val canon : int   val echo : int   val nosig : int
 val layout_us : int   val layout_it : int
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
@@ -393,6 +408,7 @@ val call : client -> 'a request -> 'a
 val decode : string -> (Protocol.packed, string) result
 val reply : 'a request -> 'a -> string
 val error_reply : string -> string
+val size : unit -> int * int
 ```
 
 **DESCRIPTION** — The protocol of `consoled` (`"console"`, the text
@@ -402,7 +418,8 @@ termios). `Read max` returns a line in line mode, keys in raw mode, `""`
 at the end; `Mode (flags, vmin, vtime)` takes `canon`, `echo` and
 `nosig` or-ed together; `Keymap` sets `layout_us` or `layout_it`, or with
 -1 tells the one in use; `Foreground pid` names the program Ctrl-C
-ends. `decode`, `reply` and `error_reply` are for services that answer
+ends; `Size` is the screen's size (`size ()`: this program's console's);
+`Ready`, whether a `Read` would answer at once. `decode`, `reply` and `error_reply` are for services that answer
 later.
 
 **SEE ALSO** — `mynos_console.h`; Mynos(3) (`console_mode`); appendix
@@ -486,6 +503,7 @@ type _ request =
   | Udp_bind : int -> int request
   | Send_to : int * string * int * string -> int request
   | Recv_from : int * int -> (string * int * string) request
+  | Poll : (int * int) list * int -> int list request
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
 type t
 val connect : ?service:string -> unit -> t
@@ -500,6 +518,7 @@ at most `max` (≤ 16384) bytes, `""` at the end; `Recv`, `Accept` and
 `Connect_tls (host, port)` checks the server's certificate against
 `/cacert.pem` and `/disk/ca.pem`; `Send` and `Recv` then carry clear
 bytes. `Udp_bind 0` takes any port; a datagram is at most 8192 bytes.
+`Poll` waits for sockets to be ready (19.1).
 
 **EXCEPTIONS** — `Ipc.Remote_error ("net", m)`, `m` such as `host not
 found`, `connection refused`, `connection reset`, `timeout`, `not your socket`, `TLS: ...`.
@@ -678,9 +697,14 @@ type event =
   | Result of { text : string; error : bool } | Note of string
 type answer = Yes | No | All
 type t
+type extra = { tool : Llm.tool; run : emit:(event -> unit) ->
+               confirm:(string -> bool) -> string -> string * bool }
+val string_schema : (string * string) list -> string
 val create : ?profile:string -> ?services:string list -> ?max_turns:int ->
-  ?trace_file:string -> ?yes_to_all:bool -> ?warn:(string -> unit) -> unit -> t
+  ?trace_file:string -> ?yes_to_all:bool -> ?warn:(string -> unit) ->
+  ?system:string -> ?record:bool -> ?extra:extra list -> unit -> t
 val run : t -> emit:(event -> unit) -> confirm:(string -> answer) -> string -> int
+val ocamlc_libraries : string -> string list
 val tokens : t -> int * int
 val trace_file : t -> string
 val set_yes_to_all : t -> bool -> unit
@@ -690,7 +714,9 @@ val forget : t -> unit
 **DESCRIPTION** — `create` makes a session: the default profile, the
 services `["net"]`, 20 model calls a task, the recording in
 `/tmp/agent.trc`; `warn` is told of a service whose description could
-not be had. `run a ~emit ~confirm task` carries a task out in the
+not be had; `system` replaces its instructions, `extra` adds a
+program's tools (21.7; `string_schema` describes their input);
+`ocamlc_libraries` gives `ocamlc` the libraries a source names (8.8). `run a ~emit ~confirm task` carries a task out in the
 conversation so far, telling `emit` what happens and asking `confirm`
 before any command, write, program or unsafe request (`All`: yes to the
 rest). Each task is recorded, with marks.
@@ -790,6 +816,8 @@ type _ request =
   | Move : int * int * int -> unit request
   | Resize_to : int * int * int -> unit request
   | Resizable : int * int * int -> unit request
+  | Start_at : int * int -> unit request
+  | Sizes : (int * int) list request
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
 type t
 val connect : unit -> t
@@ -798,6 +826,7 @@ type window = { display : t; id : int; pixels : Gfx.t }
 val window : ?display:t -> ?title:string -> int -> int -> window
 val damage : ?x:int -> ?y:int -> ?w:int -> ?h:int -> window -> unit
 val next_event : ?timeout:float -> window -> event
+val poll : window -> event
 val set_title : window -> string -> unit
 val move : window -> int -> int -> unit
 val resize : window -> int -> int -> window
@@ -809,10 +838,10 @@ val destroy : window -> unit
 size and shares its pixels with `displayd`; draw in `pixels`, then
 `damage` the part that changed (all by default). `next_event ~timeout`
 waits for the window's next event, `Tick` after `timeout` seconds (0:
-forever). `Key` is UTF-8 or a VT100 sequence; `Mouse` is in window
+forever); `poll` does not wait. `Key` is UTF-8 or a VT100 sequence; `Mouse` is in window
 coordinates, `buttons` 1 left, 2 right, 4 middle; `Wheel` is in notches,
-positive downwards. `Start`, `Stop` and `Wait_session` drive the
-graphical session (the `gui` command).
+positive downwards. `Start`, `Start_at`, `Sizes`, `Stop` and
+`Wait_session` drive the graphical session (the `gui` command).
 
 **EXCEPTIONS** — `window`: `Ipc.Remote_error` outside the graphical
 session (`no graphical session: start it with gui`); `Mynos.Error`
@@ -838,6 +867,7 @@ val rect : t -> int -> int -> int -> int -> int -> unit
 val line : t -> int -> int -> int -> int -> int -> unit
 val text : ?bold:bool -> ?max:int -> t -> int -> int -> string -> int -> int
 val cells : string -> int
+val expand_tabs : string -> string
 val blit : t -> int -> int -> t -> int -> int -> int -> int -> unit
 val get : t -> int -> int -> int
 val with_clip : int -> int -> int -> int -> (unit -> 'a) -> 'a
@@ -854,9 +884,10 @@ val draw_mask : ?opacity:int -> t -> int -> int -> mask -> int -> unit
 **DESCRIPTION** — Colours are `0xRRGGBB`. `create w h` is white and page
 aligned. `fill g x y w h c`, `rect` (an outline), `line g x0 y0 x1 y1 c`,
 `blit src sx sy dst dx dy w h`; all are clipped to the buffer and to the
-clip of `with_clip`, which nests. `text g x y s c` draws UTF-8 in the
-Terminus 8 × 16 font (`char_w`, `char_h`) and returns the cells written;
-`cells s` counts characters. `get` reads a pixel (-1 outside). A mask is
+clip of `with_clip`, which nests and belongs to the calling domain.
+`text g x y s c` draws UTF-8 in the Terminus 8 × 16 font (`char_w`,
+`char_h`) and returns the cells written; `cells s` counts them (a tab
+to the next multiple of 8), `expand_tabs` turns tabs into spaces. `get` reads a pixel (-1 outside). A mask is
 a grey PGM image drawn as ink. `send_shared` sends the pixels on a
 channel as shared memory (what `Display.window` does).
 
@@ -884,11 +915,14 @@ val background : int  val foreground : int  val muted : int
 val accent : int      val panel_colour : int
 val label : ?colour:int -> ?bold:bool -> ui -> int -> int -> string -> unit
 val paragraph : ?colour:int -> ui -> int -> int -> int -> string -> int
+val text : ?bold:bool -> ?max:int -> ui -> int -> int -> string -> int -> int
+val selectable : ?max:int -> int -> int -> string -> unit
 val panel : ?colour:int -> ui -> int -> int -> int -> int -> unit
 val button : ?h:int -> ui -> int -> int -> int -> string -> bool
 val hovered : ui -> int -> int -> int -> int -> bool
 val scroll : ?colour:int -> ui -> int -> int -> int -> int -> int -> (int -> int) -> unit
 val scroll_to_end : ui -> int -> unit
+val scroll_to : ui -> int -> int -> unit
 val text_field : ui -> int -> int -> int -> int -> string -> string
 val list_item : ui -> int -> int -> int -> selected:bool -> string -> bool
 type entry = { name : string; is_dir : bool; size : int }
@@ -900,17 +934,19 @@ type picked = Picked of string | Cancelled
 val open_file_picker : ?title:string -> ?dir:string -> ?filter:(string -> bool) -> int -> unit
 val file_picker : ui -> int -> picked option
 exception Quit
-val run : ?title:string -> ?tick:float -> ?resizable:int * int -> int -> int -> 'a ->
-  (ui -> 'a -> 'a) -> unit
+val run : ?title:string -> ?tick:float -> ?resizable:int * int ->
+  ?unsaved:(unit -> bool) -> int -> int -> 'a -> (ui -> 'a -> 'a) -> unit
 val width : ui -> int  val height : ui -> int
 val spawn : ?args:string list -> string -> unit
 ```
 
 **DESCRIPTION** — `run w h state frame` makes a window and calls
-`frame ui state` at every event (and every `tick` seconds without one),
+`frame ui state` at every event (and every `tick` seconds),
 keeping what it returns as the next state, until the window is closed
-or `frame` raises `Quit`; with `~resizable` the user may resize it, and
-`width ui`, `height ui` give its size now. Widgets draw and answer in one call: `button`
+or `frame` raises `Quit` (with `~unsaved`, its close box asks first
+while `unsaved ()`); with `~resizable` the user may resize it, and
+`width ui`, `height ui` give its size now. `text` and `selectable`
+draw text the mouse can select and copy. Widgets draw and answer in one call: `button`
 is `true` in the frame it is clicked, `text_field ui id x y w v` returns
 `v` edited by this frame's keys, `list_item` is `true` when clicked,
 `scroll ui id x y w h content` draws `content top` clipped and scrolled.
@@ -1133,9 +1169,10 @@ in the system while the thread lives.
 
 ## 24.25 misc(2)
 
-**NAME** — `mynos_sleep`, `mynos_setTimer`, `mynos_log`,
-`mynos_consoleMode`, `mynos_consoleForeground`: time, the log, the
-console.
+**NAME** — `mynos_sleep`, `mynos_setTimer`, `mynos_log`, `mynos_klog`,
+`mynos_faults`, `mynos_procstat`, `mynos_consoleMode`,
+`mynos_consoleModeSig`, `mynos_consoleForeground`: time, the log,
+statistics, the console.
 
 **SYNOPSIS**
 
@@ -1143,15 +1180,21 @@ console.
 int  mynos_sleep(unsigned long usec);
 int  mynos_setTimer(unsigned long usec);          /* old name of mynos_sleep */
 void mynos_log(const char * fmt, ...);
+int  mynos_klog(unsigned int from, char * buf, unsigned int max);
+int  mynos_faults(int pid, unsigned int out[2]);
+int  mynos_procstat(int pid, unsigned int out[6]);
 int  mynos_consoleMode(int canon, int echo, int vmin, int vtime);
+int  mynos_consoleModeSig(int canon, int echo, int isig, int vmin, int vtime);
 int  mynos_consoleForeground(int pid);
 ```
 
 **DESCRIPTION** — `sleep` blocks the calling thread at least `usec`
-microseconds, in 1 ms ticks. `log` writes a formatted line to the kernel
-log (the serial log port). `consoleMode` sets the console's input mode
-(as `tcsetattr` does); `consoleForeground` names the program Ctrl-C ends
-(0: none).
+microseconds, in 1 ms ticks. `log` writes a line to the kernel log,
+`klog` reads it back (35). `faults` (36) and `procstat` (38) are
+Mynos(3)'s `faults` and `process_stats`; the pager's calls (37) are in
+B.14. `consoleMode` sets the console's input mode (as `tcsetattr`;
+`Sig`: Ctrl-C's meaning too); `consoleForeground` names the program
+Ctrl-C ends (0: none).
 
 **RETURN VALUE** — `consoleForeground`: -1 without a console.
 
@@ -1203,6 +1246,8 @@ int mynos_registryList(mynos_reg_entry_t * buf, int max);
 **DESCRIPTION** — Requests of registry/1 to the registry at port 0:
 register a name (a new port, the caller's), look one up, list the names
 of live processes. Names are at most 20 characters (`MAXNAMELEN`).
+Calls 11 and 12 (`mynos_serviceRegister`, `mynos_clientRegister`)
+reach the kernel's name table of 2002, which no program uses.
 
 **RETURN VALUE** — A port, or `MYNOS_ERR_INVALID` (taken, or no such
 name); `List`: how many entries.
@@ -1251,12 +1296,3 @@ notation: `U B I F S`, `O<x>`, `L<x>`, `(x,y)`, `name:x`,
 `V(0:a=x,1:b=y)`; for instance `"(socket:I,max:I)"`.
 
 **SEE ALSO** — Wire(3), Ipc(3); appendix E.2.
-
----
-
-## 24.29 Obsolete calls
-
-`mynos_serviceRegister` and `mynos_clientRegister` (calls 11 and 12)
-reach a name table inside the kernel, from 2002, which no program uses:
-names are the registry's (registry(3)). `mynos_setTimer` is the old
-name of `mynos_sleep`.

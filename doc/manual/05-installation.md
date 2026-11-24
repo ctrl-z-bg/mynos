@@ -154,7 +154,7 @@ with the version of the system (the build's date and commit, as
   Initializing the 8259 Programmable Interrupt Controller... done.
   Loading Interrupt Descriptor Table... done.
   Calibrating delay loop... [427622]
-  Physical Memory : 255 MB
+  Physical Memory : 2047 MB
   ...
   RAMDISK found (module 3)
 
@@ -196,9 +196,12 @@ the RAM disk; `init` reads its list, `init.rc`, and starts the rest:
              └── ocamlrun ──► init  (reads init.rc)
                                 ├── consoled    keyboard, screen, second serial port
                                 ├── tmpfs       /tmp
+                                ├── clipboard   copy and paste, for the windows
                                 ├── ata         the hard disk ──► fatfs  /disk
+                                ├── pagerd      files mapped into memory, swap
                                 ├── netd        the network card
                                 ├── displayd    the screen, for the windows
+                                ├── soundd      the sound card
                                 ├── llmd        language models
                                 ├── httpd       a web server on /disk
                                 └── sh          the command shell

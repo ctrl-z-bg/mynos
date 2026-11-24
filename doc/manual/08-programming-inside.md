@@ -295,18 +295,14 @@ A session that goes round it once, from `sh`:
   mynos:/$ cd /disk
   mynos:/disk$ edit a.ml                 (write, Ctrl-S, Ctrl-Q)
   mynos:/disk$ ocamlc -o a.byte a.ml && ./a
-  mynos:/disk$ edit a.ml                 (Up recalls the commands)
-  mynos:/disk$ ocamlc -o a.byte a.ml && ./a
 ```
 
-or try a piece of it first in the toplevel with `#use "/disk/a.ml";;`.
-Everything stays on `/disk` for the next session.
+and again (Up recalls them); `#use "/disk/a.ml";;` tries it in the toplevel.
 
 > **THE MyNOS FACTOR — The compiler lives on the system it compiles for.**
-> `ocamlc` is an OCaml bytecode program like any other: MyNOS runs it on
-> its own `ocamlrun`, which reads the source and writes the program
-> through `fatfs`, while the type checker uses the `.cmi` files of the
-> RAM disk. Nothing is compiled on another machine and copied in: the
-> program you just wrote, the compiler that compiled it and the
-> services it calls are all processes of the same running system, and
-> the toplevel can call those services as typed functions.
+> `ocamlc` is an OCaml bytecode program like any other, run by MyNOS's
+> own `ocamlrun`: it reads the source and writes the program through
+> `fatfs`, with the `.cmi` files of the RAM disk. Nothing is compiled
+> elsewhere and copied in: the program, its compiler and the services
+> it calls are processes of the same running system, and the toplevel
+> can call those services as typed functions.

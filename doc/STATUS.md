@@ -1837,3 +1837,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   2002-2004: software task switch, threads, signals, microkernel IPC,
   drivers in user space, ATA, INVLPG), e-mail addresses removed, with a
   README that sets them beside MyNOS's history.
+- **2026-11-24** — The book reviewed against the code, chapter by
+  chapter, before its freeze: some ninety statements made true again
+  (the boot's processes and pids, init.rc, 2 GB, the ata driver's
+  walkthrough, display/1 and console/1 tables, the reference pages'
+  synopses, the recorder's event kinds, the build and the tests); the
+  timeline has 24 November; the preface points at section 20.6. Still
+  299 pages. The recorder named console/1's requests wrongly since
+  2026-11-22 (a Write shown as Size): fixed, with net/1 Poll and
+  console/1 Ready named.

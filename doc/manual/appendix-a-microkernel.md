@@ -1,6 +1,6 @@
 # Appendix A. The Microkernel
 
-The kernel of MyNOS lives in `mynos-core/`: about 8,500 lines of C and a
+The kernel of MyNOS lives in `mynos-core/`: about 9,500 lines of C and a
 few hundred of assembly, for 32-bit x86 processors. This appendix explains
 what it does, in the order in which it comes to life: the boot, the
 processor's tables, processes and threads, the scheduler, semaphores,
@@ -113,7 +113,7 @@ not reloaded, and only QEMU's numbers worked.
 
 | Vector | Handler |
 |---|---|
-| 0–16 | processor exceptions. One raised in user mode ends the program, as a fatal signal would on Unix (its status says SIGSEGV), with a line on the log port; one raised in the kernel stops the system. 14, the page fault, first tries to resolve it: copy-on-write, pages allocated on first use, faults inside `copy_from_user`/`copy_to_user` (appendix B). 7 only clears the TS flag. |
+| 0–16 | processor exceptions. One raised in user mode ends the program, as a fatal signal would on Unix (its status says SIGSEGV), with a line on the log port; one raised in the kernel stops the system. 14, the page fault, first tries to resolve it: copy-on-write, pages allocated on first use, faults inside `copy_from_user`/`copy_to_user`, the external pager's pages (appendix B). 7 only clears the TS flag. |
 | `0x20`–`0x2F` | the 16 IRQ lines. IRQ 0, the timer, runs the scheduler; the others wake the drivers that registered them (A.7). |
 | `0x80` | Linux system calls, callable from ring 3 (appendix D) |
 | `0x90` | MyNOS system calls, callable from ring 3 (A.8) |
@@ -181,15 +181,16 @@ saved: every thread shared one FPU, and a thread preempted in the middle
 of a computation could find it changed. The manual's first draft found
 it; `tests/fpu` shows it on the old kernel.)
 
-There are two kinds of threads, with the same `tss_t`:
+There are two kinds of threads, with the same `tss_t` and the same
+thread ids (`gettid`'s: the pid for a process's first thread, from
+1,000,000,000 up for the others, so never a pid):
 
 - **native threads** (`mynos_threadCreate`, system call 200, 2002):
   they share their process's address space and TLS. consoled uses them
   for its keyboard and serial threads.
 - **Linux threads** (`clone`, 2026, `kernel/lthreads.c`): what musl's
   pthreads and therefore OCaml's domains and threads use. Each has its own
-  TLS (`set_thread_area`), a thread id (from 1,000,000,000 up, so it is
-  never a pid), and the `futex` calls on which the C library builds its
+  TLS (`set_thread_area`), and the `futex` calls on which the C library builds its
   mutexes and condition variables.
 
 All threads share **one processor**: MyNOS does not run on several CPUs
@@ -284,7 +285,7 @@ The native calls:
 | 22, 23 | `connectToPort`, `listenPort` | C |
 | 24, 25 | `freePort`, `changePortOwner` | C |
 | 26 | `channelPeer`: the pid at the other end of a channel | C |
-| 27 | `processInfo`: alive, privileged, an OCaml program | A.4 |
+| 27 | `processInfo`: alive, privileged | A.4 |
 | 28 | `mapPhysical`: physical memory into the caller (`io` only) | B |
 | 29 | `dmaArea`: the DMA area, mapped, or its physical address (`io` only) | B |
 | 30 | `spawn` (image, argv, envp, privileges) | A.9 |

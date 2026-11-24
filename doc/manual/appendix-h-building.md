@@ -122,18 +122,20 @@ error stops it. In order, it builds:
    keyboardd, seriald, the registry, consoled;
 4. the OCaml runtime (`mynos-runtime`: `ocamlrun` and `primitives`),
    and Num (`third_party/num`);
-5. the C tests (`tests/abi`, `tests/stress`);
+5. the C tests (`tests/abi`, `tests/stress`, `tests/bench`, `tests/fpu`,
+   `tests/stdio`);
 6. the OCaml library (`mynos-lib/ocaml`: `mynos.cma`, with `Tracer`,
    `Gui` and the protocol modules);
 7. the OCaml tests and their RAM disks (`tests/mynos-ocaml`, `console`,
    `files`, `spawn`, `hello`, `greeter`, `effects`, `domains`, `threads`,
-   `ramdisk`);
+   `keys`, `ramdisk`);
 8. the programs: kilo and Notty (`third_party`), `edit`, `sh`, `init`;
-9. the OCaml services and their tests: `tmpfs`, `ata`, `fatfs`,
-   `tests/storage`, `tests/fat` (with its FAT16 and FAT32 images);
-10. the network: `netd`, `httpd`, `trace`, `fetch`, `llmd`, `llm`,
-    `agent`;
-11. the graphics: `displayd`, `gui` (the session and its windows),
+9. the OCaml services and their tests: `tmpfs`, `clipboard`, `ata`,
+   `fatfs`, `pagerd` and `mapcat`, `tests/storage`, `tests/libs`,
+   `tests/fat` (with its FAT16 and FAT32 images);
+10. the network: `netd`, `httpd`, `trace`, `log`, `play`, `fetch`,
+    `llmd`, `llm`, `agent`;
+11. the graphics and sound: `displayd`, `soundd`, `gui` (the session and its windows),
     `graphics` (OCaml's `Graphics`);
 12. `tests/net`, `shell` (the OCaml toplevel), `pkg`, and `system`: the
     system RAM disk and the disk image (H.5); last the manual's examples
@@ -167,8 +169,8 @@ once copied from the services', and it was built as a MyNOS program:
 journal, "Bug 3".)
 
 `system/Makefile` makes the system RAM disk, `system/ramdisk.dsk`, from
-157 files today: `init.byte` and `init.rc`; `ocamlrun`,
-`consoled`, `netd`, `displayd` and `kilo`, stripped of their debugging
+about 170 files today: `init.byte` and `init.rc`; `ocamlrun`,
+`consoled`, `netd`, `displayd`, `soundd` and `kilo`, stripped of their debugging
 information; the OCaml programs and services; fonts, logo and
 certificates; and what is needed to compile OCaml inside MyNOS: the
 bytecode compiler `ocamlc.byte`, the standard library's `.cmi` files and
@@ -245,6 +247,7 @@ tests. Its environment:
 | `DISK` | none | a raw image as the first IDE disk |
 | `NET` | none | an NE2000 card at I/O `0x300`, IRQ 9, on QEMU's user network (MyNOS is 10.0.2.15 by DHCP, the host 10.0.2.2) |
 | `HTTP` | none | with `NET`, this host port (on 127.0.0.1) forwarded to MyNOS's port 80 |
+| `UDP` | none | with `NET`, a UDP port of the host forwarded to the same port of MyNOS |
 | `VERBOSE` | none | `verbose` on the kernel's command line: its messages stay on screen |
 | `KVM` | none | `-accel kvm`: the host's processor runs MyNOS's |
 | `SOUND` | none | a Sound Blaster 16 (`-device sb16`) heard through this QEMU audio backend, or recorded with `wav:FILE` |
@@ -255,9 +258,9 @@ tests. Its environment:
 **`run-demo.sh`** boots the system: the kernel, `ocamlrun` (from
 `mynos-runtime/`, not stripped), the registry, `memrofsd`, and
 `system/ramdisk.dsk`. `ocamlrun` finds `init.byte` on the RAM disk, and
-`init` starts what `init.rc` lists: `consoled`, `tmpfs`, `ata`, `fatfs`,
-`netd`, `displayd`, `llmd`, `httpd`, and `sh`, started again whenever it
-ends. The script sets:
+`init` starts what `init.rc` lists (E.3): `consoled`, `tmpfs`,
+`clipboard`, `ata`, `fatfs`, `pagerd`, `netd`, `displayd`, `soundd`,
+`llmd`, `httpd`, `pkg boot`, and `sh`, started again whenever it ends. The script sets:
 
 - `MEM=2048` (2 GB; MyNOS uses at most 3583 MB, B.15), and `DISK=system/disk.img` if the image exists;
 - `NET=1` unless `NET` is set (`NET=` boots without a network card);
@@ -302,7 +305,7 @@ which is what the tests do.
   SHOTS=DIR tools/run-tests.sh            copy the graphical session's screens to DIR
 ```
 
-The tests start QEMU, headless, seventeen times (one of these runs
+The tests start QEMU, headless, nineteen times (one of these runs
 restarts MyNOS three times), with different sets of modules and RAM
 disks, and check what each boot did.
 The boots run in five **lanes** at once, each lane a subshell running its
@@ -313,8 +316,8 @@ longest lane: lane e, about 11 minutes without KVM (measured on
 
 | Lane | Boots |
 |---|---|
-| a | `hello.byte` with the first services and `tests/abi` (system call checks); effect handlers; `ata` on a 2,048-sector disk; `fatfs` on FAT16 and FAT32 images; domains; threads |
-| b | the `Mynos` library; files read through the standard library; the kernel stress test; `init` spawning about twenty-five programs; the console, typed on the keyboard and on COM2 |
+| a | `hello.byte` with the first services and `tests/abi` (system call checks); effect handlers; `ata` on a 2,048-sector disk; `fatfs` on FAT16 and FAT32 images; domains; threads; each thread's FPU state |
+| b | the `Mynos` library; files read through the standard library; Str and Num; the kernel stress test; `init` spawning about twenty-five programs; the console, typed on the keyboard and on COM2 |
 | c | the system without COM2 (as QEMU's window starts it), then `shutdown -r`; four boots in a row through `shutdown -r` |
 | d | the graphical session: windows, the mouse, the terminal, the agent window, Recordings, System, Files, the tour, `shutdown` |
 | e | the network, against servers on the host; then the "seventh boot": the system RAM disk driven through the keyboard (the toplevel, `sh`, the editors, `trace`, the agent, `kill`, a killed service restarted, threads compiled inside MyNOS, packages installed from the host, `fatfs`'s cache) |
@@ -339,7 +342,7 @@ script watches it from outside, in several ways:
   `screendump` saves a PPM image, and Python checks pixels: an exact
   colour at a point (`0x111820` for the top bar), or how many pixels of a
   colour a region holds (a window's boxes, a red arrow in the System
-  window, the orange marks of a recording). Lane d takes 21 screens.
+  window, the orange marks of a recording). Lane d takes 22 screens.
 - **The disk.** After a boot the script reads the disk image with mtools
   (`mtype`, `mdir`, in the container) and checks it with `fsck.fat -n`:
   what MyNOS wrote must be there, and the file system consistent. The
@@ -357,6 +360,7 @@ script watches it from outside, in several ways:
 | 47053 | `udpecho` | UDP: a datagram back in capitals |
 | 47080 | `fetch` | the host fetches a page from MyNOS's `httpd` (`HTTP=47080`) |
 | 47443–47445 | `https` | HTTPS with a good, an untrusted and a wrongly named certificate (`tests/net/tls`) |
+| 47101, 47102 | `files` | `tmp/packages`, for `pkg` (seventh boot, lane d) |
 | 47090, 47091 | `llm` | a fake language model provider, speaking both Claude's Messages API and Chat Completions, checking the requests' headers and shapes; 47091 for lane d |
 
 The disks of the graphical session and of the seventh boot are copies
@@ -382,15 +386,15 @@ whole log after the results, and exits with status 1; otherwise its last
 line is `all tests passed`. The full run is the check before a commit.
 
 The host needs, besides podman: `qemu-system-i386`, `socat`, `python3`,
-`timeout`, and `fsck.fat` (dosfstools).
+`timeout`, `curl`, and `fsck.fat` (dosfstools).
 
 ## H.8 Screenshots
 
 `tools/screenshots.sh [DIR]` (default `doc/screenshots`) boots the system
-headless on a copy of `system/disk.img`, drives it as the tests do, and
-saves three PNG images: `shell` (the text console after `free` and
-`ps`), `welcome` (the graphical session as it starts) and `system` (the
-System window). `tools/ppm2png.py` converts QEMU's PPM screens.
+headless on a clean disk made there (never `system/disk.img`), drives
+it as the tests do, and saves the manual's figures as PNG images:
+thirteen, and the agent's two more in a second boot if `llm.env`
+exists. `tools/ppm2png.py` converts QEMU's PPM screens.
 
 ## H.9 Packages
 
@@ -537,8 +541,6 @@ each step took.
 
 ## H.12 Known limits
 
-- No ready-made image: trying MyNOS means building it. A bootable ISO,
-  a disk image and a run script are mynos-sc9.
 - `mynos-core/boot/`, the floppy boot loader of 2002, does not assemble
   with today's nasm (mynos-s96); nothing needs it, QEMU and GRUB load
   the kernel directly.

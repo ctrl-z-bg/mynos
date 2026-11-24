@@ -505,8 +505,9 @@ type error, and so is using its reply as an `int`.
 A C program speaks a typed protocol with `mynos_wire.h`: a writer that
 grows a buffer, a reader that sets `r->error` on a malformed message
 instead of failing, and the Ok and Error replies. The registry,
-`memrofs` and `consoled` are C services written this way; `libmynos` is
-a C client of fs/1, console/1 and registry/1. A client of kv/1:
+`memrofs`, `consoled` and `netd` are C services written this way;
+`libmynos` is a C client of fs/1, console/1, registry/1, net/1 (sockets)
+and pager/1 (`mmap`). A client of kv/1:
 
 ```c
 /* kvget.c: a C client of kv/1, with mynos_wire.h */
@@ -564,10 +565,8 @@ memrofs.
 
 ## 17.10 Known limits
 
-- One request per connection, and `serve` takes one at a time: a slow
-  request delays the others (17.7 shows the way around it).
-- `call` has no timeout; `Ipc.describe` has one (a second by default).
-- The codecs of the requests are written by hand: nothing checks that
-  `requests`, `write_request` and `read_request` agree but a test.
-- A protocol change that clients cannot read needs a new id
-  (`"kv/2"`); a service serves one id.
+- One request per connection, and `serve` takes one at a time (17.7
+  shows the way around it); `call` has no timeout.
+- The codecs are written by hand: only a test checks that `requests`,
+  `write_request` and `read_request` agree.
+- A change that clients cannot read needs a new id (`"kv/2"`).

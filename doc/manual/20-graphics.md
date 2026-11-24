@@ -54,7 +54,8 @@ val destroy : window -> unit
 `Display.window ~title w h` makes a window whose content is `w` by `h`
 pixels (the title bar is extra) and returns `{ display; id; pixels }`,
 where `pixels` is a `Gfx.t`, white until drawn. `damage w` shows all of
-it again; `damage ~x ~y ~w ~h w`, a part. The screen is 1024 by 768.
+it again; `damage ~x ~y ~w ~h w`, a part. The screen is 1024 by 768,
+unless `gui WxH` chose another size.
 
 `next_event` waits for the window's next event:
 
@@ -70,8 +71,8 @@ it again; `damage ~x ~y ~w ~h w`, a part. The screen is 1024 by 768.
 | `Tick` | nothing came within `timeout` seconds |
 
 `timeout` is 0 by default: wait forever. `displayd` checks the timeouts
-every 100 ms, so a `Tick` comes between `timeout` and `timeout + 0.1`
-seconds after the call; and only if no other event came first. `poll w`
+every 100 ms, or every 10 ms while a window asks for less than 0.1 s; a
+`Tick` comes only if no other event came first. `poll w`
 does not wait: the next event if one is queued, `Tick` at once if none.
 It is meant for a program that animates and reads the keys between
 frames.
@@ -145,7 +146,7 @@ desktop is drawn this way, on any background.
 
 ## 20.4 A toolkit: module `Gui`
 
-`Gui` (`mynos-lib/ocaml/gui.mli`, 350 lines of OCaml) is **immediate
+`Gui` (`mynos-lib/ocaml/gui.mli`, about 650 lines of OCaml) is **immediate
 mode**: there are no widget objects. The program keeps its own state, and
 gives `Gui.run` a function that draws a whole frame from that state and
 returns the next state. A widget is a function call that draws itself
@@ -163,7 +164,7 @@ clears the pixels to `Gui.background`, calls `frame ui state`, shows the
 result (`damage`), and waits for the next event, which it records in `ui`
 before the next frame. It ends when the window is closed, or when
 `frame` raises `Gui.Quit`. With `~tick:s` a frame also comes every `s`
-seconds without events, with `ui.tick` set: animations and clocks use
+seconds, events or not, with `ui.tick` set: animations and clocks use
 it. With `~resizable:(min_w, min_h)` the user may resize the window (its
 grip, a double click on its title): `run` takes the new pixels itself,
 and `frame` lays out by `Gui.width ui` and `Gui.height ui`. Outside the
@@ -192,7 +193,7 @@ top left):
 | `paragraph ?colour ui x y width s` | the height used: `s` wrapped at words |
 | `panel ?colour ui x y w h` | `unit`: a white box with a border |
 | `button ?h ui x y w s` | `true` in the frame it is clicked (pressed and released on it) |
-| `text_field ui id x y w value` | the value, edited by this frame's keys if the field has them, at its cursor (a click places it; Left, Right, Home, End, Backspace, Delete) |
+| `text_field ui id x y w value` | the value, edited by this frame's keys if the field has them, at its cursor (a click places it; Left, Right, Home, End, Backspace, Delete, Ctrl-U; Ctrl-C, X, V: the clipboard) |
 | `list_item ui x y w ~selected s` | `true` when clicked |
 | `scroll ?colour ui id x y w h content` | `unit`: a box whose `content top` draws, clipped, and returns its height |
 | `file_picker ui id` | `Some (Picked path)` or `Some Cancelled` once answered (open it with `open_file_picker`) |
@@ -200,7 +201,7 @@ top left):
 Widgets that remember something between frames take an `id`, a number
 that tells them apart in a window: which text field has the keys (the
 last one clicked), how far a scroll box is scrolled. A text field takes
-printable keys and Backspace; the program sees Enter itself, in
+the editing keys above; the program sees Enter itself, in
 `ui.keys` (`"\r"`). A scroll box learns its content's height only by
 drawing it, and uses it at the next frame; `scroll_to_end ui id` keeps a
 log or a conversation at its end. `Gui.hovered ui x y w h` tells
@@ -380,13 +381,11 @@ the cell size is the cell. Last comes time: a frame caused by the timer
 are drawn, 7 by 7 pixels in cells of 8, so the dark background shows
 through as a grid, and the counters are written in the bar.
 
-**Time.** `~tick:0.1` asks `run` for a frame when no event has come for
-0.1 seconds. Each event (a pointer move over the window, a key) also
-makes a frame, without `ui.tick`, so the board advances only on the
-timer's frames: moving the mouse over the window does not speed the
-game up. It slows it down: the timer starts again at every event, so
-while the pointer keeps moving over Life (the focused window gets the
-pointer's moves), no tick comes and the game waits.
+**Time.** `~tick:0.1` asks `run` for a timer's frame every 0.1
+seconds, whatever events come between. Each event (a pointer move over
+the window, a key) also makes a frame, without `ui.tick`, so the board
+advances only on the timer's frames: moving the mouse over the window
+makes more frames, but neither speeds the game up nor stops it.
 
 **Running it.** Compile it on the build machine, or in MyNOS:
 
@@ -398,8 +397,8 @@ $ /disk/life.byte &
 from a Terminal window of the session. In a test run (QEMU, a window of
 640 by 440 pixels plus its title bar) the board showed generation 23,
 with 671 live cells, some five seconds after the program was started: a
-generation every 200 ms or so, which is the tick's 0.1 s, rounded up by
-`displayd`'s timer (20.2), plus the frame's own time in bytecode.
+generation every 200 ms or so in that run: the tick's 0.1 s, and the
+frame's own time in bytecode.
 Started from the text console instead, it says:
 
 ```
@@ -655,8 +654,8 @@ and `windtree` runs it.
 
 ## 20.7 Known limits
 
-- One screen size (1024 × 768 × 32) and one font (Terminus 8 × 16);
-  windows cannot be resized, and their size is their content's.
+- One font (Terminus 8 × 16); the screen's size is chosen when the
+  session starts (`gui WxH`).
 - At most 32 windows, 64 events waiting in each window's queue.
 - `Gui` handles one event per frame: a frame sees at most one key.
 - No drawing of images other than grey masks (PGM); no alpha in `fill`.

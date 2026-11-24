@@ -1,11 +1,12 @@
 # Appendix B. Memory
 
 The memory code of the kernel lives in `mynos-core/kernel/mem/`: about
-1,500 lines of C (license headers included) in five files. `physicalmem.c`
+2,000 lines of C (license headers included) in six files. `physicalmem.c`
 counts physical pages, `mem.c` builds and edits page tables and handles
 page faults, `lmemtrack.c` keeps each process's free linear space,
-`dynalloc.c` is the kernel's `kmalloc`, and `externalmem.c` reaches into
-the address space of a process other than the current one. Building and
+`dynalloc.c` is the kernel's `kmalloc`, `externalmem.c` reaches into
+the address space of a process other than the current one, and
+`pager.c` serves the external pager (B.14). Building and
 freeing a whole address space is in `kernel/process.c`.
 
 ## B.1 The model
@@ -272,9 +273,9 @@ write. `ps -f` lists them (system call 36, `mynos_faults`;
 faults of the first kind and 1,600 of the second; the graphical session
 with a Terminal about 4,500 and 1,200 more; compiling a small program
 with `ocamlc`, 4,700 and 1,000. `tests/bench/bench` measures what each
-costs: under KVM about 2.9 µs (7,600 cycles) for a page allocated on use
-and 3 µs for a copy, two thirds of it zeroing or copying the page a byte
-at a time (mynos-4d6); without KVM, about 13 µs each.
+costs: under KVM about 0.9 µs for a page allocated on use and 1.2 µs for
+a copy (3 µs until the kernel zeroed and copied pages four bytes at a
+time, mynos-4d6).
 
 ## B.8 What the C library sees
 
@@ -349,7 +350,8 @@ returns -1:
 A fault that is legitimate there (a page allocated on use) is served
 first; only a fault that would have ended the process becomes an
 error. It is Linux's exception table, with one entry. Today `recv`,
-`wait4`, `trace` and `processes` (calls 32 and 33) use it; the other
+`wait4`, `trace`, `processes`, `faults`, the pager's `next` and
+`procstat` (calls 32 to 38) use it; the other
 calls rely on the check at entry.
 
 ## B.11 Another process's memory

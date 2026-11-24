@@ -116,7 +116,8 @@ bitsavers.org, the Unix Heritage Society and multicians.org.
 
 ## J.6 The software inside MyNOS
 
-Each comes with its licence in `third_party/`.
+Each comes with its licence in `third_party/` (musl with the container
+that builds MyNOS).
 
 - musl, the C library: musl.libc.org.
 - lwIP, the TCP/IP stack: A. Dunkels, "Design and Implementation of the
@@ -127,3 +128,6 @@ Each comes with its licence in `third_party/`.
 - Terminus, the bitmap font of the graphical session.
 - Num, OCaml's numbers of any size (INRIA): github.com/ocaml/num.
 - 2048-ml, the game, by Philip Xu: github.com/pyx/2048-ml.
+- In the packages: CAMLBOY (a Game Boy emulator), GAV (Arcade
+  Volleyball), Ocs (a Scheme), Tobu Tobu Girl, Infocom's Zork I–III; and
+  Mozilla's list of certificate authorities.

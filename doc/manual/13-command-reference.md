@@ -132,6 +132,16 @@ graphical program.
 
 ---
 
+### APPS
+
+**Purpose** The Applications window: the installed packages that open a
+window. **Syntax** `apps`. **Type** Program (`/apps.byte`), graphical.
+
+**Description** A click starts one; the MyNOS menu's Applications opens
+it. **See also** PACKAGES, PKG; chapter 10, 10.14.
+
+---
+
 ### ASK
 
 **Purpose** Asks a language model for a command line, and runs it if you
@@ -428,7 +438,7 @@ Delete, Copy, Cut, Paste.
 
 ```
 mynos:/$ free
-192056 KB free
+2012032 KB free
 ```
 
 **See also** PS.
@@ -629,8 +639,8 @@ The same messages go to the second serial port, as they always did.
 mynos:/$ log
 Welcome to MyNOS - v2026.11-71dc1d2
 ...
-init: started fatfs.byte (pid 8)
-fatfs: FAT16, 8167 clusters of 2048 bytes, service fs/1 as fatfs
+init: started fatfs.byte (pid 9)
+fatfs: FAT32, 129022 clusters of 512 bytes, service fs/1 as fatfs
 ```
 
 **See also** LOG_WINDOW, TRACE; chapter 11.
@@ -826,6 +836,7 @@ pkg install [-s] NAME...
 pkg remove NAME...
 pkg update
 pkg upgrade
+pkg boot
 ```
 
 **Type** Program (`/pkg.byte`).
@@ -971,9 +982,9 @@ removed with `rmdir`. Nothing can be removed from `/`.
 
 **Type** Program (`/services.byte`), graphical.
 
-**Description** Lists the typed services `display`, `net`, `llm` and
-`ata0`, their requests from their own descriptions, and makes a form to
-call any of them.
+**Description** Lists every typed service the registry knows (but the
+terminal windows' consoles), their requests from their own
+descriptions, and makes a form to call any of them.
 
 **See also** chapter 10, 10.8.
 
@@ -1080,10 +1091,21 @@ written in the Tour's format.
 
 **Type** Program (`/terminal.byte`), graphical.
 
-**Description** Runs `sh` in an 80 x 25 window, with 1000 lines of
-scrollback. Closing it ends its `sh`.
+**Description** Runs `sh` in a window of 80 x 25 at first, resizable,
+with 1000 lines of scrollback. Closing it ends its `sh`.
 
 **See also** chapter 10, 10.6.
+
+---
+
+### TEXT
+
+**Purpose** The text editor of the graphical session. **Syntax** `text
+[FILE]`. **Type** Program (`/text.byte`), graphical.
+
+**Description** One file in a resizable window: New, Open, Save, Save
+as, Find; OCaml files coloured. The menu's Text, and Files' Edit, open
+it. **See also** EDIT, FILES; chapter 10, 10.9.
 
 ---
 
@@ -1237,7 +1259,8 @@ hand:
 |---|---|
 | `init` | the first program, started at boot; it reads `init.rc` and starts the services: not to be started again |
 | `ata`, `consoled`, `displayd`, `netd`, `soundd` | drivers, started by `init` with the `io` privilege; started from `sh` they have none: `ata` says so and stops, the others are ended at their first access to the hardware (status 139) |
-| `fatfs`, `tmpfs`, `llmd` | services, started by `init` and restarted by it (chapter 11, 11.7) |
+| `pagerd` | the external pager, a driver too (B.14) |
+| `fatfs`, `tmpfs`, `clipboard`, `llmd` | services, started by `init` and restarted by it (chapter 11, 11.7) |
 | `httpd` | the web server, started by `init`; `httpd [-w] [DIR [PORT]] &` starts another, on another port; it receives files too (`curl -T`) (chapter 9, 9.7) |
 | `ocamlrun` | the OCaml runtime, which `sh` uses to run every `.byte` program |
 | `primitives`, `runtime-launch-info` | data files for `ocamlc`, not programs: `sh` does not offer them as commands |

@@ -268,7 +268,7 @@ call a box on its client's and its server's (G.11).
 - **Starting a program reads it.** `Mynos.spawn` reads the program's
   file in the parent before the kernel starts it: a recording that spans
   a spawn of an OCaml program holds some forty `fs/1 Read` calls of
-  the parent to `memrofs`, which is `ocamlrun` being read (649,072
+  the parent to `memrofs`, which is `ocamlrun` being read (681,968
   bytes on the system's RAM disk). `trace`'s recordings begin this way
   (G.12).
 - **Everything else that happened.** The recording is of the whole

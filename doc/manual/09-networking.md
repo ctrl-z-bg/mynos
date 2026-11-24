@@ -290,9 +290,11 @@ New demos and programs come as packages, from a repository on the web:
 
 ```
 mynos:/$ pkg list
-pkg: 2 packages in the index (https://raw.githubusercontent.com/ctrl-z-bg/mynos-packages/main/index.json)
+pkg: 27 packages in the index (https://raw.githubusercontent.com/ctrl-z-bg/mynos-packages/main/index.json)
 2048       1.0                   2048, the sliding tile game, in a window (2048-ml by Philip Xu, 2014): h j k l slide the tiles, q quits
+...
 windtree   1.0                   A tree in the wind: a fractal tree under a night sky, written by the agent inside MyNOS (manual 20.6); the mouse sets the wind, q quits
+...
 mynos:/$ pkg install 2048
 pkg: 2048 1.0: downloading 440320 bytes
 pkg: 2048 1.0 installed (its bytecode): 2048
@@ -337,7 +339,9 @@ The index can come from elsewhere: `MYNOS_PKG_URL` names another
 repository with the same files, for instance one served from your
 computer (`MYNOS_PKG_URL=http://10.0.2.2:8000/ pkg list`); the file
 `/disk/pkg/url`, one line, does the same for every program, the
-graphical session's Packages window too (chapter 10, 10.14). Appendix H.9
+graphical session's Packages window too (chapter 10, 10.14); `run-demo.sh`
+removes a `10.0.2.2` address from it at the next start, unless
+`PKG=local` (H.9). Appendix H.9
 tells how packages are built and published.
 
 ## 9.9 When something does not work

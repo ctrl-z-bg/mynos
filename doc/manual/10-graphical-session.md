@@ -130,7 +130,7 @@ Every window has a title bar, with a close box at its right:
 - **Unsaved changes.** Text, Paint and Studio ask before their close box
   ends them with changes not saved.
 - **Resizing.** A window that can be resized (Terminal, Files, Packages,
-  Applications, Log, Agent, Tour, and the packages' manual, wiki, feeds
+  Applications, Log, Agent, Tour, Text, and the packages' manual, wiki, feeds
   and view) has a grip at its bottom right corner: drag it, an outline
   shows the new size, the window takes it when you let go. A double
   click on its title maximizes it, and another brings it back.
@@ -228,9 +228,9 @@ types say: an `integer` field must hold a number; a field of a
 structured type takes JSON.
 
 The window asks every service the registry knows (but the terminal
-windows' consoles), each one about its protocol: `ata0`, `console`,
-`display`, `fatfs`, `llm`, `memrofs`, `net`, `power`, `registry`,
-`tmpfs`, and any service of your own. The agent can use them too
+windows' consoles), each one about its protocol: `ata0`, `clipboard`,
+`console`, `display`, `fatfs`, `llm`, `memrofs`, `net`, `pager`, `power`,
+`registry`, `sound`, `tmpfs`, and any service of your own. The agent can use them too
 (chapter 12).
 
 ![Figure 10-5. Services: `fatfs`'s `list`, called with the path `/`; the reply, as JSON](../screenshots/services.png)
@@ -297,8 +297,8 @@ react.
 file Files shows, or `text FILE` in a Terminal, opens a file in an
 editor of its own: New, Open (the picker), Save, Save as, Find. The
 keys of an editor: the arrows, Home, End, Page Up and Down (with Shift
-to select), Ctrl-A, Ctrl-C, Ctrl-X, Ctrl-V (a clipboard of the
-window's), Ctrl-Z and Ctrl-Y, Ctrl-S to save, Ctrl-F to find. OCaml
+to select), Ctrl-A, Ctrl-C, Ctrl-X, Ctrl-V (the system's clipboard,
+10.4), Ctrl-Z and Ctrl-Y, Ctrl-S to save, Ctrl-F to find. OCaml
 files are coloured. The window is resizable.
 
 ## 10.10 Recordings
@@ -338,7 +338,7 @@ open it is also a service, `mynos` (protocol mynos/1, one request,
 `ask`): the Services window, a script or another agent can ask it a
 question. Chapter 21.7.
 
-**The volume.** With a sound card (chapter 9), the top bar shows a
+**The volume.** With a sound card (5.5), the top bar shows a
 loudspeaker and the volume, left of the clock. A click opens a slider;
 the wheel over the loudspeaker changes it by 5. It is soundd's volume,
 for every program (`play`, a game); the bar follows a change made

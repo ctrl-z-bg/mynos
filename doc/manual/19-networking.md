@@ -355,7 +355,8 @@ number"`.
 ## 19.10 Known limits
 
 - IPv4 only; one card (NE2000), one address, by DHCP or QEMU's defaults.
-- At most 64 sockets in the whole system; a `Recv` returns at most
-  16384 bytes and a datagram is at most 8192. TLS for clients only.
+- At most 64 sockets in the whole system: 32 TCP connections (TLS
+  included), 8 listening, 8 UDP; a `Recv` returns at most 16384 bytes, a
+  datagram is at most 8192. TLS for clients only.
 - `Http`: no redirects, no keep-alive, no compression, the whole answer
   in memory; its `timeout` does not cover connecting.

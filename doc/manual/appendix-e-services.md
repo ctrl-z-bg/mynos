@@ -182,6 +182,7 @@ a service too: one of its domains serves **power/1** (E.17).
 | `sound` | `services/sound/soundd.c` | C | io | `driver` | sound/1 |
 | `llm` | `services/llm/llmd.ml` | OCaml | — | `start` | llm/1 |
 | — | `httpd/httpd.ml` | OCaml | — | `start` | a client of net/1 |
+| — | `pkg/pkg.ml` (`pkg boot`) | OCaml | — | `start` | runs once: upgrades packages if asked (H.9) |
 | — | `sh/sh.ml` | OCaml | — | `respawn` | a client |
 | `term<pid>` | `gui/terminal.ml` | OCaml | — | the GUI | console/1 |
 | `mynos` | `gui/agent_window.ml` (as `ask.byte`) | OCaml | — | the GUI | mynos/1: `ask` (MyNOS's voice, 21.7) |
@@ -398,7 +399,8 @@ these functions at link time and turns them into fs/1 requests:
 `consoled` (`services/console/consoled.c`, C, 2026, a `driver`),
 registered as `console`, owns the keyboard and is the standard input of
 programs. A terminal window (`gui/terminal.ml`, OCaml) is a console of
-its own. Both serve **console/1** (`mynos-lib/ocaml/console.ml`,
+its own, and so is Studio's runner (`studiorun<pid>`). All serve
+**console/1** (`mynos-lib/ocaml/console.ml`,
 `mynos-lib/include/mynos_console.h`):
 
 | Case | Request | Arguments | Reply |
@@ -435,7 +437,8 @@ absence of `ISIG` sets bit 4, VMIN and VTIME pass through.
 **Terminal windows.** Each registers `term<pid>` and starts `sh` with
 `MYNOS_CONSOLE=term<pid>`; libmynos then sends that shell's reads, modes
 and output, and those of every program it starts, to the window. The
-output goes through a VT100 emulator onto an 80 × 25 grid. Two domains:
+output goes through a VT100 emulator onto a grid of 80 × 25 at first,
+the window's size after. Two domains:
 one serves requests and never waits for input (a `read` with nothing to
 give is kept, with its channel, until a key comes: `decode` and `reply`
 of E.2), the other handles the display's events. `keymap` answers 0 and
@@ -479,19 +482,22 @@ function call rather than a message. Protocol **net/1**
 - *An address first.* DHCP; after 5 s without an answer, QEMU's user
   network (10.0.2.15/24, gateway 10.0.2.2, DNS 10.0.2.3). Requests wait
   in the queue until there is an address.
-- *Sockets have owners*: at most 64; another process's gets `not your
+- *Sockets have owners*: at most 64 (32 TCP or TLS connections);
+  another process's gets `not your
   socket`. Once a second the sockets of processes that have ended are
   closed, so a restarted server can listen on its port again.
 - *TLS for clients*: the server's certificate is checked against
   Mozilla's authorities (`/cacert.pem`, on the RAM disk) and the user's
-  (`/disk/ca.pem`), read at the first `connect_tls`; `send` and `recv`
+  (`/disk/ca.pem`), read at the first `connect_tls` and again when it
+  changes; `send` and `recv`
   then carry the clear bytes.
 - Without an NE2000 card netd logs it and ends with code 0.
 
 **httpd** (`httpd/httpd.ml`, OCaml, no privilege) registers no name: it
-is a client of net/1 and of the file services. `httpd [DIR [PORT]]`
-serves `/disk` on port 80 by default, HTTP/1.0, `GET` only (a path with
-`..` gets `403`). Its main domain `accept`s; 8 worker domains serve the
+is a client of net/1 and of the file services. `httpd [-w] [DIR [PORT]]`
+serves `/disk` on port 80 by default, HTTP/1.0: files and directory
+listings, not hidden or `.env` files (a path with `..` gets `403`);
+`PUT` and a form's `POST` write files, from the host only unless `-w`. Its main domain `accept`s; 8 worker domains serve the
 connections, each with a 10 s `set_timeout`, so that an idle browser
 connection does not hold the others. Without a network service it ends
 with code 0. When `netd` ends and `init` starts it again, the listening
@@ -526,7 +532,8 @@ worker domains answer them with `Llm.answer`.
 
 `displayd` (`services/display/displayd.c`, C, 2026, a `driver`),
 registered as `display`. It waits in text mode until a client starts the
-graphical session, then sets QEMU's VGA to 1024 × 768 × 32 through the
+graphical session, then sets QEMU's VGA to 1024 × 768 × 32 (or the size
+`start_at` asks) through the
 Bochs extension (BGA), maps its frame buffer (`mapPhysical`, call 28),
 and composes the desktop, the windows and the pointer. A machine
 without the Bochs extension has no graphical session: displayd logs it at
@@ -548,6 +555,8 @@ boot and ends with code 0. Protocol **display/1**
 | 10 | `move` | `(window:I,x:I,y:I)` | `U` |
 | 11 | `resize` | `(window:I,width:I,height:I)`, then a shared message of pixels | `U` |
 | 12 | `resizable` | `(window:I,min_width:I,min_height:I)`; 0: not | `U` |
+| 13 | `start_at` | `(width:I,height:I)` | `U`: the session begins at that size |
+| 14 | `sizes` (safe) | `U` | `L<(width:I,height:I)>`: the sizes it can start at |
 
 - *Pixels are shared, not sent.* After `attach` the same connection
   carries one more message, sent with `MYNOS_IPC_SHARED`: the window's
@@ -580,7 +589,7 @@ its samples from the kernel's **DMA area**: 64 KB of RAM below 16 MB on a
 put nothing and mapped for a driver by call 29 (appendices A and B).
 Two halves of 4 KB (46 ms) play in turn; at the card's interrupt for one,
 `soundd` fills it again with the mix of what programs play. The output is
-22050 Hz, 16-bit, stereo; after half a second of silence the card pauses.
+22050 Hz, 16-bit, stereo; after 20 s of silence the card pauses.
 Protocol **sound/1** (`mynos-lib/ocaml/sound.ml`):
 
 | Case | Request | Arguments | Reply |
@@ -676,12 +685,13 @@ services, all in C, each with its own struct protocol: the
 
 Everything else is from 2026: consoled, tmpfs, ata and fatfs
 (2026-11-16); netd, httpd, llmd and displayd (2026-11-17); power/1 in
-init (2026-11-18). Typed IPC arrived on 2026-11-17 with block/1, then
+init (2026-11-18); soundd and clipboard (2026-11-22); pagerd
+(2026-11-23). Typed IPC arrived on 2026-11-17 with block/1, then
 net/1; fs/1, registry/1 and console/1 replaced the last C struct
-protocols on 2026-11-18. The drivers are mixed: consoled, netd and
-displayd are C, living with C libraries (lwIP, mbedTLS) and interrupt
-threads; ata shows that a driver can be an ordinary OCaml bytecode
-program with the `io` privilege.
+protocols on 2026-11-18. The drivers are mixed: consoled, netd,
+displayd and soundd are C, living with C libraries (lwIP, mbedTLS) and
+interrupt threads; ata and pagerd show that a driver can be an ordinary
+OCaml bytecode program with the `io` privilege.
 
 ## E.19 Known limits
 
@@ -695,8 +705,8 @@ program with the `io` privilege.
   touch every port.
 - Services know who calls but rarely decide on it: `ata0` accepts writes
   from any process, beneath fatfs, and `power` serves anyone.
-  `Ipc.caller` carries the caller's `io` flag; no service uses it yet
-  (mynos-dow).
+  `Ipc.caller` carries the caller's `io` flag; no service uses it, by
+  decision (a single-user system: doc/decisions/identity-and-permissions.md).
 - The file services do not close the descriptors of a client that has
   ended, unlike netd's sockets and displayd's windows (mynos-f2d).
 - memrofs and tmpfs are flat; paths inside a service are at most 63

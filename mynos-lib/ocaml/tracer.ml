@@ -182,16 +182,18 @@ let protocols = [
               "Accept", [ I ], [ I; S; I ]; "Send", [ I; S ], [ I ];
               "Recv", [ I; I ], [ S ]; "Close", [ I ], []; "Set_timeout", [ I; I ], [];
               "Connect_tls", [ S; I ], [ I ]; "Udp_bind", [ I ], [ I ];
-              "Send_to", [ I; S; I; S ], [ I ]; "Recv_from", [ I; I ], [ S; I; S ] |];
+              "Send_to", [ I; S; I; S ], [ I ]; "Recv_from", [ I; I ], [ S; I; S ];
+              "Poll", [], [] |];
   "llm/1", [| "Profiles", [], []; "Chat", [ S ], [] |];   (* Chat: its profile *)
   "fs/1", [| "Open", [ S; I ], [ I ]; "Close", [ I ], []; "Read", [ I; I ], [ S ];
              "Write", [ I; S ], [ I ]; "Seek", [ I; I; I ], [ I ]; "List", [ S ], [];
              "Remove", [ S ], []; "Mkdir", [ S ], []; "Rmdir", [ S ], [];
              "Rename", [ S; S ], []; "Space", [], [ I; I ] |];
   "registry/1", [| "Register", [ S ], [ I ]; "Lookup", [ S ], [ I ]; "List", [], [] |];
+  (* by case number, as console.ml: 3 Write, 4 Foreground, 5 Size, 6 Ready *)
   "console/1", [| "Read", [ I ], [ S ]; "Mode", [ I; I; I ], []; "Keymap", [ I ], [ I ];
-                  "Size", [], [ I; I ];
-                  "Write", [ S ], []; "Foreground", [ I ], [] |];
+                  "Write", [ S ], []; "Foreground", [ I ], [];
+                  "Size", [], [ I; I ]; "Ready", [], [] |];
 ]
 
 let get_args c args =

@@ -36,7 +36,7 @@ knows. Then try these, one at a time:
   ls: built in
   /edit.byte
   mynos:/$ free
-  192736 KB free
+  2012032 KB free
 ```
 
 `echo` repeats its words; `pwd` prints the current directory; `which`
@@ -52,15 +52,15 @@ says where a command comes from; `free` prints the free memory. Now
       3     0   1 io  memrofsd        memrofs
       5     1   3 io  consoled        console
      ...
-      8     1   1     fatfs           fatfs
+      9     1   1     fatfs           fatfs
      ...
-     13     1   1     sh
+     17     1   1     sh
 ```
 
 Each line is a process: its number (`pid`), its parent's, its number of
 threads, `io` if it may touch the hardware, its name, and the names it
 registered as a service. Process 1, shown as `ocamlrun`, is `init`, an
-OCaml program run by the bytecode interpreter; process 13 is the shell
+OCaml program run by the bytecode interpreter; process 17 is the shell
 you are typing to.
 
 ## 6.3 Built-in commands and programs
@@ -73,7 +73,6 @@ A command is either **built into** `sh` or a **program**: a file that
 | `help` | the summary |
 | `cd`, `pwd` | change, print the current directory (chapter 7) |
 | `version` | the system's version (also the boot's first line) |
-| `log [-f]` | the kernel's log, since boot (`-f`: follow it) |
 | `ls [-l] [-a]`, `cat`, `cp`, `mv`, `rm`, `mkdir`, `rmdir`, `touch` | files (chapter 7) |
 | `echo WORDS` | print the words |
 | `export NAME=value`, `unset NAME`, `env` | variables |
@@ -101,6 +100,7 @@ disk), then `/`, the RAM disk. It tries the name as it is, then with
 | `ocamlc` | the OCaml compiler (chapter 8) |
 | `hello` | a small test program |
 | `trace` | the event recorder (chapter 11) |
+| `log [-f]` | the kernel's log, since boot (`-f`: follow it) |
 | `fetch URL` | HTTP and HTTPS (chapter 9) |
 | `pkg` | packages: demos and programs from the web, installed in `/disk/bin` (chapter 9) |
 | `llm`, `agent` | language models (chapter 12) |
@@ -277,12 +277,12 @@ after it. `sh` prints its pid in brackets, and `$!` holds it:
 
 ```
   mynos:/$ trace -s 30 &
-  [15]
+  [18]
   mynos:/$ echo $!
-  15
+  18
   mynos:/$ kill $!
   mynos:/$
-  [15] done, status 137
+  [18] done, status 137
 ```
 
 When a program in the background has ended, `sh` says so (`done`, and
@@ -322,7 +322,7 @@ travel as UTF-8.
 Some differences:
 
 - The terminal also shows the messages of the kernel and of the
-  services (`init: started ...`, `process 14 (trace) killed by 5`),
+  services (`init: started ...`, `process 18 (trace) killed by 5`),
   which the screen does not.
 - Ctrl-C goes to MyNOS. To stop QEMU, type **Ctrl-A, then X**, or close
   the window.
@@ -332,8 +332,8 @@ Some differences:
 
 ## 6.12 Copy and paste
 
-QEMU's window cannot paste text into MyNOS, and MyNOS has no clipboard
-of its own. With `SERIAL=1` (6.11) your terminal's copy and paste work:
+QEMU's window cannot paste text from your computer into MyNOS (MyNOS's
+own clipboard serves its windows, chapter 10). With `SERIAL=1` (6.11) your terminal's copy and paste work:
 select text, copy it, paste it into the terminal, and MyNOS receives it
 as typed. Several lines pasted at once run one after the other, as if
 each had been typed and followed by Enter.

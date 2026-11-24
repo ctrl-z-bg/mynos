@@ -3,9 +3,10 @@
 Everything in MyNOS that is not the kernel is a process, and processes
 talk only through the kernel's IPC: a file read, a line typed at the
 console, a TCP packet, a window's pixels. The code is in
-`mynos-core/kernel/ipc/`: under 700 lines of C (license headers included)
-in four files. `port.c` keeps the ports, `channel.c` the channels, `ipc.c`
-sends and receives, `msg.h` describes a message in transit. The pages of
+`mynos-core/kernel/ipc/`: about 700 lines of C (license headers
+included) in five files. `port.c` keeps the ports, `channel.c` the
+channels, `ipc.c` sends and receives, `msg.h` and `msg.c` describe a
+message in transit. The pages of
 long messages are moved by `mem/externalmem.c` (appendix B.11).
 
 ## C.1 Three objects, and what is not there

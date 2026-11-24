@@ -20,13 +20,15 @@ mynos:/$ ps
     3     0   1 io  memrofsd        memrofs
     5     1   3 io  consoled        console
     6     1   1     tmpfs           tmpfs
-    7     1   1 io  ata             ata0
-    8     1   1     fatfs           fatfs
-    9     1   3 io  netd            net
-   10     1   3 io  displayd        display
-   11     1  10     llmd            llm
-   12     1  18     httpd
-   13     1   1     sh
+    7     1   1     clipboard       clipboard
+    8     1   4 io  ata             ata0
+    9     1   1     fatfs           fatfs
+   10     1   3 io  pagerd          pager
+   11     1   3 io  netd            net
+   12     1   3 io  displayd        display
+   14     1  10     llmd            llm
+   15     1  18     httpd
+   17     1   1     sh
 ```
 
 | Column | Meaning |
@@ -45,7 +47,7 @@ mynos:/$ ps
 Pid 1 is `init`, which the kernel started as a bare `ocamlrun`, hence
 its name; it registered `power`, the service that turns the machine
 off. `ps` lists the processes as they are, nothing more: no memory, no
-time used. It is a built-in of `sh`, so it is not in its own list.
+time used; `ps -f` adds the page faults of each. It is a built-in of `sh`, so it is not in its own list.
 
 ## 11.2 What happened — `trace`
 
@@ -114,8 +116,7 @@ Perfetto.
 
 **Other uses.** `trace COMMAND` alone saves to `/tmp/last.trace`.
 `trace -s SECONDS [-o FILE]` records the whole system for a while,
-whatever runs, and prints only the summary line. The options go in that
-order: `-s` first, then `-o`. Only one program can record at a time: a
+whatever runs, and prints only the summary line. Only one program can record at a time: a
 second one says `trace: another program is recording (one recording at
 a time)`.
 
@@ -191,7 +192,7 @@ the frames every window sends; one click shows it.
 
 ## 11.5 The System window
 
-The menu's **System** (figure 10-2) draws MyNOS as it is now, in layers:
+The menu's **System** (figure 10-7) draws MyNOS as it is now, in layers:
 
 ```
   Programs   sh  gui  welcome  system ...      green: they ask
@@ -304,12 +305,16 @@ watches them:
 ```
 driver consoled          the console
 start tmpfs.byte         /tmp
+start clipboard.byte     the clipboard
 driver ata.byte          the disk driver
 start fatfs.byte         /disk
+driver pagerd.byte       the external pager
 driver netd              the network
 driver displayd          the display
+driver soundd            sound
 start llmd.byte          the language models
 start httpd.byte         the web server
+start pkg.byte boot      packages upgraded, if asked
 respawn sh.byte          the shell at the console
 ```
 
@@ -331,19 +336,19 @@ mynos:/$ ps
 ```
 
 `kill` takes a pid or a service's name. `fatfs` ended, `init` started a
-new one (here pid 22, instead of 8), the new one registered the name
+new one (here pid 22, instead of 9), the new one registered the name
 `fatfs` again, and the next request from `sh` found it by name. The
 kernel log tells it:
 
 ```
-process 8 (fatfs) killed by 13
-init: fatfs.byte (pid 8) ended: signal 9
+process 9 (fatfs) killed by 17
+init: fatfs.byte (pid 9) ended: signal 9
 init: restarting fatfs.byte
 init: started fatfs.byte (pid 22)
-fatfs: FAT16, 8167 clusters of 2048 bytes, service fs/1 as fatfs
+fatfs: FAT32, 129022 clusters of 512 bytes, service fs/1 as fatfs
 ```
 
-Drivers and `init` cannot be killed (`sh: kill: 7: not allowed (init, or
+Drivers and `init` cannot be killed (`sh: kill: 8: not allowed (init, or
 a driver)`). In the System window, the old `fatfs` fades and the new one
 appears outlined. The Tour's sixth lesson, *A service that dies*, runs this
 and explains each step as it replays (11.6).

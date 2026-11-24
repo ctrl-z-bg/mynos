@@ -27,7 +27,7 @@ belongs to the process that opened it.
 
 ## 18.2 fs/1
 
-Every file service answers the same ten requests (`mynos-lib/ocaml/fs.mli`,
+Every file service answers the same eleven requests (`mynos-lib/ocaml/fs.mli`,
 `mynos-lib/include/mynos_fs.h`):
 
 | Case | Request (`Fs`) | Reply |
@@ -40,6 +40,7 @@ Every file service answers the same ten requests (`mynos-lib/ocaml/fs.mli`,
 | 5 | `List path` | `(name, size)` list; size −1 for a directory |
 | 6–8 | `Remove path`, `Mkdir path`, `Rmdir path` | `unit` |
 | 9 | `Rename (from, to)`, within the service | `unit` |
+| 10 | `Space` | `(size, free)`, in KB |
 
 An error is an Error reply whose message starts with a name. `libmynos`
 turns the name into `errno`; in OCaml, `Fs.error_of message` gives its
@@ -232,6 +233,8 @@ graphical session. It serves console/1 (`mynos-lib/ocaml/console.mli`,
 | 2 | `Keymap layout`: `layout_us`, `layout_it`, −1 to ask | the layout in use |
 | 3 | `Write data` | `unit` |
 | 4 | `Foreground pid` | `unit` |
+| 5 | `Size` | `(cols, rows)`: a terminal window's own |
+| 6 | `Ready` | a `Read` would answer at once (`poll`) |
 
 **Line mode** (`canon`, the default) edits the line in the service:
 Backspace, Ctrl-D for the end of input (and in `consoled`, Up and Down
@@ -243,8 +246,8 @@ raw mode `vmin` and `vtime` mean what they mean in termios: with
 at most *t* tenths of a second and may return `""`. A raw mode belongs to
 the process that set it: when another process reads, the console goes
 back to line mode, so a program that ended without restoring it leaves
-no harm behind. The screen is 80 × 25 and understands VT100 sequences;
-`TIOCGWINSZ` says so.
+no harm behind. `consoled`'s screen is 80 × 25 and understands VT100
+sequences; `TIOCGWINSZ` asks the console's `Size`.
 
 A C program sets the mode with termios; `libmynos` translates `ICANON`,
 `ECHO`, `ISIG`, `VMIN` and `VTIME` (the other flags are kept but mean

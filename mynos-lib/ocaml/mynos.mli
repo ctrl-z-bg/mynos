@@ -42,7 +42,7 @@ val time : unit -> float
 (** Seconds since 1970 (UTC), from the clock read at boot. *)
 
 val sleep : float -> unit
-(** Block for at least this many seconds (10 ms resolution). *)
+(** Block for at least this many seconds (1 ms resolution). *)
 
 type stats = {
   processes : int;

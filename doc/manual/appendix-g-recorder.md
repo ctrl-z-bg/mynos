@@ -49,6 +49,8 @@ as in `kernel/trace.h`:
 | 7 | `Free` | `ipc/channel.c`, a channel end freed | the process | the other end | `channel` |
 | 8 | `Irq` | `irq.c`, an interrupt dispatched | the driver | the process interrupted | `arg`: the IRQ line |
 | 9 | `Mark` | `trace` operation 5 (G.9) | the process | — | data: a label |
+| 10 | `Fault` | `mem/pager.c`, a fault for the external pager | the process | the pager | `arg`: the page's number |
+| 11 | `Page` | `mem/pager.c`, a page given | the pager | the process | `size` 4096, `arg`: the page |
 
 Every event also carries a sequence number, the processor's time-stamp
 counter (`rdtsc`) and the id of the running thread.
@@ -194,11 +196,11 @@ arguments:
 | Protocol | Requests the player names |
 |---|---|
 | `block/1` | `Info`, `Read`, `Write`, `Flush` |
-| `net/1` | `Config`, `Ping`, `Resolve`, `Connect`, `Listen`, `Accept`, `Send`, `Recv`, `Close`, `Set_timeout`, `Connect_tls`, `Udp_bind`, `Send_to`, `Recv_from` |
+| `net/1` | `Config`, `Ping`, `Resolve`, `Connect`, `Listen`, `Accept`, `Send`, `Recv`, `Close`, `Set_timeout`, `Connect_tls`, `Udp_bind`, `Send_to`, `Recv_from`, `Poll` |
 | `llm/1` | `Profiles`, `Chat` (its profile only) |
-| `fs/1` | `Open`, `Close`, `Read`, `Write`, `Seek`, `List`, `Remove`, `Mkdir`, `Rmdir`, `Rename` |
+| `fs/1` | `Open`, `Close`, `Read`, `Write`, `Seek`, `List`, `Remove`, `Mkdir`, `Rmdir`, `Rename`, `Space` |
 | `registry/1` | `Register`, `Lookup`, `List` |
-| `console/1` | `Read`, `Mode`, `Keymap`, `Write`, `Foreground` |
+| `console/1` | `Read`, `Mode`, `Keymap`, `Write`, `Foreground`, `Size`, `Ready` |
 
 For each case the table also gives the types of the reply. A request
 sent on a channel is remembered for that channel, and the next message
@@ -339,7 +341,7 @@ kernel's buffer every 50 ms. When
 the command ends it stops, reads the rest, and only then writes the file:
 the recorder's own writes to the disk are not in the recording. The last
 line names the file, the number of events and those lost. The options
-must come in the order shown: `-s` first, then `-o`.
+may come in either order.
 
 A recording made this way begins with `trace` reading `ocamlrun` from
 the RAM disk in 16 KB requests in order to spawn `sh`: starting a program
@@ -356,7 +358,7 @@ is the real output of the build of 2026-11-18, cut where marked:
        ms      took  call
     0.686     0.251  trace(14) -> memrofsd(3)  fs/1 Open ("ocamlrun", 0)  =>  Ok 3
     1.106     0.067  trace(14) -> memrofsd(3)  fs/1 Seek (3, 0, 1)  =>  Ok 0
-  ...                (2 seeks, 40 reads: the 649,072 bytes of ocamlrun, to start sh)
+  ...                (2 seeks, 42 reads: the 681,968 bytes of ocamlrun, to start sh)
    13.585     0.058  trace(14) -> memrofsd(3)  fs/1 Close 3  =>  Ok
    31.751     0.211  sh(15) -> registry(2)  registry/1 Lookup "fatfs"  =>  Ok 21
    32.568     0.567  sh(15) -> fatfs(8)  fs/1 Open ("bin/ocamlrun", 0)  =>  Error "not_found"
@@ -397,8 +399,9 @@ The same moment in `trace show`, event by event:
    80.442  sh(15)                                free channel 1368984
 ```
 
-The arrows: `=>` a connection, `->` a message sent, `<-` received, `+` a
-spawn, `x` an exit, `!` an interrupt, `#` a mark. The file begins with a
+The arrows: `=>` a connection, `->` a message sent (or a page the
+pager gave), `<-` received, `+` a spawn, `x` an exit, `!` an interrupt
+(or a page fault for the pager), `#` a mark. The file begins with a
 `running:` line for each process alive at the start.
 
 ## G.14 Where recordings are used

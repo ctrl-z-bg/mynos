@@ -17,8 +17,8 @@ both ways (appendix C).
 at the other end of a *channel*: the kernel, not the client, says who is
 calling.
 
-**console/1** — The protocol of the consoles: consoled, and each
-terminal window (appendix E).
+**console/1** — The protocol of the consoles: consoled, each terminal
+window, and Studio's runner (appendix E).
 
 **copy-on-write** — Pages shared between two processes until one of them
 writes; then the writer gets its own copy (appendix B).

@@ -108,10 +108,11 @@ touching OCaml's sources. `mynos-runtime/gen_prims.sh` does it:
 | Primitives | Number |
 |---|---|
 | upstream runtime | 479 |
-| `Mynos` (`mynos_stubs.c`) | 43 |
+| `Mynos` (`mynos_stubs.c`) | 57 |
 | `Gfx` (`gfx_stubs.c`) | 15 |
 | unix and systhreads | 147 |
-| **in all** | **684** |
+| Str and Num | 37 |
+| **in all** | **735** |
 
 **Why programs are compiled with `-use-prims`.** When `ocamlc` links a
 program it checks that every primitive the program uses exists in the
@@ -166,14 +167,15 @@ up while it waits:
 | `sem_p` | `sem_create`, `sem_try_p`, `sem_v`, `sem_free` |
 | `sleep_us` | `getpid`, `uptime`, `time`, `stats` |
 | `registry_register`, `registry_lookup`, `registry_list` | `log`, `environment` |
-| `spawn` (reads the program file), `wait` | `process_info`, `processes`, `kill` |
+| `spawn` (reads the program file), `wait` | `process_info`, `processes`, `kill`, `faults`, `procstat` |
+| `pager_wait` (the pager's next fault) | `pager_*` (the other pager calls), `version`, `klog_*` |
 | `console_mode`, `console_foreground` (requests to the console service) | `inb`, `outb`, `inw`, `outw`, `insw`, `outsw` |
 | | `driver_register`, `enable_irq`, `trace_*` |
 
 The registry and console stubs wait because they are IPC exchanges with
 another process; `spawn` because it reads a whole program from a file
-service. The console's two were the last to be added, when OCaml's
-threads came (2026-11-18): the domains had already needed all the others.
+service; `pager_wait` because the pager sleeps there until a page is
+asked for.
 
 The driver primitives (`inb`, `outb`, `insw`, …) are `in` and `out`
 instructions executed in user space. They work only in a process with the `io`
@@ -303,10 +305,15 @@ interface (`.mli`) for each module. Its modules, in link order:
 | `Tools` | a typed service's requests as a language model's tools, called with JSON |
 | `Tracer` | the event recorder: start, stop, save, show recordings |
 | `Agent` | a task in natural language carried out by a model with tools |
+| `Voice` | MyNOS's voice: the system answers questions about itself (21.7) |
 | `Gfx` | drawing on 32-bit pixel buffers (F.5) |
 | `Display` | windows, damage and events, with the display service |
+| `Clipboard` | `clipboard/1`: the text copied last, for every program |
 | `Gui` | a small immediate-mode toolkit on `Display` and `Gfx` |
+| `Textarea` | a text editor's area for `Gui`: Text and Studio use it |
 | `Power` | `power/1`: shutting down or restarting, a request to `init` |
+| `Sound` | `sound/1`: sound through `soundd`, WAV files (E.15) |
+| `Pager` | `pager/1`: files mapped into memory, memory that may go to the swap (B.14) |
 
 Programs outside the library's directory compile with
 `-I mynos-lib/ocaml mynos.cma` (and `-use-prims`, F.3). Inside MyNOS

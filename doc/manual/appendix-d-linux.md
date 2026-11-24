@@ -200,7 +200,6 @@ counts from the boot.
 Pointers a call receives are checked before the kernel uses them
 (`__mem_userArea`: the caller's own user pages), and a bad one gives
 `-EFAULT`: otherwise the kernel could be made to write into itself.
-Two handlers still miss the check (D.9).
 
 ## D.4 Files are not kernel calls
 
@@ -211,7 +210,8 @@ library's file functions at link time:
 
 ```
   open, read, write, lseek, close, stat, lstat, fstat, unlink, rename,
-  mkdir, rmdir, opendir, readdir, rewinddir, closedir, getcwd, chdir, ioctl
+  mkdir, rmdir, opendir, readdir, rewinddir, closedir, getcwd, chdir, ioctl,
+  poll, select, fcntl, mmap, munmap, msync      (sockets: socket.c, 14.2)
 ```
 
 The replacement is done by the static linker, not by any trick at run
@@ -238,7 +238,8 @@ to the kernel:
 ```
 
 - **Files** get descriptors from 20 up (`FD_BASE`), 64 at most
-  (`FD_MAX`); `libmynos` keeps, for each, the service and the service's
+  (`FD_MAX`), sockets from 84; one of these not open gives `EBADF`.
+  `libmynos` keeps, for each, the service and the service's
   own descriptor. A `read` loops until it has everything asked for, as a
   regular file on Linux does: the OCaml runtime reads whole bytecode
   sections in one call and calls a short read a truncated file.
@@ -476,8 +477,8 @@ service learns that a client went away when its channel breaks
   sampled at each tick, not measured, and is all user time.
   The gaps are collected in mynos-51c.
 - There is no `execve`, `brk`, `readv`, `pipe`, `dup`, `select` or socket
-  call: `-ENOSYS`. OCaml's `Unix` functions built on them fail with
-  `ENOSYS` (appendix F). Sockets, `select`, `poll` and a socket's
+  call: `-ENOSYS`. OCaml's `Unix` functions built on `execve`, `pipe` or
+  `dup` fail with `ENOSYS` (appendix F). Sockets, `select`, `poll` and a socket's
   `fcntl` are `libmynos`'s (14.2), before the kernel is asked.
 - `freopen` and `tmpfile` still open with musl's raw `open`; `libmynos`
   replaces `fopen` only (D.4).
