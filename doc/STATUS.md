@@ -1767,3 +1767,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   instead of 26, no fetch failed, 5.1 and 5.4 s (was 8.0); with 2 per
   server 3.9 to 7.2 s. What is left is mostly stalls of about 1.5 s that
   come from the NE2000 under QEMU (mynos-bix, open).
+- **2026-11-24** — netd allows 32 TLS connections (two altcp pcbs each:
+  the default stopped at 16, "out of memory"); NetSurf keeps at most 12
+  open, closing idle ones. Tried on seven sites: Hacker News, DuckDuckGo
+  lite fine; ocaml.org, Repubblica, BBC readable with faults; GitHub
+  broken. Most faults are NetSurf 3.11's (libcss has no var(), no
+  gradients, no grid layout); the port's own: one bitmap monospace font,
+  no WebP (BBC's images), network stalls (mynos-bix). QEMU's ne2000
+  checked: a frame that finds the ring full is dropped, not held.

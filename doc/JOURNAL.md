@@ -3424,3 +3424,29 @@ sharing at most 4 UDP ports (lwIP reuses one when it cannot open more).
 
 **Lesson.** A library's defaults are sized for a sensor, not a browser:
 the first program that asks many things at once finds them.
+
+## 2026-11-24 — The seventeenth TLS connection: "out of memory"
+
+**Symptom.** NetSurf on www.repubblica.it: 411 of 437 fetches failed
+with "out of memory", the page came without its style sheets, and every
+page opened after it failed the same way, even Hacker News.
+
+**Diagnosis.** The message is netd's, from `altcp_tls_new` in
+`tls_start`: no TLS connection could be made, though netd's memory was
+fine. The site takes its resources from five hosts; NetSurf kept up to
+four connections open to each, and never closed an idle one unless it
+reused it.
+
+**Cause.** In lwIP a TLS connection is two altcp pcbs, TLS over TCP;
+MEMP_NUM_ALTCP_PCB defaults to MEMP_NUM_TCP_PCB (32), so netd allowed 16
+TLS connections at most. The fetcher, keeping connections to every host
+of a page and of the pages before, used them all up.
+
+**Fix.** netd: MEMP_NUM_ALTCP_PCB is twice MEMP_NUM_TCP_PCB. The fetcher:
+at most 12 connections in all; one idle for 20 s is closed, and when a
+new one is needed past the 12, the oldest idle one of another host is
+closed first.
+
+**Lesson.** Keeping connections open moves a resource from "per fetch"
+to "per session": its limit must be counted for the whole session, not
+for one page.

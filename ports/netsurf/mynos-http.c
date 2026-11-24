@@ -348,7 +348,8 @@ static double now_ms(void)
  * each one saved is time saved for all the fetches. */
 
 #define PER_SERVER 4
-#define IDLE_MS 20000           /* an open connection older is not reused */
+#define MAX_OPEN 12             /* in all: netd's TLS connections are few */
+#define IDLE_MS 20000           /* an open connection idle longer is closed */
 
 struct conn {
 	long long sock;
@@ -368,6 +369,7 @@ struct server {
 static pthread_mutex_t pool_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t pool_cond = PTHREAD_COND_INITIALIZER;
 static struct server *servers = NULL;
+static int total_open = 0;      /* connections, in use or idle, all servers */
 
 static struct server *server_of(struct mhttp *c)
 {
@@ -431,6 +433,42 @@ static long long open_conn(struct mhttp *c, char *err, size_t errlen)
 	return s;
 }
 
+/* idle connections closed (under pool_lock): those idle longer than
+   IDLE_MS, or, with oldest, the oldest one of all; true if one was */
+static bool close_idle(bool oldest)
+{
+	struct server *sv, *osv = NULL;
+	struct conn **kp, **okp = NULL;
+	bool closed = false;
+	double now = now_ms();
+	for (sv = servers; sv != NULL; sv = sv->next) {
+		for (kp = &sv->idle; *kp != NULL; ) {
+			struct conn *k = *kp;
+			if (now - k->since >= IDLE_MS) {
+				*kp = k->next;
+				sock_close(k->sock);
+				free(k);
+				sv->open--;
+				total_open--;
+				closed = true;
+				continue;
+			}
+			if (okp == NULL || k->since < (*okp)->since) { okp = kp; osv = sv; }
+			kp = &k->next;
+		}
+	}
+	if (oldest && !closed && okp != NULL) {
+		struct conn *k = *okp;
+		*okp = k->next;
+		sock_close(k->sock);
+		free(k);
+		osv->open--;
+		total_open--;
+		closed = true;
+	}
+	return closed;
+}
+
 /* a connection for c: one left open (*reused), or a new one */
 static long long acquire(struct mhttp *c, bool *reused, char *err, size_t errlen)
 {
@@ -443,27 +481,26 @@ static long long acquire(struct mhttp *c, bool *reused, char *err, size_t errlen
 		snprintf(err, errlen, "out of memory");
 		return -1;
 	}
+	close_idle(false);
 	for (;;) {
-		while (sv->idle != NULL) {
+		if (sv->idle != NULL) {
 			struct conn *k = sv->idle;
 			sv->idle = k->next;
 			s = k->sock;
-			if (now_ms() - k->since < IDLE_MS) {
-				free(k);
-				pthread_mutex_unlock(&pool_lock);
-				*reused = true;
-				return s;
-			}
-			free(k);                    /* too old: closed */
-			sv->open--;
+			free(k);
 			pthread_mutex_unlock(&pool_lock);
-			sock_close(s);
-			pthread_mutex_lock(&pool_lock);
+			*reused = true;
+			return s;
 		}
-		if (sv->open < PER_SERVER || c->aborted) break;
+		if (c->aborted) break;
+		if (sv->open < PER_SERVER) {
+			if (total_open < MAX_OPEN) break;
+			if (close_idle(true)) continue;   /* room made: another server's */
+		}
 		pthread_cond_wait(&pool_cond, &pool_lock);
 	}
 	sv->open++;
+	total_open++;
 	pthread_mutex_unlock(&pool_lock);
 	*reused = false;
 	if (c->aborted) s = -1;
@@ -471,6 +508,7 @@ static long long acquire(struct mhttp *c, bool *reused, char *err, size_t errlen
 	if (s < 0) {
 		pthread_mutex_lock(&pool_lock);
 		sv->open--;
+		total_open--;
 		pthread_cond_broadcast(&pool_cond);
 		pthread_mutex_unlock(&pool_lock);
 	}
@@ -491,6 +529,7 @@ static void release(struct mhttp *c, long long s, bool keep)
 		sv->idle = k;
 	} else if (sv != NULL) {
 		sv->open--;
+		total_open--;
 	}
 	pthread_cond_broadcast(&pool_cond);
 	pthread_mutex_unlock(&pool_lock);

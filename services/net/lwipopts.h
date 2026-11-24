@@ -36,6 +36,10 @@
 #define MEMP_NUM_RAW_PCB        4
 #define MEMP_NUM_UDP_PCB        8
 #define MEMP_NUM_TCP_PCB        32
+/* a TLS connection takes two altcp pcbs (TLS over TCP): with the
+   default (as many as TCP pcbs) the 17th TLS connection failed, "out of
+   memory" */
+#define MEMP_NUM_ALTCP_PCB      (2 * MEMP_NUM_TCP_PCB)
 #define MEMP_NUM_TCP_PCB_LISTEN 8
 #define MEMP_NUM_TCP_SEG        64
 #define PBUF_POOL_SIZE          64
