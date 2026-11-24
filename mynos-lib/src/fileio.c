@@ -22,6 +22,8 @@
  *     in memory), /disk/PATH is PATH on fatfs (the FAT disk); any other
  *     path is on memrofs, the read-only RAM disk, whose root also lists
  *     the mount points;
+ *   - sockets (socket.c, over the network service) get descriptors from
+ *     SOCK_FD_BASE up: read, write and close pass them on (fdhooks.h);
  *   - everything else (stdout, stderr, and the kernel's own single file
  *     when there is no memrofs) goes to the kernel.
  * The C library's stdio reaches them too (stdio.c replaces its internal
@@ -45,9 +47,18 @@
 #include <mynos_console.h>
 #include <mynos_fs.h>
 #include <mynos_wire.h>
+#include "fdhooks.h"
 
 #define FD_BASE 20
 #define FD_MAX  64
+
+/* the sockets' (socket.c), once a program has made one */
+const struct mynos_sock_ops * __mynos_sock_ops;
+#define SOCKET(fd) (__mynos_sock_ops && __mynos_sock_ops->owns(fd))
+
+/* a descriptor of ours (a file's or a socket's) that is not open: the
+   kernel would take it for its own file, or write it on the screen */
+#define CLOSED(fd, slot) ((slot) < 0 && (fd) >= FD_BASE)
 
 /* name of the bytecode file the kernel serves (GRUB module 1), used by
    ocamlrun when no other program is named */
@@ -747,8 +758,10 @@ int close(int fd)
     redirected[fd] = -1;
     return close(f);
   }
+  if (SOCKET(fd)) return __mynos_sock_ops->close(fd);
   slot = file_slot(fd);
 
+  if (CLOSED(fd, slot)) { errno = EBADF; return -1; }
   if (slot < 0) return result(sys3(6 /* close */, fd, 0, 0));
   files[slot].used = 0;
   free(files[slot].path);
@@ -788,9 +801,11 @@ ssize_t read(int fd, void * buf, size_t count)
   int slot;
 
   fd = std_fd(fd);
+  if (SOCKET(fd)) return __mynos_sock_ops->read(fd, buf, count);
   if (fd == 0 && service_port(console_name(), &console_cache) >= 0)
     return console_read(console_cache.port, buf, count);
   slot = file_slot(fd);
+  if (CLOSED(fd, slot)) { errno = EBADF; return -1; }
   if (slot < 0) return result(sys3(3 /* read */, fd, (long)buf, count));
 
   /* like a Linux regular file: all that was asked, unless the file ends */
@@ -819,11 +834,13 @@ ssize_t write(int fd, const void * buf, size_t count)
   int slot;
 
   fd = std_fd(fd);
+  if (SOCKET(fd)) return __mynos_sock_ops->write(fd, buf, count);
   slot = file_slot(fd);
 
   if (slot < 0 && (fd == 1 || fd == 2) && console_owns_output() &&
       service_port(console_name(), &console_cache) >= 0)
     return console_write(console_cache.port, buf, count);
+  if (CLOSED(fd, slot)) { errno = EBADF; return -1; }
   if (slot < 0) return result(sys3(4 /* write */, fd, (long)buf, count));
   while (done < count) {
     ssize_t n = fs_write(slot, (const char *)buf + done, count - done);
@@ -840,8 +857,10 @@ off_t lseek(int fd, off_t offset, int whence)
   int slot;
 
   fd = std_fd(fd);
+  if (SOCKET(fd)) { errno = ESPIPE; return -1; }
   slot = file_slot(fd);
 
+  if (CLOSED(fd, slot)) { errno = EBADF; return -1; }
   if (slot < 0) return result(sys3(19 /* lseek */, fd, (long)offset, whence));
   fs_start(&w, FS_SEEK);
   wire_put_int(&w, files[slot].fd);
@@ -908,11 +927,12 @@ int fstat(int fd, struct stat * st)
 {
   int slot;
   fd = std_fd(fd);
+  if (SOCKET(fd)) return __mynos_sock_ops->fstat(fd, st);
   slot = file_slot(fd);
   memset(st, 0, sizeof(*st));
   if (slot < 0 && fd >= 0 && fd <= 2) {
     /* the console: a terminal, a character device (the kernel's fstat64
-       would describe the program's own bytecode module: mynos-1ev) */
+       knows only its bytecode file's descriptor) */
     st->st_mode = S_IFCHR | 0620;
     st->st_nlink = 1;
     st->st_blksize = 1024;

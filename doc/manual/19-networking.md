@@ -2,7 +2,7 @@
 
 A MyNOS program reaches the network by sending typed requests to a
 service, `net`, as it reaches files by sending requests to `fatfs`. There
-are no sockets in the kernel and no socket calls in the C library. This
+are no sockets in the kernel; C programs get theirs from libmynos (14.2). This
 chapter shows how to use the network from OCaml: the service and its
 requests (19.1–19.2), TCP clients and timeouts (19.3–19.4), a complete
 TCP server (19.5), UDP (19.6), TLS (19.7), and the two modules built on

@@ -108,13 +108,13 @@ The kernel answers the 55 call numbers below. Every other number gets
 |---|---|---|
 | 1 | `exit` | ends the calling thread; with the process's last thread, the process (D.7) |
 | 252 | `exit_group` | ends the process, with the status for its parent; a non-zero status is written to the log |
-| 2 | `fork` | a copy of the process, its memory shared copy-on-write; only the calling thread runs in the child (the 2002 code) |
+| 2 | `fork` | a copy of the process, its memory shared copy-on-write; the child has one thread, a copy of the caller (as POSIX says); `-ENOMEM`, with what it took freed, when memory runs out |
 | 114 | `wait4` | waits for a child (`pid` > 0: that one; -1 or 0: any, as there are no process groups) and collects its status; option `WNOHANG` only; the resource usage is not filled; `-ECHILD` without children |
 | 7 | `waitpid` | the same as `wait4` |
 | 20 | `getpid` | the pid (appendix A.4) |
 | 122 | `uname` | `MyNOS`, `mynos`, the version (`2026.11-71dc1d2`: the build's year and month and its commit), `#1`, `i386` |
 | 64 | `getppid` | the parent's pid |
-| 29 | `pause` | waits forever: no signal can end the wait |
+| 29 | `pause` | waits forever: no signal can end the wait (`-EINTR` if it ever returns) |
 | 43 | `times` | the process's CPU time in ticks of 10 ms (Linux's `USER_HZ`, whatever the timer's rate), all of it as user time; the children's is not kept (0); returns the ticks since boot |
 | 77 | `getrusage` | the same CPU time, as user time; `RUSAGE_CHILDREN` and the other fields (memory, faults, switches) get 0 |
 | 24, 47, 49, 50, 199-202 | `getuid`, `getgid`, `geteuid`, `getegid` and their 32-bit forms | 0: MyNOS has no users (`doc/decisions/identity-and-permissions.md`) |
@@ -153,7 +153,7 @@ services.
 | 19 | `lseek` | the module-1 file's position: `SEEK_SET`, `SEEK_CUR`, `SEEK_END` |
 | 140 | `_llseek` | the same with a 64-bit offset, the result written back |
 | 195 | `stat64` | whatever the path: the module-1 file (a regular file, `rwxr-xr-x`, its size) |
-| 197 | `fstat64` | the same, whatever the descriptor |
+| 197 | `fstat64` | the same, for the descriptor `open` returned; `-EBADF` for any other |
 | 54 | `ioctl` | `TIOCGWINSZ` on descriptors 0-2: 25 rows, 80 columns (musl's `isatty` asks it); anything else `-ENOTTY` |
 
 **Time.** The clocks come from `kernel/time.c`: timer ticks at 1000 Hz,
@@ -477,11 +477,12 @@ service learns that a client went away when its channel breaks
   The gaps are collected in mynos-51c.
 - There is no `execve`, `brk`, `readv`, `pipe`, `dup`, `select` or socket
   call: `-ENOSYS`. OCaml's `Unix` functions built on them fail with
-  `ENOSYS` (appendix F); C programs have no sockets (mynos-t9l).
+  `ENOSYS` (appendix F). Sockets are `libmynos`'s, over the network
+  service (14.2), before the kernel is asked.
 - `freopen` and `tmpfile` still open with musl's raw `open`; `libmynos`
   replaces `fopen` only (D.4).
-- The kernel's own file calls ignore their path and descriptor: on a
-  system without file services every `open` and `stat` finds module 1.
+- The kernel's own file calls ignore their path: on a system without
+  file services every `open` and `stat` finds module 1.
 - The initial stack must fit in one page; the auxiliary vector is empty.
 - Futexes: 256 waiters in all; no priority inheritance or robust lists.
 - The clocks tick at 1000 Hz: no time is finer than 1 ms, and a sleep

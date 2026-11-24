@@ -168,10 +168,12 @@ val environment : unit -> string array
     [MYNOS_STDERR] redirect its standard input and output to files. *)
 
 val wait : int -> status
-(** Wait for the end of this child process. *)
+(** Wait for the end of this child process. Raises {!Error} with
+    ["invalid"] if it is not a child of ours (or was waited for already). *)
 
 val wait_any : unit -> int * status
-(** Wait for the end of any child process: its pid and status. *)
+(** Wait for the end of any child process: its pid and status. Raises
+    {!Error} with ["invalid"] if there is none. *)
 
 (** {1 Drivers}
 
@@ -212,7 +214,9 @@ val console_mode :
     termios VMIN and VTIME; [isig:false] makes Ctrl-C a key instead of an
     interrupt (editors), [isig:true] an interrupt again (unchanged if
     omitted). The raw mode ends when another process reads the console.
-    The screen is 80x25 and understands VT100 sequences. *)
+    The screen is 80x25 and understands VT100 sequences. Raises {!Error}
+    with ["broken"] when there is no console (a service started without
+    one). *)
 
 val console_foreground : int -> unit
 (** The program this process started and now waits for (0: none): Ctrl-C

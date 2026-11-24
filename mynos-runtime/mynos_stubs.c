@@ -23,6 +23,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <errno.h>
 #include <time.h>
 
 #define CAML_NAME_SPACE
@@ -329,7 +330,11 @@ CAMLprim value caml_mynos_wait(value pid)
   caml_enter_blocking_section();
   ret = waitpid(Int_val(pid), &status, 0);
   caml_leave_blocking_section();
-  if (ret < 0) mynos_error("wait", MYNOS_ERR_INVALID);
+  /* not a child of ours (ECHILD), a bad pid (EINVAL); anything else the
+     kernel failed at */
+  if (ret < 0)
+    mynos_error("wait", errno == ECHILD || errno == EINVAL
+                ? MYNOS_ERR_INVALID : MYNOS_ERR_BROKEN);
   r = caml_alloc_tuple(2);
   Store_field(r, 0, Val_int(ret));
   Store_field(r, 1, Val_int(status));
@@ -353,7 +358,8 @@ CAMLprim value caml_mynos_uptime(value unit)
 }
 
 /* ---- drivers: port I/O and interrupts ----
-   MyNOS processes run with IOPL 3: in and out work in user space. */
+   Processes with the io privilege (drivers) run with IOPL 3: in and out
+   work in their user space; in any other process they end the program. */
 
 CAMLprim value caml_mynos_inb(value port)
 {
@@ -444,10 +450,12 @@ CAMLprim value caml_mynos_console_mode(value canon, value echo, value isig,
 				       value vmin, value vtime)
 {
   int c = Bool_val(canon), e = Bool_val(echo), s = Int_val(isig),
-      m = Int_val(vmin), t = Int_val(vtime);
+      m = Int_val(vmin), t = Int_val(vtime), ret;
   caml_enter_blocking_section();
-  mynos_consoleModeSig(c, e, s, m, t);
+  ret = mynos_consoleModeSig(c, e, s, m, t);
   caml_leave_blocking_section();
+  /* no console service, or it refused the mode */
+  if (ret < 0) mynos_error("console_mode", MYNOS_ERR_BROKEN);
   return Val_unit;
 }
 

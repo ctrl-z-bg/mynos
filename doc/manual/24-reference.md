@@ -1123,6 +1123,9 @@ program that uses the C library from several threads should use
 pthreads (Linux threads, appendix D.7) instead.
 
 **RETURN VALUE** — `threadCreate`: the new thread's id, or an error.
+`threadSelf`: the calling thread's id. Thread ids are those of
+`gettid` (appendix D.7): the pid for a process's first thread, unique
+in the system while the thread lives.
 
 **SEE ALSO** — appendix A.4.
 

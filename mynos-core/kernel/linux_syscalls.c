@@ -480,7 +480,7 @@ int _linux_syscall_kill(int pid, int sig) {
   if (sig == 0)
     return 0;
   printk("process ");
-  print_ulong(currProcess);
+  print_ulong(CURRPID);
   printk(" killed by signal ");
   print_int(sig);
   print_char('\n');
@@ -565,7 +565,7 @@ int32_t _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id) {
     printk("Linux syscall ");
     print_uint(syscall_id);
     printk(" not implemented (process ");
-    print_uint(currProcess);
+    print_uint(CURRPID);
     printk("): -ENOSYS\n");
   }
   return -38; /* -ENOSYS */
@@ -575,7 +575,7 @@ void _linux_syscall_exit(int status) {
   /* a normal end is silent: the parent gets the status (waitpid) */
   if (status != 0) {
     printk("process ");
-    print_int(currProcess);
+    print_int(CURRPID);
     printk(" exited with code ");
     print_int(status);
     print_char('\n');
@@ -647,7 +647,8 @@ int _linux_syscall_ioctl(int fd, uint32_t req, unsigned short * arg) {
 }
 
 /* getrandom (355): the kernel's random numbers (random.c), at most 256
-   bytes per call, as Linux allows */
+   bytes per call (Linux gives more; a caller asking for more gets a short
+   count and asks again, as it must for any read) */
 int _linux_syscall_getrandom(unsigned char * buf, uint32_t len,
 			     uint32_t flags) {
   if (len > 256) len = 256;
@@ -660,17 +661,22 @@ int _linux_syscall_waitpid(int pid, int * status, int options) {
   return _linux_syscall_wait4(pid, status, options, NULL);
 }
 
+/* pause (29): sleeps until a signal; with no signal handlers there is
+   none to wake it, so it sleeps for good (Linux returns -EINTR after a
+   handler ran: the value is that one, for the record) */
 int32_t _linux_syscall_pause() {
   privP();
-  return -1;
+  return -4;              /* -EINTR */
 }
 
 /*
- * There is no filesystem behind the Linux file calls yet (mynos-nxa): every
- * open() opens the same read-only file, the OCaml bytecode passed as GRUB
- * module 1. These calls give it proper file semantics (a position, seeks
- * from start/current/end, a size) so that any libc and OCaml runtime can
- * read it.
+ * The kernel's own file calls serve one read-only file, the OCaml bytecode
+ * passed as GRUB module 1: every open() opens it. Files are libmynos's
+ * (fileio.c, over the file services), which answers open, read, stat and
+ * the rest before the kernel sees them; it passes only the bytecode's name
+ * (mynos_bytecode) through, when ocamlrun runs the module. These calls give
+ * that file proper semantics (a position, seeks from start/current/end, a
+ * size).
  */
 #define BYTECODE_FD 5
 #define SEEK_SET 0
@@ -766,8 +772,11 @@ int _linux_syscall_stat64(char * path, struct stat64 * st) {
   return bytecode_stat(st);
 }
 
+/* stat64 describes the file open() would open, the bytecode, whatever
+   the path; fstat64 only the descriptor open() returned */
 int _linux_syscall_fstat64(int fd, struct stat64 * st) {
   USER(st, sizeof *st);
+  if (fd != BYTECODE_FD) return -9;      /* -EBADF */
   return bytecode_stat(st);
 }
 
@@ -903,11 +912,23 @@ static uint32_t copy_page_table(uint32_t ptp, uint32_t * ptc) {
   return 1;
 }
 
-/* copy all threads from current process. it returns the tss
-   corrisponding to current thread, for further changes... see the code! */
-static tss_t * copyThreads(process_descriptor_t * ddest,
-			   process_descriptor_t * dorig,
-			   uint32_t * pdc, pid_t pid);
+/* the child's only thread: a copy of the calling one */
+static tss_t * copyThread(process_descriptor_t * ddest,
+			  uint32_t * pdc, pid_t pid);
+
+/* a fork that ran out of memory: the child's address space built so far
+   is freed (its page tables, the pages they took or referenced, the
+   directory and its mirror); the parent's pages left copy-on-write become
+   writable again at their next write, as their only user's */
+static int forkFailed(uint32_t * pdc, uint32_t * lastPT, uint32_t * ptc) {
+  uint32_t pdFrame = LINEAR_TO_PHYSICAL_ADDRESS(pdc) >> 12;
+  uint32_t mirrorFrame = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) >> 12;
+  if (ptc) __OS_releasePages(ptc, 1, 0, 0);
+  __OS_releasePages(lastPT, 1, 0, 0);
+  __OS_releasePages(pdc, 1, 0, 0);
+  __OS_freeSpaceFrames(pdFrame, mirrorFrame);
+  return -12;                                   /* -ENOMEM */
+}
 
 int _linux_syscall_fork() {
   uint32_t i;
@@ -920,8 +941,12 @@ int _linux_syscall_fork() {
 
   /* the pid first: nothing to undo if there is none */
   if ((new_pid = allocPid()) < 0) return -11;   /* -EAGAIN */
-  if ((pdc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
-  if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
+  if ((pdc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -12;
+  if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) {
+    __OS_releasePages(pdc, 1, 1, 0);
+    return -12;                                 /* -ENOMEM */
+  }
+  kbzero(pdc, PAGE_SIZE);   /* a failure frees what the entries name */
 
   pdc[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | 
     PF_USER | PF_READWRITE | PF_PRESENT;
@@ -938,11 +963,18 @@ int _linux_syscall_fork() {
     if (*pde & (PF_PRESENT | PF_LOGICAL_PRESENT)) {   // this PT is allocated
       flags = *pde & 0xFFF;
       if (*pde & PF_PRESENT) {
-	if ((ptc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
+	if ((ptc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) {
+	  if (prevPtc) __OS_releasePages(prevPtc, 1, 0, 0);
+	  return forkFailed(pdc, lastPT, NULL);
+	}
+	kbzero(ptc, PAGE_SIZE);
 	pdc[i] = LINEAR_TO_PHYSICAL_ADDRESS(ptc) | flags;
 	
 	/* copy the page table */
-	if (copy_page_table(i, ptc) == -1) return -1;
+	if (copy_page_table(i, ptc) == -1) {
+	  if (prevPtc) __OS_releasePages(prevPtc, 1, 0, 0);
+	  return forkFailed(pdc, lastPT, ptc);
+	}
 
 	/* the kernel aliases of the child's structures are dropped once
 	   they are built: the last page table still has to be written */
@@ -960,7 +992,7 @@ int _linux_syscall_fork() {
   __OS_releasePages(ptc, 1, 0, 0);
 
   numProcesses++;
-  numThreads += processTable[currProcess]->numThreads;
+  numThreads++;
 
   processTable[PSLOT(new_pid)] = 
     (process_descriptor_t*)kmalloc(sizeof(process_descriptor_t));
@@ -978,23 +1010,11 @@ int _linux_syscall_fork() {
   listInit(processTable[PSLOT(new_pid)]->channelList);
   listInit(processTable[PSLOT(new_pid)]->portList);
 
-  /* copy the tsses */
-  mirror = 
-    copyThreads(processTable[PSLOT(new_pid)], processTable[currProcess], 
-		pdc, new_pid);
-
-  // TODO: other threads!!!
+  /* the child has one thread, a copy of the caller (POSIX: the other
+     threads are not in the child) */
+  mirror = copyThread(processTable[PSLOT(new_pid)], pdc, new_pid);
+  processTable[PSLOT(new_pid)]->numThreads = 1;
   readyQueueInsert(mirror);
-#if 0
-  // insert the threads into the readyQueue
-  {
-    tss_t * thread = processTable[PSLOT(new_pid)]->tss;
-    while (thread) {
-      readyQueueInsert(thread);
-      thread = thread->next;
-    }
-  }
-#endif
 
   processTable[PSLOT(new_pid)]->pid = new_pid;
   processTable[PSLOT(new_pid)]->ppid = CURRPID;
@@ -1063,43 +1083,23 @@ int _linux_syscall_fork() {
   return ret;
 }
 
-static tss_t * copyThreads(process_descriptor_t * ddest,
-			   process_descriptor_t * dorig,
-			   uint32_t * pdc, pid_t pid) {
-  tss_t * orig = processTable[currProcess]->tss;
+static tss_t * copyThread(process_descriptor_t * ddest,
+			  uint32_t * pdc, pid_t pid) {
   tss_t * dest;
-  tss_t * prevDest = NULL;
-  tss_t * mirror;
-  
+
   /* the child goes on with the parent's floating-point state */
   fpu_save(currThread);
 
-  /* the first one */
   dest = ddest->tss = (tss_t*)kmalloc(sizeof(tss_t));
-  
-  while (dest != NULL) {
-    kmemcpy((void*)dest, 
-	    (void*)orig,
-	    sizeof(tss_t));
-    dest->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
-    dest->privSem = __OS_sem_allocateSemaphore(0);
-    dest->semHeld = 0;
-    dest->tid = pid;          /* only the calling thread will run */
-    dest->clearTid = NULL;
-    dest->prev = prevDest;
-    prevDest = dest;
-    dest->pid = pid;
-
-    if (orig == currThread) mirror = dest;
-
-    if (orig->next != NULL) {
-      orig = orig->next;
-      dest->next = (tss_t*)kmalloc(sizeof(tss_t));
-      dest = dest->next;
-    } else {
-      dest = dest->next = NULL;
-    }
-  }
-
-  return mirror;
+  kmemcpy((void*)dest, (void*)currThread, sizeof(tss_t));
+  dest->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
+  dest->privSem = __OS_sem_allocateSemaphore(0);
+  dest->semHeld = 0;
+  dest->tid = pid;          /* the child's first thread: its pid */
+  dest->clearTid = NULL;
+  dest->queue = NULL;
+  dest->timeToWake = 0;
+  dest->prev = dest->next = NULL;
+  dest->pid = pid;
+  return dest;
 }

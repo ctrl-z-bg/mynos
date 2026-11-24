@@ -56,7 +56,6 @@ typedef struct {
   /* End of i386 TSS.  */
 
   pid_t pid;
-  uint32_t threadID;
 
   uint32_t justForked;
 

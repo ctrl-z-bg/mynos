@@ -40,8 +40,10 @@
 #define BH(t) Long_val(Field(t, 2))
 
 /* the clip: every primitive draws only inside it (and the buffer).
-   Gfx.with_clip sets it, nested ones intersected on the OCaml side */
-static int clip_on = 0, clip_x0, clip_y0, clip_x1, clip_y1;
+   Gfx.with_clip sets it, nested ones intersected on the OCaml side. One
+   per thread, so each domain has its own (the OCaml side keeps its list
+   per domain): a domain's clip does not cut another's drawing */
+static __thread int clip_on = 0, clip_x0, clip_y0, clip_x1, clip_y1;
 
 CAMLprim value caml_gfx_set_clip(value x, value y, value w, value h)
 {

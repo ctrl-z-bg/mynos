@@ -370,7 +370,7 @@ int32_t _mynos_syscall_WRONGSYSCALL(uint32_t syscall_id) {
   printk("MyNOS syscall ");
   print_uint(syscall_id);
   printk(" doesn't exist (process ");
-  print_uint(currProcess);
+  print_uint(CURRPID);
   printk(")\n");
   return MYNOS_ERR_INVALID;
 }

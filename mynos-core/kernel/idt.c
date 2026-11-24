@@ -123,7 +123,7 @@ static void exception(const char * what, uint32_t eip, uint32_t cs) {
   __asm__ volatile("cld");
   if ((cs & 3) == 3) {
     printk("process ");
-    print_ulong(currProcess);
+    print_ulong(CURRPID);
     printk(" killed: ");
     printk((char *)what);
     printk(" at ");
@@ -137,7 +137,7 @@ static void exception(const char * what, uint32_t eip, uint32_t cs) {
   printk(" in the kernel at ");
   print_ulong_hex(eip);
   printk(" (process ");
-  print_ulong(currProcess);
+  print_ulong(CURRPID);
   printk(")\n");
   while (1);
 }

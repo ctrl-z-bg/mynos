@@ -219,9 +219,10 @@ them; with it, the primitives are simply found in the table.
 That `Unix` links does not mean that all of it works. A `Unix` function
 works when musl's function and the kernel's calls behind it exist:
 `Unix.gettimeofday`, `Unix.sleepf`, files through `libmynos`. Those whose
-system calls MyNOS lacks (`execve`, `pipe`, sockets, `select`) fail with
-`Unix_error (ENOSYS, …)`. The network is reached through module `Net`
-instead.
+system calls MyNOS lacks (`execve`, `pipe`, `select`) fail with
+`Unix_error (ENOSYS, …)`. Sockets work: `Unix.socket`, `connect`,
+`getaddrinfo` and the rest reach `libmynos`'s (14.2), over the network
+service; module `Net` speaks to it directly, with TLS.
 
 Two more libraries come the same way:
 
@@ -385,11 +386,9 @@ the last commit it builds is tagged `legacy-last`.
 - One processor (mynos-awn): domains and threads take turns.
 - Signals are never delivered (appendix D.8): handlers installed with
   `Sys.signal` do not run.
-- Much of `Unix` fails with `ENOSYS` (F.6); there are no sockets for C
-  programs or `Unix` (mynos-t9l), only `Net`.
+- Much of `Unix` fails with `ENOSYS` (F.6): no `select`, so no
+  non-blocking sockets.
 - The primitive list is part of the program: bytecode linked against one
   `primitives` file needs a runtime with all of its names.
-- `Gfx`'s clip rectangle is one global in C, shared by every thread and
-  domain of a program.
 - `Mynos.registered` returns at most 128 names, `Mynos.processes` at
   most 256 processes.

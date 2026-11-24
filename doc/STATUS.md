@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-23
+Last updated: 2026-11-24
 
 ---
 
@@ -537,7 +537,7 @@ last commit that still builds with that toolchain `legacy-last`.
 | — | `mynos-core/kernel/threads.c` | Native MyNOS threads (`mynos_threadCreate`) share their creator's TLS: code that uses the C library should use pthreads. |
 | — | `mynos-lib/src/fileio.c` | `/` (memrofs) is read-only and flat, `/tmp` (tmpfs) flat and in memory; `/disk` (fatfs) has directories. `rename` within one service; paths up to 63 characters inside a service. |
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
-| mynos-t9l | `mynos-lib/` | C programs have no sockets API yet: only OCaml programs reach the network (module `Net`). |
+| mynos-x8i | `mynos-lib/src/socket.c` | BSD sockets (IPv4, TCP and UDP, over `net/1`) block: no non-blocking sockets, `select` or `poll`; no half close; no TLS (`net/1`'s `Connect_tls` is not a socket call). |
 | — | `services/net/netd.c` | TLS: clients only (no `Listen_tls`); no revocation checks (CRL, OCSP); Mozilla's list is parsed at the first TLS connection (about 1.5 s in QEMU), later handshakes take 0.2-0.4 s; the clear bytes travel between netd and the program over IPC. |
 | — | `services/ata/ata.ml` | The disk is polled (PIO: the driver copies every word anyway, and QEMU completes commands at once); IRQ 14 is free for it. |
 | — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently. |
@@ -1797,3 +1797,19 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   system faulted in the kernel (NetSurf on Slashdot, one time in four).
   Found with a hardware watchpoint through QEMU's gdb server. A check in
   tests/abi.
+- **2026-11-24** — Before the book's freeze: `mynos_threadSelf` and
+  `mynos_threadCreate` give the system-wide thread id, gettid's (they
+  gave a per-process count; mynos-8t3). `fork` copies only the calling
+  thread (it copied every thread, ran one, and counted all), returns
+  `-ENOMEM` and frees the child's pages when memory runs out (it leaked
+  them and returned -1); `fstat64` answers only for the bytecode's
+  descriptor, `pause` gives `-EINTR`; log lines name the pid, not the
+  slot. Gfx's clip is per domain; `Mynos.wait` tells a missing child
+  from a failure; `Mynos.console_mode` raises without a console
+  (mynos-1ev). Checks in tests/abi.
+- **2026-11-24** — BSD sockets for C programs in libmynos
+  (`mynos-lib/src/socket.c`, mynos-t9l): IPv4 TCP and UDP over `net/1`,
+  `getaddrinfo`, `read`/`write`/`close` on a socket through a hook in
+  `fileio.c` (programs without sockets do not link them). OCaml's `Unix`
+  sockets work too: `ocamlrun` links them. Blocking only (mynos-x8i).
+  tests/net/sockets.c and a `Unix` check in the network test.

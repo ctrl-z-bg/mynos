@@ -50,6 +50,7 @@ services/display/displayd
 system/soundd
 services/sound/soundd
 services/net/netd
+tests/net/sockets
 tests/net/netd
 tests/net/ocamlrun
 tests/net/cacert.pem

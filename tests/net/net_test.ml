@@ -106,6 +106,15 @@ let () =
        Net.call n (Net.Close u);
        a = "10.0.2.2" && p = 47053 && d = "HELLO UDP"
      | exception e -> print_endline (error e); false);
+  (* BSD sockets from a C program (libmynos, mynos-t9l) *)
+  ok &&& check "C sockets: TCP, UDP, a server (tests/net/sockets.c)"
+    (match Mynos.spawn "sockets" [| "sockets" |] with
+     | pid -> Mynos.wait pid = Mynos.Exited 0
+     | exception e -> print_endline (error e); false);
+  ok &&& check "OCaml's Unix sockets (the same library)"
+    (match Mynos.spawn "ocamlrun" [| "ocamlrun"; "net_child.byte"; "unix" |] with
+     | pid -> Mynos.wait pid = Mynos.Exited 0
+     | exception e -> print_endline (error e); false);
   (* sockets belong to their process (doc/decisions/identity-and-permissions.md) *)
   let child args =
     match Mynos.spawn "ocamlrun" (Array.append [| "ocamlrun"; "net_child.byte" |] args) with

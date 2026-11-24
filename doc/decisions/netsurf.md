@@ -33,7 +33,8 @@ Wikipedia page: 4.3 s, then 0.68 s (Linux 0.23 s).
 A libnsfb surface (`ports/netsurf/mynos-surface.c`) draws in a window of
 `displayd` (display/1, pixels shared); a fetcher
 (`ports/netsurf/mynos-http.c`) does HTTP over `netd`'s sockets, which do
-TLS. No C sockets in libmynos were needed (mynos-t9l stays open).
+TLS. No C sockets in libmynos were needed (they came later, mynos-t9l,
+without TLS: the fetcher stays on net/1).
 
 ### 4. ports/netsurf: patches, not sources
 

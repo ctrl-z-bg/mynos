@@ -22,14 +22,17 @@ external set_clip : int -> int -> int -> int -> unit = "caml_gfx_set_clip"
 external no_clip : unit -> unit = "caml_gfx_no_clip"
 
 (* the clips in force, innermost first: each the intersection with the
-   one around it *)
-let clips : (int * int * int * int) list ref = ref []
+   one around it. Each domain has its own (as the C side has, per thread):
+   a domain drawing a window does not clip another's drawing *)
+let clips_key : (int * int * int * int) list ref Domain.DLS.key =
+  Domain.DLS.new_key (fun () -> ref [])
 
-let apply () = match !clips with
+let apply () = let clips = Domain.DLS.get clips_key in match !clips with
   | [] -> no_clip ()
   | (x, y, w, h) :: _ -> set_clip x y w h
 
 let with_clip x y w h f =
+  let clips = Domain.DLS.get clips_key in
   let x0, y0, x1, y1 = match !clips with
     | [] -> (x, y, x + w, y + h)
     | (cx, cy, cw, ch) :: _ ->
@@ -38,7 +41,7 @@ let with_clip x y w h f =
   apply ();
   Fun.protect ~finally:(fun () -> clips := List.tl !clips; apply ()) f
 
-let clip () = match !clips with [] -> None | c :: _ -> Some c
+let clip () = match !(Domain.DLS.get clips_key) with [] -> None | c :: _ -> Some c
 
 let create width height = { pixels = alloc width height; width; height }
 

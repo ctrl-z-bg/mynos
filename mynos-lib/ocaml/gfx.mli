@@ -47,7 +47,8 @@ val blit : t -> int -> int -> t -> int -> int -> int -> int -> unit
 
 val with_clip : int -> int -> int -> int -> (unit -> 'a) -> 'a
 (** [with_clip x y w h f]: [f ()], every primitive drawing only inside
-    the rectangle (within the clip around it, if any). *)
+    the rectangle (within the clip around it, if any). The clip is the
+    calling domain's: other domains draw unclipped by it. *)
 
 val clip : unit -> (int * int * int * int) option
 (** The clip in force: [(x, y, w, h)]. *)

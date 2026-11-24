@@ -2,6 +2,8 @@
 # (net_test.ml), the test authority's certificate, and llmd with its
 # test configuration. Built in the dev container (tools/build-all.sh).
 
+include ../../mynos.mk
+
 OCAMLC = ocamlc -use-prims ../../mynos-runtime/primitives -I ../../mynos-lib/ocaml
 MYNOS = ../../mynos-lib/ocaml/mynos.cma ../../mynos-runtime/primitives
 
@@ -11,7 +13,13 @@ init.byte: net_test.ml $(MYNOS)
 	$(OCAMLC) mynos.cma -o $@ net_test.ml
 
 net_child.byte: net_child.ml $(MYNOS)
-	$(OCAMLC) mynos.cma -o $@ net_child.ml
+	$(OCAMLC) -I +unix -noautolink mynos.cma unix.cma -o $@ net_child.ml
+
+# BSD sockets from C (mynos-t9l)
+sockets: sockets.c ../../mynos-lib/lib/libmynos.a
+	$(MYNOS_CC) -Wall -Os -I../../mynos-lib/include sockets.c -o $@ \
+		-L../../mynos-lib/lib -lmynos $(MYNOS_LDFLAGS)
+	strip $@
 
 ocamlrun: ../../mynos-runtime/ocamlrun
 	strip -o $@ $<
@@ -42,10 +50,10 @@ ask-no.txt:
 	echo n > $@
 
 FILES = init.byte net_child.byte ocamlrun netd cacert.pem llmd.byte llm-test.env \
-	sh.byte ask-yes.txt ask-no.txt agent.byte tmpfs.byte
+	sh.byte ask-yes.txt ask-no.txt agent.byte tmpfs.byte sockets
 
 ramdisk.dsk: $(FILES)
 	../../services/fs/memrofs/tool/createDisk $(FILES) >/dev/null
 
 clean:
-	rm -f *.cm[io] *.byte ocamlrun netd cacert.pem ramdisk.dsk ask-yes.txt ask-no.txt
+	rm -f *.cm[io] *.byte ocamlrun netd cacert.pem ramdisk.dsk ask-yes.txt ask-no.txt sockets

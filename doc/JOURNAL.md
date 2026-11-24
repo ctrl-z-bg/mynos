@@ -3513,3 +3513,66 @@ same way. Slashdot: eight loads, no fault.
 it uses: `rep movs` reads a flag the caller owns. And a corrupted table
 found far from its writer is a case for a watchpoint, not for guessing:
 the last two hypotheses were wrong.
+
+## 2026-11-24 — Sockets for C, and who else picks them up
+
+**Symptom.** C programs had no network (mynos-t9l): musl's `socket`
+makes the Linux `socketcall`, and the kernel answers `-ENOSYS`. OCaml's
+`Unix.socket` failed the same way.
+
+**Diagnosis.** The pieces were there: `net/1` already has every request
+a BSD socket needs (connect, listen, accept, send, recv, UDP), and
+`fileio.c` showed how to replace the C library's functions at static
+link time (libmynos comes first on the link line; musl keeps one
+function per object file).
+
+**Cause.** Nobody had written the mapping. Two design points: `read`,
+`write` and `close` live in `fileio.c` and must reach sockets too, yet a
+program without sockets should not carry them; and netd keeps one
+waiting `Recv` and one `Send` per socket, on the channel each came on.
+
+**Fix.** `mynos-lib/src/socket.c`: descriptors from 84 up, after the
+files'; each call one request on a channel of its own (a thread may
+wait in `recv` while another sends); netd's error strings mapped to
+`errno`; `getaddrinfo` over `Resolve`. `fileio.c` calls through a
+pointer, `__mynos_sock_ops`, that `socket()` sets: a program that never
+calls it never links `socket.o`. Programs that do pick it up without a
+change: `ocamlrun` (its `Unix` stubs reference `socket`), so
+`Unix.socket` now works. The test found one more thing: a `write` to a
+socket already closed went on to the kernel, whose `write` ignores the
+descriptor and printed the byte on the screen; `fileio.c` now answers
+`EBADF` for any descriptor of its ranges (files, sockets) that is not
+open.
+
+**Lesson.** A replaced libc function is replaced for every caller in
+the link, not only for the program being written: check who else
+references the symbol (`nm`), here to find a feature, elsewhere to find
+a surprise.
+
+## 2026-11-24 — fork copied threads it never ran
+
+**Symptom.** From the reference's review (mynos-1ev): a process that
+forks with several threads gave its child copies of all of them,
+counted in its thread count; and a fork out of memory returned -1 and
+kept the pages it had taken.
+
+**Diagnosis.** `copyThreads` (2002) copied the whole thread list;
+`readyQueueInsert` was called on the caller's copy only ("TODO: other
+threads!!!"), the rest of the loop under `#if 0`. The copies were
+never run, but `numThreads` counted them, the processes' monitor showed
+them, and an exiting thread of the child checked that count.
+
+**Cause.** The 2002 code meant to run the copies (Solaris's `forkall`),
+then stopped half way. POSIX `fork` copies only the calling thread.
+
+**Fix.** `copyThread` copies the caller alone, the child counts one.
+On failure, `forkFailed` frees what was built: the child's directory,
+page tables and the pages they took or referenced (the same walk as
+`reapZombies`, split out), and returns `-ENOMEM`; the parent's pages
+left copy-on-write become writable at their next write, as their only
+user's. tests/abi: a fork while a second thread waits; the child's
+thread count (`procstat`) is 1.
+
+**Lesson.** A `#if 0` and a TODO in old code mark a half-made decision:
+finish it one way or the other, and make the counters say what runs.
+

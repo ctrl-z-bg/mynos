@@ -58,7 +58,6 @@ typedef struct {
   pid_t pid;
 
   uint32_t numThreads;
-  uint32_t lastThread;
 
   processData_t * processData;
 
@@ -143,6 +142,9 @@ int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
 void killProcess(int status);
 int _mynos_syscall_kill(pid_t pid);
 int allocPid(void);
+/* frees the frames of an address space given its page directory's and
+   its mirror's frames (an ended process's, or a fork's that failed) */
+void __OS_freeSpaceFrames(uint32_t pdFrame, uint32_t mirrorFrame);
 void reapZombies(void);
 void freeProcessDescriptor(pid_t pid);
 

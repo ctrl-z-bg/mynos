@@ -11,9 +11,10 @@ export LC_ALL=C
 
 up=$1; shift
 
-# The list: upstream, unchanged, then ours. The order matters: bytecode
-# compiled for the standard runtime refers to the builtin primitives by
-# their position in this table, so ours must not shift any of them.
+# The list: upstream, unchanged, then ours (without any upstream has). A
+# bytecode file names the primitives it uses (its PRIM section) and the
+# runtime looks each name up in this table at load time: the order does
+# not matter, the names do.
 { cat "$up/primitives"
   sed -n -e 's/^CAMLprim value \([a-z][a-z0-9_]*\).*$/\1/p' "$@" | sort -u |
     { grep -vxF -f "$up/primitives" || true; }

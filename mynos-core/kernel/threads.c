@@ -86,8 +86,6 @@ void threadStart(tss_t * tss) {
   if (next) next->prev = tss;
 
   processTable[currProcess]->numThreads++;
-  processTable[currProcess]->lastThread++;
-  tss->threadID = processTable[currProcess]->lastThread;
   numThreads++;
 
   /* the new thread's private semaphore */
@@ -115,7 +113,7 @@ int32_t __OS_threadCreate(uint32_t entry_point,
   initStack(tss->esp0, tss);
 
   threadStart(tss);
-  return tss->threadID;
+  return tss->tid;
 }
 
 extern void _linux_syscall_exit(int32_t status);
@@ -128,9 +126,9 @@ void __OS_threadExit(void * retval) {
 
 #ifdef DEBUG_THREADS
   printk("Thread ");
-  print_ulong(currThread->threadID);
+  print_ulong(currThread->tid);
   printk(" (process  ");
-  print_ulong(currProcess);
+  print_ulong(CURRPID);
   printk(") exited\n");
 #endif
 
@@ -168,7 +166,9 @@ void __OS_threadExit(void * retval) {
     _linux_syscall_exit((int)retval);
 }
 
+/* the thread's id: the same as gettid's, unique in the system (until
+   reused), the pid for a process's first thread */
 uint32_t __OS_threadSelf() {
-  return currThread->threadID;
+  return currThread->tid;
 }
 

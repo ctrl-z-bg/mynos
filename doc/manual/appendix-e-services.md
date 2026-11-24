@@ -687,8 +687,8 @@ program with the `io` privilege.
   `/disk` wait for each other (mynos-cui). So does consoled, whose main
   loop is held by a `read` until a line comes; it also waits without a
   timeout for the request of a client that has connected (mynos-f2d).
-- C programs have no sockets; only OCaml programs reach the network
-  (mynos-t9l). TLS is for clients only, without revocation checks.
+- TLS is for clients only, without revocation checks; C programs'
+  sockets (14.2) have no TLS: they use `net/1` for it.
 - The `io` privilege is all or nothing (mynos-37p): every driver can
   touch every port.
 - Services know who calls but rarely decide on it: `ata0` accepts writes

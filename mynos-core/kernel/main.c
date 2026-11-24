@@ -89,11 +89,9 @@ void tsksw() {
   processTable[0]->tss->justForked = 0;
 
   processTable[0]->numThreads = 1;
-  processTable[0]->lastThread = 0;
   (processTable[0]->tss)->next = (processTable[0]->tss)->prev = NULL;
   processTable[0]->pid = 0;
   processTable[0]->tss->pid = 0;
-  processTable[0]->tss->threadID = 0;
   processTable[0]->tss->tid = 0;
   processTable[0]->tss->clearTid = NULL;
   processTable[0]->tss->kstack = 0;

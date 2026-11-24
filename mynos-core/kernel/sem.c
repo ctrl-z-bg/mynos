@@ -344,7 +344,7 @@ int __OS_sem_V(int semid) {
 	p = pqExtract(semaphores.list[i].queue);
 #ifdef DEBUG
 	printk("*SEM*: V, waking up: ");
-	print_uint(p->threadID);
+	print_uint(p->tid);
 	printk("\n");
 #endif
 

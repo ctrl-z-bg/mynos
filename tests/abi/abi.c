@@ -352,6 +352,45 @@ static void direction_flag_checks(void) {
   }
 }
 
+/* thread ids (2026-11-24): mynos_threadSelf is gettid, in the first
+   thread (the pid) and in another; fork's child has one thread, the
+   caller's copy, however many the parent has */
+static int tid_sem;
+static volatile int tid_seen, tid_gettid;
+static void * tid_thread(void * a) {
+  (void)a;
+  tid_seen = mynos_threadSelf();
+  tid_gettid = (int)linux_syscall0(224 /* gettid */);
+  mynos_P(tid_sem);                       /* alive while the parent forks */
+  return NULL;
+}
+
+static void thread_id_checks(void) {
+  pthread_t t;
+  unsigned int ps[6];
+  int st = 0;
+  pid_t c;
+  check("threadSelf: the first thread's is the pid",
+        mynos_threadSelf() == getpid() &&
+        mynos_threadSelf() == (int)linux_syscall0(224));
+  tid_sem = mynos_initSem(0);
+  pthread_create(&t, NULL, tid_thread, NULL);
+  while (!tid_seen) mynos_sleep(10000);
+  check("threadSelf: another thread's is its gettid",
+        tid_seen == tid_gettid && tid_seen != getpid());
+  if ((c = fork()) == 0) {
+    /* procstat's fifth word: the threads of the process */
+    int n = mynos_procstat(getpid(), ps) == 0 ? (int)ps[4] : -1;
+    _exit(n == 1 && mynos_threadSelf() == getpid() ? 0 : 1);
+  }
+  waitpid(c, &st, 0);
+  check("fork: the child has one thread, the caller's",
+        WIFEXITED(st) && WEXITSTATUS(st) == 0);
+  mynos_V(tid_sem);
+  pthread_join(t, NULL);
+  mynos_freeSem(tid_sem);
+}
+
 int main(int argc, char ** argv) {
   long r;
   int sem;
@@ -552,6 +591,7 @@ int main(int argc, char ** argv) {
   wait_checks();
   pager_checks();
   direction_flag_checks();
+  thread_id_checks();
 
   printf("abi: %s\n", failures ? "SOME CHECKS FAILED" : "all checks passed");
   return failures;

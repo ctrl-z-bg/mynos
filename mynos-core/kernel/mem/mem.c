@@ -378,7 +378,7 @@ void * __OS_releasePages(void *pageaddr, unsigned int npages,
 #ifdef DEBUG
     printk(__FUNCTION__);
     printk("(process ");
-    print_uint(currProcess);
+    print_uint(CURRPID);
     printk("): releasing page ");
     print_uint_hex(addr);
 #endif    
@@ -660,7 +660,7 @@ static int copy_user_fixup(uint32_t * frame) {
 
 void __mem_userSegfault(uint32_t addr) {
   printk("process ");
-  print_ulong(currProcess);
+  print_ulong(CURRPID);
   printk(" killed: invalid memory access at ");
   print_ulong_hex(addr);
   print_char('\n');
@@ -678,9 +678,9 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode, uint32_t * frame) {
   print_char('\n');
   print_char('\n');
   printk("Process ");
-  print_uint(currProcess);
+  print_uint(CURRPID);
   printk(" thread ");
-  print_uint(currThread->threadID);
+  print_uint(currThread->tid);
   printk(" tried to access the linear address ");
   print_uint_hex(addr);
   print_char('\n');
@@ -716,7 +716,7 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode, uint32_t * frame) {
     printk("kernel page fault at ");
     print_ulong_hex(addr);
     printk(", process ");
-    print_ulong(currProcess);
+    print_ulong(CURRPID);
     print_char('\n');
     KPANIC("page fault (?)");
   }
@@ -756,7 +756,7 @@ void _page_fault_handler(uint32_t addr, uint32_t errcode, uint32_t * frame) {
     printk("kernel page fault at ");
     print_ulong_hex(addr);
     printk(", process ");
-    print_ulong(currProcess);
+    print_ulong(CURRPID);
     print_char('\n');
     KPANIC("page fault");
   }

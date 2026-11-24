@@ -135,7 +135,8 @@ to that many cells. The font files are on the RAM disk
 **Clipping.** `Gfx.with_clip x y w h f` runs `f ()` with every primitive
 drawing only inside the rectangle; clips nest, each inside the one
 around it. `Gfx.clip ()` tells the clip in force. The clip belongs to
-the process, not to a buffer: draw from one domain at a time.
+the domain, not to a buffer: two domains drawing two windows clip each
+their own.
 
 **Masks** are grey images used as ink: `Gfx.load_mask "/mynos-logo.pgm"`
 reads a binary PGM file, and `draw_mask g x y m c` paints colour `c` where
@@ -658,6 +659,4 @@ and `windtree` runs it.
   windows cannot be resized, and their size is their content's.
 - At most 32 windows, 64 events waiting in each window's queue.
 - `Gui` handles one event per frame: a frame sees at most one key.
-- The clip of `Gfx` is per process: two domains that draw with clips at
-  the same time disturb each other.
 - No drawing of images other than grey masks (PGM); no alpha in `fill`.

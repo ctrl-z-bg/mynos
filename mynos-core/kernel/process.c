@@ -450,9 +450,7 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
 
   // THREADS
   desc->numThreads = 1;
-  desc->lastThread = 0;
   desc->tss->next = desc->tss->prev = NULL;
-  desc->tss->threadID = 0;
   // end THREADS
   desc->tss->timeToWake = 0;
 
@@ -543,8 +541,8 @@ int createProcess(uint32_t * elf, uint32_t len, char ** argv, char ** envp,
     desc->bytecode = !kmemcmp((char *)base, "ocamlrun", 9);
   }
   if (spawnProcess(desc, elf, len, argv, envp) == NULL) {
-    /* a bad image fails before allocating; out of memory, after (and
-       leaks what it took: processes do not free memory yet) */
+    /* a bad image fails before allocating; out of memory, after, and
+       leaks the pages it took (only an ended process's are freed) */
     kfree(desc);
     return MYNOS_ERR_INVALID;
   }
@@ -767,8 +765,7 @@ int __OS_touchesRamdisk(uint32_t start, uint32_t len) {
  * its page directory and the page table that mirrors it. The kernel's
  * page tables and the shared RAM disk ones are not the process's.
  */
-static void freeAddressSpace(process_descriptor_t * d) {
-  uint32_t pdFrame = d->pgdirPhys >> 12;
+void __OS_freeSpaceFrames(uint32_t pdFrame, uint32_t mirrorFrame) {
   uint32_t * w, saved, unused, i, j;
   int pdSeen = 0;
 
@@ -793,7 +790,11 @@ static void freeAddressSpace(process_descriptor_t * d) {
   __mem_unmapFrame(saved);
 
   if (!pdSeen) unsetFrame(pdFrame);
-  unsetFrame(((uint32_t)d->ptsMirror) >> 12);
+  unsetFrame(mirrorFrame);
+}
+
+static void freeAddressSpace(process_descriptor_t * d) {
+  __OS_freeSpaceFrames(d->pgdirPhys >> 12, ((uint32_t)d->ptsMirror) >> 12);
 }
 
 /*
