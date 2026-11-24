@@ -1823,5 +1823,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   tests/net/sockets.c and tests/stdio (stdin typed and piped).
 - **2026-11-24** — NetSurf reaches users as `ports/netsurf` only (the
   owner's decision for the book's version): no package, nothing in the
-  system image; `pkg` unchanged (doc/decisions/netsurf.md). Browser 1.6
-  (OCaml) is committed, not yet published to mynos-packages (1.5 is).
+  system image; `pkg` unchanged (doc/decisions/netsurf.md). Published
+  to mynos-packages: browser 1.6 (CSS) and Studio 1.4 rebuilt (its
+  runner answers console/1 `ready`); the other packages stay as they
+  were, since they run unchanged on this system.
