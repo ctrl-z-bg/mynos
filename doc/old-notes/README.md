@@ -11,6 +11,8 @@ questions, and the answers of people who were building their own
 systems. Only one keeps its Usenet headers (the newsgroup
 alt.os.development); the others have the form of Usenet replies, quoted
 lines and signatures, but no headers left to say where they appeared.
+The questions signed "Kirk" in `threads.txt` and `signals.txt` were
+asked by Cesare, one of MyNOS's authors.
 
 ## Why they are worth keeping
 
