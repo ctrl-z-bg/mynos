@@ -455,6 +455,7 @@ extern void _page_fault_handler_TRAP();
 __asm__ (".pushsection .text\n" \
 	 ".globl _page_fault_handler_TRAP \n"\
 	 "_page_fault_handler_TRAP:       \n"\
+	 "   cld                          \n"  /* the C code needs DF = 0 */\
 	 "   pushal                       \n"  /* save all registers */\
 	 "   movl %esp, %ebx              \n"  /* the frame: registers, error code, eip */\
 	 "   pushl %ebx                   \n"\

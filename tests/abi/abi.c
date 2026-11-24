@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
+#include <sys/utsname.h>
 
 static int failures = 0;
 
@@ -301,6 +302,56 @@ static void wait_checks(void) {
   pthread_join(t, NULL);
 }
 
+/* The direction flag (2026-11-24): a program may set DF (std) and be
+   interrupted, or call the kernel, with it set; the kernel's string copies
+   (rep movs) need it clear. Before every entry did cld, the timer's switch
+   copied a TLS descriptor backwards over the user data segment's, and the
+   next process to load 0x23 faulted in the kernel (NetSurf on Slashdot). */
+static volatile int df_stop;
+
+/* spin with DF set, in assembly only (C code may not run with DF = 1) */
+static void df_spin(void) {
+  __asm__ volatile("std");
+  while (!df_stop) __asm__ volatile("pause");
+  __asm__ volatile("cld");
+}
+
+static void * df_spinner(void * a) { (void)a; df_spin(); return NULL; }
+
+static void direction_flag_checks(void) {
+  struct utsname u1, u2;
+  struct timespec t0, t1;
+  pthread_t t;
+  int r;
+  uname(&u1);
+  memset(&u2, 0, sizeof u2);
+  /* the system call itself with DF set: the kernel copies the names */
+  __asm__ volatile("std\n\tint $0x80\n\tcld" : "=a"(r) : "a"(122 /* uname */), "b"(&u2) : "memory");
+  check("DF set: a system call's copies go forward",
+        r == 0 && strcmp(u1.sysname, u2.sysname) == 0 && strcmp(u1.release, u2.release) == 0);
+  /* two threads switched by the timer with DF set, for 300 ms */
+  df_stop = 0;
+  pthread_create(&t, NULL, df_spinner, NULL);
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  for (;;) {
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    if ((t1.tv_sec - t0.tv_sec) * 1000 + (t1.tv_nsec - t0.tv_nsec) / 1000000 > 300) break;
+    __asm__ volatile("std\n\tpause\n\tpause\n\tcld");
+  }
+  df_stop = 1;
+  pthread_join(t, NULL);
+  /* a corrupt user data descriptor faults the next load of 0x23: fork
+     and wait, which switch through other processes and back */
+  r = fork();
+  if (r == 0) _exit(7);
+  {
+    int st = 0;
+    waitpid(r, &st, 0);
+    check("DF set across timer switches: the system goes on",
+          WIFEXITED(st) && WEXITSTATUS(st) == 7);
+  }
+}
+
 int main(int argc, char ** argv) {
   long r;
   int sem;
@@ -500,6 +551,7 @@ int main(int argc, char ** argv) {
 
   wait_checks();
   pager_checks();
+  direction_flag_checks();
 
   printf("abi: %s\n", failures ? "SOME CHECKS FAILED" : "all checks passed");
   return failures;

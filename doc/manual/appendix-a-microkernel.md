@@ -118,6 +118,9 @@ not reloaded, and only QEMU's numbers worked.
 | `0x80` | Linux system calls, callable from ring 3 (appendix D) |
 | `0x90` | MyNOS system calls, callable from ring 3 (A.8) |
 
+Every entry begins with `cld`: the interrupted program may have set the
+direction flag, which the kernel's copies (`rep movs`) follow.
+
 ## A.4 Processes and threads
 
 **A process** is an address space, a set of IPC objects, and one or more

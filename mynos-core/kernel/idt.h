@@ -26,6 +26,7 @@
   __asm__ (".pushsection .text\n" \
    ".globl "#NAME"_ISR     \n"\
    #NAME"_ISR:             \n"\
+   "   cld                 \n"     /* the C code below needs DF = 0 */\
    "   pushal              \n"\
    "   call "#NAME"_handler\n"     /* call the ISR handler */\
    "   movb $0x20, %al     \n"     /* send the EOI to master PIC */\
@@ -39,6 +40,7 @@
   __asm__ (".pushsection .text\n" \
    ".globl "#NAME"_TRAP    \n"\
    #NAME"_TRAP:            \n"\
+   "   cld                 \n"     /* the C code below needs DF = 0 */\
    "   pushal              \n"\
    "   call "#NAME"_handler\n"     /* call the TRAP handler */\
    "   popal               \n"\

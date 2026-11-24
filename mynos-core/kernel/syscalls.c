@@ -39,6 +39,7 @@ void _mynos_syscalls_trap_TRAP();
 __asm__ (".pushsection .text\n" \
 	 ".globl _mynos_syscalls_trap_TRAP         \n"\
 	 "_mynos_syscalls_trap_TRAP:               \n"\
+	 "   cld\n"  /* the caller may have DF = 1: the kernel's C needs 0 */\
 	 /* the C functions may change ecx and edx: the caller gets them back
 	    (only eax, the result, changes) */
 	 "   pushl %edx\n"\

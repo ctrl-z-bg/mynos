@@ -44,6 +44,7 @@ void pit_ISR();
 __asm__ (".pushsection .text\n" \
 	 ".globl pit_ISR         \n"\
 	 "pit_ISR:               \n"\
+	 "   cld                 \n"     /* the interrupted code may have DF = 1 */\
 	 "   pushal              \n"\
 	 "   call pit_handler    \n"     /* call the ISR handler */\
 	 "   popal               \n"\

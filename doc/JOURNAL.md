@@ -3477,3 +3477,39 @@ choice, knowing the query is then unencrypted.
 **Lesson.** "It cannot work" needs the same proof as "it works": a
 working example on another system is the first thing to look for, and
 the variables to vary are all of the request's, the scheme included.
+
+## 2026-11-24 — A backward copy over the GDT: the direction flag
+
+**Symptom.** Opening Slashdot in NetSurf froze MyNOS, about one time in
+four: "int13: General Protection in the kernel" in `switchTo`, at
+`popw %fs`, switching to a thread of displayd, then of consoled, then of
+netd: always another process than NetSurf.
+
+**Diagnosis.** The selector being loaded was 0x23, the user data
+segment, which is legal: so the GDT's entry 4 had changed. A dump of the
+GDT at the fault showed its high word as 0x0020381F instead of
+0x00CFF300; a trap on the GDT's physical frame never fired (nobody freed
+or reused it). A hardware watchpoint on that word, through QEMU's gdb
+server, caught the writer: `kmemcpy` called by `tls_load` from
+`switchTo` on a timer interrupt, copying the TLS descriptor into entry 5,
+with DF set in EFLAGS: `rep movsl` ran backwards, from entry 5 into 4.
+
+**Cause.** The direction flag belongs to the interrupted program
+(musl, like any libc, may run with DF set around a backward copy); an
+interrupt or a system call does not clear it, and no kernel entry did
+`cld`. The kernel's C code assumed DF clear, as the ABI says; that did
+not matter while `kmemcpy` was a byte loop. On 2026-11-23 (mynos-4d6)
+`kmemcpy` and `kmemset` became `rep movsl` and `rep stosl` to make page
+faults three times faster (commit 98cd6c9), and from then on any kernel copy made while a
+program had DF set went backwards.
+
+**Fix.** `cld` first thing at every kernel entry: the ISR and trap
+wrappers (IRQs too), the timer, the page fault, both system call traps,
+and the exceptions' C function. tests/abi: two threads switched by the
+timer with DF set, then a fork; before the fix it faults the kernel the
+same way. Slashdot: eight loads, no fault.
+
+**Lesson.** A faster primitive brings the contract of the instructions
+it uses: `rep movs` reads a flag the caller owns. And a corrupted table
+found far from its writer is a case for a watchpoint, not for guessing:
+the last two hypotheses were wrong.

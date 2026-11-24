@@ -118,6 +118,9 @@ asm(".pushsection .text\n" ".globl int_null        \n"
  * fatal signal would on Unix. An exception in the kernel stops the system.
  */
 static void exception(const char * what, uint32_t eip, uint32_t cs) {
+  /* the vectors are these C functions themselves: the faulting code may
+     have left DF = 1, which the kernel's string copies must not see */
+  __asm__ volatile("cld");
   if ((cs & 3) == 3) {
     printk("process ");
     print_ulong(currProcess);

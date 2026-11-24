@@ -1790,3 +1790,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   HTTP (the results come in the page; over HTTPS, through JavaScript
   NetSurf cannot run). The address bar and the welcome page search Google
   over HTTP by default (the user's choice; unencrypted), DuckDuckGo next.
+- **2026-11-24** — Kernel: `cld` at every entry. Since 2026-11-23 the
+  kernel's copies are `rep movsl`, which follow the direction flag, and a
+  program interrupted with DF set made them run backwards: the timer's
+  switch wrote a TLS descriptor over the user data segment's, and the
+  system faulted in the kernel (NetSurf on Slashdot, one time in four).
+  Found with a hardware watchpoint through QEMU's gdb server. A check in
+  tests/abi.

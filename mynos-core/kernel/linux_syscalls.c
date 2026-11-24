@@ -93,6 +93,7 @@ void _linux_syscalls_trap_TRAP();
 __asm__ (".pushsection .text\n" \
 	 ".globl _linux_syscalls_trap_TRAP\n"\
 	 "_linux_syscalls_trap_TRAP:\n"\
+	 "   cld\n"  /* the caller may have DF = 1: the kernel's C needs 0 */\
 	 "   pushl %ebp\n"\
 	 "   pushl %edi\n"\
 	 "   pushl %esi\n"\
