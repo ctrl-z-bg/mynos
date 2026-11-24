@@ -123,7 +123,7 @@ void tsksw() {
   /* load the task register with the relative address in the gdt of the
      current process's tssd */
   idle_tssd_selector = (ushort16_t*)((uint32_t)tssd_gdt_selector);
-  __asm__ volatile ("ltrw (idle_tssd_selector)\n");
+  arch_load_task_register(tssd_gdt_selector);
 
 }
 

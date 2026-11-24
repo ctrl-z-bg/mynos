@@ -31,7 +31,7 @@ talking through IPC.
 
 | Directory | What it is |
 |---|---|
-| `mynos-core/` | The microkernel: boot, memory, processes, threads, scheduler, IPC, syscalls |
+| `mynos-core/` | The microkernel: boot, memory, processes, threads, scheduler, IPC, syscalls; the architecture's own code in `kernel/arch/i386` (doc/decisions/arch.md) |
 | `mynos-lib/` | User-space library wrapping the native MyNOS syscalls (`include/mynos.h`), and the OCaml library `Mynos` (`ocaml/`) |
 | `services/` | User-space servers: `registry`, `console`, `keyboard`, `serial`, `fs/memrofs`; in OCaml: `tmpfs`, `ata` (disk driver), `fatfs` |
 | `mynos-runtime/` | The OCaml 5.5 bytecode runtime for MyNOS: upstream runtime, unchanged, plus a MyNOS `main()` (dev toolchain) |
@@ -1870,3 +1870,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   its first start. `httpd /disk 8081 &` still serves the whole disk.
   Hidden and `.env` files stay refused in any directory. The manual's
   chapter 9 lost its warning about what is on `/disk`.
+- **2026-11-24** — Version 2 begins, on branch `next` (from `main` at
+  a56a094; `main` stays version 1, the book's, and is merged into `next`
+  while the book changes). Its first step, `arch-split` (mynos-btq.1):
+  the i386's code in `mynos-core/kernel/arch/i386` (start.asm, GDT, IDT,
+  TSS, the task switch, port I/O, PIC, PIT, the delay calibration, the
+  entries into the kernel, kmemcpy/kmemset), behind `arch.h` for what
+  generic code asks of the processor; generic code has no inline
+  assembly left. Still i386-shaped in generic code, for the x86-64 step:
+  the TSS as the thread, two-level page tables, the Linux ABI's
+  handlers (doc/decisions/arch.md). Full suite unchanged, 174 checks.

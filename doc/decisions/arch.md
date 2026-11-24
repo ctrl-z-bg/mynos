@@ -45,8 +45,11 @@ be in its first 8 KB.
 | `arch_flush_page` | `invlpg` |
 | `arch_write_protect_kernel` | CR0.WP |
 | `arch_fpu_reset` | `finit` |
+| `arch_load_task_register` | `ltr` |
+| `ARCH_FORK_SAVE_REGISTERS`, `ARCH_FORK_SWITCH`, `ARCH_FORK_CHILD_RESUME` | `fork`'s child: the parent's registers, its resumption after the scheduler, its `%gs` and `%ebp` (macros: they must run in `fork`'s own frame) |
 
-They are `static inline`: what each one costs is the instruction.
+They are `static inline`: what each one costs is the instruction. With
+them, generic code has no assembly of its own left.
 
 ## What stays generic, and is not yet
 

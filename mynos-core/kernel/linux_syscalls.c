@@ -763,33 +763,14 @@ int _linux_syscall_fork() {
   __OS_releasePages(pdc, 1, 0, 0);
   
   /* copy the registers, except eip and esp */
-  asm volatile("movl %%eax, %0":"=m"(mirror->eax));
-  asm volatile("movl %%ebx, %0":"=m"(mirror->ebx));
-  asm volatile("movl %%ecx, %0":"=m"(mirror->ecx));
-  asm volatile("movl %%edx, %0":"=m"(mirror->edx));
-  asm volatile("movl %%esi, %0":"=m"(mirror->esi));
-  asm volatile("movl %%edi, %0":"=m"(mirror->edi));
-  asm volatile("movl %%ebp, %0":"=m"(mirror->ebp));
-
-  asm volatile("movw %%cs, %0":"=m"(mirror->cs));
-  asm volatile("movw %%ds, %0":"=m"(mirror->ds));
-  asm volatile("movw %%es, %0":"=m"(mirror->es));
-  asm volatile("movw %%fs, %0":"=m"(mirror->fs));
-  asm volatile("movw %%gs, %0":"=m"(mirror->gs));
-  asm volatile("movw %%ss, %0":"=m"(mirror->ss));
+  ARCH_FORK_SAVE_REGISTERS(mirror);
 
   ret = new_pid;
   mirror->justForked = 1;
   
   /* copy eip and esp and call the scheduler */
   mirror->esp0 = currThread->esp0;
-  asm volatile (
-		"movl $1f, %0\n\t"\
-		"movl %%esp, %1\n\t"\
-		"call sched\n\t"\
-		"1:\t"\
-		:"=m"(mirror->eip),\
-		"=m"(mirror->esp):);
+  ARCH_FORK_SWITCH(mirror);
 
   /* this process was just forked, restore some register */
   if (currThread->justForked) {
@@ -797,11 +778,7 @@ int _linux_syscall_fork() {
     /* the child did not come back through switchTo's segment pops: %gs
        still caches the previous thread's descriptor. Reload it, so that its
        TLS (set_thread_area, copied from the parent) is in effect. */
-    if (currThread->tls_base || currThread->tls_limit)
-      asm volatile("movw %w0, %%gs" :: "r"((GDT_TLS_INDEX << 3) | 3));
-    else
-      asm volatile("movw %w0, %%gs" :: "r"(GDT_USER_DATA_SEL + 3));
-    asm volatile("movl %0, %%ebp"::"m"(currThread->ebp));
+    ARCH_FORK_CHILD_RESUME(currThread);
   }
 
   // back from a task switch...

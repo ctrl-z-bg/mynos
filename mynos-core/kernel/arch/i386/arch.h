@@ -99,6 +99,51 @@ static inline void arch_write_protect_kernel(void) {
   __asm__ volatile ("movl %0, %%cr0" : : "r"(cr0 | 0x10000));
 }
 
+/* the task register: the TSS whose esp0 the processor uses to enter the
+   kernel from a process */
+static inline void arch_load_task_register(unsigned short selector) {
+  __asm__ volatile ("ltr %0" : : "r"(selector));
+}
+
+/* ---- fork (linux_syscalls.c): the child is the parent's registers ---- */
+
+/* the registers into the child's thread [t], except eip and esp */
+#define ARCH_FORK_SAVE_REGISTERS(t) do {                     \
+    __asm__ volatile ("movl %%eax, %0" : "=m"((t)->eax));    \
+    __asm__ volatile ("movl %%ebx, %0" : "=m"((t)->ebx));    \
+    __asm__ volatile ("movl %%ecx, %0" : "=m"((t)->ecx));    \
+    __asm__ volatile ("movl %%edx, %0" : "=m"((t)->edx));    \
+    __asm__ volatile ("movl %%esi, %0" : "=m"((t)->esi));    \
+    __asm__ volatile ("movl %%edi, %0" : "=m"((t)->edi));    \
+    __asm__ volatile ("movl %%ebp, %0" : "=m"((t)->ebp));    \
+    __asm__ volatile ("movw %%cs, %0" : "=m"((t)->cs));      \
+    __asm__ volatile ("movw %%ds, %0" : "=m"((t)->ds));      \
+    __asm__ volatile ("movw %%es, %0" : "=m"((t)->es));      \
+    __asm__ volatile ("movw %%fs, %0" : "=m"((t)->fs));      \
+    __asm__ volatile ("movw %%gs, %0" : "=m"((t)->gs));      \
+    __asm__ volatile ("movw %%ss, %0" : "=m"((t)->ss));      \
+  } while (0)
+
+/* the child resumes here, in the parent's frame: its eip is the label
+   after the call to the scheduler, its esp this frame's */
+#define ARCH_FORK_SWITCH(t)                                  \
+  __asm__ volatile ("movl $1f, %0\n\t"                       \
+                    "movl %%esp, %1\n\t"                     \
+                    "call sched\n\t"                          \
+                    "1:\t"                                     \
+                    : "=m"((t)->eip), "=m"((t)->esp) :)
+
+/* the child, back: it did not come through switchTo's segment pops, so
+   %gs still caches the previous thread's descriptor; reloaded, its TLS
+   (set_thread_area, copied from the parent) is in effect */
+#define ARCH_FORK_CHILD_RESUME(t) do {                                  \
+    if ((t)->tls_base || (t)->tls_limit)                                \
+      __asm__ volatile ("movw %w0, %%gs" : : "r"((GDT_TLS_INDEX << 3) | 3)); \
+    else                                                                \
+      __asm__ volatile ("movw %w0, %%gs" : : "r"(GDT_USER_DATA_SEL + 3)); \
+    __asm__ volatile ("movl %0, %%ebp" : : "m"((t)->ebp));              \
+  } while (0)
+
 /* ---- the FPU ---- */
 
 static inline void arch_fpu_reset(void) { __asm__ volatile ("finit"); }
