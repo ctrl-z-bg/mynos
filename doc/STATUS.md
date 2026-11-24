@@ -1786,3 +1786,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   results need JavaScript beyond NetSurf's (a blank page): not fixable
   here. Repubblica's faults (captions over photos, cut columns) are
   NetSurf's: its style sheets use grid layout, gradients and var().
+- **2026-11-24** — Correction: Google search works in NetSurf, over plain
+  HTTP (the results come in the page; over HTTPS, through JavaScript
+  NetSurf cannot run). The address bar and the welcome page search Google
+  over HTTP by default (the user's choice; unencrypted), DuckDuckGo next.

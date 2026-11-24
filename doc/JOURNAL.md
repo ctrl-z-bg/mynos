@@ -3450,3 +3450,30 @@ closed first.
 **Lesson.** Keeping connections open moves a resource from "per fetch"
 to "per session": its limit must be counted for the whole session, not
 for one page.
+
+## 2026-11-24 — Google needed JavaScript, but only over HTTPS
+
+**Symptom.** Google searches in NetSurf ended on a blank page, after the
+consent page. I concluded that Google's results now need JavaScript and
+that nothing could be done; the user then showed NetSurf 3.11 on Linux
+showing Google's results.
+
+**Diagnosis.** NetSurf's log in MyNOS (`-V FILE`) showed Google's loader
+script failing ("identifier 'performance' undefined", then 'Image') and
+no navigation after it. curl with NetSurf's user agent got the loader
+page whatever the user agent, the consent cookie or the parameters of
+Google's home page form; the one difference that mattered was the
+scheme: over http:// the results are in the HTML, over https:// they
+come from the script.
+
+**Cause.** Google serves two pages: a JavaScript loader over HTTPS, the
+results themselves over HTTP. NetSurf on Linux had reached the HTTP one
+through Google's home page.
+
+**Fix.** The address bar's web search and the welcome page's form use
+http://www.google.com/search (DuckDuckGo's lite page next), the user's
+choice, knowing the query is then unencrypted.
+
+**Lesson.** "It cannot work" needs the same proof as "it works": a
+working example on another system is the first thing to look for, and
+the variables to vary are all of the request's, the scheme included.
