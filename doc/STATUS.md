@@ -1852,4 +1852,5 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   sysmonitor; on the console it redraws every second until `q`, `-b -n
   N` prints N tables. Set aside on 2026-11-21 because the kernel kept no
   CPU time or memory per process; it does since 2026-11-23. Tried in
-  MyNOS; not published yet.
+  MyNOS. Published to mynos-packages with manual 1.2, the chapters as
+  the printed book has them.
