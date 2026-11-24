@@ -60,6 +60,7 @@
 #include <mynos.h>
 #include <mynos_console.h>
 #include <mynos_wire.h>
+#include <mynos_virtio.h>
 #include "../keyboard/keymap.h"
 
 #define LINE_MAX 256
@@ -669,76 +670,175 @@ static int child_of(int pid, int parent)
    release (keyboard thread only) */
 static unsigned int pressed[2][128];
 
+/* one byte of scan code set 1, from the PC's keyboard or translated from
+   a virtio keyboard's key codes (both threads, one at a time: kb_lock) */
+static int kb_lock;
+static void scancode(unsigned int key)
+{
+  static int extended = 0;
+  unsigned int c = 0;
+  int ext;
+  if (key == 0xE0) {                   /* prefix of the grey keys */
+    extended = 1;
+    return;
+  }
+  if (extended && (key == 0x2A || key == 0xAA || key == 0x36 || key == 0xB6)) {
+    /* the keyboard's "fake shifts" around the grey keys: not the user's */
+  } else if (extended && (key == 0x38 || key == 0xB8))
+    altgr_key = key == 0x38;           /* right Alt: AltGr */
+  /* the grey keys are themselves even with Num Lock on (the keypad
+     shares their scan codes) */
+  else if (extended && (key == 0x48 || key == 0x50 || key == 0x4B ||
+			key == 0x4D || key == 0x47 || key == 0x4F ||
+			key == 0x49 || key == 0x51 || key == 0x52 || key == 0x53))
+    c = key << 8;
+  else if (!extended && key < 0x80 &&
+	   ((control_keys & (CK_CTRL | CK_ALT)) == 0 ||
+	    (control_keys & (CK_CTRL | CK_ALT)) == (CK_CTRL | CK_ALT)) &&
+	   key != 0x53 && (c = layout_char(key)) != 0)
+    /* Ctrl + Alt is AltGr too, for keyboards without it (key 0x53, Delete,
+       is left to Ctrl + Alt + Delete) */
+    c = c >= 0x80 ? (UNI | c) : c;
+  else
+    c = keymap_translate(key);
+  ext = extended;
+  extended = 0;
+  if ((control_keys & CK_SHIFT) && (c == KEY_UP || c == KEY_DOWN || c == KEY_LEFT ||
+				    c == KEY_RIGHT || c == KEY_HOME || c == KEY_END))
+    c |= SHIFTED;
+  /* a key let go: its release, if its press sent something */
+  if (key & 0x80) {
+    unsigned int was = pressed[ext][key & 0x7F];
+    pressed[ext][key & 0x7F] = 0;
+    if (was) {
+      mynos_P(input_lock);
+      release_key(was);
+      mynos_V(input_lock);
+    }
+    return;
+  }
+  /* Shift + Page Up / Page Down: the scrollback, in every mode */
+  if ((c == KEY_PGUP || c == KEY_PGDN) && (control_keys & CK_SHIFT)) {
+    mynos_P(input_lock);
+    raw_write(c == KEY_PGUP ? "\033[?1v" : "\033[?2v", 5);
+    looking_back = 1;
+    mynos_V(input_lock);
+    return;
+  }
+  if (c != 0) {
+    /* held, the key repeats; if it now sends something else (Shift
+       pressed meanwhile), what it sent before is released */
+    unsigned int was = pressed[ext][key];
+    if (was && was != c) {
+      mynos_P(input_lock);
+      release_key(was);
+      mynos_V(input_lock);
+    }
+    pressed[ext][key] = c;
+    input(c);
+  }
+}
+
+/* the PC's keyboard (IRQ 1) */
 static void * keyboard_thread(void * arg)
 {
   int irq = (int)arg;
-  int extended = 0;
   while (1) {
-    unsigned int key, c = 0;
-    int ext;
+    unsigned int key;
     mynos_P(irq);
     key = inportb(0x60);
-    if (key == 0xE0) {                 /* prefix of the grey keys */
-      extended = 1;
-      outportb(0x20, 0x20);
-      continue;
-    }
-    if (extended && (key == 0x2A || key == 0xAA || key == 0x36 || key == 0xB6)) {
-      /* the keyboard's "fake shifts" around the grey keys: not the user's */
-    } else if (extended && (key == 0x38 || key == 0xB8))
-      altgr_key = key == 0x38;         /* right Alt: AltGr */
-    /* the grey keys are themselves even with Num Lock on (the keypad
-       shares their scan codes) */
-    else if (extended && (key == 0x48 || key == 0x50 || key == 0x4B ||
-			  key == 0x4D || key == 0x47 || key == 0x4F ||
-			  key == 0x49 || key == 0x51 || key == 0x52 || key == 0x53))
-      c = key << 8;
-    else if (!extended && key < 0x80 &&
-	     ((control_keys & (CK_CTRL | CK_ALT)) == 0 ||
-	      (control_keys & (CK_CTRL | CK_ALT)) == (CK_CTRL | CK_ALT)) &&
-	     key != 0x53 && (c = layout_char(key)) != 0)
-      /* Ctrl + Alt is AltGr too, for keyboards without it (key 0x53, Delete,
-	 is left to Ctrl + Alt + Delete) */
-      c = c >= 0x80 ? (UNI | c) : c;
-    else
-      c = keymap_translate(key);
-    ext = extended;
-    extended = 0;
     outportb(0x20, 0x20);
-    if ((control_keys & CK_SHIFT) && (c == KEY_UP || c == KEY_DOWN || c == KEY_LEFT ||
-                                      c == KEY_RIGHT || c == KEY_HOME || c == KEY_END))
-      c |= SHIFTED;
-    /* a key let go: its release, if its press sent something */
-    if (key & 0x80) {
-      unsigned int was = pressed[ext][key & 0x7F];
-      pressed[ext][key & 0x7F] = 0;
-      if (was) {
-        mynos_P(input_lock);
-        release_key(was);
-        mynos_V(input_lock);
+    mynos_P(kb_lock);
+    scancode(key);
+    mynos_V(kb_lock);
+  }
+  return NULL;
+}
+
+/* ---- a virtio keyboard (doc/decisions/virtio.md) ---- */
+
+/* Linux's key codes (virtio-input's): those below 89 are the scan codes
+   of set 1; the grey keys are set 1's with the 0xE0 prefix */
+static int linux_to_set1(unsigned int code, int * extended)
+{
+  static const struct { unsigned short code, sc; } grey[] = {
+    {96, 0x1C}, {97, 0x1D}, {98, 0x35}, {100, 0x38}, {102, 0x47}, {103, 0x48},
+    {104, 0x49}, {105, 0x4B}, {106, 0x4D}, {107, 0x4F}, {108, 0x50}, {109, 0x51},
+    {110, 0x52}, {111, 0x53}, {125, 0x5B}, {126, 0x5C}, {0, 0} };
+  int i;
+  *extended = 0;
+  if (code > 0 && code < 89) return code;
+  for (i = 0; grey[i].code; i++)
+    if (grey[i].code == code) { *extended = 1; return grey[i].sc; }
+  return -1;
+}
+
+static virtio_dev_t vkbd;
+static virtq_t vkbd_q;
+
+#define VEV_KEY 1
+#define VIRTIO_INPUT_CFG_EV_BITS 0x11
+#define VEV_REL 2
+#define VEV_ABS 3
+
+/* does this input device report events of [type]? (its configuration:
+   select EV_BITS, subsel type, then size) */
+static int vinput_has(virtio_dev_t * d, int type)
+{
+  *(volatile unsigned char *)(d->device + 0) = VIRTIO_INPUT_CFG_EV_BITS;
+  *(volatile unsigned char *)(d->device + 1) = type;
+  return virtio_config8(d, 2) != 0;
+}
+
+/* the first virtio input device that has keys and no pointer: 0, or -1 */
+static int vkbd_find(void)
+{
+  int i;
+  for (i = 0; i < 8; i++) {
+    if (virtio_find(VIRTIO_INPUT, i, &vkbd) < 0) return -1;
+    if (vinput_has(&vkbd, VEV_KEY) && !vinput_has(&vkbd, VEV_REL) &&
+        !vinput_has(&vkbd, VEV_ABS))
+      return 0;
+  }
+  return -1;
+}
+
+#define VKBD_EVENTS 64
+static void * vkbd_thread(void * arg)
+{
+  struct ev { unsigned short type, code; unsigned int value; } * ev;
+  unsigned long phys;
+  int irq = (int)arg, i, id;
+  ev = virtio_dma(1, &phys);
+  for (i = 0; i < VKBD_EVENTS && i < vkbd_q.size; i++) {
+    virtq_buf_t b = { phys + i * sizeof *ev, sizeof *ev, 1 };
+    virtq_add(&vkbd_q, &b, 1);
+  }
+  virtio_ready(&vkbd);
+  virtq_kick(&vkbd_q);
+  while (1) {
+    while ((id = virtq_get(&vkbd_q, NULL)) >= 0) {
+      /* one descriptor per event: the id is its buffer */
+      struct ev e = ev[id];
+      virtq_buf_t b = { phys + id * sizeof *ev, sizeof *ev, 1 };
+      virtq_add(&vkbd_q, &b, 1);
+      if (e.type == VEV_KEY) {
+        int extended, sc = linux_to_set1(e.code, &extended);
+        if (sc >= 0) {
+          mynos_P(kb_lock);
+          if (extended) scancode(0xE0);
+          scancode(sc | (e.value == 0 ? 0x80 : 0));    /* 0: released */
+          mynos_V(kb_lock);
+        }
       }
-      continue;
     }
-    /* Shift + Page Up / Page Down: the scrollback, in every mode */
-    if ((c == KEY_PGUP || c == KEY_PGDN) && (control_keys & CK_SHIFT)) {
-      mynos_P(input_lock);
-      raw_write(c == KEY_PGUP ? "\033[?1v" : "\033[?2v", 5);
-      looking_back = 1;
-      mynos_V(input_lock);
-      continue;
-    }
-    if (c != 0) {
-      /* held, the key repeats; if it now sends something else (Shift
-         pressed meanwhile), what it sent before is released */
-      unsigned int was = pressed[ext][key];
-      if (was && was != c) {
-        mynos_P(input_lock);
-        release_key(was);
-        mynos_V(input_lock);
-      }
-      pressed[ext][key] = c;
-      input(c);
-    }
+    virtq_kick(&vkbd_q);
+    if (irq >= 0) {
+      mynos_P(irq);
+      virtio_isr(&vkbd);
+      mynos_enableIrq(vkbd.irq);
+    } else
+      mynos_sleep(10000);
   }
   return NULL;
 }
@@ -906,18 +1006,32 @@ int main()
   hist_lock = mynos_initSem(1);
   input_lock = mynos_initSem(1);
   available = mynos_initSem(0);
+  kb_lock = mynos_initSem(1);
 
-  irq = mynos_driverRegister("keyboard", 1, NULL, NULL);
-  if (irq < 0) {
-    mynos_log("consoled: cannot get the keyboard (%d)\n", irq);
-    return 1;
+  i8042_present = inportb(0x64) != 0xFF;
+  if (i8042_present) {
+    irq = mynos_driverRegister("keyboard", 1, NULL, NULL);
+    if (irq < 0) {
+      mynos_log("consoled: cannot get the keyboard (%d)\n", irq);
+      return 1;
+    }
+    led_status = 0;
+    setleds();
+    mynos_enableIrq(1);
+    stack = malloc(0x4000);
+    mynos_threadCreate(keyboard_thread, (void *)irq, stack + 0x4000, 0);
+  } else
+    mynos_log("consoled: no PC keyboard controller\n");
+
+  /* a virtio keyboard too, if there is one (QEMU's virtio-keyboard-pci) */
+  if (vkbd_find() == 0 && virtio_start(&vkbd, 0) == 0 &&
+      virtq_setup(&vkbd, 0, VKBD_EVENTS, &vkbd_q) == 0) {
+    int sem = mynos_driverRegister("vkbd", vkbd.irq | MYNOS_IRQ_PCI, NULL, NULL);
+    if (sem >= 0) mynos_enableIrq(vkbd.irq);
+    mynos_log("consoled: virtio keyboard, IRQ %d\n", vkbd.irq);
+    stack = malloc(0x4000);
+    mynos_threadCreate(vkbd_thread, (void *)sem, stack + 0x4000, 0);
   }
-  led_status = 0;
-  setleds();
-  mynos_enableIrq(1);
-
-  stack = malloc(0x4000);
-  mynos_threadCreate(keyboard_thread, (void *)irq, stack + 0x4000, 0);
 
   /* COM2: interrupts when a byte comes (the kernel writes to it, polling).
      Only if there is one: a missing port reads 0xFF, "a byte waiting"

@@ -31,7 +31,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="virtio_disk virtio_net disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload sound_ok edit_utf8 log_shown"
+results="virtio_disk virtio_net virtio_gui disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload sound_ok edit_utf8 log_shown"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -287,11 +287,15 @@ fi
 }
 
 sec_virtio() {
-# virtio devices only (mynos-btq.2): a disk, which vblkd serves as vblk0
+# virtio devices only (mynos-btq.2): a keyboard (the PC's controller is
+# off: every key typed here comes through consoled's virtio driver), a
+# disk, which vblkd serves as vblk0
 # and fatfs mounts as /disk (a file written there is on the image the
 # host reads), and a network card, which netd takes instead of the
-# NE2000 (httpd answers the host through it)
-virtio_disk= virtio_net=
+# NE2000 (httpd answers the host through it); a GPU and a tablet, for
+# the graphical session (no VGA: a click on the welcome window's Clock
+# button, through QMP, opens the clock)
+virtio_disk= virtio_net= virtio_gui=
 if [ -f system/ramdisk.dsk ] && [ -f system/vblkd ] && [ -f tests/fat/fat16.img ]; then
     cp tests/fat/fat16.img tests/fat/run-virtio.img
     : > "$tmp/logv"
@@ -299,6 +303,9 @@ if [ -f system/ramdisk.dsk ] && [ -f system/vblkd ] && [ -f tests/fat/fat16.img 
         services/registry/registry services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
         -- -display none -serial null -serial "file:$tmp/logv" \
+           -machine pc,i8042=off -vga none -device virtio-gpu-pci \
+           -device virtio-keyboard-pci -device virtio-tablet-pci \
+           -qmp "unix:$tmp/qmp-v,server,nowait" \
            -drive "file=tests/fat/run-virtio.img,format=raw,if=none,id=vd" \
            -device virtio-blk-pci,drive=vd \
            -netdev user,id=vn,hostfwd=tcp:127.0.0.1:47181-:80 \
@@ -313,10 +320,30 @@ if [ -f system/ramdisk.dsk ] && [ -f system/vblkd ] && [ -f tests/fat/fat16.img 
     i=0
     while [ $i -lt 20 ] && ! grep -aq 'netd: address' "$tmp/logv"; do sleep 0.5; i=$((i + 1)); done
     curl -s -m 5 -i http://127.0.0.1:47181/ | grep -q 'Server: MyNOS httpd' && virtio_net=yes
-    tools/type-keys.py "$tmp/mon-v" 'shutdown\n'
-    i=0
-    while [ $i -lt 20 ] && kill -0 $qemu 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
-    kill -0 $qemu 2>/dev/null && { printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-v" >/dev/null || true; }
+    qmp() { printf '{"execute":"qmp_capabilities"}\n%s\n' "$1" |
+                socat -t1 - "UNIX-CONNECT:$tmp/qmp-v" >/dev/null; sleep 0.3; }
+    tools/type-keys.py "$tmp/mon-v" 'gui\n'; sleep 8
+    qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"abs","data":{"axis":"x","value":7454}},{"type":"abs","data":{"axis":"y","value":18271}}]}}'
+    qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":true,"button":"left"}}]}}'
+    qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":false,"button":"left"}}]}}'
+    sleep 6
+    printf 'screendump %s\n' "$tmp/gv.ppm" | socat - "UNIX-CONNECT:$tmp/mon-v" >/dev/null; sleep 1
+    python3 - "$tmp/gv.ppm" <<'PY' && virtio_gui=yes
+import sys
+d = open(sys.argv[1], "rb").read()
+parts = d.split(b"\n", 3)
+w, h = map(int, parts[1].split())
+pix = parts[3]
+def px(x, y):
+    i = (y * w + x) * 3
+    return (pix[i] << 16) | (pix[i + 1] << 8) | pix[i + 2]
+assert (w, h) == (1024, 768), (w, h)
+assert px(150, 114) == 0x2D6CA2, hex(px(150, 114))   # the Clock's title bar, focused
+assert px(214, 236) != px(214, 300)                 # a hand, on the dial
+PY
+    # (the session holds the keys: QEMU is stopped from its monitor, which
+    # closes the disk's image with what was written)
+    printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-v" >/dev/null || true
     wait $qemu || true
     [ "$(tools/in-container.sh dev mtype -i tests/fat/run-virtio.img ::/v.txt 2>/dev/null)" = virtio-ok ] &&
         virtio_disk=yes
@@ -1341,6 +1368,13 @@ PY
     expect "keys: up q, held"
     expect "vblkd: virtio disk, 32768 sectors"
     expect "netd: virtio card, IRQ"
+    expect "consoled: virtio keyboard, IRQ"
+    expect "virtio GPU, no PS/2 mouse, virtio tablet"
+    if [ -n "$virtio_gui" ]; then
+        echo "ok    virtio: the graphical session on a virtio GPU, a click of a virtio tablet"
+    else
+        echo "FAIL  virtio: the graphical session on a virtio GPU, a click of a virtio tablet"; fail=1
+    fi
     if [ -n "$virtio_net" ]; then
         echo "ok    virtio: netd on a virtio card, httpd reached by the host"
     else

@@ -139,8 +139,13 @@ unsigned int scan2ascii_table[][8] =
 };
 
 
+/* is there a PC keyboard controller (i8042)? A missing one reads 0xFF,
+   and waiting for it to be ready would never end */
+static int i8042_present = 1;
+
 void setleds()
 {
+	if (!i8042_present) return;
 	outportb(0x60, 0xED);
 	while(inportb(0x64) & 2);
 	outportb(0x60, led_status);

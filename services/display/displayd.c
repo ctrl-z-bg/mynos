@@ -45,6 +45,7 @@
 #include <time.h>
 #include <mynos.h>
 #include <mynos_wire.h>
+#include <mynos_virtio.h>
 
 #define SERVICE  "display"
 #define PROTOCOL "display/1"
@@ -158,6 +159,108 @@ static void mode_graphics(void)
 }
 
 static void mode_text(void) { bga(4, 0); vga_restore(); }
+
+/* ---- a virtio GPU (doc/decisions/virtio.md): the screen of QEMU's
+   virt machines, and of -vga none -device virtio-gpu-pci. One 2D
+   resource whose backing is the frame buffer here, in DMA memory: what
+   is composed there goes to the host with TRANSFER_TO_HOST_2D, then
+   RESOURCE_FLUSH, for the rectangle that changed ---- */
+
+static int vgpu = 0;                     /* the screen is a virtio GPU's */
+static virtio_dev_t gpu;
+static virtq_t gpuq;
+static unsigned char * gpu_cmd;          /* a command, then its reply */
+static unsigned long gpu_cmd_phys;
+static unsigned int * gpu_fb;            /* the resource's backing */
+static unsigned long gpu_fb_phys, gpu_fb_bytes;
+static int gpu_res = 0;                  /* the resource, 0: none */
+
+#define GPU_GET_DISPLAY_INFO 0x0100
+#define GPU_RESOURCE_CREATE_2D 0x0101
+#define GPU_RESOURCE_UNREF 0x0102
+#define GPU_SET_SCANOUT 0x0103
+#define GPU_RESOURCE_FLUSH 0x0104
+#define GPU_TRANSFER_TO_HOST_2D 0x0105
+#define GPU_RESOURCE_ATTACH_BACKING 0x0106
+#define GPU_OK_NODATA 0x1100
+#define GPU_FORMAT_B8G8R8X8 2               /* 0x00RRGGBB, little endian */
+
+/* a command of [n] bytes (its header's type first, the rest zero but
+   the words given), waited for: 0, or -1 if the device refused it */
+static int gpu_command(int n, const unsigned int * words, int nwords)
+{
+  virtq_buf_t b[2];
+  int i;
+  memset(gpu_cmd, 0, 512);
+  for (i = 0; i < nwords; i++) ((unsigned int *)gpu_cmd)[i] = words[i];
+  b[0].phys = gpu_cmd_phys; b[0].len = n; b[0].write = 0;
+  b[1].phys = gpu_cmd_phys + 256; b[1].len = 24; b[1].write = 1;
+  if (virtq_add(&gpuq, b, 2) < 0) return -1;
+  virtq_kick(&gpuq);
+  for (i = 0; virtq_get(&gpuq, NULL) < 0; i++)
+    if (i > 1000) mynos_sleep(1000);
+  return *(unsigned int *)(gpu_cmd + 256) == GPU_OK_NODATA ? 0 : -1;
+}
+
+/* the header is 6 words (type, flags, fence: 2, context, ring); the
+   command's own fields follow */
+static int vgpu_init(void)
+{
+  if (virtio_find(VIRTIO_GPU, 0, &gpu) < 0) return -1;
+  if (virtio_start(&gpu, 0) < 0 || virtq_setup(&gpu, 0, 16, &gpuq) < 0) return -1;
+  gpu_cmd = virtio_dma(1, &gpu_cmd_phys);
+  if (gpu_cmd == NULL) return -1;
+  virtio_ready(&gpu);
+  return 0;
+}
+
+/* the screen at W x H: a resource as large, its backing, the scanout */
+static int vgpu_mode(void)
+{
+  unsigned long bytes = (unsigned long)W * H * 4;
+  if (bytes > gpu_fb_bytes) {           /* a larger screen: more memory
+					   (the smaller one stays, unused) */
+    gpu_fb = virtio_dma((bytes + 4095) / 4096, &gpu_fb_phys);
+    if (gpu_fb == NULL) { gpu_fb_bytes = 0; return -1; }
+    gpu_fb_bytes = bytes;
+  }
+  if (gpu_res) {
+    unsigned int unref[] = { GPU_RESOURCE_UNREF, 0, 0, 0, 0, 0, gpu_res };
+    gpu_command(32, unref, 7);
+  }
+  gpu_res++;
+  {
+    unsigned int create[] = { GPU_RESOURCE_CREATE_2D, 0, 0, 0, 0, 0,
+                              gpu_res, GPU_FORMAT_B8G8R8X8, W, H };
+    unsigned int attach[] = { GPU_RESOURCE_ATTACH_BACKING, 0, 0, 0, 0, 0,
+                              gpu_res, 1, gpu_fb_phys, 0, W * H * 4, 0 };
+    unsigned int scanout[] = { GPU_SET_SCANOUT, 0, 0, 0, 0, 0,
+                               0, 0, W, H, 0, gpu_res };
+    if (gpu_command(40, create, 10) < 0 || gpu_command(48, attach, 12) < 0 ||
+        gpu_command(48, scanout, 12) < 0)
+      return -1;
+  }
+  return 0;
+}
+
+/* the rectangle, from the frame buffer to the host's screen */
+static void vgpu_flush(int x0, int y0, int x1, int y1)
+{
+  unsigned int w = x1 - x0, h = y1 - y0, off = (y0 * W + x0) * 4;
+  unsigned int transfer[] = { GPU_TRANSFER_TO_HOST_2D, 0, 0, 0, 0, 0,
+                              x0, y0, w, h, off, 0, gpu_res, 0 };
+  unsigned int flush[] = { GPU_RESOURCE_FLUSH, 0, 0, 0, 0, 0,
+                           x0, y0, w, h, gpu_res, 0 };
+  gpu_command(56, transfer, 14);
+  gpu_command(48, flush, 12);
+}
+
+/* the session ends: the screen shows nothing of ours */
+static void vgpu_off(void)
+{
+  unsigned int scanout[] = { GPU_SET_SCANOUT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+  gpu_command(48, scanout, 12);
+}
 
 /* ---- the font (PSF 1, with a Unicode table) ---- */
 
@@ -639,6 +742,7 @@ static void compose(int x0, int y0, int x1, int y1)
   draw_pointer();
   for (y = y0; y < y1; y++)
     memcpy(fb + y * W + x0, back + y * W + x0, (x1 - x0) * 4);
+  if (vgpu) vgpu_flush(x0, y0, x1, y1);
 }
 
 static void compose_window(struct window * w)
@@ -824,7 +928,7 @@ static const char * size_refused(int w, int h)
 {
   unsigned long rows;
   if (w < 800 || h < 600 || w > 4096 || h > 4096 || w % 8) return "from 800x600, a width multiple of 8";
-  rows = (FB_SKIP + w * 4 - 1) / (w * 4);
+  rows = vgpu ? 0 : (FB_SKIP + w * 4 - 1) / (w * 4);
   if ((rows + h) * (unsigned long)w * 4 > vram) return "more than the video memory holds";
   return NULL;
 }
@@ -840,8 +944,16 @@ static void start_session(int w, int h)
     back = b;
     W = w; H = h;
   }
-  mode_graphics();
-  fb = vram_base + fb_rows_skipped * W;
+  if (vgpu) {
+    if (vgpu_mode() < 0) {
+      mynos_log("displayd: the virtio GPU refused %dx%d\n", W, H);
+      return;
+    }
+    fb = gpu_fb;
+  } else {
+    mode_graphics();
+    fb = vram_base + fb_rows_skipped * W;
+  }
   if (px > W - 1) px = W - 1;            /* the pointer stays where it was, */
   if (py > H - 1) py = H - 1;            /* on the screen */
   active = 1;
@@ -856,7 +968,7 @@ static void end_session(void)
   if (!active) return;
   for (i = 0; i < MAXWIN; i++) if (win[i].used) remove_window(i);
   active = 0;
-  mode_text();
+  if (vgpu) vgpu_off(); else mode_text();
   for (i = 0; i < nwaiters; i++) reply_unit(waiters[i]);
   nwaiters = 0;
 }
@@ -1120,6 +1232,117 @@ static void vmmouse_read(void)
     pointer_to((int)(r[1] * W / 65536), (int)(r[2] * H / 65536), buttons);
     wheel((signed char)(r[3] & 0xFF));
   }
+}
+
+/* ---- a virtio tablet (absolute) or mouse (relative) ---- */
+
+static virtio_dev_t vptr;
+static virtq_t vptr_q;
+static const char * vptr_kind = NULL;
+static int vptr_absolute = 0, vptr_max[2] = { 32767, 32767 };
+
+/* virtio-input's event types (Linux's: not displayd's own EV_*) */
+#define VEV_SYN 0
+#define VEV_KEY 1
+#define VEV_REL 2
+#define VEV_ABS 3
+#define BTN_LEFT 0x110
+#define BTN_RIGHT 0x111
+#define BTN_MIDDLE 0x112
+#define REL_X 0
+#define REL_Y 1
+#define REL_WHEEL 8
+#define CFG_EV_BITS 0x11
+#define CFG_ABS_INFO 0x12
+
+static void vptr_select(int sel, int sub)
+{
+  vptr.device[0] = sel;
+  vptr.device[1] = sub;
+}
+
+/* does it report events of this type? */
+static int vptr_has(virtio_dev_t * d, int type)
+{
+  d->device[0] = CFG_EV_BITS;
+  d->device[1] = type;
+  return virtio_config8(d, 2) != 0;
+}
+
+#define VPTR_EVENTS 64
+struct vev { unsigned short type, code; unsigned int value; };
+static struct vev * vev;
+static unsigned long vev_phys;
+
+static void * vptr_thread(void * arg)
+{
+  int sem = IDX(arg), id;
+  int x = px, y = py, b = pbuttons, dz = 0;
+  for (;;) {
+    while ((id = virtq_get(&vptr_q, NULL)) >= 0) {
+      struct vev e = vev[id];
+      virtq_buf_t buf = { vev_phys + id * sizeof *vev, sizeof *vev, 1 };
+      virtq_add(&vptr_q, &buf, 1);
+      if (e.type == VEV_ABS && e.code < 2) {
+        int v = (int)((long long)e.value * (e.code ? H : W) / (vptr_max[e.code] + 1));
+        if (e.code) y = v; else x = v;
+      } else if (e.type == VEV_REL && e.code == REL_X) x += (int)e.value;
+      else if (e.type == VEV_REL && e.code == REL_Y) y += (int)e.value;
+      else if (e.type == VEV_REL && e.code == REL_WHEEL) dz += (int)e.value;
+      else if (e.type == VEV_KEY && e.code >= BTN_LEFT && e.code <= BTN_MIDDLE) {
+        int bit = e.code == BTN_LEFT ? 1 : e.code == BTN_RIGHT ? 2 : 4;
+        b = e.value ? (b | bit) : (b & ~bit);
+      } else if (e.type == VEV_SYN) {   /* a report is whole */
+        pthread_mutex_lock(&lock);
+        pointer_to(x, y, b);
+        if (dz) wheel(-dz);
+        x = px; y = py; dz = 0;
+        pthread_mutex_unlock(&lock);
+      }
+    }
+    virtq_kick(&vptr_q);
+    if (sem >= 0) {
+      if (mynos_P(sem) < 0) return NULL;
+      virtio_isr(&vptr);
+      mynos_enableIrq(vptr.irq);
+    } else
+      mynos_sleep(10000);
+  }
+  return NULL;
+}
+
+/* the first virtio input device with a pointer, if any */
+static void vpointer_start(void)
+{
+  int i, sem;
+  pthread_t t;
+  for (i = 0; i < 8; i++) {
+    if (virtio_find(VIRTIO_INPUT, i, &vptr) < 0) return;
+    if (vptr_has(&vptr, VEV_ABS) || vptr_has(&vptr, VEV_REL)) break;
+  }
+  if (i == 8) return;
+  vptr_absolute = vptr_has(&vptr, VEV_ABS);
+  if (vptr_absolute) {                 /* the axes' ranges: max at +4 */
+    int a;
+    for (a = 0; a < 2; a++) {
+      vptr_select(CFG_ABS_INFO, a);
+      if (virtio_config8(&vptr, 2)) vptr_max[a] = virtio_config32(&vptr, 8 + 4);
+      if (vptr_max[a] <= 0) vptr_max[a] = 32767;
+    }
+  }
+  if (virtio_start(&vptr, 0) < 0 || virtq_setup(&vptr, 0, VPTR_EVENTS, &vptr_q) < 0 ||
+      (vev = virtio_dma(1, &vev_phys)) == NULL)
+    return;
+  for (i = 0; i < vptr_q.size; i++) {
+    virtq_buf_t b = { vev_phys + i * sizeof *vev, sizeof *vev, 1 };
+    virtq_add(&vptr_q, &b, 1);
+  }
+  virtio_ready(&vptr);
+  virtq_kick(&vptr_q);
+  sem = mynos_driverRegister("vpointer", vptr.irq | MYNOS_IRQ_PCI, NULL, NULL);
+  if (sem >= 0) mynos_enableIrq(vptr.irq);
+  vptr_kind = vptr_absolute ? ", virtio tablet" : ", virtio mouse";
+  pthread_create(&t, NULL, vptr_thread, ARG(sem));
 }
 
 static void kbc_wait(void)
@@ -1642,26 +1865,37 @@ int main(void)
   load_font(1, FONT_BOLD);
   load_logo();
 
-  if (bga_get(0) < 0xB0C0 || bga_get(0) > 0xB0CF || !(lfb = find_lfb())) {
-    mynos_log("displayd: no Bochs VGA (QEMU's standard VGA): no graphics\n");
+  if (bga_get(0) >= 0xB0C0 && bga_get(0) <= 0xB0CF && (lfb = find_lfb())) {
+    /* the video memory, all of it (its size in 64 KB, register 10; 8 MB
+       if it does not say), so that any size it holds can be shown */
+    vram = (unsigned long)bga_get(10) * 65536;
+    if (vram < 4UL << 20 || vram > 64UL << 20) vram = 8UL << 20;
+    base = mynos_mapPhysical(lfb, vram / 4096);
+    if (!base) {
+      mynos_log("displayd: cannot map the frame buffer\n");
+      return 1;
+    }
+    vram_base = (unsigned int *)base;
+    fb_rows_skipped = (FB_SKIP + W * 4 - 1) / (W * 4);
+    fb = vram_base + fb_rows_skipped * W;
+  } else if (vgpu_init() == 0) {
+    vgpu = 1;
+    lfb = 0;
+    vram = 16UL << 20;          /* what dmaAlloc gives in one piece */
+  } else {
+    mynos_log("displayd: no Bochs VGA (QEMU's standard VGA), no virtio GPU: no graphics\n");
     return 0;                 /* by choice: init does not start it again */
   }
-  /* the video memory, all of it (its size in 64 KB, register 10; 8 MB
-     if it does not say), so that any size it holds can be shown */
-  vram = (unsigned long)bga_get(10) * 65536;
-  if (vram < 4UL << 20 || vram > 64UL << 20) vram = 8UL << 20;
-  base = mynos_mapPhysical(lfb, vram / 4096);
   back = malloc(W * H * 4);
-  if (!base || !back) {
-    mynos_log("displayd: cannot map the frame buffer\n");
+  if (!back) {
+    mynos_log("displayd: no memory\n");
     return 1;
   }
-  vram_base = (unsigned int *)base;
-  fb_rows_skipped = (FB_SKIP + W * 4 - 1) / (W * 4);
-  fb = vram_base + fb_rows_skipped * W;
 
-  /* the mouse: PS/2 on IRQ 12, and vmmouse if there is one */
-  sem = mynos_driverRegister("mouse", 12, NULL, NULL);
+  /* the mouse: PS/2 on IRQ 12, and vmmouse if there is one; a virtio
+     tablet or mouse too */
+  sem = inportb(0x64) == 0xFF ? MYNOS_ERR_INVALID      /* no controller */
+                              : mynos_driverRegister("mouse", 12, NULL, NULL);
   if (sem >= 0) {
     kbc_wait(); outportb(0x64, 0xA8);              /* the auxiliary port on */
     kbc_wait(); outportb(0x64, 0x60);              /* command byte: both IRQs */
@@ -1680,7 +1914,8 @@ int main(void)
     mynos_enableIrq(12);
     pthread_create(&t, NULL, mouse_thread, ARG(sem));
   } else
-    mynos_log("displayd: no mouse (%d)\n", sem);
+    mynos_log("displayd: no PS/2 mouse (%d)\n", sem);
+  vpointer_start();
 
   pthread_create(&t, NULL, timer_thread, NULL);
 
@@ -1689,10 +1924,10 @@ int main(void)
     mynos_log("displayd: cannot register (%d)\n", port);
     return 1;
   }
-  mynos_log("displayd: %dx%d (up to %lu MB of video memory), frame buffer at 0x%lx, %s%s\n",
-            W, H, vram >> 20, lfb,
-	    vmmouse ? "vmmouse (absolute)" : "PS/2 mouse",
-	    packet == 4 ? ", wheel" : "");
+  mynos_log("displayd: %dx%d (up to %lu MB of video memory), %s, %s%s%s\n",
+            W, H, vram >> 20, vgpu ? "virtio GPU" : "Bochs VGA",
+	    vmmouse ? "vmmouse (absolute)" : sem >= 0 ? "PS/2 mouse" : "no PS/2 mouse",
+	    packet == 4 ? ", wheel" : "", vptr_kind ? vptr_kind : "");
 
   for (;;) {
     mynos_msg_t * m;

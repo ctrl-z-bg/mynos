@@ -1896,3 +1896,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   attaches the disk and the card as virtio devices. The suite's virtio
   boot also reaches `httpd` from the host through the virtio card: 178
   checks.
+- **2026-11-24** — virtio, third part (mynos-btq.2, done): a virtio
+  keyboard in `consoled`, a virtio tablet or mouse and a virtio GPU in
+  `displayd`; both services start without the PC's keyboard controller.
+  `dmaAlloc` gives up to 16 MB. The suite's virtio boot has no PC
+  device left that it uses (`-machine pc,i8042=off -vga none`): the
+  keys typed, the disk, the network and the graphical session (a click
+  through QMP) are all virtio's. A bug found on the way: dmaAlloc chose
+  its physical pages before the page tables of its mapping were made,
+  and one of those could be inside the piece (JOURNAL).

@@ -283,18 +283,25 @@ void * __OS_mapDmaArea(void) {
    process's end frees them. */
 void * __OS_allocDma(uint32_t npages, uint32_t * phys) {
   uint32_t first, run = 0, page, start, i;
-  for (page = 0x1000; page < __total_phy_pages; page++) {
-    if (__memory_bitmap[page / 8] & (1 << (page % 8))) { run = 0; continue; }
-    if (++run == npages) break;
-  }
-  if (run < npages) return NULL;
-  first = page + 1 - npages;
+  /* the linear pages first: their page tables, if new, take physical
+     pages, which must not be in the piece chosen next (2026-11-24: one
+     was, and zeroing the piece zeroed its own page table) */
   start = __lmt_allocArea(&(processTable[currProcess]->lmemmap), npages);
   if (start < USERMINPAGE) return NULL;
   if (__OS_askPagesFrom((void *)(start << 12), npages, 0, PF_USER | PF_READWRITE) == NULL) {
     __lmt_freeArea(&(processTable[currProcess]->lmemmap), start, npages);
     return NULL;
   }
+  for (page = 0x1000; page < __total_phy_pages; page++) {
+    if (__memory_bitmap[page / 8] & (1 << (page % 8))) { run = 0; continue; }
+    if (++run == npages) break;
+  }
+  if (run < npages) {
+    /* (the linear pages stay reserved, unmapped: rare, and freed with
+       the process) */
+    return NULL;
+  }
+  first = page + 1 - npages;
   for (i = 0; i < npages; i++) {
     uint32_t * pte = (uint32_t *)__GET_PAGE_TABLE_ENTRY(__PAGE_PD_INDEX(start + i),
 							 __PAGE_PT_INDEX(start + i));

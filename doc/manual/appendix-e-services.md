@@ -429,7 +429,10 @@ absence of `ISIG` sets bit 4, VMIN and VTIME pass through.
 
 - *Three threads.* The keyboard thread (IRQ 1) and, when there is a
   COM2, a serial thread (IRQ 3, so that the host's terminal is a whole
-  console) translate keys and edit the line; the main thread serves
+  console) translate keys and edit the line; a fourth for a virtio
+  keyboard, whose Linux key codes become the PC's scan codes, so that
+  the same layouts and editing serve both (a machine without the PC's
+  keyboard controller, QEMU's `virt`, has only this one); the main thread serves
   requests, one at a time. The input threads are native threads, which
   share their creator's TLS (A.4): they call no C library function.
 - *Line editing in the service*: UTF-8, Left, Right, Home and End,
@@ -552,9 +555,13 @@ registered as `display`. It waits in text mode until a client starts the
 graphical session, then sets QEMU's VGA to 1024 × 768 × 32 (or the size
 `start_at` asks) through the
 Bochs extension (BGA), maps its frame buffer (`mapPhysical`, call 28),
-and composes the desktop, the windows and the pointer. A machine
-without the Bochs extension has no graphical session: displayd logs it at
-boot and ends with code 0. Protocol **display/1**
+and composes the desktop, the windows and the pointer. Without the Bochs
+extension it looks for a virtio GPU (`-vga none -device virtio-gpu-pci`,
+and the screen of QEMU's `virt` machines): the frame buffer is then DMA
+memory (`dmaAlloc`), the backing of one 2D resource of the GPU, and
+each composed rectangle goes to the host with two commands,
+`TRANSFER_TO_HOST_2D` and `RESOURCE_FLUSH`. A machine with neither has
+no graphical session: displayd logs it at boot and ends with code 0. Protocol **display/1**
 (`mynos-lib/ocaml/display.ml`):
 
 | Case | Request | Arguments | Reply |
@@ -582,8 +589,10 @@ boot and ends with code 0. Protocol **display/1**
 - *Events wait in a queue* per window (64 at most); `next_event` on an
   empty queue keeps its channel until an event comes, or answers `tick`
   after `timeout_ms`; with a negative `timeout_ms`, at once.
-- *Input*: the PS/2 mouse (IRQ 12), with QEMU's vmmouse when present;
-  keys from the console service, read in raw mode during the session.
+- *Input*: the PS/2 mouse (IRQ 12), with QEMU's vmmouse when present,
+  and a virtio tablet (absolute coordinates, `virtio-tablet-pci`) or
+  mouse; keys from the console service, read in raw mode during the
+  session.
 - *The text console survives*: the picture starts 256 KB into the card's
   memory, after VGA's text-mode memory, and the VGA registers are put
   back after the session.

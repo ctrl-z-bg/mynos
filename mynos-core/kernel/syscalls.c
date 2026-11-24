@@ -101,7 +101,7 @@ int _mynos_syscall_dmaArea(uint32_t what) {
   return a ? (int)a : MYNOS_ERR_FULL;
 }
 
-/* dmaAlloc (39): npages (1 to 256) of RAM, physically contiguous and
+/* dmaAlloc (39): npages (1 to 4096, 16 MB) of RAM, physically contiguous and
    zeroed, mapped into the caller, for a device that reads and writes
    memory by itself (virtio's queues and buffers): their address, and in
    *phys their physical address, which the driver gives the device.
@@ -112,7 +112,7 @@ int _mynos_syscall_dmaAlloc(uint32_t npages, uint32_t * phys) {
   void * a;
   if (!(processTable[currProcess]->privileges & MYNOS_PRIV_IO))
     return MYNOS_ERR_DENY;
-  if (npages == 0 || npages > 256 || !__mem_userArea(phys, sizeof *phys))
+  if (npages == 0 || npages > 4096 || !__mem_userArea(phys, sizeof *phys))
     return MYNOS_ERR_INVALID;
   a = __OS_allocDma(npages, &p);
   if (a == NULL) return MYNOS_ERR_FULL;

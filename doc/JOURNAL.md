@@ -3677,3 +3677,49 @@ another directory (`httpd /disk 8081`).
 
 **Lesson.** Publish by placing, not by excluding: the default should be
 that nothing is on the web until someone puts it there.
+
+## 2026-11-24 — dmaAlloc zeroed its own page table
+
+**Symptom.** In the suite's virtio boot (256 MB, a disk, a network card,
+a keyboard, a tablet, a GPU) `displayd` was killed when the graphical
+session started: "invalid memory access at 0x42401000". The same boot
+without the disk and the card, or by hand with 512 MB, worked.
+
+**Diagnosis.** The address was one page past a 4 MB boundary, in the
+3 MB frame buffer `displayd` had just asked `dmaAlloc` for. Its first
+4 MB were fine; the next page table was not.
+
+**Cause.** `__OS_allocDma` chose a run of free physical pages first,
+then reserved the linear pages with `__OS_askPagesFrom`, which makes the
+page tables the range needs and takes their pages from the same free
+pool: one page table landed inside the run. The run was then mapped and
+zeroed, and the zeroing wiped that page table. Whether it happened
+depended on what the other drivers had taken before.
+
+**Fix.** The linear pages, and their page tables, first; the physical
+run after.
+
+**Lesson.** When a function takes two resources from the same pool, the
+one taken first must not be counted as free by the search for the
+second: order them so that the search sees the pool as it will be.
+
+## 2026-11-24 — A key became a mouse event
+
+**Symptom.** After the virtio tablet was added to `displayd`, no key
+reached a window of the graphical session: the Terminal, `edit`, the
+keys test, all silent. The mouse worked; the text console too.
+
+**Diagnosis.** By halves: the old `consoled` with the new `displayd`
+failed, the new `consoled` with the old `displayd` worked.
+
+**Cause.** The virtio tablet's code defined Linux's event types as
+macros, `#define EV_KEY 1`, after `displayd`'s own `enum { EV_KEY,
+EV_MOUSE, ... }` of the events it posts to windows. From that line on,
+every key was posted as kind 1: a mouse event.
+
+**Fix.** The virtio constants are `VEV_*`, in `displayd` and in
+`consoled`.
+
+**Lesson.** A macro defined late silently overrides a name declared
+early, with no warning; constants taken from another vocabulary (Linux's
+input events) get a prefix of their own.

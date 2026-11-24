@@ -2,8 +2,8 @@
 
 - **Issues:** mynos-btq.2, in the version 2 line (mynos-btq)
 - **Date:** 2026-11-24
-- **Status:** accepted by the owner (C, virtio 1.x); the disk and the
-  network done, input and the screen next.
+- **Status:** accepted by the owner (C, virtio 1.x); done: the disk,
+  the network, the keyboard, the tablet or mouse, and the screen.
 
 ## Why
 
@@ -26,7 +26,7 @@ drivers written once on i386 are the drivers of every port.
 
 ## What there is
 
-- **The kernel**: `dmaAlloc` (call 39), 1 to 256 pages of RAM in one
+- **The kernel**: `dmaAlloc` (call 39), 1 to 4096 pages (16 MB) of RAM in one
   physical piece, zeroed, mapped into a driver with their physical
   address; the driver's mapping is their only reference, so they are
   freed when it ends. PCI interrupt lines, registered with
@@ -50,6 +50,18 @@ drivers written once on i386 are the drivers of every port.
   virtio card if it finds one, else the NE2000.
 - **`VIRTIO=1`** for `tools/run-qemu.sh` and `tools/run-demo.sh`: `DISK`
   and `NET` become virtio devices.
+
+- **virtio-input**: a keyboard in `consoled` (Linux's key codes turned
+  into the PC's scan codes, so that layouts and line editing are the
+  same), a tablet or a mouse in `displayd` (which device is which: the
+  event types its configuration lists). Without the PC's keyboard
+  controller (`-machine pc,i8042=off`, or `virt`) both still start.
+- **virtio-gpu** in `displayd`, when there is no Bochs VGA: a 2D
+  resource whose backing is the frame buffer, in DMA memory (`dmaAlloc`
+  gives up to 16 MB in one piece), and two commands for each rectangle
+  that changes. The text console is VGA's, so a machine with only a
+  virtio GPU shows the graphical session and nothing before it; the
+  serial port has the boot.
 
 ## Next
 

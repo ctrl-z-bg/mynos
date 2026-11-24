@@ -1090,7 +1090,7 @@ of the caller's lines. `mapPhysical` maps `npages` pages of device
 memory (page-aligned, beyond RAM) into the caller. `dmaArea` maps the
 kernel's DMA area (`MYNOS_DMA_AREA_SIZE`, 64 KB below 16 MB, for ISA
 DMA: appendix B) and puts its physical address in `*phys`. `dmaAlloc`
-gives `npages` (1 to 256) pages of RAM in one physical piece, zeroed,
+gives `npages` (1 to 4096: 16 MB) pages of RAM in one physical piece, zeroed,
 for a PCI device, with their physical address in `*phys`; they are freed
 when the process ends. `inportb` and
 `outportb` are the `in` and `out` instructions.

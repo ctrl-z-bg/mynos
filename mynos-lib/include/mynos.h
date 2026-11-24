@@ -241,7 +241,7 @@ void * mynos_mapPhysical(unsigned long phys, int npages);
    controller's); NULL without one. Drivers only. */
 #define MYNOS_DMA_AREA_SIZE 65536
 void * mynos_dmaArea(unsigned long * phys);
-/* npages (1 to 256) of RAM in one physical piece, zeroed, mapped here,
+/* npages (1 to 4096: 16 MB) of RAM in one physical piece, zeroed, mapped here,
    for a device that reads and writes memory by itself (virtio): its
    address, its physical address in *phys; NULL if there is no such
    piece. Drivers only. Freed when the process ends. */

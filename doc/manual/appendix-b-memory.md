@@ -314,7 +314,7 @@ it into the caller, one reference to each page, which the end of the
 process drops, as for shared pages. `soundd` plays from it (appendix E).
 
 **DMA memory for PCI devices** (call 39, `dmaAlloc`, `io` only) is the
-same idea without ISA's limits: 1 to 256 pages of RAM in one physical
+same idea without ISA's limits: 1 to 4096 pages (16 MB) of RAM in one physical
 piece, anywhere above 16 MB, zeroed and mapped into the caller, with
 their physical address for the device. virtio's queues and buffers live
 there (`vblkd`, appendix E). The pages are found in the physical memory
