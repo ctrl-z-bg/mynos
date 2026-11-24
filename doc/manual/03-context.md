@@ -141,5 +141,5 @@ Two decades later the pieces have become ordinary. OCaml 5 (2022) has
 parallel domains and effect handlers; MirageOS (2013) builds whole
 network appliances in OCaml; Rust has brought a safe language into
 Linux's own kernel. MyNOS, finished in 2026 (in the sense of 2.3), is a
-small, working demonstration of the road its authors chose in 2002, and
+small, working demonstration of the road its authors chose in 2001, and
 of where it leads.

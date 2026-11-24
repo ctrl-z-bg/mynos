@@ -132,9 +132,9 @@ years ago, and they still find it interesting, and fun.
 
 *Finished*, in this manual, means just that: MyNOS is now a small,
 working demonstration of the architectural path its authors chose in
-2002, not a general-purpose operating system.
+2001, not a general-purpose operating system.
 
-The work of 2026 followed the 2002 design, not a new one: the decisions
+The work of 2026 followed the 2001 design, not a new one: the decisions
 taken along the way are in `doc/decisions/`, and the day-by-day account,
 with every bug and what it taught, is in `doc/JOURNAL.md`. Chapter 4
 gives the dates.

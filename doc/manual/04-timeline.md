@@ -86,8 +86,8 @@ added was decided step by step, by the authors, in the notes of
 `doc/decisions/`; what went wrong, and what it taught, is in
 `doc/JOURNAL.md`, a diary of every non-trivial bug.
 
-> **THE MyNOS FACTOR — A system finished twenty-four years later.**
-> The design of 2002 needed no correction to be finished in 2026: a
+> **THE MyNOS FACTOR — A system finished twenty-five years later.**
+> The design of 2001 needed no correction to be finished in 2026: a
 > microkernel, services as processes, OCaml's virtual machine as one of
 > them, and a higher level of abstraction through the language. What
 > changed is the cost of doing it: a few days of work, directed by the
