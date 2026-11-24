@@ -32,10 +32,10 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
-#include "../pit.h"                         /* GazOS stuff                 */
-#include "../pic.h"
-#include "../gdt.h"
-#include "../idt.h"
+#include "pit.h"                         /* GazOS stuff                 */
+#include "pic.h"
+#include "gdt.h"
+#include "idt.h"
 
 extern void pit_delay_ISR(void);         /* Timer ISR for calibration   */
 

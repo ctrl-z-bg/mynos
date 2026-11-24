@@ -47,7 +47,7 @@ MyNOS is a **multiboot** kernel: GRUB (or QEMU's `-kernel`) loads
 line (`module /registry` in GRUB, `-initrd "path args"` in QEMU) becomes
 its `argv`.
 
-`kernel/start.asm` turns paging on and calls `mynos_main` in
+`kernel/arch/i386/start.asm` turns paging on and calls `mynos_main` in
 `kernel/main.c`, which then:
 
 1. copies what it needs of GRUB's information (the kernel's command line,
@@ -91,7 +91,7 @@ not used when booting with GRUB, and does not assemble with today's
 
 ## A.3 The processor's tables
 
-**The GDT** (`kernel/gdt.c`) is small, because MyNOS uses a flat memory
+**The GDT** (`kernel/arch/i386/gdt.c`) is small, because MyNOS uses a flat memory
 model: every segment spans the whole 4 GB, and protection comes from
 paging (appendix B). Until `init_memory` the kernel runs on the boot
 loader's GDT and selectors; `_init_gdt` then loads MyNOS's own and
@@ -109,7 +109,7 @@ not reloaded, and only QEMU's numbers worked.
 | entry 5 | the running thread's TLS segment (Linux threads), rewritten at every context switch |
 | | the one hardware TSS |
 
-**The IDT** (`kernel/idt.c`) has 256 gates:
+**The IDT** (`kernel/arch/i386/idt.c`) has 256 gates:
 
 | Vector | Handler |
 |---|---|
@@ -145,13 +145,13 @@ another pid, so a stale pid can never reach the wrong process
 (`doc/decisions/identity-and-permissions.md`). Ports and channels carry
 generations in the same way.
 
-**A thread** is a `tss_t` (`kernel/tss.h`): the saved registers, a
+**A thread** is a `tss_t` (`kernel/arch/i386/tss.h`): the saved registers, a
 kernel stack (four pages), a private semaphore on which it waits, its
 time to wake if it sleeps, its TLS segment, and links to the next thread
 of its process and to the queue it is in. The name is historical: in
 2002 every thread had a hardware task segment, and the processor switched
 between them. Today there is **one hardware TSS**, and the context switch
-is done in software (`kernel/softtaskswitch.c`):
+is done in software (`kernel/arch/i386/softtaskswitch.c`):
 
 ```
   switchTo(old, new):

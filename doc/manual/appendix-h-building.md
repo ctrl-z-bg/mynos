@@ -20,7 +20,7 @@ builds it.
 | Debian 13 "trixie", i386 | 13.7 | the base: a 32-bit userland, like the target |
 | gcc | 14.2 | the kernel, the C services, libmynos |
 | binutils | 2.44 | |
-| nasm | 2.16 | `kernel/start.asm` |
+| nasm | 2.16 | `kernel/arch/i386/start.asm` |
 | musl (`musl-gcc`) | 1.2.5 | the C library of every user-space C program |
 | OCaml | 5.5.2, bytecode only | the OCaml programs, and the runtime (below) |
 | dosfstools, mtools | | FAT images, and files copied in and out of them |

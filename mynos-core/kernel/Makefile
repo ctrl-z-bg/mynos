@@ -20,7 +20,7 @@
 RELPATH    = kernel
 include ../CommonHeader
 
-SUBDIRS	= 3parts ipc mem
+SUBDIRS	= 3parts ipc mem arch/$(ARCH)
 
 #CFLAGS += $(foreach DIR, $(SUBDIRS), -I$(DIR))
 
@@ -40,7 +40,10 @@ OFILESC	=	$(SRCSC:%.c=%.o)
 SRCSAS	= 	$(wildcard *.asm)
 OFILESAS	=	$(SRCSAS:%.asm=%.o)
 
-ALL_OBJ  = $(foreach DIR, $(SUBDIRS), $(DIR)/$(DIR:%=%_module.o))
+ALL_OBJ  = 3parts/3parts_module.o ipc/ipc_module.o mem/mem_module.o \
+	   arch/$(ARCH)/arch_module.o
+# first in the kernel: the multiboot header must be in its first 8 KB
+START    = arch/$(ARCH)/start.o
 
 all: $(SUBDIRS) kernel
 
@@ -48,7 +51,7 @@ $(SUBDIRS):
 	$(MAKE) -C $@
 
 $(ALL_OBJ):
-	$(MAKE) -C $(@D:%_module.o=%)
+	$(MAKE) -C $(@D)
 
 ($OFILESC): $(SRCSC)
 	$(CC) -c $(CFLAGS) $<
@@ -56,9 +59,8 @@ $(ALL_OBJ):
 ($OFILESAS): $(SRCSC)
 	$(AS) $(ASFLAGS) $<
 
-kernel: $(ALL_OBJ) $(OFILESC) start.asm
-	nasm -f elf start.asm -o start.o
-	$(LD) start.o $(OFILESC) $(ALL_OBJ) \
+kernel: $(ALL_OBJ) $(OFILESC)
+	$(LD) $(START) $(OFILESC) $(ALL_OBJ) \
 		--oformat elf32-i386 -Ttext 0x200000 -o kernel.elf 
 
 clean:

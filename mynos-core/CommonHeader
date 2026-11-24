@@ -34,3 +34,9 @@ ASFLAGS = -f elf
 # it. Without them, objects of an old layout of a struct were linked with
 # new ones (mynos-y87: tss_t grew, and the kernel no longer booted)
 CFLAGS += -MMD -MP
+
+# the architecture (doc/decisions/arch.md): its code is in kernel/arch/$(ARCH);
+# every part of the kernel sees the kernel's own headers ("mem/mem.h") and
+# the architecture's ("gdt.h") by name
+ARCH ?= i386
+CFLAGS += -I$(MYNOS_CORE_ROOT)/kernel -I$(MYNOS_CORE_ROOT)/kernel/arch/$(ARCH)

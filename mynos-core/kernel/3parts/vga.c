@@ -1,5 +1,5 @@
 #include "../global.h"
-#include "../io.h"
+#include "io.h"
 #include "vga.h"
 
 //

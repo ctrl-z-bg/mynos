@@ -61,7 +61,7 @@ does not write the instruction inline: it calls through a pointer kept at
 `int 0x80`.
 
 The IDT entry for vector `0x80` is an interrupt gate callable from ring 3
-(`kernel/idt.c`). Interrupts are off while the kernel handles the call; a
+(`kernel/arch/i386/idt.c`). Interrupts are off while the kernel handles the call; a
 call that waits gives the processor away explicitly, through the
 scheduler.
 
