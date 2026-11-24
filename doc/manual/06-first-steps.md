@@ -359,8 +359,8 @@ and QEMU ends. `shutdown -r` restarts MyNOS instead: the kernel boots
 again, `/tmp` is empty, and `/disk` keeps your files (chapter 7).
 
 > **THE MyNOS FACTOR — The console is a program you can replace.**
-> On Unix, the line you are typing is edited by the terminal driver, in
-> the kernel. In MyNOS the kernel only draws characters: `consoled`, an
+> On Unix, in canonical mode (the default), the line you are typing is
+> edited by the terminal driver, in the kernel. In MyNOS the kernel only draws characters: `consoled`, an
 > ordinary process, owns the keyboard, edits lines, keeps the history,
 > knows the Italian layout and ends a program on Ctrl-C; `sh` edits its
 > own line on top of it. A terminal window of the graphical session
