@@ -1,27 +1,28 @@
 (* httpd: a small web server for MyNOS, in OCaml, over the network service
    (module Net). It serves the files of a directory over HTTP/1.0, with 8
-   worker domains, and lists directories. Hidden files (".name") and
-   ".env" files (llm.env: the language models' keys) are neither served
-   nor listed.
+   worker domains, and lists directories. The directory is /disk/web,
+   made at the first start if there is none: only what is put there is
+   on the web, not the rest of the disk. Hidden files (".name") and
+   ".env" files (configuration, keys) are neither served nor listed.
 
-     httpd [-w] [DIR [PORT]]   DIR: /disk by default, PORT: 80
+     httpd [-w] [DIR [PORT]]   DIR: /disk/web by default, PORT: 80
 
    It also receives files: PUT writes one (curl -T FILE URL), and a
    directory's listing has a form that sends several (POST, multipart),
-   into that directory. Writing is allowed to the computer QEMU runs on
+   into the served directory. Writing is allowed to the computer QEMU runs on
    (the client 10.0.2.2, when MyNOS is 10.0.2.15 on QEMU's user network:
    what tools/run-demo.sh forwards), and to anyone with -w. A write must
    name this server in Host, and in Origin if there is one: a page of
    another site, open in a browser, cannot send it.
 
    init starts it at boot; tools/run-demo.sh forwards the host's port 8080
-   to it: http://localhost:8080/ shows MyNOS's disk. *)
+   to it: http://localhost:8080/ shows /disk/web. *)
 
 let open_writes, args =
   match List.tl (Array.to_list Sys.argv) with
   | "-w" :: rest -> true, rest
   | rest -> false, rest
-let root = match args with d :: _ -> d | [] -> "/disk"
+let root = match args with d :: _ -> d | [] -> "/disk/web"
 let port = match args with _ :: p :: _ -> int_of_string p | _ -> 80
 
 let log fmt = Printf.ksprintf (fun s -> Mynos.log ("httpd: " ^ s ^ "\n")) fmt
@@ -400,6 +401,11 @@ let listen () =
     | l -> Ok (n, l)
     | exception Ipc.Remote_error (_, m) -> Error (Printf.sprintf "port %d: %s" port m)
 
+(* the served directory, made if there is none (the first start); with
+   no disk, the server still runs, and answers 404 *)
+let make_root () =
+  try mkdirs root with Sys_error m -> log "%s: %s" root m
+
 (* accept, and queue for the workers. Errors in a row mean that the
    listening socket is gone (netd ended, and init started it again: its
    sockets are new): listen again, on the new netd, instead of asking the
@@ -421,13 +427,14 @@ let rec accept n l errors =
 and relisten () =
   Mynos.sleep 1.0;
   match listen () with
-  | Ok (n, l) -> log "serving %s on port %d again" root port; accept n l 0
+  | Ok (n, l) -> make_root (); log "serving %s on port %d again" root port; accept n l 0
   | Error _ -> relisten ()
 
 let () =
   match listen () with
   | Error m -> log "%s" m
   | Ok (n, l) ->
+    make_root ();
     log "serving %s on port %d, %d connections at a time%s" root port workers
       (if open_writes then ", writes from anyone (-w)" else "");
     for _ = 1 to workers do ignore (Domain.spawn worker) done;

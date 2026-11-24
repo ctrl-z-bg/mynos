@@ -75,7 +75,8 @@ MyNOS keeps a few files of its own there, with names starting with a
 dot, which `ls` does not show: `.sh_history` and `.history` (6.7),
 `.keymap` (6.5); and `llm.env`, if you have one (5.7). It is also your
 **home directory**: `cd` without a directory goes to `/disk`. MyNOS's
-web server, `httpd`, shows the files of `/disk` to a browser (chapter 9).
+web server, `httpd`, shows the files of `/disk/web` to a browser
+(chapter 9).
 
 ## 7.5 Paths and the current directory
 

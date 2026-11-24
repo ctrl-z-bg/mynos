@@ -49,6 +49,12 @@ each window, the focused one lit; and a clock, in UTC. The rest is the
 **desktop**, with the project's logo, a Minotaur from the 2003 website,
 faint in its corner.
 
+**The volume.** With a sound card (5.5), the top bar shows a
+loudspeaker and the volume, left of the clock. A click opens a slider;
+the wheel over the loudspeaker changes it by 5. It is soundd's volume,
+for every program (`play`, a game); the bar follows a change made
+elsewhere within five seconds.
+
 The pointer follows the mouse. In QEMU's window the mouse is not
 captured: it moves in and out of the window freely (QEMU's `vmmouse`).
 
@@ -205,8 +211,10 @@ reply appears below, as JSON:
 
 ```
 Reply
-"172.66.147.243"
+"104.20.23.154"
 ```
+
+(or another of `example.com`'s addresses: 9.4).
 
 A request without arguments says `(no arguments)`; `net`'s `config`, so
 called, gives the same facts as `ifconfig`. A refused request shows
@@ -324,12 +332,6 @@ ask it to do something, which waits for your yes. While the window is
 open it is also a service, `mynos` (protocol mynos/1, one request,
 `ask`): the Services window, a script or another agent can ask it a
 question. Chapter 21.7.
-
-**The volume.** With a sound card (5.5), the top bar shows a
-loudspeaker and the volume, left of the clock. A click opens a slider;
-the wheel over the loudspeaker changes it by 5. It is soundd's volume,
-for every program (`play`, a game); the bar follows a change made
-elsewhere within five seconds.
 
 ## 10.13 Tour
 

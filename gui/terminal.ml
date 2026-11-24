@@ -391,7 +391,8 @@ let lock = Mutex.create ()
 let canon = ref true and echo = ref true and vmin = ref 1 and vtime = ref 0
 let isig = ref true                    (* Ctrl-C ends the foreground program *)
 let foreground = ref 0                 (* the program sh waits for *)
-let line = Buffer.create 80                      (* being typed, line mode *)
+let line = ref ""                                (* being typed, line mode *)
+let cur = ref 0                       (* the cursor in it: a byte offset *)
 let input = Buffer.create 256                    (* ready for readers *)
 let eof = ref false
 let pending : (int * int * float) list ref = ref []   (* channel, max, deadline *)
@@ -434,7 +435,7 @@ let handle chn msg =
           canon := mode land Console.canon <> 0; echo := mode land Console.echo <> 0;
           isig := mode land Console.nosig = 0;
           vmin := vm; vtime := vt;
-          if !canon then Buffer.clear line;
+          if !canon then (line := ""; cur := 0);
           ok r ()
         | Console.Keymap _ as r -> ok r Console.layout_us
         | Console.Foreground pid as r ->
@@ -507,24 +508,70 @@ let append_history s =
         history_file (fun oc -> output_string oc (s ^ "\n"))
   with Sys_error _ -> ()
 
+(* ---- line mode: editing the line ---- *)
+
+(* the cells of a piece of the line: its characters, not its bytes *)
+let cells s = String.fold_left (fun n c -> if Char.code c land 0xC0 <> 0x80 then n + 1 else n) 0 s
+
+let echo_out s = if !echo then output s
+
+(* the line from the cursor on drawn again, [blank] cells cleared after
+   it (what a deletion left), the cursor back in its place *)
+let redraw_tail blank =
+  let tail = String.sub !line !cur (String.length !line - !cur) in
+  echo_out (tail ^ String.make blank ' ' ^ String.make (cells tail + blank) '\b')
+
+(* the first byte of the character before or after byte [i] *)
+let char_before i =
+  let i = ref (max 0 (i - 1)) in
+  while !i > 0 && Char.code !line.[!i] land 0xC0 = 0x80 do decr i done;
+  !i
+let char_after i =
+  let n = String.length !line in
+  let i = ref (min n (i + 1)) in
+  while !i < n && Char.code !line.[!i] land 0xC0 = 0x80 do incr i done;
+  !i
+
+let insert t =
+  let l = !line in
+  line := String.sub l 0 !cur ^ t ^ String.sub l !cur (String.length l - !cur);
+  echo_out t;
+  cur := !cur + String.length t;
+  if !cur < String.length !line then redraw_tail 0
+
+(* the bytes from..upto taken out, the cursor at [from] (on the screen it
+   is there already) *)
+let delete_range from upto =
+  if upto > from then begin
+    let l = !line in
+    line := String.sub l 0 from ^ String.sub l upto (String.length l - upto);
+    cur := from;
+    redraw_tail 1
+  end
+
 (* the line being typed replaced by [s], on the screen too *)
 let show_line s =
-  if !echo then begin
-    let old = Buffer.contents line in
-    String.iter (fun c -> if Char.code c land 0xC0 <> 0x80 then output "\b \b") old;
-    output s
-  end;
-  Buffer.clear line; Buffer.add_string line s
+  let l = !line in
+  echo_out (String.sub l !cur (String.length l - !cur));   (* to its end *)
+  echo_out (String.concat "" (List.init (cells l) (fun _ -> "\b \b")));
+  echo_out s;
+  line := s; cur := String.length s
 
 let browse dir =
   if not !lines_loaded then load_history ();
   let oldest = max 0 (!lines_count - lines_max) in
   let pos = !lines_pos + dir in
   if pos >= oldest && pos <= !lines_count then begin
-    if !lines_pos = !lines_count then draft := Buffer.contents line;
+    if !lines_pos = !lines_count then draft := !line;
     lines_pos := pos;
     show_line (if pos = !lines_count then !draft else lines.(pos mod lines_max))
   end
+
+(* a line typed, or what there is of it (Ctrl-D), to the readers *)
+let give ~newline =
+  Buffer.add_string input !line;
+  if newline then Buffer.add_char input '\n';
+  line := ""; cur := 0
 
 let key k =
   if k = "\003" && !isig && !foreground > 0 then begin
@@ -532,44 +579,58 @@ let key k =
     let pid = !foreground in
     foreground := 0;
     output "^C\r\n";
-    Buffer.clear line; Buffer.clear input;
+    line := ""; cur := 0; Buffer.clear input;
     (try Mynos.kill pid with Mynos.Error _ -> ())
   end else
   if not !canon then begin
     Buffer.add_string input k;
     if !echo && k <> "" && k.[0] >= ' ' then output k
-  end else if k = "\027[A" || k = "\027OA" || k = "\016" then browse (-1)
-  else if k = "\027[B" || k = "\027OB" || k = "\014" then browse 1
-  else if k <> "" && k.[0] = '\027' then ()   (* no other editing keys in line mode *)
-  else begin
-    let i = ref 0 in
-    while !i < String.length k do
-      let c = k.[!i] in
-      (match c with
-       | '\r' | '\n' ->
-         if !echo then output "\r\n";
-         let typed = Buffer.contents line in
-         if !echo && remember typed then append_history typed;
-         lines_pos := !lines_count;
-         Buffer.add_buffer input line; Buffer.add_char input '\n'; Buffer.clear line
-       | '\127' | '\b' ->
-         let s = Buffer.contents line in
-         if s <> "" then begin
-           let j = ref (String.length s - 1) in
-           while !j > 0 && Char.code s.[!j] land 0xC0 = 0x80 do decr j done;
-           Buffer.clear line; Buffer.add_string line (String.sub s 0 !j);
-           if !echo then output "\b \b"
-         end
-       | '\004' ->
-         if Buffer.length line = 0 then eof := true
-         else (Buffer.add_buffer input line; Buffer.clear line)
-       | c when Char.code c < 0x20 -> ()
-       | c ->
-         Buffer.add_char line c;
-         if !echo then output_byte c);
-      incr i
-    done
-  end
+  end else
+    match k with
+    | "\027[A" | "\027OA" | "\016" -> browse (-1)          (* Up, Ctrl-P *)
+    | "\027[B" | "\027OB" | "\014" -> browse 1             (* Down, Ctrl-N *)
+    | "\027[D" | "\027OD" ->                               (* Left *)
+      if !cur > 0 then (cur := char_before !cur; echo_out "\b")
+    | "\027[C" | "\027OC" ->                               (* Right *)
+      let upto = char_after !cur in
+      echo_out (String.sub !line !cur (upto - !cur)); cur := upto
+    | "\027[H" | "\027OH" | "\027[1~" | "\027[7~" | "\001" ->  (* Home, Ctrl-A *)
+      echo_out (String.make (cells (String.sub !line 0 !cur)) '\b'); cur := 0
+    | "\027[F" | "\027OF" | "\027[4~" | "\027[8~" | "\005" ->  (* End, Ctrl-E *)
+      echo_out (String.sub !line !cur (String.length !line - !cur));
+      cur := String.length !line
+    | "\027[3~" -> delete_range !cur (char_after !cur)     (* Delete *)
+    | _ when k <> "" && k.[0] = '\027' -> ()   (* no other editing keys *)
+    | _ ->
+      (* typed or pasted: whole characters at a time *)
+      let n = String.length k in
+      let i = ref 0 in
+      while !i < n do
+        let c = k.[!i] in
+        let len =
+          let b = Char.code c in
+          if b land 0xE0 = 0xC0 then 2 else if b land 0xF0 = 0xE0 then 3
+          else if b land 0xF8 = 0xF0 then 4 else 1 in
+        let len = min len (n - !i) in
+        (match c with
+         | '\r' | '\n' ->
+           echo_out (String.sub !line !cur (String.length !line - !cur));
+           echo_out "\r\n";
+           let typed = !line in
+           if !echo && remember typed then append_history typed;
+           lines_pos := !lines_count;
+           give ~newline:true
+         | '\127' | '\b' ->
+           if !cur > 0 then begin
+             let from = char_before !cur in
+             echo_out "\b";
+             delete_range from !cur
+           end
+         | '\004' -> if !line = "" then eof := true else give ~newline:false
+         | c when Char.code c < 0x20 -> ()
+         | _ -> insert (String.sub k !i len));
+        i := !i + len
+      done
 
 let () =
   let me = Mynos.getpid () in

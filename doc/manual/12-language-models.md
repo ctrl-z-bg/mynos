@@ -84,8 +84,7 @@ LLM_LOCAL_URL=http://10.0.2.2:11434/v1
 ```
 
 **Your keys.** MyNOS has no users yet: any program in it can read
-`/disk/llm.env`, and `httpd` serves `/disk` to your computer (chapter 9),
-`llm.env` included. To keep a key out of MyNOS altogether, run on your
+`/disk/llm.env` (`httpd` does not serve it, chapter 9). To keep a key out of MyNOS altogether, run on your
 computer a proxy that adds it, point `URL` at it
 (`http://10.0.2.2:PORT/v1`) and leave `KEY` empty.
 

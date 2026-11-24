@@ -197,10 +197,9 @@ A line longer than the screen scrolls sideways.
 
 Other programs that read lines from the keyboard (the OCaml toplevel,
 `cat` reading what you type) get the console's own, simpler editing:
-Backspace, Up and Down (or Ctrl-P and Ctrl-N) for the history, Enter,
-and Ctrl-D for "end of input". There the cursor cannot be moved back
-into the line: erase up to the mistake and type again. A line has at
-most 255 characters.
+Left and Right, Home or Ctrl-A and End or Ctrl-E to move, Backspace and
+Delete, Up and Down (or Ctrl-P and Ctrl-N) for the history, Enter, and
+Ctrl-D for "end of input". A line has at most 255 characters.
 
 ## 6.7 The history
 
@@ -211,8 +210,8 @@ changed. Up again goes further back, Down forward again.
 lines of it when it starts, so the commands of earlier sessions come
 back too. The lines typed to other programs, the toplevel's phrases for
 example, have a history of their own, the last 64 lines, kept by
-`consoled` and the terminal windows in `/disk/.history`. Without a disk, both live only until
-the machine stops.
+`consoled` and the terminal windows in `/disk/.history`. Without a
+disk, both live only until the machine stops.
 
 ## 6.8 Completing with Tab
 

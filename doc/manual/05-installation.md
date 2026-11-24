@@ -203,7 +203,7 @@ the RAM disk; `init` reads its list, `init.rc`, and starts the rest:
                                 ├── displayd    the screen, for the windows
                                 ├── soundd      the sound card
                                 ├── llmd        language models
-                                ├── httpd       a web server on /disk
+                                ├── httpd       a web server on /disk/web
                                 └── sh          the command shell
 ```
 
@@ -218,7 +218,7 @@ On the host, `run-demo.sh` may print a few lines of its own:
 ```
 
 The second means that a browser on your computer can open
-`http://localhost:8080/` and see the files of MyNOS's disk, served by
+`http://localhost:8080/` and see the files of `/disk/web`, served by
 MyNOS's web server (chapter 9). If port 8080 is taken, the script says
 so and boots without it.
 
@@ -350,8 +350,8 @@ Three things to know about this file:
   the host's `llm.env` each time `run-demo.sh` runs. Edit the host's
   file, not the copy.
 - **MyNOS has no users yet.** Any program inside MyNOS can read
-  `/disk/llm.env`, and the web server `httpd` serves every file of
-  `/disk` (forwarded to the host's 127.0.0.1:8080 by `run-demo.sh`). To
+  `/disk/llm.env` (the web server `httpd` does not serve it: it serves
+  `/disk/web`, and never a `.env` file). To
   keep a key out of MyNOS altogether, `llm.env.example` suggests pointing
   `LLM_<NAME>_URL` at a proxy on the host that adds the key
   (`http://10.0.2.2:PORT/v1`), and leaving `LLM_<NAME>_KEY` empty.

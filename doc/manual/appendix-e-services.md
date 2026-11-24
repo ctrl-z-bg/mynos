@@ -421,8 +421,9 @@ absence of `ISIG` sets bit 4, VMIN and VTIME pass through.
   console) translate keys and edit the line; the main thread serves
   requests, one at a time. The input threads are native threads, which
   share their creator's TLS (A.4): they call no C library function.
-- *Line editing in the service*: UTF-8, Backspace, Ctrl-D for end of
-  file, the last 64 lines recalled with Up and Down (kept in
+- *Line editing in the service*: UTF-8, Left, Right, Home and End,
+  Backspace and Delete, Ctrl-D for end of file, the last 64 lines
+  recalled with Up and Down (kept in
   `/disk/.history`), the layout kept in `/disk/.keymap`. In raw mode the
   arrows are VT100 sequences.
 - *A raw mode belongs to its caller.* When another process reads while
@@ -443,8 +444,8 @@ one serves requests and never waits for input (a `read` with nothing to
 give is kept, with its channel, until a key comes: `decode` and `reply`
 of E.2), the other handles the display's events. `keymap` answers 0 and
 changes nothing: the keys reach displayd already translated by consoled.
-In line mode Up and Down bring back the lines of `/disk/.history`, the
-same as consoled's. Closing the window kills `sh` and what it started.
+Its line mode edits as consoled does, and Up and Down bring back the
+same lines, `/disk/.history`. Closing the window kills `sh` and what it started.
 
 ## E.12 netd: the network
 
@@ -496,7 +497,8 @@ function call rather than a message. Protocol **net/1**
 
 **httpd** (`httpd/httpd.ml`, OCaml, no privilege) registers no name: it
 is a client of net/1 and of the file services. `httpd [-w] [DIR [PORT]]`
-serves `/disk` on port 80 by default, HTTP/1.0: files and directory
+serves `/disk/web` on port 80 by default (made at its first start),
+HTTP/1.0: files and directory
 listings, not hidden or `.env` files (a path with `..` gets `403`);
 `PUT` and a form's `POST` write files, from the host only unless `-w`. Its main domain `accept`s; 8 worker domains serve the
 connections, each with a 10 s `set_timeout`, so that an idle browser

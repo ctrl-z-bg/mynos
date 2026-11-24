@@ -3651,3 +3651,29 @@ kept while browsing.
 **Lesson.** Two servers of one protocol must be compared by what a user
 does with them, not only by their requests: line editing is not in the
 protocol, and is what the user sees.
+
+The owner had meant Left and Right: the cursor could not be moved back
+into a line in either server (the book said so). Both now keep a cursor
+in the line and redraw only what follows it, with Backspace to move left
+and the characters themselves to move right: nothing but what every
+terminal understands, so the same writes serve the screen, the serial
+port and the window. A second lesson, for the agent: "the arrows" was
+read as Up and Down because those were the ones missing in one place;
+asking which arrows would have saved a round trip.
+
+## 2026-11-24 — httpd serves /disk/web, not /disk
+
+**Decision.** The owner's: the web server publishes a directory made
+for it, `/disk/web`, created at its first start, and receives uploads
+there. Before, it served the whole of `/disk`, the home directory too,
+with the shell's history and whatever a program saved; the `.env` and
+hidden-file filters (mynos-n16) were the only line between the disk and
+a browser.
+
+**Why.** A filter of names refuses what one thought of; a directory of
+its own publishes only what one put there. The filters stay, for a
+`.env` copied into `/disk/web` by mistake or a server started on
+another directory (`httpd /disk 8081`).
+
+**Lesson.** Publish by placing, not by excluding: the default should be
+that nothing is on the web until someone puts it there.

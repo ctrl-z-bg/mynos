@@ -80,6 +80,9 @@ mynos:/$ host nonexistent.invalid
 sh: host not found
 ```
 
+`example.com` has several addresses, which change: the name server may
+give you another one than this book's.
+
 `ifconfig`, `ping` and `host` are built into `sh`: they are typed
 requests to `netd` (`Config`, `Ping`, `Resolve` of protocol `net/1`),
 made by the shell itself.
@@ -192,9 +195,10 @@ HTTP, and certificates are not checked for revocation.
 
 ## 9.7 MyNOS as a web server — `httpd`
 
-`init` starts `httpd` at boot. It serves the files of `/disk` over HTTP
-on port 80: a directory is shown as a list of links, a file is sent as
-it is.
+`init` starts `httpd` at boot. It serves the files of `/disk/web` over
+HTTP on port 80: a directory is shown as a list of links, a file is sent
+as it is. `httpd` makes `/disk/web` at its first start, empty: what you
+put there is on the web, the rest of `/disk` is not.
 
 **From your computer.** `tools/run-demo.sh` forwards your computer's port
 8080 to MyNOS's port 80, if 8080 is free, and says so:
@@ -242,16 +246,11 @@ What `httpd` does, exactly:
 - each request is written to the kernel log (`httpd: 10.0.2.2 GET /
   HTTP/1.1`), not on the screen.
 
-**Be careful what you put on `/disk`.** `httpd` serves all of it,
-including `/disk/llm.env`, the file that holds your language model keys
-(chapter 12), to anyone who can reach the forwarded port. On your own
-computer that is you; do not forward the port further.
-
 **Files from your computer into MyNOS.** `httpd` also receives files:
 
 ```
-$ curl -T notes.txt http://localhost:8080/             (/disk/notes.txt)
-$ curl -T photo.png http://localhost:8080/img/a.png    (/disk/img/a.png)
+$ curl -T notes.txt http://localhost:8080/           (/disk/web/notes.txt)
+$ curl -T photo.png http://localhost:8080/img/a.png  (/disk/web/img/a.png)
 ```
 
 Missing directories are made, and a file of the same name is replaced
@@ -260,20 +259,20 @@ listing ends with an **Upload** form, which sends one or more files into
 it. Writing is allowed only to the computer QEMU runs on (in QEMU,
 connections forwarded from it come from 10.0.2.2), and only to requests
 that name MyNOS in `Host` and, if they carry one, in `Origin`, so that
-a page of another site, open in your browser, cannot write to your
-disk. `httpd -w` allows writing to anyone who can reach it: for a real
+a page of another site, open in your browser, cannot write to
+`/disk/web`. `httpd -w` allows writing to anyone who can reach it: for a real
 network, think first. `.env` files are never written.
 
 Downloading through `httpd` is the way out of MyNOS: a recording
-converted for Perfetto (chapter 11) is written to `/disk` and opened from
-your browser.
+converted for Perfetto (chapter 11) is written to `/disk/web` and opened
+from your browser.
 
 `httpd` can serve another directory or port: `httpd [-w] [DIR [PORT]]`, for
-instance `httpd /tmp 8081 &`. A program inside MyNOS can reach MyNOS's
+instance `httpd /tmp 8081 &`, or the whole disk with `httpd /disk 8081 &`. A program inside MyNOS can reach MyNOS's
 own address too: `fetch http://10.0.2.15/` asks `httpd` (the packets go
-back in through lwIP's loopback, without the card). `httpd` serves
-neither hidden files nor `.env` files: `llm.env`, which holds the
-models' keys, is not served, nor listed.
+back in through lwIP's loopback, without the card). Whatever its
+directory, `httpd` serves neither hidden files nor `.env` files, which
+hold configuration and keys: they are not sent, nor listed.
 
 > **THE MyNOS FACTOR — The network is a program you can watch.**
 > In MyNOS the TCP/IP stack and the card's driver are one ordinary

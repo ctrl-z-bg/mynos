@@ -316,8 +316,8 @@ Files window and the file pickers of Recordings and System accept both.
 | `s`, `f` | a flow arrow from the request to its handling |
 
 Times are in microseconds; a call whose end is not in the recording is
-drawn to the last event. `httpd` serves `/disk`, so a JSON file written
-there can be downloaded by the host's browser through the forwarded
+drawn to the last event. `httpd` serves `/disk/web`, so a JSON file
+written there can be downloaded by the host's browser through the forwarded
 port (H.6) and opened in Perfetto.
 
 ## G.12 The `trace` command

@@ -155,7 +155,7 @@ let ts = Tools.of_service "net" in
 let names = List.map (fun t -> t.Tools.tool.Llm.name) ts in
   (* ["net_config"; "net_ping"; "net_resolve"; "net_connect"; ...] *)
 let ip = Tools.call (Tools.find ts "net_resolve") {|{"name": "example.com"}|} in
-  (* "\"172.66.147.243\"": a JSON string *)
+  (* "\"104.20.23.154\"": a JSON string *)
 ...
 ```
 

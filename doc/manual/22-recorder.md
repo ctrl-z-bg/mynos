@@ -259,7 +259,7 @@ Array.iter (fun (e : Tracer.event) ->
 ```
 
 **Perfetto.** `Tracer.to_json r` is a string of JSON; written to a file
-under `/disk`, it can be fetched from the host through `httpd` and
+under `/disk/web`, it can be fetched from the host through `httpd` and
 opened in `ui.perfetto.dev`, where each process is a track and each
 call a box on its client's and its server's (G.11).
 

@@ -184,7 +184,7 @@ All services are linked statically against `libmynos` and placed at
   curl (`fetch -i -H ... -d ... URL`). One lwIP thread; a second one receives the requests;
   requests that wait (`Recv`, `Accept`...) keep their channel open until
   lwIP's callback replies. `sh` has `ifconfig`, `ping`, `host`; `httpd`
-  (`httpd/httpd.ml`, OCaml) serves `/disk` over HTTP with 8 worker domains
+  (`httpd/httpd.ml`, OCaml) serves `/disk/web` over HTTP with 8 worker domains
   (idle connections time out after 10 s), and
   `tools/run-demo.sh` forwards the host's port 8080 to it. It receives
   files too (mynos-god): `PUT` (`curl -T`) and an Upload form in each
@@ -1859,3 +1859,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   lines there too, as on the console. The window keeps the last 64 and
   shares them with consoled through `/disk/.history`. The graphical
   test checks it (`cat`, a line, Up, Enter).
+- **2026-11-24** — Line mode edits the whole line, in consoled and in
+  terminal windows: Left and Right, Home and End (Ctrl-A, Ctrl-E),
+  Delete, and typing or Backspace in the middle of the line. On the
+  console, from the keyboard and from the serial port's escape
+  sequences. The OCaml toplevel and `cat` get it; `sh` keeps its own.
+  The console and graphical tests check it.
+- **2026-11-24** — `httpd` serves `/disk/web`, not the whole of `/disk`,
+  and writes uploads (`PUT`, the form) there: it makes the directory at
+  its first start. `httpd /disk 8081 &` still serves the whole disk.
+  Hidden and `.env` files stay refused in any directory. The manual's
+  chapter 9 lost its warning about what is on `/disk`.

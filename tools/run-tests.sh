@@ -240,6 +240,11 @@ if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     # character, Enter as \r
     printf 'from serial \303\250\177\303\251\r' >> "$tmp/com2.in"
     sleep 2
+    # the cursor moved in the line: Left, Home, End (keyboard), then
+    # Left, Delete, Home from the serial port's escape sequences
+    keys a c left b home x end y ret
+    printf '12\033[D\033[3~3\033[H0\r' >> "$tmp/com2.in"
+    sleep 2
     keys ctrl-d
     sleep 2
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon" >/dev/null || true
@@ -381,10 +386,13 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     to 160 166; mon "mouse_button 1"; mon "mouse_button 0"; mon "mouse_button 1"; mon "mouse_button 0"; sleep 1
     tools/type-keys.py "$tmp/mon-g" 'echo sel-'; mon "mouse_button 2"; mon "mouse_button 0"; sleep 1
     tools/type-keys.py "$tmp/mon-g" ' > /tmp/sel.txt\n'; sleep 3
-    # line mode in the terminal window: Up brings the last line back
+    # line mode in the terminal window: Up brings the last line back;
+    # Home, Delete and a letter edit it, Left and End move in it
     tools/type-keys.py "$tmp/mon-g" 'cat > /tmp/hist.txt\n'; sleep 2
     tools/type-keys.py "$tmp/mon-g" 'hist-up\n'; sleep 1
-    mon "sendkey up"; mon "sendkey ret"; sleep 1; mon "sendkey ctrl-d"; sleep 2
+    mon "sendkey up"; mon "sendkey ret"; sleep 1
+    for k in up home delete shift-h left end ret; do mon "sendkey $k"; done
+    sleep 1; mon "sendkey ctrl-d"; sleep 2
     # the agent window (the menu's fifth item, at 168,182): a task, the
     # confirmation it waits for, Allow (at the bottom of the window)
     click 20 10; sleep 1; click 40 127; sleep 10
@@ -513,7 +521,7 @@ s = open(sys.argv[1], "rb").read().decode("latin-1")
 assert s.count("agentwin-ok") >= 2, "aw.txt copied to /disk by Files"
 assert "newdir" in s, "a folder made by Files"
 assert "ctrlc-137" in s, "Ctrl-C in the terminal window"
-assert re.search(r"hist-up\s+hist-up", s), "Up in the terminal window's line mode"
+assert re.search(r"hist-up\s+hist-up\s+Hist-up", s), "Up, Home, Delete in the terminal window's line mode"
 PY
     grep -aq '"name": "windtree"' "$tmp/logg" && pkgwin_ok=yes
     cat "$tmp/logg" >> "$part"
@@ -664,7 +672,7 @@ if [ -f system/ramdisk.dsk ]; then
         python3 -c 'import wave, math
 w = wave.open("tests/fat/run-a440.wav", "wb"); w.setnchannels(1); w.setsampwidth(1); w.setframerate(11025)
 w.writeframes(bytes(int(128 + 100 * math.sin(2 * math.pi * 440 * i / 11025)) for i in range(5512))); w.close()'
-        tools/in-container.sh dev sh -c "mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/llm.env && mcopy -i tests/fat/run-shell.img tests/fat/run-utf8.txt ::/utf8.txt && mcopy -i tests/fat/run-shell.img tests/greeter/greeter.byte ::/greeter.byte && mcopy -i tests/fat/run-shell.img tests/stdio/stdio ::/stdio-test && mcopy -i tests/fat/run-shell.img tests/zmachine/czech.z5 ::/czech.z5 && mcopy -i tests/fat/run-shell.img tests/fat/run-a440.wav ::/a440.wav"
+        tools/in-container.sh dev sh -c "mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/llm.env && mcopy -i tests/fat/run-shell.img tests/fat/run-utf8.txt ::/utf8.txt && mcopy -i tests/fat/run-shell.img tests/greeter/greeter.byte ::/greeter.byte && mcopy -i tests/fat/run-shell.img tests/stdio/stdio ::/stdio-test && mcopy -i tests/fat/run-shell.img tests/zmachine/czech.z5 ::/czech.z5 && mcopy -i tests/fat/run-shell.img tests/fat/run-a440.wav ::/a440.wav && mmd -i tests/fat/run-shell.img ::/web && mcopy -i tests/fat/run-shell.img tests/greeter/greeter.byte ::/web/greeter.byte && mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/web/llm.env"
         rm -f tests/fat/run-utf8.txt tests/fat/run-a440.wav
     fi
     tools/net-peer.py llm 47090 & llm7_pid=$!
@@ -788,13 +796,15 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
     tools/type-keys.py "$tmp/mon7" "echo 'let () = let t = Thread.create (fun () -> print_endline (\"from-a-\" ^ \"thread\")) () in Thread.join t' > /disk/th.ml\n"; sleep 2
     tools/type-keys.py "$tmp/mon7" "echo 'let () = let d = Ipc.describe \"console\" in if d.Ipc.summary = Console.Protocol.summary && d.requests = Console.Protocol.requests then print_endline (\"console-\" ^ \"described\")' >> /disk/th.ml\n"; sleep 2
     tools/type-keys.py "$tmp/mon7" 'ocamlc -use-prims /primitives mynos.cma unix.cma threads.cma -noautolink -o /disk/th.byte /disk/th.ml && /disk/th.byte\n'; sleep 25
-    # httpd serves /disk, but not its .env files (the models' keys:
-    # mynos-n16), neither by name nor in the listing
+    # httpd serves /disk/web (made before this boot: kept as it is), not
+    # the rest of /disk, and not its .env files (mynos-n16), neither by
+    # name nor in the listing
     httpd_private=
     if curl -s -m 5 http://127.0.0.1:47180/ | grep -q 'greeter.byte' &&
        ! curl -s -m 5 http://127.0.0.1:47180/ | grep -qi 'llm.env' &&
        [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:47180/llm.env)" = 404 ] &&
-       [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:47180/LLM.ENV)" = 404 ]; then
+       [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:47180/LLM.ENV)" = 404 ] &&
+       [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:47180/utf8.txt)" = 404 ]; then
         httpd_private=yes
     fi
     # httpd receives files from the host (QEMU's 10.0.2.2): PUT, into a
@@ -812,7 +822,7 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
        curl -s -m 10 $u/up/ | grep -q 'multipart/form-data'; then
         httpd_upload=yes
     fi
-    tools/type-keys.py "$tmp/mon7" 'cat /disk/up/a/up1.txt /disk/up/up1.txt\n'; sleep 2
+    tools/type-keys.py "$tmp/mon7" 'cat /disk/web/up/a/up1.txt /disk/web/up/up1.txt\n'; sleep 2
     # the kernel's log, read inside MyNOS (mynos-lfv): its boot messages
     # come back on the console, so the log port sees them twice
     tools/type-keys.py "$tmp/mon7" 'log\n'; sleep 4
@@ -1153,7 +1163,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "windtree-2"                                # ran: no session
     expect "windtree   1.0      compiled from its sources"   # pkg list -i
     expect "pkg: 2048 removed"
-    expect "pkg: utils 1.1 installed (its bytecode): grep wc head tail sort uniq find du df hexdump tree clip"
+    expect "pkg: utils 1.2 installed (its bytecode): grep wc head tail sort uniq find du df hexdump tree clip top"
     expect "1:alpha"                                  # sort | head | grep
     expect "1267650600228229401496703205376"          # calc
     expect "1/2 = 0.5"
@@ -1188,9 +1198,9 @@ if [ -f system/ramdisk.dsk ]; then
         echo "FAIL  sound: a WAV file and a tone, as the card played them"; fail=1
     fi
     if [ -n "$httpd_private" ]; then
-        echo "ok    httpd: serves /disk, not its .env files"
+        echo "ok    httpd: serves /disk/web, not its .env files"
     else
-        echo "FAIL  httpd: serves /disk, not its .env files"; fail=1
+        echo "FAIL  httpd: serves /disk/web, not its .env files"; fail=1
     fi
     if [ -n "$httpd_upload" ] && [ "$(grep -ac 'put-by-the-host' "$log7")" -ge 2 ]; then
         echo "ok    httpd: receives files from the host (PUT, a form)"
@@ -1291,9 +1301,9 @@ PY
     expect "keys: up ESC[C, held"
     expect "keys: up q, held"
     if [ -n "$files_ok" ]; then
-        echo "ok    files: a file copied between services, a folder made; Ctrl-C and Up in a terminal"
+        echo "ok    files: a file copied between services, a folder made; Ctrl-C and line editing in a terminal"
     else
-        echo "FAIL  files: a file copied between services, a folder made; Ctrl-C and Up in a terminal"; fail=1
+        echo "FAIL  files: a file copied between services, a folder made; Ctrl-C and line editing in a terminal"; fail=1
     fi
     if [ -n "$pkgwin_ok" ]; then
         echo "ok    gui: the Packages window read the index through pkg"
@@ -1348,7 +1358,9 @@ if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     expect 'console: line 1: "hi"'
     expect 'console: line 2: "OK"'
     expect 'console: line 3: "from serial \195\169"'
-    expect "console: end of input after 3 lines"
+    expect 'console: line 4: "xabcy"'
+    expect 'console: line 5: "013"'
+    expect "console: end of input after 5 lines"
 fi
 reject "PANIC"
 reject "page fault (?)"

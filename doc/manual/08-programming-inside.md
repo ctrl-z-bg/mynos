@@ -47,9 +47,9 @@ mistake is reported, and the toplevel waits for the next phrase:
 
 Things to know:
 
-- **Line editing is the console's** (6.6): Backspace, and Up and Down
-  for the phrases typed before, kept in `/disk/.history` across
-  restarts. The cursor cannot be moved back into the line.
+- **Line editing is the console's** (6.6): Left and Right, Home and End to
+  move, Backspace and Delete, and Up and Down for the phrases typed
+  before, kept in `/disk/.history` across restarts.
 - **To leave**, type `#quit;;` or press Ctrl-D: you are back in `sh`.
 - **Ctrl-C ends the whole toplevel**, not only the phrase that is
   running, and what you defined is lost; `sh`'s prompt comes back

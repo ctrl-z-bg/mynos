@@ -103,12 +103,12 @@ disk driver for four sectors. In step 1 the file had been read before:
 | `trace show FILE` | every event, one per line: `=>` a connection, `->` sent, `<-` received, `+` born, `x` ended, `!` an interrupt, `#` a mark |
 | `trace json FILE OUT` | a file for Perfetto, the timeline viewer of `ui.perfetto.dev` |
 
-To see the Perfetto file on your computer, write it on `/disk` and
+To see the Perfetto file on your computer, write it in `/disk/web` and
 download it through `httpd` (chapter 9):
 
 ```
-mynos:/$ trace json /tmp/h.trc /disk/h.json
-/disk/h.json: open it in ui.perfetto.dev
+mynos:/$ trace json /tmp/h.trc /disk/web/h.json
+/disk/web/h.json: open it in ui.perfetto.dev
 ```
 
 then open `http://localhost:8080/h.json`, save it, and open it in

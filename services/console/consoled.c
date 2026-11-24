@@ -11,7 +11,8 @@
 
 /*
  * consoled: the console service. It owns the keyboard (IRQ 1), edits the
- * line being typed (echo, backspace, Ctrl-D for end of file) and gives
+ * line being typed (echo, Backspace and Delete, the cursor moved with Left,
+ * Right, Home and End or Ctrl-A and Ctrl-E, Ctrl-D for end of file) and gives
  * complete lines to clients over IPC: it is what a program reads as its
  * standard input (see mynos-lib/src/fileio.c). Output still goes straight
  * to the kernel's screen driver.
@@ -74,9 +75,11 @@
 /* an arrow, Home or End with Shift (selecting text: ESC [ 1 ; 2 A...) */
 #define SHIFTED 0x2000000
 
-/* the line being edited (keyboard thread only) */
+/* the line being edited (keyboard thread only), and the cursor in it
+   (a byte offset, at the start of a character) */
 static char line[LINE_MAX];
 static int line_len = 0;
+static int cur = 0;
 
 /* history: a ring of the last HIST_MAX lines, without their newline,
    protected by hist_lock (the keyboard thread edits it, the main thread
@@ -214,11 +217,67 @@ static void queue_input(const char * s, int n, int eof)
   mynos_V(available);
 }
 
+/* the cursor back over n cells (Backspace moves it, erasing nothing) */
+static void cursor_back(int n)
+{
+  static char back[LINE_MAX + 1];
+  if (n <= 0) return;
+  memset(back, '\b', n);
+  raw_write(back, n);
+}
+
+/* the line from the cursor on drawn again, with `blank` cells cleared
+   after it (what a deletion left), and the cursor back in its place */
+static void redraw_tail(int blank)
+{
+  raw_write(line + cur, line_len - cur);
+  raw_write("  ", blank);
+  cursor_back(cells(line + cur, line_len - cur) + blank);
+}
+
+/* the character before or after the cursor: its first byte */
+static int char_before(int i)
+{
+  if (i > 0) i--;
+  while (i > 0 && (line[i] & 0xC0) == 0x80) i--;
+  return i;
+}
+static int char_after(int i)
+{
+  if (i < line_len) i++;
+  while (i < line_len && (line[i] & 0xC0) == 0x80) i++;
+  return i;
+}
+
+/* text typed at the cursor: inserted, the rest of the line moved on */
+static void insert(const char * s, int n)
+{
+  if (line_len + n >= LINE_MAX - 1) return;
+  memmove(line + cur + n, line + cur, line_len - cur);
+  memcpy(line + cur, s, n);
+  line_len += n;
+  raw_write(s, n);
+  cur += n;
+  if (cur < line_len) redraw_tail(0);
+}
+
+/* the bytes from..to taken out of the line, the cursor at `from` (on
+   screen it is there already) */
+static void delete_range(int from, int to)
+{
+  if (to <= from) return;
+  memmove(line + from, line + to, line_len - to);
+  line_len -= to - from;
+  cur = from;
+  redraw_tail(1);
+}
+
 /* replace the line on screen and in the buffer */
 static void show_line(const char * s, int n)
 {
   static char erase[3 * LINE_MAX];
   int i, shown = cells(line, line_len);
+  raw_write(line + cur, line_len - cur);      /* to the line's end first */
   for (i = 0; i < shown; i++) {
     erase[3 * i] = '\b';
     erase[3 * i + 1] = ' ';
@@ -227,6 +286,7 @@ static void show_line(const char * s, int n)
   raw_write(erase, 3 * shown);
   memcpy(line, s, n);
   line_len = n;
+  cur = n;
   raw_write(line, line_len);
 }
 
@@ -524,38 +584,46 @@ static void key_typed(unsigned int c)
     history_move(-1);
   } else if (c == KEY_DOWN || c == CTRL_N) {
     history_move(+1);
+  } else if (c == KEY_LEFT) {         /* the cursor along the line */
+    if (cur > 0) { cur = char_before(cur); raw_write("\b", 1); }
+  } else if (c == KEY_RIGHT) {
+    int to = char_after(cur);
+    raw_write(line + cur, to - cur);
+    cur = to;
+  } else if (c == KEY_HOME || c == 0x01) {   /* Home, Ctrl-A */
+    cursor_back(cells(line, cur));
+    cur = 0;
+  } else if (c == KEY_END || c == 0x05) {    /* End, Ctrl-E */
+    raw_write(line + cur, line_len - cur);
+    cur = line_len;
   } else if (c == '\n' || c == '\r') {
     raw_write("\n", 1);
     history_add();
     hist_pos = hist_count;
     line[line_len++] = '\n';
     queue_input(line, line_len, 0);
-    line_len = 0;
+    line_len = cur = 0;
   } else if (c == 0x08) {              /* backspace: a whole character */
-    if (line_len > 0) {
-      while (line_len > 1 && (line[line_len - 1] & 0xC0) == 0x80) line_len--;
-      line_len--;
-      raw_write("\b \b", 3);
+    if (cur > 0) {
+      int from = char_before(cur);
+      raw_write("\b", 1);
+      delete_range(from, cur);
     }
+  } else if (c == KEY_DELETE) {        /* the character under the cursor */
+    delete_range(cur, char_after(cur));
   } else if (c & UNI) {
     char u[4];
-    int n = utf8_encode(c & ~UNI, u);
-    if (line_len + n < LINE_MAX - 1) {
-      memcpy(line + line_len, u, n);
-      line_len += n;
-      raw_write(u, n);
-    }
+    insert(u, utf8_encode(c & ~UNI, u));
   } else if (c == 0x04) {              /* Ctrl-D */
     if (line_len == 0)
       queue_input("", 0, 1);           /* end of file */
     else {
       queue_input(line, line_len, 0);  /* flush the partial line */
-      line_len = 0;
+      line_len = cur = 0;
     }
-  } else if (c >= 0x20 && c < 0x7F && line_len < LINE_MAX - 1) {
+  } else if (c >= 0x20 && c < 0x7F) {
     char ch = (char)c;
-    line[line_len++] = ch;
-    raw_write(&ch, 1);
+    insert(&ch, 1);
   }
 }
 
@@ -576,7 +644,7 @@ static void input(unsigned int c)
     int pid = foreground;
     foreground = 0;
     raw_write("^C\n", 3);
-    line_len = 0;
+    line_len = cur = 0;
     mynos_P(lock);
     queue_len = 0;
     mynos_V(lock);
@@ -720,6 +788,11 @@ static void * serial_thread(void * arg)
 	esc = 0;
 	if (b == 'A') input(KEY_UP);
 	else if (b == 'B') input(KEY_DOWN);
+	else if (b == 'C') input(KEY_RIGHT);
+	else if (b == 'D') input(KEY_LEFT);
+	else if (b == 'H' || (b == '~' && (param == 1 || param == 7))) input(KEY_HOME);
+	else if (b == 'F' || (b == '~' && (param == 4 || param == 8))) input(KEY_END);
+	else if (b == '~' && param == 3) input(KEY_DELETE);
 	continue;                      /* others: not for line editing */
       }
       if (u_left > 0) {
@@ -960,7 +1033,7 @@ int main()
       vmin = a2;
       vtime = a3;
       mode_owner = caller;
-      if (canon) line_len = 0;
+      if (canon) line_len = cur = 0;
       wire_reply_ok(&w);
     } else {                     /* CONSOLE_WRITE: to the screen */
       if (dlen) write(1, data, dlen);

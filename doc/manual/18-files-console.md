@@ -237,8 +237,8 @@ graphical session. It serves console/1 (`mynos-lib/ocaml/console.mli`,
 | 6 | `Ready` | a `Read` would answer at once (`poll`) |
 
 **Line mode** (`canon`, the default) edits the line in the service:
-Backspace, Ctrl-D for the end of input, Up and Down for the last
-lines;
+Left and Right, Home and End, Backspace and Delete, Ctrl-D for the end of
+input, Up and Down for the last lines;
 a `read` returns a whole line. **Raw mode** passes keys as they come,
 the arrows and editing keys as VT100 sequences (`ESC [ A` for Up). In
 raw mode `vmin` and `vtime` mean what they mean in termios: with
