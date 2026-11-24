@@ -32,6 +32,9 @@
  */
 
 #include <dirent.h>
+#include <poll.h>
+#include <signal.h>
+#include <sys/select.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -333,6 +336,15 @@ int ioctl(int fd, IOCTL_REQ req, ...)
   va_start(ap, req);
   arg = va_arg(ap, void *);
   va_end(ap);
+  if (SOCKET(fd) && (req == FIONBIO || req == FIONREAD)) {
+    if (req == FIONREAD) { *(int *)arg = 0; return 0; }   /* not known */
+    {
+      int fl = __mynos_sock_ops->fcntl(fd, F_GETFL, 0);
+      if (fl < 0) return -1;
+      return __mynos_sock_ops->fcntl(fd, F_SETFL, *(int *)arg ? fl | O_NONBLOCK
+                                                     : fl & ~O_NONBLOCK);
+    }
+  }
   if (fd >= 0 && fd <= 2 && std_fd(fd) != fd) {   /* redirected to a file */
     errno = ENOTTY;
     return -1;
@@ -687,6 +699,154 @@ static int std_fd(int fd)
   if (fd < 0 || fd > 2) return fd;
   redir_init();
   return redirected[fd] >= 0 ? redirected[fd] : fd;
+}
+
+/* ---- waiting on several descriptors: poll, select (mynos-x8i) ---- */
+
+/* whether a Read of the console would answer at once; a console that
+   cannot say (an older one) is taken as ready: the read waits then */
+static int console_ready(void)
+{
+  wire_writer w;
+  wire_reader r;
+  mynos_msg_t * msg;
+  int ready;
+  console_start(&w, CONSOLE_READY);
+  if (console_request(console_cache.port, &w, &r, &msg) < 0) return 1;
+  ready = wire_get_bool(&r);
+  if (r.error) ready = 1;
+  mynos_freeMsg(&msg);
+  return ready;
+}
+
+#define POLL_SLICE_MS 20          /* the console and sockets: asked in turn */
+#define POLL_MAX 256
+
+/* Files, stdout and stderr are always ready, as on Linux; the console
+   when a Read would answer at once; sockets when netd says so (its Poll
+   waits for them). With the console and sockets together, netd is asked
+   to wait at most POLL_SLICE_MS, then the console again. */
+int poll(struct pollfd * fds, nfds_t nfds, int timeout)
+{
+  long deadline = timeout > 0 ? now_ms() + timeout : 0;
+  int sfd[POLL_MAX], sidx[POLL_MAX];
+  short sev[POLL_MAX], srev[POLL_MAX];
+  if (nfds > POLL_MAX) { errno = EINVAL; return -1; }
+  for (;;) {
+    int count = 0, nsock = 0, console = 0, i;
+    long left = timeout < 0 ? -1 : timeout == 0 ? 0 : deadline - now_ms();
+    if (left < -1) left = 0;
+    for (i = 0; i < (int)nfds; i++) {
+      int fd = fds[i].fd, f;
+      short ev = 0;
+      fds[i].revents = 0;
+      if (fd < 0) continue;
+      f = std_fd(fd);
+      if (SOCKET(f)) {
+        sfd[nsock] = f;
+        sev[nsock] = fds[i].events;
+        sidx[nsock++] = i;
+        continue;
+      }
+      if (f == 0 && service_port(console_name(), &console_cache) >= 0) {
+        console = 1;
+        if ((fds[i].events & (POLLIN | POLLRDNORM)) && console_ready())
+          ev = POLLIN | POLLRDNORM;
+      } else if (f >= FD_BASE && file_slot(f) < 0)
+        ev = POLLNVAL;
+      else
+        ev = POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM;
+      fds[i].revents = ev & (fds[i].events | POLLHUP | POLLERR | POLLNVAL);
+      if (fds[i].revents) count++;
+    }
+    if (nsock) {
+      long wait = count ? 0 : console ? (left < 0 || left > POLL_SLICE_MS
+                                         ? POLL_SLICE_MS : left) : left;
+      if (__mynos_sock_ops->poll(sfd, sev, nsock, (int)wait, srev) < 0) return -1;
+      for (i = 0; i < nsock; i++) {
+        fds[sidx[i]].revents = srev[i];
+        if (srev[i]) count++;
+      }
+    }
+    if (count || timeout == 0 || (timeout > 0 && now_ms() >= deadline))
+      return count;
+    if (!nsock) {                       /* the console, or nothing: wait */
+      long nap = POLL_SLICE_MS;
+      if (timeout > 0 && deadline - now_ms() < nap) nap = deadline - now_ms();
+      if (!console && timeout > 0) nap = deadline - now_ms();
+      if (nap > 0) mynos_sleep(nap * 1000);
+    }
+  }
+}
+
+int ppoll(struct pollfd * fds, nfds_t nfds, const struct timespec * ts,
+          const sigset_t * mask)
+{
+  (void)mask;                           /* no signals are delivered */
+  return poll(fds, nfds, ts ? (int)(ts->tv_sec * 1000 + (ts->tv_nsec + 999999) / 1000000) : -1);
+}
+
+/* select, over poll */
+static int select_ms(int n, fd_set * rd, fd_set * wr, fd_set * ex, int ms)
+{
+  struct pollfd p[POLL_MAX];
+  int i, k = 0, count = 0;
+  if (n < 0 || n > FD_SETSIZE) { errno = EINVAL; return -1; }
+  for (i = 0; i < n; i++) {
+    short ev = 0;
+    if (rd && FD_ISSET(i, rd)) ev |= POLLIN;
+    if (wr && FD_ISSET(i, wr)) ev |= POLLOUT;
+    if (ex && FD_ISSET(i, ex)) ev |= POLLPRI;
+    if (!ev) continue;
+    if (k == POLL_MAX) { errno = EINVAL; return -1; }
+    p[k].fd = i;
+    p[k].events = ev;
+    k++;
+  }
+  if (poll(p, k, ms) < 0) return -1;
+  for (i = 0; i < k; i++)
+    if (p[i].revents & POLLNVAL) { errno = EBADF; return -1; }
+  if (rd) FD_ZERO(rd);
+  if (wr) FD_ZERO(wr);
+  if (ex) FD_ZERO(ex);
+  for (i = 0; i < k; i++) {
+    short r = p[i].revents;
+    if (rd && (p[i].events & POLLIN) && (r & (POLLIN | POLLHUP | POLLERR))) {
+      FD_SET(p[i].fd, rd); count++;
+    }
+    if (wr && (p[i].events & POLLOUT) && (r & (POLLOUT | POLLERR))) {
+      FD_SET(p[i].fd, wr); count++;
+    }
+  }
+  return count;
+}
+
+int select(int n, fd_set * rd, fd_set * wr, fd_set * ex, struct timeval * tv)
+{
+  return select_ms(n, rd, wr, ex,
+                   tv ? (int)(tv->tv_sec * 1000 + (tv->tv_usec + 999) / 1000) : -1);
+}
+
+int pselect(int n, fd_set * rd, fd_set * wr, fd_set * ex,
+            const struct timespec * ts, const sigset_t * mask)
+{
+  (void)mask;
+  return select_ms(n, rd, wr, ex,
+                   ts ? (int)(ts->tv_sec * 1000 + (ts->tv_nsec + 999999) / 1000000) : -1);
+}
+
+/* fcntl: a socket's flags here (O_NONBLOCK); the rest to the kernel, as
+   musl's would (which has no fcntl: -ENOSYS) */
+int fcntl(int fd, int cmd, ...)
+{
+  va_list ap;
+  long arg;
+  va_start(ap, cmd);
+  arg = va_arg(ap, long);
+  va_end(ap);
+  if (SOCKET(fd)) return __mynos_sock_ops->fcntl(fd, cmd, arg);
+  if (cmd == F_SETFL) arg |= O_LARGEFILE;
+  return result(sys3(221 /* fcntl64 */, fd, cmd, arg));
 }
 
 /* ---- the replaced functions ---- */

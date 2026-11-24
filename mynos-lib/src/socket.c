@@ -24,15 +24,22 @@
  * in recv while another sends on the same socket (netd keeps one waiting
  * Recv and one Send per socket).
  *
- * Not here: non-blocking sockets, select and poll (mynos-x8i); a half
- * close (net/1 has none: shutdown(SHUT_WR) fails); MSG_DONTWAIT; options
- * other than the timeouts (others are accepted and do nothing); a bind to
- * one address (a socket listens on all). Sockets belong to the process
- * that made them: a child after fork cannot use its parent's.
+ * poll and select (fileio.c) ask netd's Poll, which answers as soon as
+ * one of the sockets is ready. A non-blocking socket (O_NONBLOCK,
+ * SOCK_NONBLOCK, MSG_DONTWAIT) asks it first, with no wait, and gives
+ * EAGAIN when the call would wait; its connect still waits for the
+ * connection (and returns 0, never EINPROGRESS).
+ *
+ * Not here: a half close (net/1 has none: shutdown(SHUT_WR) fails);
+ * options other than the timeouts (others are accepted and do nothing); a
+ * bind to one address (a socket listens on all). Sockets belong to the
+ * process that made them: a child after fork cannot use its parent's.
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
+#include <poll.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,7 +55,14 @@
 #define NET "net/1"
 enum { N_CONFIG = 0, N_RESOLVE = 2, N_CONNECT = 3, N_LISTEN = 4,
        N_ACCEPT = 5, N_SEND = 6, N_RECV = 7, N_CLOSE = 8, N_TIMEOUT = 9,
-       N_UDP_BIND = 11, N_SEND_TO = 12, N_RECV_FROM = 13 };
+       N_UDP_BIND = 11, N_SEND_TO = 12, N_RECV_FROM = 13, N_POLL = 14 };
+
+/* netd's Poll flags */
+#define P_IN   1
+#define P_OUT  2
+#define P_HUP  4
+#define P_ERR  8
+#define P_NVAL 16
 
 #define MAXRECV  16384          /* netd's most per Recv */
 #define MAXSEND  32768          /* our most per Send */
@@ -65,6 +79,7 @@ struct msock {
   int timeout_ms;               /* SO_RCVTIMEO (0: none) */
   char * peeked;                /* bytes MSG_PEEK read, still to be read */
   size_t npeeked;
+  int nonblock;                 /* O_NONBLOCK */
 };
 
 static struct msock socks[SOCK_FD_MAX];
@@ -176,6 +191,37 @@ static void net_close(int id)
   errno = saved;
 }
 
+/* netd's Poll: the flags of n of its sockets, as soon as one is ready or
+   after timeout_ms (negative: no limit); 0, or -1 */
+static int net_poll(const int * ids, const int * events, int n,
+                    int timeout_ms, int * flags)
+{
+  wire_writer w;
+  wire_reader r;
+  mynos_msg_t * msg;
+  int i;
+  net_start(&w, N_POLL);
+  wire_put_int(&w, n);
+  for (i = 0; i < n; i++) { wire_put_int(&w, ids[i]); wire_put_int(&w, events[i]); }
+  wire_put_int(&w, timeout_ms);
+  if (net_call(&w, &r, &msg) < 0) return -1;
+  if (wire_get_int(&r) != n) r.error = 1;
+  for (i = 0; i < n; i++) flags[i] = (int)wire_get_int(&r);
+  mynos_freeMsg(&msg);
+  if (r.error) { errno = EIO; return -1; }
+  return 0;
+}
+
+/* whether a call on a non-blocking socket would wait: EAGAIN then */
+static int would_wait(int id, int want)
+{
+  int f;
+  if (net_poll(&id, &want, 1, 0, &f) < 0) return 0;     /* let the call say */
+  if (f & (want | P_HUP | P_ERR | P_NVAL)) return 0;
+  errno = EAGAIN;
+  return 1;
+}
+
 /* ---- addresses ---- */
 
 static int to_sin(const struct sockaddr * a, socklen_t len,
@@ -225,9 +271,12 @@ static ssize_t s_read(int fd, void * buf, size_t count);
 static ssize_t s_write(int fd, const void * buf, size_t count);
 static int s_close(int fd);
 static int s_fstat(int fd, struct stat * st);
+static int s_poll(const int * fds, const short * events, int n,
+                  int timeout_ms, short * revents);
+static int s_fcntl(int fd, int cmd, long arg);
 
 static const struct mynos_sock_ops ops = {
-  s_owns, s_read, s_write, s_close, s_fstat
+  s_owns, s_read, s_write, s_close, s_fstat, s_poll, s_fcntl
 };
 
 /* a free descriptor with its socket, or -1 */
@@ -250,16 +299,17 @@ static int new_sock(int type, int id)
 
 int socket(int domain, int type, int protocol)
 {
-  int t = type & ~(SOCK_CLOEXEC | SOCK_NONBLOCK);
+  int t = type & ~(SOCK_CLOEXEC | SOCK_NONBLOCK), fd;
   if (domain != AF_INET) { errno = EAFNOSUPPORT; return -1; }
-  if (type & SOCK_NONBLOCK) { errno = EINVAL; return -1; }
   if (t != SOCK_STREAM && t != SOCK_DGRAM) { errno = ESOCKTNOSUPPORT; return -1; }
   if (protocol != 0 &&
       protocol != (t == SOCK_STREAM ? IPPROTO_TCP : IPPROTO_UDP)) {
     errno = EPROTONOSUPPORT;
     return -1;
   }
-  return new_sock(t, -1);
+  if ((fd = new_sock(t, -1)) >= 0 && (type & SOCK_NONBLOCK))
+    socks[fd - SOCK_FD_BASE].nonblock = 1;
+  return fd;
 }
 
 /* the netd socket is new: the timeout asked before applies to it */
@@ -322,7 +372,7 @@ int accept4(int fd, struct sockaddr * a, socklen_t * len, int flags)
   int nfd;
   if (s == NULL) return -1;
   if (!s->listening) { errno = EINVAL; return -1; }
-  if (flags & SOCK_NONBLOCK) { errno = EINVAL; return -1; }
+  if (s->nonblock && would_wait(s->id, P_IN)) return -1;
   net_start(&w, N_ACCEPT);
   wire_put_int(&w, s->id);
   if (net_call(&w, &r, &msg) < 0) {
@@ -336,6 +386,7 @@ int accept4(int fd, struct sockaddr * a, socklen_t * len, int flags)
   if (r.error) { errno = EIO; return -1; }
   if ((nfd = new_sock(SOCK_STREAM, (int)id)) < 0) { net_close((int)id); return -1; }
   s = &socks[nfd - SOCK_FD_BASE];
+  s->nonblock = (flags & SOCK_NONBLOCK) != 0;
   s->has_peer = make_sin(addr, (int)port, &s->peer) == 0;
   if (s->has_peer) put_sin(a, len, &s->peer);
   return nfd;
@@ -417,8 +468,12 @@ ssize_t sendto(int fd, const void * buf, size_t len, int flags,
   struct msock * s = sock_of(fd);
   struct sockaddr_in to;
   if (s == NULL) return -1;
-  if (flags & MSG_DONTWAIT) { errno = EOPNOTSUPP; return -1; }
-  if (s->type == SOCK_STREAM) return tcp_send(s, buf, len);
+  if (s->type == SOCK_STREAM) {
+    if ((s->nonblock || (flags & MSG_DONTWAIT)) && s->id >= 0 && !s->listening &&
+        len > 0 && would_wait(s->id, P_OUT))
+      return -1;
+    return tcp_send(s, buf, len);
+  }
   if (a != NULL) {
     if (to_sin(a, alen, &to) < 0) return -1;
   } else if (s->has_peer) {
@@ -490,12 +545,14 @@ ssize_t recvfrom(int fd, void * buf, size_t len, int flags,
 {
   struct msock * s = sock_of(fd);
   if (s == NULL) return -1;
-  if (flags & MSG_DONTWAIT) { errno = EOPNOTSUPP; return -1; }
   if (s->type == SOCK_STREAM) {
     size_t done = 0;
     ssize_t n;
     if (s->id < 0 || s->listening) { errno = ENOTCONN; return -1; }
     if (s->rd_shut || len == 0) return 0;
+    if ((s->nonblock || (flags & MSG_DONTWAIT)) && !s->npeeked &&
+        would_wait(s->id, P_IN))
+      return -1;
     if (flags & MSG_PEEK) n = tcp_peek(s, buf, len);
     else do {                             /* MSG_WAITALL: all of it */
       n = tcp_recv(s, (char *)buf + done, len - done);
@@ -515,6 +572,8 @@ ssize_t recvfrom(int fd, void * buf, size_t len, int flags,
     struct sockaddr_in from;
     if (udp_open(s) < 0) return -1;
     if (flags & MSG_PEEK) { errno = EOPNOTSUPP; return -1; }
+    if ((s->nonblock || (flags & MSG_DONTWAIT)) && would_wait(s->id, P_IN))
+      return -1;
     net_start(&w, N_RECV_FROM);
     wire_put_int(&w, s->id);
     wire_put_int(&w, len ? (len > MAXRECV ? MAXRECV : len) : 1);
@@ -611,6 +670,61 @@ static int s_fstat(int fd, struct stat * st)
   st->st_nlink = 1;
   st->st_blksize = 4096;
   return 0;
+}
+
+/* poll on sockets (fileio.c's poll): what is known here, then netd's
+   Poll for the rest */
+static int s_poll(const int * fds, const short * events, int n,
+                  int timeout_ms, short * revents)
+{
+  int ids[SOCK_FD_MAX * 2], want[SOCK_FD_MAX * 2], which[SOCK_FD_MAX * 2];
+  int flags[SOCK_FD_MAX * 2];
+  short mask;
+  int i, k = 0, count = 0;
+  for (i = 0; i < n; i++) {
+    struct msock * s = s_owns(fds[i]) ? &socks[fds[i] - SOCK_FD_BASE] : NULL;
+    mask = events[i] | POLLHUP | POLLERR | POLLNVAL;
+    revents[i] = 0;
+    if (s == NULL) revents[i] = POLLNVAL;
+    else if (s->npeeked || s->rd_shut) revents[i] = POLLIN | POLLRDNORM;
+    else if (s->id < 0)                   /* not connected, or unbound UDP */
+      revents[i] = s->type == SOCK_DGRAM ? POLLOUT | POLLWRNORM : POLLOUT | POLLHUP;
+    else if (k < (int)(sizeof ids / sizeof ids[0])) {
+      ids[k] = s->id;
+      want[k] = ((events[i] & (POLLIN | POLLRDNORM)) ? P_IN : 0) |
+                ((events[i] & (POLLOUT | POLLWRNORM)) ? P_OUT : 0);
+      which[k++] = i;
+    }
+    revents[i] &= mask;
+    if (revents[i]) count++;
+  }
+  if (k > 0) {
+    if (net_poll(ids, want, k, count ? 0 : timeout_ms, flags) < 0) return -1;
+    for (i = 0; i < k; i++) {
+      short e = 0;
+      if (flags[i] & P_IN) e |= POLLIN | POLLRDNORM;
+      if (flags[i] & P_OUT) e |= POLLOUT | POLLWRNORM;
+      if (flags[i] & P_HUP) e |= POLLHUP;
+      if (flags[i] & P_ERR) e |= POLLERR;
+      if (flags[i] & P_NVAL) e |= POLLNVAL;
+      e &= events[which[i]] | POLLHUP | POLLERR | POLLNVAL;
+      revents[which[i]] = e;
+      if (e) count++;
+    }
+  }
+  return count;
+}
+
+static int s_fcntl(int fd, int cmd, long arg)
+{
+  struct msock * s = sock_of(fd);
+  if (s == NULL) return -1;
+  switch (cmd) {
+  case F_GETFL: return O_RDWR | (s->nonblock ? O_NONBLOCK : 0);
+  case F_SETFL: s->nonblock = (arg & O_NONBLOCK) != 0; return 0;
+  case F_GETFD: case F_SETFD: return 0;
+  default: errno = EINVAL; return -1;
+  }
 }
 
 /* no half close in net/1: SHUT_RD stops the reads here, SHUT_RDWR closes

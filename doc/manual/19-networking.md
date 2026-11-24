@@ -2,7 +2,7 @@
 
 A MyNOS program reaches the network by sending typed requests to a
 service, `net`, as it reaches files by sending requests to `fatfs`. There
-are no sockets in the kernel; C programs get theirs from libmynos (14.2). This
+are no sockets in the kernel (C's are libmynos's: 14.2). This
 chapter shows how to use the network from OCaml: the service and its
 requests (19.1–19.2), TCP clients and timeouts (19.3–19.4), a complete
 TCP server (19.5), UDP (19.6), TLS (19.7), and the two modules built on
@@ -42,6 +42,7 @@ a GADT, each indexed by the type of its reply:
 | `Udp_bind port` | `int` | a UDP socket (0: any port) |
 | `Send_to (socket, address, port, data)` | `int` | one datagram, at most 8192 bytes |
 | `Recv_from (socket, max)` | `string * int * string` | the next datagram: sender, port, data |
+| `Poll (sockets, ms)` | `int list` | readiness, when one is ready |
 
 Addresses are dotted IPv4 strings. A socket is a number that belongs to
 the process that made it; another process that names it gets the error
@@ -355,8 +356,6 @@ number"`.
 
 - IPv4 only; one card (NE2000), one address, by DHCP or QEMU's defaults.
 - At most 64 sockets in the whole system; a `Recv` returns at most
-  16384 bytes and a datagram is at most 8192.
-- TLS for clients only; no client certificates.
+  16384 bytes and a datagram is at most 8192. TLS for clients only.
 - `Http`: no redirects, no keep-alive, no compression, the whole answer
   in memory; its `timeout` does not cover connecting.
-- `Connect` cannot be bounded by a timeout of the program's own.

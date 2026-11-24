@@ -3576,3 +3576,35 @@ thread count (`procstat`) is 1.
 **Lesson.** A `#if 0` and a TODO in old code mark a half-made decision:
 finish it one way or the other, and make the counters say what runs.
 
+## 2026-11-24 — poll and select: what to wait for
+
+**Symptom.** `select` and `poll` failed at once (`-ENOSYS`, mynos-x8i):
+a program that sleeps with `select(0, …, &tv)` spun, and none could wait
+on a socket and the keyboard together.
+
+**Diagnosis.** The descriptors live in three places: sockets in netd,
+stdin in a console service (consoled, or a Terminal window, or Studio's
+runner), files in the file services (always ready). Nothing in the
+kernel knows them, so `poll` belongs in libmynos, and each service must
+say whether its descriptor is ready.
+
+**Cause.** No request asked that. The first draft of netd's `Poll` took
+a list of sockets and answered when any flag was set: a writable socket,
+polled for reading only, answered at once, every time, and the caller
+looped on a request that never waited.
+
+**Fix.** net/1 `poll` (case 14) takes (socket, events) pairs and answers
+when one of the events asked for is ready (or the peer closed, or it
+failed), or at its deadline; netd checks its pollers after every pass of
+its loop, and wakes for the nearest deadline. console/1 `ready` (case 6)
+says whether a `read` would answer at once. libmynos's `poll` asks
+both: netd waits when there are only sockets; with the console too, it
+waits 20 ms at a time between questions to the console. `select`,
+`ppoll` and `pselect` go through `poll`; a socket's `O_NONBLOCK` asks
+`Poll` with no wait before a call and gives `EAGAIN`. An older console
+that does not know `ready` counts as ready (the read then waits, as
+before).
+
+**Lesson.** A readiness question must carry what the asker waits for;
+otherwise the service answers the wrong question quickly.
+

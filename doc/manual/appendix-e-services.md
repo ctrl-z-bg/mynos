@@ -409,6 +409,7 @@ its own. Both serve **console/1** (`mynos-lib/ocaml/console.ml`,
 | 3 | `write` | `data:S` | `U` |
 | 4 | `foreground` | `pid:I`: the program the caller waits for, 0 none | `U` |
 | 5 | `size` (safe) | `U` | `(cols:I,rows:I)`: 80 × 25, or a terminal window's as it is now |
+| 6 | `ready` (safe) | `U` | `B`: a `read` would answer at once (for `poll`) |
 
 libmynos translates termios: `ICANON` and `ECHO` are bits 1 and 2, the
 absence of `ISIG` sets bit 4, VMIN and VTIME pass through.
@@ -465,13 +466,14 @@ function call rather than a message. Protocol **net/1**
 | 11 | `udp_bind` | `port:I`, 0 any | `I`: a UDP socket | |
 | 12 | `send_to` | `((socket:I,address:S),(port:I,data:S))` | `I`: its size | |
 | 13 | `recv_from` | `(socket:I,max:I)` | `(address:S,port:I,data:S)` | |
+| 14 | `poll` | `(sockets:L<(socket:I,events:I)>,timeout_ms:I)` | `L<I>`: each one's flags, once one is ready | |
 
 - *One thread runs lwIP* (its raw API, `NO_SYS`): the main loop, which
   wakes on a request, an interrupt or every 100 ms. A listener thread
   queues the requests with their channels; a third waits for the card's
   interrupt (both are pthreads).
 - *Requests that wait keep their channel*: `recv`, `accept`, `connect`,
-  `ping`, `resolve`, `recv_from` are answered by the lwIP callback that
+  `ping`, `resolve`, `recv_from`, `poll` are answered by the lwIP callback that
   ends the wait, or fail with `timeout` after `set_timeout`; `connect`
   and `connect_tls` (its handshake included) after 20 s.
 - *An address first.* DHCP; after 5 s without an answer, QEMU's user

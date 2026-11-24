@@ -63,6 +63,13 @@ type _ request =
       (** [(socket, max)]: the next datagram, waiting for one
           ({!Set_timeout} applies): [(address, port, data)], [data] cut to
           [max] bytes *)
+  | Poll : (int * int) list * int -> int list request
+      (** [([(socket, events); ...], timeout_ms)]: wait until a socket is
+          ready for its events (1 data, the end or a connection to accept;
+          2 a [Send] would not wait), or [timeout_ms] (0: at once;
+          negative: no limit): each socket's flags, its events that are
+          ready and 4 the peer closed, 8 the connection failed, 16 not a
+          socket of ours. *)
 
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
 

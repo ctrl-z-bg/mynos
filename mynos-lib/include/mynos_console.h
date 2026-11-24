@@ -39,6 +39,8 @@
                                 CONSOLE_NOSIG                              */
 #define CONSOLE_SIZE       5 /* () -> (cols:I,rows:I): the screen's size (a
                                 terminal window's, as it is now)           */
+#define CONSOLE_READY      6 /* () -> B: a Read would answer at once (input,
+                                or its end, is waiting): poll and select   */
 #define CONSOLE_LAYOUT_US 0
 #define CONSOLE_LAYOUT_IT 1
 

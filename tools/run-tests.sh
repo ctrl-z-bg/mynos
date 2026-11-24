@@ -1130,6 +1130,9 @@ if [ -f system/ramdisk.dsk ]; then
     expect "console-described"                         # consoled speaks console/1
     expect "stdio: all checks passed"                  # C stdio: fopen...
     expect "stdio: read [typed-line]"                  # ... stdin, typed
+    expect "stdio: poll on stdin, at once: 0"          # poll: nothing typed yet...
+    expect "stdio: poll on stdin, waiting: 1"          # ... then the line
+    expect "stdio: poll on stdin, at once: 1"          # ... a pipe's file: ready
     expect "stdio: read [piped-line]"                  # ... and redirected
     expect "stdio: isatty(1) 1"                        # a terminal...
     expect "stdio: isatty(1) 0"                        # ... or a file

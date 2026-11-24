@@ -7,6 +7,7 @@ type _ request =
   | Write : string -> unit request
   | Foreground : int -> unit request
   | Size : (int * int) request
+  | Ready : bool request
 
 let canon = 1 and echo = 2 and nosig = 4
 let layout_us = 0 and layout_it = 1
@@ -37,7 +38,10 @@ module Protocol = struct
          ends it."
         Wire.(field "pid" int) Wire.unit;
       request ~safe:true 5 "size" "The screen: its columns and rows (a terminal window's, as it is now)."
-        Wire.unit Wire.(pair (field "cols" int) (field "rows" int)) ]
+        Wire.unit Wire.(pair (field "cols" int) (field "rows" int));
+      request ~safe:true 6 "ready"
+        "Whether a read would answer at once: input, or its end, is waiting."
+        Wire.unit Wire.bool ]
   type 'a r = 'a request
   type 'a request = 'a r
   type packed = Request : 'a request -> packed
@@ -51,6 +55,7 @@ module Protocol = struct
     | Write s -> case 3; Wire.write w Wire.string s
     | Foreground p -> case 4; Wire.write w Wire.int p
     | Size -> case 5
+    | Ready -> case 6
 
   let read_request r =
     match Wire.read r Wire.int with
@@ -60,6 +65,7 @@ module Protocol = struct
     | 3 -> Request (Write (Wire.read r Wire.string))
     | 4 -> Request (Foreground (Wire.read r Wire.int))
     | 5 -> Request Size
+    | 6 -> Request Ready
     | n -> raise (Wire.Error (Printf.sprintf "console: unknown request %d" n))
 
   let reply : type a. a request -> a Wire.t = function
@@ -69,6 +75,7 @@ module Protocol = struct
     | Write _ -> Wire.unit
     | Foreground _ -> Wire.unit
     | Size -> Wire.(pair (field "cols" int) (field "rows" int))
+    | Ready -> Wire.bool
 end
 
 module I = Ipc.Make (Protocol)

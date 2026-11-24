@@ -83,6 +83,15 @@
 #define MAXDGRAM    8192      /* bytes in a datagram sent */
 #define OWNER_CHECK 1000      /* ms between checks of the owners */
 #define DHCP_WAIT   5000      /* ms, then a static address (QEMU's) */
+#define MAXPOLLERS  32        /* Poll requests waiting at once */
+#define MAXPOLLSOCK 64        /* sockets in one Poll */
+
+/* Poll's flags for each socket (the same in libmynos's socket.c) */
+#define P_IN   1              /* data, the end, an error, a connection */
+#define P_OUT  2              /* a Send would not wait */
+#define P_HUP  4              /* the peer closed */
+#define P_ERR  8              /* the connection failed */
+#define P_NVAL 16             /* not a socket of the caller's */
 
 /* lwIP's clock (NO_SYS) */
 u32_t sys_now(void) {
@@ -872,6 +881,105 @@ static void owner_checks(void) {
   }
 }
 
+/* ---------------------------------------------------------------- poll */
+
+/* a Poll waiting for one of its sockets, or for its deadline */
+struct poller {
+  int ch, caller, n;
+  int ids[MAXPOLLSOCK], events[MAXPOLLSOCK];
+  int forever;
+  u32_t deadline;
+};
+static struct poller pollers[MAXPOLLERS];
+static int npollers = 0;
+
+/* what a socket is ready for, for this caller */
+static int readiness(int id, int caller) {
+  struct sock * s = get_sock(id, caller);
+  int f = 0;
+  if (s == NULL) return P_NVAL;
+  switch (s->state) {
+  case S_LISTEN:
+    if (s->nbacklog > 0) f |= P_IN;
+    break;
+  case S_OPEN:
+    if (s->rx || s->eof) f |= P_IN;
+    if (s->eof) f |= P_HUP;
+    if (s->err != ERR_OK) f |= P_IN | P_ERR | P_HUP;
+    else if (s->pcb && s->tx_ch < 0 && altcp_sndbuf(s->pcb) > 0) f |= P_OUT;
+    break;
+  case S_UDP:
+    if (s->dgrams) f |= P_IN;
+    f |= P_OUT;
+    break;
+  default:                                /* connecting: nothing yet */
+    break;
+  }
+  return f;
+}
+
+/* the poller answered if one of its sockets is ready or its time is up:
+   1 if it was */
+static int serve_poller(struct poller * p) {
+  wire_writer w;
+  int i, any = 0, flags[MAXPOLLSOCK];
+  for (i = 0; i < p->n; i++) {
+    flags[i] = readiness(p->ids[i], p->caller) &
+               (p->events[i] | P_HUP | P_ERR | P_NVAL);
+    if (flags[i]) any = 1;
+  }
+  if (!any && (p->forever || (s32_t)(sys_now() - p->deadline) < 0)) return 0;
+  wire_writer_init(&w);
+  wire_reply_ok(&w);
+  wire_put_int(&w, p->n);
+  for (i = 0; i < p->n; i++) wire_put_int(&w, flags[i]);
+  send_reply(p->ch, &w);
+  return 1;
+}
+
+static void serve_pollers(void) {
+  int i = 0;
+  while (i < npollers)
+    if (serve_poller(&pollers[i])) pollers[i] = pollers[--npollers];
+    else i++;
+}
+
+/* ms until the nearest poller's deadline (at most WAKE_MS) */
+static long poll_wait_ms(void) {
+  long ms = WAKE_MS;
+  int i;
+  for (i = 0; i < npollers; i++)
+    if (!pollers[i].forever) {
+      s32_t left = (s32_t)(pollers[i].deadline - sys_now());
+      if (left < ms) ms = left < 0 ? 0 : left;
+    }
+  return ms;
+}
+
+/* Poll: (socket, the flags it waits for) pairs; their flags as soon as one
+   is ready, or when timeout_ms have passed (0: at once; negative: no
+   limit). The peer's end, a failure and a bad socket count as ready */
+static void do_poll(int ch, wire_reader * r) {
+  struct poller * p;
+  long long n = wire_get_int(r), i, timeout;
+  if (r->error || n < 0 || n > MAXPOLLSOCK) { reply_error(ch, "bad socket list"); return; }
+  if (npollers == MAXPOLLERS) { reply_error(ch, "too many polls"); return; }
+  p = &pollers[npollers];
+  p->ch = ch;
+  p->caller = current_caller;
+  p->n = (int)n;
+  for (i = 0; i < n; i++) {
+    p->ids[i] = (int)wire_get_int(r);
+    p->events[i] = (int)wire_get_int(r);
+  }
+  timeout = wire_get_int(r);
+  if (r->error || !wire_at_end(r)) { reply_error(ch, "malformed request"); return; }
+  p->forever = timeout < 0;
+  if (timeout > 86400000) timeout = 86400000;
+  p->deadline = sys_now() + (u32_t)(timeout < 0 ? 0 : timeout);
+  if (!serve_poller(p)) npollers++;
+}
+
 /* ---------------------------------------------------------------- UDP */
 
 static void reply_datagram(int ch, struct dgram * d, int max) {
@@ -1012,6 +1120,11 @@ static const wire_request_doc requests[] = {
   { 0, "recv_from", "(socket:I,max:I)", "(address:S,port:I,data:S)",
     "Receive one UDP datagram (at most max bytes): the sender's address "
     "and port, and the data. Waits." },
+  { 0, "poll", "(sockets:L<(socket:I,events:I)>,timeout_ms:I)", "L<I>",
+    "Wait until one of the sockets is ready for what it is asked for (1 "
+    "data or a connection to take, 2 a send would not wait), or after "
+    "timeout_ms (0: at once, negative: no limit): each one's flags, those "
+    "and 4 the peer closed, 8 failed, 16 not a socket of ours." },
 };
 
 static void describe(int ch) {
@@ -1073,6 +1186,7 @@ static void handle(int ch, int caller, const char * msg, unsigned int len) {
     do_send_to(ch, x, a, y, data, n); break;
   case 13: x = wire_get_int(&r); y = wire_get_int(&r); END();
     do_recv_from(ch, x, y); break;
+  case 14: do_poll(ch, &r); break;
   default: reply_error(ch, "unknown request"); break;
   }
 #undef END
@@ -1193,7 +1307,7 @@ int main(void) {
     pthread_mutex_lock(&lock);
     if ((queue == NULL || !ready) && !interrupted) {
       clock_gettime(CLOCK_REALTIME, &until);
-      until.tv_nsec += WAKE_MS * 1000000L;
+      until.tv_nsec += poll_wait_ms() * 1000000L;
       if (until.tv_nsec >= 1000000000) { until.tv_sec++; until.tv_nsec -= 1000000000; }
       pthread_cond_timedwait(&wake, &lock, &until);
     }
@@ -1221,5 +1335,6 @@ int main(void) {
       free(r);
       r = next;
     }
+    serve_pollers();
   }
 }

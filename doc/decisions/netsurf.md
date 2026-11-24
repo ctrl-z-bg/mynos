@@ -43,10 +43,17 @@ files; the sources are downloaded at build time, their version and
 SHA-256 fixed. The build runs in its own container image
 (`tools/containers/netsurf`), not in `tools/build-all.sh`.
 
+### 5. It reaches users as a port only (2026-11-24)
+
+The owner's decision, for the version the book describes: NetSurf stays
+in `ports/netsurf` (its scripts, patches and MyNOS pieces), built by
+whoever wants it with `build.sh` and tried with `try.sh`. No package,
+nothing in the system image or the release: `pkg` does not change. A
+package (the first with a C program, its fonts apart, with a note on
+where its GPL sources are) remains possible later.
+
 ## Open
 
-- How NetSurf reaches users: it would be the first package with a C
-  program. To be discussed with the user before it is done.
 - gzip, WebP. Images (PNG, JPEG, SVG) and real fonts (FreeType, DejaVu)
   are there, at 3.92 MB of the 4 MB a program may take: WebP does not
   fit; the limit, or JavaScript (Duktape, about 800 KB), would have to

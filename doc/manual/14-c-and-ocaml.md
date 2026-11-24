@@ -58,7 +58,7 @@ The OCaml runtime gets the same functions, so the standard library's
 | The log | `mynos_log(fmt, ...)`: a line on the log port (COM2) | `libmynos` |
 
 What is not there: `execve` (a program starts another with
-`mynos_spawn`), `pipe`, `dup`, `select` and `poll`, signal handlers (none is ever called),
+`mynos_spawn`), `pipe`, `dup`, signal handlers (none is ever called),
 and `freopen` and `tmpfile`, which still open with musl's own raw call.
 Appendix D.3 lists every Linux call the kernel answers.
 
@@ -67,11 +67,13 @@ becomes the `net/1` request of chapter 19 (`connect` is `Connect`,
 `recv` is `Recv`, `SO_RCVTIMEO` is `Set_timeout`, `getaddrinfo` is
 `Resolve`), on a channel of its own, so one thread may wait in `recv`
 while another sends; netd's errors become `errno` values. IPv4, TCP and
-UDP; OCaml's `Unix` sockets reach the same code. They block: no
-non-blocking sockets, `select` or `poll` (mynos-x8i); no half close
-(`shutdown(SHUT_WR)` fails); no TLS (`net/1`'s `Connect_tls` is not a
-socket call). After `fork` a child cannot use its parent's sockets:
-they belong to the process that made them.
+UDP; OCaml's `Unix` sockets reach the same code. `poll` and `select`
+wait on sockets (`net/1`'s `Poll`, which netd answers when one is
+ready), the console (console/1's `Ready`) and files (always ready);
+`O_NONBLOCK` makes a call that would wait fail with `EAGAIN`, but
+`connect` still waits. No half close (`shutdown(SHUT_WR)` fails); no
+TLS (`Connect_tls` is not a socket call). After `fork` a child cannot
+use its parent's sockets: they belong to the process that made them.
 
 The headers are in `mynos-lib/include`:
 

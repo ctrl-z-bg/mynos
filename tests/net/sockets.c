@@ -7,6 +7,10 @@
 #include <errno.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <poll.h>
+#include <fcntl.h>
+#include <time.h>
+#include <sys/select.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -20,6 +24,13 @@ static void check(const char * what, int ok)
 {
   printf("sockets: %-44s %s\n", what, ok ? "ok" : "FAIL");
   if (!ok) failures++;
+}
+
+static long ms_now(void)
+{
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return t.tv_sec * 1000 + t.tv_nsec / 1000000;
 }
 
 static struct sockaddr_in addr(const char * dotted, int port)
@@ -110,6 +121,38 @@ int main(void)
   check("SO_RCVTIMEO: recv gives EAGAIN", r < 0 && e == EAGAIN);
   close(s);
 
+  /* poll, select, a non-blocking socket (mynos-x8i) */
+  {
+    struct pollfd p;
+    long t0 = ms_now(), dt;
+    tv.tv_sec = 0; tv.tv_usec = 200000;
+    r = select(0, NULL, NULL, NULL, &tv);
+    dt = ms_now() - t0;
+    check("select with no descriptors waits", r == 0 && dt >= 150 && dt < 1000);
+    s = socket(AF_INET, SOCK_STREAM, 0);
+    a = addr("10.0.2.2", 47001);
+    connect(s, (struct sockaddr *)&a, sizeof a);
+    fcntl(s, F_SETFL, fcntl(s, F_GETFL) | O_NONBLOCK);
+    r = recv(s, buf, sizeof buf, 0);
+    e = errno;
+    check("O_NONBLOCK: nothing yet, EAGAIN", r < 0 && e == EAGAIN);
+    p.fd = s; p.events = POLLIN;
+    t0 = ms_now();
+    r = poll(&p, 1, 100);
+    dt = ms_now() - t0;
+    check("poll: nothing within 100 ms", r == 0 && dt >= 90);
+    p.events = POLLOUT;
+    check("poll: writable", poll(&p, 1, 0) == 1 && (p.revents & POLLOUT));
+    send(s, "poll me\n", 8, 0);
+    p.events = POLLIN;
+    r = poll(&p, 1, 3000);
+    check("poll: the answer comes", r == 1 && (p.revents & POLLIN));
+    fcntl(s, F_SETFL, fcntl(s, F_GETFL) & ~O_NONBLOCK);
+    r = read_all(s, buf, sizeof buf);
+    check("and reads", r == 8 && !strcmp(buf, "POLL ME\n"));
+    close(s);
+  }
+
   /* refused */
   s = socket(AF_INET, SOCK_STREAM, 0);
   a = addr("10.0.2.2", 47002);
@@ -147,10 +190,20 @@ int main(void)
     a = addr("0.0.0.0", 8091);
     r = bind(server_fd, (struct sockaddr *)&a, sizeof a);
     check("bind, listen", r == 0 && listen(server_fd, 4) == 0);
+    {
+      fd_set rd;
+      FD_ZERO(&rd); FD_SET(server_fd, &rd);
+      tv.tv_sec = 0; tv.tv_usec = 100000;
+      check("select: no connection yet", select(server_fd + 1, &rd, NULL, NULL, &tv) == 0);
+      s = socket(AF_INET, SOCK_STREAM, 0);
+      a = addr("10.0.2.15", 8091);
+      r = connect(s, (struct sockaddr *)&a, sizeof a);
+      FD_ZERO(&rd); FD_SET(server_fd, &rd);
+      tv.tv_sec = 3; tv.tv_usec = 0;
+      check("select: a connection to accept",
+            select(server_fd + 1, &rd, NULL, NULL, &tv) == 1 && FD_ISSET(server_fd, &rd));
+    }
     pthread_create(&t, NULL, server, NULL);
-    s = socket(AF_INET, SOCK_STREAM, 0);
-    a = addr("10.0.2.15", 8091);
-    r = connect(s, (struct sockaddr *)&a, sizeof a);
     send(s, "stressed", 8, 0);
     r = r == 0 ? recv(s, buf, sizeof buf, MSG_PEEK) : -1;
     r = r > 0 ? read_all(s, buf, sizeof buf) : -1;

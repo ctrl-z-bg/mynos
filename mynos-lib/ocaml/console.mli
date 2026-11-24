@@ -16,6 +16,9 @@ type _ request =
       (** the program the caller waits for: Ctrl-C ends it (0: none) *)
   | Size : (int * int) request
       (** the screen's columns and rows (a terminal window's change) *)
+  | Ready : bool request
+      (** whether a [Read] would answer at once: input, or its end, is
+          waiting (libmynos's [poll] and [select] on fd 0) *)
 
 val canon : int
 val echo : int

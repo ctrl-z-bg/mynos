@@ -21,7 +21,8 @@ let serve port lines =
          | Console.Mode _ -> ok r ()
          | Console.Keymap _ -> ok r Console.layout_us
          | Console.Foreground _ -> ok r ()
-         | Console.Size -> ok r (80, 25))
+         | Console.Size -> ok r (80, 25)
+         | Console.Ready -> ok r true)                  (* the end, at once *)
   done
 
 let () =

@@ -73,7 +73,10 @@ come through a JavaScript loader that NetSurf cannot run (it lacks
 results are in the page, as NetSurf on Linux shows. The query then
 travels unencrypted.
 
-**Not done** (mynos-1g0): WebP (BBC's images, for one; no room for it
-under 4 MB); how NetSurf reaches users (to be
-decided). Fetches still stall now and then for about 1.5 s, a matter
+**How it reaches users**: as this port only (decided on 2026-11-24,
+`doc/decisions/netsurf.md`): built here, not a package, not in the
+system image.
+
+**Not done**: WebP (BBC's images, for one; no room for it
+under 4 MB). Fetches still stall now and then for about 1.5 s, a matter
 of MyNOS's network card under QEMU, not of NetSurf (mynos-bix). Room left under the 4 MB limit: about 270 KB.

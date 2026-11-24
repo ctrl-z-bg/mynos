@@ -448,7 +448,8 @@ let handle chn msg =
           output data;
           ok r ();
           render ()
-        | Console.Size as r -> ok r (!cols, !rows))
+        | Console.Size as r -> ok r (!cols, !rows)
+        | Console.Ready as r -> ok r (Buffer.length input > 0 || !eof))
 
 let serve port =
   while true do

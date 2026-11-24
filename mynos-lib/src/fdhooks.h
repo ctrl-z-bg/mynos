@@ -12,8 +12,8 @@
 /*
  * Descriptors that are not files (fileio.c): the sockets (socket.c) set
  * __mynos_sock_ops when a program makes its first one, and read, write,
- * close, lseek and fstat pass their descriptors to it. A program that
- * makes no socket does not link socket.c.
+ * close, lseek, fstat, poll, fcntl and ioctl pass their descriptors to it.
+ * A program that makes no socket does not link socket.c.
  */
 
 #ifndef __MYNOS_FDHOOKS_H__
@@ -33,6 +33,13 @@ struct mynos_sock_ops {
   ssize_t (*write)(int fd, const void * buf, size_t count);
   int (*close)(int fd);
   int (*fstat)(int fd, struct stat * st);
+  /* the poll events of n sockets (of those asked for, and POLLHUP,
+     POLLERR, POLLNVAL), waiting up to timeout_ms (0: none, -1: no limit)
+     for one of them; how many have some */
+  int (*poll)(const int * fds, const short * events, int n, int timeout_ms,
+              short * revents);
+  /* F_GETFL, F_SETFL (O_NONBLOCK), F_GETFD, F_SETFD */
+  int (*fcntl)(int fd, int cmd, long arg);
 };
 
 extern const struct mynos_sock_ops * __mynos_sock_ops;

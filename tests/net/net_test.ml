@@ -210,8 +210,8 @@ let () =
     | out -> print_endline ("net: " ^ name ^ " " ^ input ^ " -> " ^ out); Ok out
     | exception (Ipc.Remote_error (_, m) | Failure m) -> Error m
     | exception e -> Error (error e) in
-  ok &&& check "tools: 16 requests of 2 services, as tools"
-    (List.length tools = 16
+  ok &&& check "tools: 17 requests of 2 services, as tools"
+    (List.length tools = 17
      && (Tools.find tools "net_ping").tool.Llm.schema
         = {|{"type":"object","properties":{"address":{"type":"string"},"timeout_ms":{"type":"integer"}},"required":["address","timeout_ms"]}|});
   ok &&& check "tools: net_config from JSON"

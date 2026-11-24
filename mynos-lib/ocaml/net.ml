@@ -24,6 +24,7 @@ type _ request =
   | Udp_bind : int -> int request
   | Send_to : int * string * int * string -> int request
   | Recv_from : int * int -> (string * int * string) request
+  | Poll : (int * int) list * int -> int list request
 
 let config_codec =
   Wire.(conv
@@ -39,6 +40,9 @@ let config_codec =
 let socket = Wire.(field "socket" int)
 let address = Wire.(field "address" string)
 let port = Wire.(field "port" int)
+let poll_args =
+  Wire.(pair (field "sockets" (list (pair socket (field "events" int))))
+          (field "timeout_ms" int))
 
 module Protocol = struct
   let id = "net/1"
@@ -91,7 +95,13 @@ module Protocol = struct
         "Receive one UDP datagram (at most max bytes): the sender's address \
          and port, and the data. Waits."
         Wire.(pair socket (field "max" int))
-        Wire.(triple address port (field "data" string)) ]
+        Wire.(triple address port (field "data" string));
+      request 14 "poll"
+        "Wait until one of the sockets is ready for what it is asked for (1 \
+         data or a connection to take, 2 a send would not wait), or after \
+         timeout_ms (0: at once, negative: no limit): each one's flags, \
+         those and 4 the peer closed, 8 failed, 16 not a socket of ours."
+        poll_args Wire.(list int) ]
   type 'a r = 'a request
   type 'a request = 'a r
   type packed = Request : 'a request -> packed
@@ -114,6 +124,7 @@ module Protocol = struct
     | Udp_bind p -> case 11; int p
     | Send_to (s, a, p, d) -> case 12; int s; str a; int p; str d
     | Recv_from (s, n) -> case 13; int s; int n
+    | Poll (l, t) -> case 14; Wire.write w poll_args (l, t)
 
   let read_request r =
     let str () = Wire.read r Wire.string and int () = Wire.read r Wire.int in
@@ -134,6 +145,7 @@ module Protocol = struct
       let s = int () in let a = str () in let p = int () in
       Request (Send_to (s, a, p, str ()))
     | 13 -> let s = int () in Request (Recv_from (s, int ()))
+    | 14 -> let l, t = Wire.read r poll_args in Request (Poll (l, t))
     | n -> raise (Wire.Error (Printf.sprintf "net: unknown request %d" n))
 
   let reply : type a. a request -> a Wire.t = function
@@ -151,6 +163,7 @@ module Protocol = struct
     | Accept _ -> Wire.(triple int string int)
     | Close _ -> Wire.unit
     | Set_timeout _ -> Wire.unit
+    | Poll _ -> Wire.(list int)
 end
 
 module I = Ipc.Make (Protocol)

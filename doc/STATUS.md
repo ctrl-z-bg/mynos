@@ -537,7 +537,7 @@ last commit that still builds with that toolchain `legacy-last`.
 | — | `mynos-core/kernel/threads.c` | Native MyNOS threads (`mynos_threadCreate`) share their creator's TLS: code that uses the C library should use pthreads. |
 | — | `mynos-lib/src/fileio.c` | `/` (memrofs) is read-only and flat, `/tmp` (tmpfs) flat and in memory; `/disk` (fatfs) has directories. `rename` within one service; paths up to 63 characters inside a service. |
 | — | `services/ata/ata.ml` | One disk (primary master), PIO with polling, LBA28 (128 GB). |
-| mynos-x8i | `mynos-lib/src/socket.c` | BSD sockets (IPv4, TCP and UDP, over `net/1`) block: no non-blocking sockets, `select` or `poll`; no half close; no TLS (`net/1`'s `Connect_tls` is not a socket call). |
+| — | `mynos-lib/src/socket.c`, `fileio.c` | BSD sockets: IPv4 only; no half close; no TLS (`net/1`'s `Connect_tls` is not a socket call); a non-blocking `connect` waits. `poll` with the console and sockets together asks each in turn every 20 ms. |
 | — | `services/net/netd.c` | TLS: clients only (no `Listen_tls`); no revocation checks (CRL, OCSP); Mozilla's list is parsed at the first TLS connection (about 1.5 s in QEMU), later handshakes take 0.2-0.4 s; the clear bytes travel between netd and the program over IPC. |
 | — | `services/ata/ata.ml` | The disk is polled (PIO: the driver copies every word anyway, and QEMU completes commands at once); IRQ 14 is free for it. |
 | — | `sh/sh.ml`, `mynos-lib/src/fileio.c` | Pipes run their commands one after the other (through a file), not concurrently. |
@@ -1813,3 +1813,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `fileio.c` (programs without sockets do not link them). OCaml's `Unix`
   sockets work too: `ocamlrun` links them. Blocking only (mynos-x8i).
   tests/net/sockets.c and a `Unix` check in the network test.
+- **2026-11-24** — `poll`, `select`, `ppoll`, `pselect` in libmynos
+  (mynos-x8i), and non-blocking sockets (`O_NONBLOCK` through `fcntl` or
+  `ioctl(FIONBIO)`, `SOCK_NONBLOCK`, `MSG_DONTWAIT`: `EAGAIN`). Two
+  requests added to existing protocols: net/1 `poll` (case 14: pairs of
+  socket and events, answered as soon as one is ready) and console/1
+  `ready` (case 6), served by consoled, the Terminal window and Studio's
+  runner. `select` with no descriptors now sleeps. Checks in
+  tests/net/sockets.c and tests/stdio (stdin typed and piped).
+- **2026-11-24** — NetSurf reaches users as `ports/netsurf` only (the
+  owner's decision for the book's version): no package, nothing in the
+  system image; `pkg` unchanged (doc/decisions/netsurf.md). Browser 1.6
+  (OCaml) is committed, not yet published to mynos-packages (1.5 is).

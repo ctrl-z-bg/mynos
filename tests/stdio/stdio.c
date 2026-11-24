@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <poll.h>
 
 static int failures = 0;
 
@@ -97,8 +98,15 @@ int main(void)
     check("mmap MAP_SHARED: the change written to the file", ok && strcmp(back, "mapped file: HELLO\n") == 0);
   }
 
-  /* standard input: the console, or what the shell redirected */
-  printf("stdio: type a line\n");
+  /* standard input: the console, or what the shell redirected. poll
+     (mynos-x8i): at once, nothing typed yet (a file: ready); then it waits
+     for the line */
+  {
+    struct pollfd p = { 0, POLLIN, 0 };
+    printf("stdio: poll on stdin, at once: %d\n", poll(&p, 1, 0));
+    printf("stdio: type a line\n");
+    printf("stdio: poll on stdin, waiting: %d\n", poll(&p, 1, -1));
+  }
   if (fgets(line, sizeof line, stdin)) {
     line[strcspn(line, "\n")] = 0;
     printf("stdio: read [%s]\n", line);

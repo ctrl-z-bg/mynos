@@ -477,8 +477,8 @@ service learns that a client went away when its channel breaks
   The gaps are collected in mynos-51c.
 - There is no `execve`, `brk`, `readv`, `pipe`, `dup`, `select` or socket
   call: `-ENOSYS`. OCaml's `Unix` functions built on them fail with
-  `ENOSYS` (appendix F). Sockets are `libmynos`'s, over the network
-  service (14.2), before the kernel is asked.
+  `ENOSYS` (appendix F). Sockets, `select`, `poll` and a socket's
+  `fcntl` are `libmynos`'s (14.2), before the kernel is asked.
 - `freopen` and `tmpfile` still open with musl's raw `open`; `libmynos`
   replaces `fopen` only (D.4).
 - The kernel's own file calls ignore their path: on a system without

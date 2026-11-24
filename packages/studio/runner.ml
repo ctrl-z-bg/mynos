@@ -62,7 +62,8 @@ let handle ch msg =
         | Console.Mode _ as r -> ok r ()
         | Console.Keymap _ as r -> ok r Console.layout_us
         | Console.Foreground _ as r -> ok r ()
-        | Console.Size as r -> ok r (!cols, 24))
+        | Console.Size as r -> ok r (!cols, 24)
+        | Console.Ready as r -> ok r (Buffer.length input > 0))
 
 let name () = Printf.sprintf "studiorun%d" (Mynos.getpid ())
 

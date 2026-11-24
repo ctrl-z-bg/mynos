@@ -812,6 +812,8 @@ static const wire_request_doc requests[] = {
     "it." },
   { 1, "size", "U", "(cols:I,rows:I)",
     "The screen: its columns and rows (a terminal window's, as it is now)." },
+  { 1, "ready", "U", "B",
+    "Whether a read would answer at once: input, or its end, is waiting." },
 };
 
 static void describe(wire_writer * w)
@@ -900,8 +902,8 @@ int main()
       if (kind == CONSOLE_WRITE) data = wire_get_string(&r, &dlen);
       else if (kind == CONSOLE_MODE) {
         a1 = wire_get_int(&r); a2 = wire_get_int(&r); a3 = wire_get_int(&r);
-      } else if (kind != CONSOLE_SIZE) a1 = wire_get_int(&r);
-      if (r.error || !wire_at_end(&r) || kind < CONSOLE_READ || kind > CONSOLE_SIZE)
+      } else if (kind != CONSOLE_SIZE && kind != CONSOLE_READY) a1 = wire_get_int(&r);
+      if (r.error || !wire_at_end(&r) || kind < CONSOLE_READ || kind > CONSOLE_READY)
         kind = -1;
     }
     if (kind < 0) {
@@ -940,6 +942,13 @@ int main()
       wire_reply_ok(&w);
       wire_put_int(&w, CONSOLE_COLS);
       wire_put_int(&w, CONSOLE_ROWS);
+    } else if (kind == CONSOLE_READY) {
+      int ready;
+      mynos_P(lock);
+      ready = queue_len > 0 || eof_pending;
+      mynos_V(lock);
+      wire_reply_ok(&w);
+      wire_put_bool(&w, ready);
     } else if (kind == CONSOLE_FOREGROUND) {
       if (a1 == 0 || child_of(a1, caller)) foreground = a1;
       wire_reply_ok(&w);
