@@ -1,0 +1,144 @@
+--- a/netsurf/frontends/framebuffer/fbtk/text.c
++++ b/netsurf/frontends/framebuffer/fbtk/text.c
+@@ -146,6 +146,16 @@
+ 			x +=  scroll;
+ 		}
+ 
++		/* (MyNOS) all the text selected: behind it, a highlight */
++		if (widget->u.text.selected && widget->u.text.len > 0) {
++			nsfb_bbox_t sel;
++			sel.x0 = x;
++			sel.y0 = bbox.y0 + padding;
++			sel.x1 = x + widget->u.text.width;
++			sel.y1 = bbox.y1 - padding;
++			nsfb_plot_rectangle_fill(root->u.root.fb, &sel, 0xFFFFD8B0);
++		}
++
+ 		/* Call the fb text plotting, baseline is 3/4 down the font */
+ 		ctx.plot->text(&ctx,
+ 			       &font_style,
+@@ -345,7 +355,63 @@
+ 		return 0;
+ 	}
+ 
++	/* (MyNOS) all the text selected: typing replaces it, deleting
++	 * clears it, moving the caret unselects it; Ctrl-A selects all */
++	if ((modifier & (FBTK_MOD_LCTRL | FBTK_MOD_RCTRL)) && value == NSFB_KEY_a) {
++		widget->u.text.selected = true;
++		widget->u.text.idx = widget->u.text.len;
++		caret_moved = true;
++		value = -1;
++	} else if (widget->u.text.selected) {
++		switch (value) {
++		case NSFB_KEY_RSHIFT: case NSFB_KEY_LSHIFT:
++		case NSFB_KEY_RCTRL: case NSFB_KEY_LCTRL:
++		case NSFB_KEY_RETURN:
++			break;
++		case NSFB_KEY_BACKSPACE:
++		case NSFB_KEY_DELETE:
++			widget->u.text.selected = false;
++			widget->u.text.idx = widget->u.text.len = 0;
++			widget->u.text.text[0] = '\0';
++			widget->u.text.width = 0;
++			caret_moved = true;
++			value = -1;
++			break;
++		case NSFB_KEY_LEFT: case NSFB_KEY_RIGHT:
++		case NSFB_KEY_HOME: case NSFB_KEY_END:
++		case NSFB_KEY_UP: case NSFB_KEY_DOWN:
++		case NSFB_KEY_PAGEUP: case NSFB_KEY_PAGEDOWN:
++			widget->u.text.selected = false;
++			break;
++		default:
++			widget->u.text.selected = false;
++			if (!(modifier & (FBTK_MOD_LCTRL | FBTK_MOD_RCTRL))) {
++				/* a character: the text goes, it comes */
++				widget->u.text.idx = widget->u.text.len = 0;
++				widget->u.text.text[0] = '\0';
++				widget->u.text.width = 0;
++			}
++			break;
++		}
++	}
++
+ 	switch (value) {
++	case -1:
++		break;
++
++	case NSFB_KEY_DELETE:
++		/* (MyNOS) the character after the caret */
++		if (widget->u.text.idx >= widget->u.text.len)
++			break;
++		memmove(widget->u.text.text + widget->u.text.idx,
++				widget->u.text.text + widget->u.text.idx + 1,
++				widget->u.text.len - widget->u.text.idx);
++		widget->u.text.len--;
++		fb_font_width(&font_style, widget->u.text.text,
++				widget->u.text.len, &widget->u.text.width);
++		caret_moved = true;
++		break;
++
+ 	case NSFB_KEY_BACKSPACE:
+ 		if (widget->u.text.idx <= 0)
+ 			break;
+@@ -363,8 +429,13 @@
+ 		break;
+ 
+ 	case NSFB_KEY_RETURN:
++		/* (MyNOS) the caret leaves the field: the next click on it
++		 * selects all of it again */
++		widget->u.text.selected = false;
++		fbtk_set_caret(widget, false, 0, 0, 0, NULL);
+ 		widget->u.text.enter(widget->u.text.pw, widget->u.text.text);
+-		break;
++		fbtk_request_redraw(widget);
++		return 0;
+ 
+ 	case NSFB_KEY_RIGHT:
+ 		if (widget->u.text.idx < widget->u.text.len) {
+@@ -495,6 +566,29 @@
+ 
+ 	fb_text_font_style(widget, &fh, &border, &font_style);
+ 
++	/* (MyNOS) the click that gives the field the caret selects all
++	 * of it; a click in a field that has it places the caret */
++	if (cbi->event != NULL && cbi->event->type != NSFB_EVENT_KEY_DOWN)
++		return 0;
++	{
++		int cx, cy, ch;
++		if (!fbtk_get_caret(widget, &cx, &cy, &ch) &&
++		    widget->u.text.text != NULL && widget->u.text.len > 0) {
++			widget->u.text.selected = true;
++			widget->u.text.idx = widget->u.text.len;
++			fb_font_width(&font_style, widget->u.text.text,
++				      widget->u.text.len, &widget->u.text.idx_offset);
++			fbtk_set_caret(widget, true,
++				       widget->u.text.idx_offset + border,
++				       border,
++				       widget->height - border - border,
++				       fb_text_input_remove_caret_cb);
++			fbtk_request_redraw(widget);
++			return 0;
++		}
++	}
++	widget->u.text.selected = false;
++
+ 	widget->u.text.idx = widget->u.text.len;
+ 
+ 	fb_font_position(&font_style, widget->u.text.text,
+@@ -523,6 +617,7 @@
+ text_input_strip_focus(fbtk_widget_t *widget, fbtk_callback_info *cbi)
+ {
+ 	fbtk_set_caret(widget, false, 0, 0, 0, NULL);
++	widget->u.text.selected = false;
+ 
+ 	return 0;
+ }
+@@ -556,6 +651,7 @@
+ 	widget->u.text.text = strdup(text);
+ 	widget->u.text.len = strlen(text);
+ 	widget->u.text.idx = widget->u.text.len;
++	widget->u.text.selected = false;
+ 
+ 
+ 	fb_text_font_style(widget, &fh, &border, &font_style);

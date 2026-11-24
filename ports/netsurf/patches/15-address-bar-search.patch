@@ -1,0 +1,43 @@
+--- a/netsurf/frontends/framebuffer/gui.c
++++ b/netsurf/frontends/framebuffer/gui.c
+@@ -39,6 +39,7 @@
+ #include "netsurf/browser_window.h"
+ #include "netsurf/keypress.h"
+ #include "desktop/browser_history.h"
++#include "desktop/searchweb.h"
+ #include "netsurf/plotters.h"
+ #include "netsurf/window.h"
+ #include "netsurf/misc.h"
+@@ -1170,7 +1171,15 @@
+ 	nsurl *url;
+ 	nserror error;
+ 
+-	error = nsurl_create(text, &url);
++	/* (MyNOS) words, not an address (a space, or neither a dot nor a
++	 * colon): a web search */
++	if (strchr(text, ' ') != NULL ||
++	    (strchr(text, '.') == NULL && strchr(text, ':') == NULL &&
++	     strcmp(text, "localhost") != 0)) {
++		error = search_web_omni(text, SEARCH_WEB_OMNI_SEARCHONLY, &url);
++	} else {
++		error = search_web_omni(text, SEARCH_WEB_OMNI_NONE, &url);
++	}
+ 	if (error != NSERROR_OK) {
+ 		fb_warn_user("Errorcode:", messages_get_errorcode(error));
+ 	} else {
+@@ -2247,6 +2256,15 @@
+ 	/* Override, since we have no support for non-core SELECT menu */
+ 	nsoption_set_bool(core_select_menu, true);
+ 
++	/* (MyNOS) the web search the address bar falls back to: the
++	 * providers of SearchEngines (the first by default) */
++	{
++		char *se = filepath_find(respaths, "SearchEngines");
++		search_web_init(se);
++		free(se);
++		search_web_select_provider(nsoption_int(search_provider));
++	}
++
+ 	if (process_cmdline(argc,argv) != true)
+ 		die("unable to process command line.\n");
+ 

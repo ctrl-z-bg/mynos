@@ -1,0 +1,10 @@
+--- a/netsurf/frontends/framebuffer/fbtk/widget.h
++++ b/netsurf/frontends/framebuffer/fbtk/widget.h
+@@ -187,6 +187,7 @@
+ 			int len; /* text length */
+ 			int width; /* text width in px */
+ 			int idx_offset; /* caret pos in pixels */
++			bool selected; /* (MyNOS) all the text selected */
+ 		} text;
+ 
+ 		/* application driven widget */

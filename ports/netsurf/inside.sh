@@ -86,6 +86,10 @@ cp nsfb-mynos $s/nsfb && strip $s/nsfb
 (cd frontends/framebuffer/res && for f in *; do
    case $f in de|fr|it|ja|nl|zh_CN) ;; *) cp -rL "$f" $s/res/ ;; esac; done)
 printf 'enable_javascript:1\n' > $s/home/.netsurf/Choices
+# the web searches of the address bar: DuckDuckGo's lite page first (it
+# needs no JavaScript; Google's results do), then NetSurf's list
+{ printf 'DuckDuckGo|lite.duckduckgo.com|https://lite.duckduckgo.com/lite/?q=%%s|https://duckduckgo.com/favicon.ico|\n'
+  cat resources/SearchEngines; } > $s/res/SearchEngines
 # the fonts NetSurf looks for (NETSURF_FB_FONTPATH: /disk/ns/fonts)
 mkdir -p $s/fonts
 for f in DejaVuSans DejaVuSans-Bold DejaVuSans-Oblique DejaVuSans-BoldOblique \

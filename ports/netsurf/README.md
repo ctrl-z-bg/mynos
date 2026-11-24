@@ -38,6 +38,9 @@ article on OCaml, over HTTPS, in about 10 s under KVM.
 | `patches/08-mynos-http-build.patch`, `09-mynos-http-register.patch` | the fetcher built and registered |
 | `patches/10-empty-url.patch` | an empty URL argument (the launcher's empty `$1`) opens the home page |
 | `patches/11-framebuffer-paths.patch` | the framebuffer front end drew no paths ("path unimplemented"), and SVG is drawn with nothing else: curves made line segments, filled a scan line at a time (non-zero winding), stroked; fill and stroke by colour, as `svg.c` leaves the plot types unset. A clip outside the surface is empty, not an error (the error fell on the next plot, an SVG, drawn as broken) |
+| `patches/13-address-bar-select-all.patch`, `14-...-state.patch` | the address bar had no selection: the click that gives it the caret selects all of it (so does Ctrl-A), typing replaces it, Backspace and Delete clear it; Delete deletes forward; after Enter the caret leaves it |
+| `patches/15-address-bar-search.patch` | words in the address bar (a space, or neither a dot nor a colon) are a web search, through NetSurf's own providers: the framebuffer front end never used them. `res/SearchEngines` puts DuckDuckGo's lite page first |
+| `patches/16-welcome-duckduckgo.patch` | the welcome page searches DuckDuckGo's lite page, not Google |
 | `patches/12-svgtiny-quadratic.patch` | libsvgtiny: a relative `q` kept its control point relative, a relative `t` added the current point to its reflected one twice |
 | `try.sh` | a clean disk (never `system/disk.img`) with the stage in `/disk/ns` and a launcher, `/disk/ns/netsurf` |
 
@@ -63,6 +66,10 @@ fixes that took it from 4.3 s).
 MIT). Each patch follows the licence of the file it changes;
 `mynos-surface.c` is MyNOS's, GPL version 2 or later. A NetSurf program
 built from them is therefore distributed under version 2.
+
+**Google** search does not work and cannot: since 2025 its results come
+only through JavaScript (a loader script; without it, a page asking for
+JavaScript), far beyond Duktape and NetSurf's DOM. Hence DuckDuckGo.
 
 **Not done** (mynos-1g0): WebP (BBC's images, for one; no room for it
 under 4 MB); how NetSurf reaches users (to be

@@ -1780,3 +1780,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   DejaVu faces in /disk/ns/fonts), not its bitmap monospaced font: Hacker
   News, Wikipedia and ocaml.org look as they should, but for NetSurf's
   own limits. The program loads 3.92 MB of its 4 MB.
+- **2026-11-24** — NetSurf's address bar: a click selects all of it,
+  typing replaces it (Ctrl-A, Delete too); words are a web search,
+  DuckDuckGo's lite page by default, also on the welcome page. Google's
+  results need JavaScript beyond NetSurf's (a blank page): not fixable
+  here. Repubblica's faults (captions over photos, cut columns) are
+  NetSurf's: its style sheets use grid layout, gradients and var().
