@@ -167,7 +167,7 @@ a service too: one of its domains serves **power/1** (E.17).
 ## E.4 The running system
 
 | Name | Program | Lang. | Priv. | Started by | Protocol |
-|---|---|---|---|---|---|
+|----------|--------------------------------|-----|----|---------|-----------------------------|
 | `registry` | `services/registry/registry.c` | C | io | boot module | registry/1 |
 | `memrofs` | `services/fs/memrofs/memrofsd.c` | C | io | boot module | fs/1 |
 | `power` | `init/init.ml` | OCaml | io | boot module (`ocamlrun`) | power/1 |

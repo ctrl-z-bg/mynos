@@ -403,7 +403,8 @@ Started from the text console instead, it says:
 
 ```
 life.byte: no graphical session: start it with gui.
-A graphical program: start the graphical session (gui), then run it from a Terminal window, from Files, or with &.
+A graphical program: start the graphical session (gui), then run it from a
+Terminal window, from Files, or with &.
 ```
 
 and ends with status 2.

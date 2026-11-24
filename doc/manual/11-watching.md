@@ -148,23 +148,7 @@ the model and each tool it uses, so its recording reads as chapters:
 
 The menu's **Recordings** shows a recording drawn instead of printed.
 It opens `/tmp/agent.trc` if there is one, else `/tmp/last.trace`;
-`recordings FILE`, in a terminal window, opens another.
-
-```
- ┌─ Recordings ─────────────────────────────────────────────────────────┐
- │ agent.trc                           751 calls, 3 marks, 17999.2 ms   │
- │[Timeline][Calls][Whole][GUI: hidden][/tmp/agent.trc ][Files][Open][Record]
- │            0 us        5000 ms       10000 ms       15000 ms         │
- │ marks      │model call 1                                        │    │
- │ registry(2)│                                                   ▌│    │
- │ netd(9)    ▌                                                    ▌    │
- │ llmd(11)   ▒▒▒                                                  ▒    │
- │ fatfs(22)  ▌                                                  ▌▌▌    │
- │ sh(51)                                                         ▒     │
- ├──────────────────────────────────────────────────────────────────────┤
- │ the selected call: who, what, the reply, the times, the bytes        │
- └──────────────────────────────────────────────────────────────────────┘
-```
+`recordings FILE`, in a terminal window, opens another (figure 11-2).
 
 **Timeline.** One lane per process. Each call is a light box on its
 client's lane (waiting) and a dark box on its server's lane (working).

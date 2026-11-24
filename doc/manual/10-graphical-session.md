@@ -44,20 +44,7 @@ closes it.
 
 ## 10.2 Step 2: the screen
 
-```
- ┌────────┬──────────────┬──────────────┬─────────────────────┬──────────┐
- │▌MyNOS  │ Welcome to.. │ Terminal     │                     │ 10:51:38 │  the top bar
- ├────────┴──────────────┴──────────────┴─────────────────────┴──────────┤
- │   ┌─ Welcome to MyNOS ─────────────[x]┐                               │
- │   │                                   │      the desktop              │
- │   │           a window                │                               │
- │   └───────────────────────────────────┘                               │
- │                                                       (the logo)      │
- └───────────────────────────────────────────────────────────────────────┘
-   the MyNOS menu    a tab for each window, in the order they opened   the clock (UTC)
-```
-
-The **top bar** has, from the left: the **MyNOS menu**; a **tab** for
+The **top bar** (figure 10-1) has, from the left: the **MyNOS menu**; a **tab** for
 each window, the focused one lit; and a clock, in UTC. The rest is the
 **desktop**, with the project's logo, a Minotaur from the 2003 website,
 faint in its corner.
@@ -392,7 +379,8 @@ session, says so and ends (exit status 2):
 ```
 mynos:/$ clock
 clock.byte: no graphical session: start it with gui.
-A graphical program: start the graphical session (gui), then run it from a Terminal window, from Files, or with &.
+A graphical program: start the graphical session (gui), then run it from a
+Terminal window, from Files, or with &.
 ```
 
 Inside the session, start one from a Terminal window, from Files, or

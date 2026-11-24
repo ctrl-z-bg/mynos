@@ -290,10 +290,11 @@ New demos and programs come as packages, from a repository on the web:
 
 ```
 mynos:/$ pkg list
-pkg: 27 packages in the index (https://raw.githubusercontent.com/ctrl-z-bg/mynos-packages/main/index.json)
-2048       1.0                   2048, the sliding tile game, in a window (2048-ml by Philip Xu, 2014): h j k l slide the tiles, q quits
+pkg: 27 packages in the index (https://raw.githubusercontent.com/ctrl-z-bg/
+mynos-packages/main/index.json)
+2048       1.0                   2048, the sliding tile game, in a window ...
 ...
-windtree   1.0                   A tree in the wind: a fractal tree under a night sky, written by the agent inside MyNOS (manual 20.6); the mouse sets the wind, q quits
+windtree   1.0                   A tree in the wind: a fractal tree under ...
 ...
 mynos:/$ pkg install 2048
 pkg: 2048 1.0: downloading 440320 bytes

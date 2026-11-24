@@ -16,7 +16,8 @@ let serve port lines =
       | Ok (Console.Protocol.Request r) ->
         let ok (type a) (r : a Console.request) (v : a) = answer ch (Console.reply r v) in
         (match r with
-         | Console.Write s -> Mutex.protect (fst lines) (fun () -> Buffer.add_string (snd lines) s); ok r ()
+         | Console.Write s ->
+           Mutex.protect (fst lines) (fun () -> Buffer.add_string (snd lines) s); ok r ()
          | Console.Read _ -> ok r ""                   (* no input: the end *)
          | Console.Mode _ -> ok r ()
          | Console.Keymap _ -> ok r Console.layout_us

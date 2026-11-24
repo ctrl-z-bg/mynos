@@ -191,7 +191,8 @@ those frames.
 A client (pid 1031) asks a service (pid 2012), already registered on port
 20023, for something; the request is 120 bytes, the reply 6. libmynos
 does the same for every file operation (some add a second message, the
-data, on the same channel).
+data, on the same channel). Time goes down; an arrow is what the kernel
+returns to the process whose column it points to.
 
 ```
   client, pid 1031              kernel                     server, pid 2012
