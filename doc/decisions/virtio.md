@@ -2,8 +2,8 @@
 
 - **Issues:** mynos-btq.2, in the version 2 line (mynos-btq)
 - **Date:** 2026-11-24
-- **Status:** accepted by the owner (C, virtio 1.x); the disk done, the
-  network next, then input and the screen.
+- **Status:** accepted by the owner (C, virtio 1.x); the disk and the
+  network done, input and the screen next.
 
 ## Why
 
@@ -43,10 +43,16 @@ drivers written once on i386 are the drivers of every port.
   `vblk0`, protocol block/1, the same as `ata0`. `fatfs` takes `ata0`,
   else `vblk0`; `init` flushes both before the power goes.
 
+- **virtio-net** in `netd` (`services/net/vnet.c`), with the NE2000's
+  calls: queue 0 receives (32 buffers of 2 KB always offered), queue 1
+  transmits (16 buffers, reused as the card gives them back); a header
+  of 12 bytes, all zero, before each frame (no offloads). `netd` takes a
+  virtio card if it finds one, else the NE2000.
+- **`VIRTIO=1`** for `tools/run-qemu.sh` and `tools/run-demo.sh`: `DISK`
+  and `NET` become virtio devices.
+
 ## Next
 
-- **virtio-net** in `netd`, beside the NE2000: an lwIP interface over two
-  queues (receive, transmit).
 - **virtio-input** (keyboard and mouse) and **the screen** (virtio-gpu,
   or QEMU's `ramfb`): what the graphical session needs on `virt`.
 - On AArch64 and RISC-V, PCI's configuration space is memory (ECAM)

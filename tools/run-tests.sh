@@ -31,7 +31,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="virtio_disk disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload sound_ok edit_utf8 log_shown"
+results="virtio_disk virtio_net disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload sound_ok edit_utf8 log_shown"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -287,9 +287,11 @@ fi
 }
 
 sec_virtio() {
-# a virtio disk only (mynos-btq.2): vblkd serves it as vblk0, fatfs mounts
-# it as /disk; a file written there is on the image the host reads
-virtio_disk=
+# virtio devices only (mynos-btq.2): a disk, which vblkd serves as vblk0
+# and fatfs mounts as /disk (a file written there is on the image the
+# host reads), and a network card, which netd takes instead of the
+# NE2000 (httpd answers the host through it)
+virtio_disk= virtio_net=
 if [ -f system/ramdisk.dsk ] && [ -f system/vblkd ] && [ -f tests/fat/fat16.img ]; then
     cp tests/fat/fat16.img tests/fat/run-virtio.img
     : > "$tmp/logv"
@@ -299,6 +301,8 @@ if [ -f system/ramdisk.dsk ] && [ -f system/vblkd ] && [ -f tests/fat/fat16.img 
         -- -display none -serial null -serial "file:$tmp/logv" \
            -drive "file=tests/fat/run-virtio.img,format=raw,if=none,id=vd" \
            -device virtio-blk-pci,drive=vd \
+           -netdev user,id=vn,hostfwd=tcp:127.0.0.1:47181-:80 \
+           -device virtio-net-pci,netdev=vn \
            -monitor "unix:$tmp/mon-v,server,nowait" &
     qemu=$!
     i=0
@@ -306,6 +310,9 @@ if [ -f system/ramdisk.dsk ] && [ -f system/vblkd ] && [ -f tests/fat/fat16.img 
         sleep 1; i=$((i + 1))
     done
     tools/type-keys.py "$tmp/mon-v" 'X=ok; echo virtio-$X > /disk/v.txt; cat /disk/v.txt\n'; sleep 3
+    i=0
+    while [ $i -lt 20 ] && ! grep -aq 'netd: address' "$tmp/logv"; do sleep 0.5; i=$((i + 1)); done
+    curl -s -m 5 -i http://127.0.0.1:47181/ | grep -q 'Server: MyNOS httpd' && virtio_net=yes
     tools/type-keys.py "$tmp/mon-v" 'shutdown\n'
     i=0
     while [ $i -lt 20 ] && kill -0 $qemu 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
@@ -1333,6 +1340,12 @@ PY
     expect "keys: up ESC[C, held"
     expect "keys: up q, held"
     expect "vblkd: virtio disk, 32768 sectors"
+    expect "netd: virtio card, IRQ"
+    if [ -n "$virtio_net" ]; then
+        echo "ok    virtio: netd on a virtio card, httpd reached by the host"
+    else
+        echo "FAIL  virtio: netd on a virtio card, httpd reached by the host"; fail=1
+    fi
     if [ -n "$virtio_disk" ]; then
         echo "ok    virtio: a file written on a virtio disk, read by the host"
     else

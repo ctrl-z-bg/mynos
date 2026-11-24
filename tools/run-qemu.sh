@@ -22,6 +22,9 @@
 #   HTTP     with NET, a host port forwarded to MyNOS's port 80 (httpd)
 #   UDP      with NET, a UDP port of the host forwarded to the same port of
 #            MyNOS, from any address (GavML's network game: UDP=7145)
+#   VIRTIO   if set, DISK and NET are virtio devices (virtio-blk-pci,
+#            virtio-net-pci: vblkd and netd's virtio driver) instead of
+#            an IDE disk and an NE2000 (doc/decisions/virtio.md)
 #   KVM      if set, the host's processor runs MyNOS's (KVM: /dev/kvm),
 #            far faster than emulating it; run-demo.sh sets it if it can
 #   SOUND    a Sound Blaster 16 (soundd), heard through this audio backend
@@ -57,13 +60,22 @@ case ${SOUND:-} in
     *) audio="-audiodev $SOUND,id=snd -device sb16,audiodev=snd" ;;
 esac
 
+# the disk and the network card: virtio devices, or the PC's IDE and NE2000
+if [ -n "${VIRTIO:-}" ]; then
+    disk_if=none,id=vd disk_dev="-device virtio-blk-pci,drive=vd"
+    net_dev=virtio-net-pci,netdev=n0
+else
+    disk_if=ide,index=0 disk_dev=
+    net_dev=ne2k_isa,netdev=n0,iobase=0x300,irq=9
+fi
+
 # shellcheck disable=SC2086
 set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "${MEM:-32}" \
     -cpu "${CPU:-qemu32,+rdrand,+rdseed}" \
     ${VERBOSE:+-append verbose} ${KVM:+-accel kvm} \
-    ${DISK:+-drive file=$DISK,format=raw,if=ide,index=0} \
+    ${DISK:+-drive file=$DISK,format=raw,if=$disk_if} ${DISK:+$disk_dev} \
     ${NET:+-netdev user,id=n0${HTTP:+,hostfwd=tcp:127.0.0.1:$HTTP-:80}${UDP:+,hostfwd=udp::$UDP-:$UDP}} \
-    ${NET:+-device ne2k_isa,netdev=n0,iobase=0x300,irq=9} $audio "$@"
+    ${NET:+-device $net_dev} $audio "$@"
 
 if [ -z "${SHOT:-}" ]; then
     exec qemu-system-i386 "$@"

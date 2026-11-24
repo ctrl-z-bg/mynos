@@ -60,6 +60,7 @@
 #include "lwip/prot/ip4.h"
 #include "netif/ethernet.h"
 #include "ne2k.h"
+#include "vnet.h"
 
 #include "mbedtls/ssl.h"
 #include "mbedtls/x509_crt.h"
@@ -166,12 +167,21 @@ static const char * err_text(err_t e) {
 static struct netif netif;
 static unsigned char mac[6];
 
+/* the card: a virtio one if there is one, else the NE2000 */
+static int virtio_card = 0;
+static int card_send(const void * frame, unsigned int len) {
+  return virtio_card ? vnet_send(frame, len) : ne2k_send(frame, len);
+}
+static int card_recv(void * buf) {
+  return virtio_card ? vnet_recv(buf) : ne2k_recv(buf);
+}
+
 static err_t linkoutput(struct netif * n, struct pbuf * p) {
   static unsigned char frame[NE2K_BUFSIZE];
   (void)n;
   if (p->tot_len > NE2K_MAXFRAME) return ERR_IF;
   pbuf_copy_partial(p, frame, p->tot_len, 0);
-  return ne2k_send(frame, p->tot_len) ? ERR_IF : ERR_OK;
+  return card_send(frame, p->tot_len) ? ERR_IF : ERR_OK;
 }
 
 static err_t netif_setup(struct netif * n) {
@@ -190,7 +200,7 @@ static err_t netif_setup(struct netif * n) {
 static void poll_card(void) {
   static unsigned char frame[NE2K_BUFSIZE];
   int len;
-  while ((len = ne2k_recv(frame)) != 0) {
+  while ((len = card_recv(frame)) != 0) {
     struct pbuf * p;
     if (len < 0) continue;
     p = pbuf_alloc(PBUF_RAW, (u16_t)len, PBUF_POOL);
@@ -1212,6 +1222,7 @@ static void * irq_thread(void * arg) {
   int sem = IDX(arg);
   for (;;) {
     if (mynos_P(sem) < 0) return NULL;
+    if (virtio_card) vnet_ack();      /* its PCI line, unmasked again */
     pthread_mutex_lock(&lock);
     interrupted = 1;
     pthread_cond_signal(&wake);
@@ -1257,12 +1268,17 @@ int main(void) {
   pthread_t t;
   int port;
 
-  if (ne2k_init(NE2K_IOBASE, mac) < 0) {
-    mynos_log("netd: no NE2000 card at 0x%x\n", NE2K_IOBASE);
+  int irq = NE2K_IRQ;
+  if (vnet_init(mac, &irq) == 0) {
+    virtio_card = 1;
+    mynos_log("netd: virtio card, IRQ %d, %02x:%02x:%02x:%02x:%02x:%02x\n",
+              irq, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  } else if (ne2k_init(NE2K_IOBASE, mac) < 0) {
+    mynos_log("netd: no network card (virtio, NE2000 at 0x%x)\n", NE2K_IOBASE);
     return 0;                     /* nothing to serve: not a failure (init) */
-  }
-  mynos_log("netd: NE2000 at 0x%x, %02x:%02x:%02x:%02x:%02x:%02x\n",
-            NE2K_IOBASE, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  } else
+    mynos_log("netd: NE2000 at 0x%x, %02x:%02x:%02x:%02x:%02x:%02x\n",
+              NE2K_IOBASE, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
   /* mbedTLS's cryptography (PSA): its random numbers come from the
      kernel's (getrandom) */
@@ -1280,11 +1296,12 @@ int main(void) {
   dhcp_start(&netif);
 
   {
-    int sem = mynos_driverRegister("ne2k", NE2K_IRQ, NULL, NULL);
+    int sem = mynos_driverRegister(virtio_card ? "virtio-net" : "ne2k",
+                                   virtio_card ? (irq | MYNOS_IRQ_PCI) : irq, NULL, NULL);
     if (sem < 0)
-      mynos_log("netd: no IRQ %d (%d): polling every %d ms\n", NE2K_IRQ, sem, WAKE_MS);
+      mynos_log("netd: no IRQ %d (%d): polling every %d ms\n", irq, sem, WAKE_MS);
     else {
-      mynos_enableIrq(NE2K_IRQ);
+      mynos_enableIrq(irq);
       pthread_create(&t, NULL, irq_thread, ARG(sem));
     }
   }

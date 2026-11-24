@@ -1889,3 +1889,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `vblk0` (block/1), which `fatfs` mounts when there is no `ata0`. A new
   boot of the suite (lane c) writes a file on a virtio disk and the host
   reads it: 176 checks.
+- **2026-11-24** — virtio, second part (mynos-btq.2): `netd` drives a
+  virtio network card (`services/net/vnet.c`: a receive queue, a
+  transmit queue, the PCI line shared with the disk's) when it finds
+  one, else the NE2000. `VIRTIO=1` for `run-qemu.sh` and `run-demo.sh`
+  attaches the disk and the card as virtio devices. The suite's virtio
+  boot also reaches `httpd` from the host through the virtio card: 178
+  checks.

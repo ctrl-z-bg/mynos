@@ -461,9 +461,12 @@ same lines, `/disk/.history`. Closing the window kills `sh` and what it started.
 ## E.12 netd: the network
 
 `netd` (`services/net/netd.c`, C, 2026, a `driver`), registered as
-`net`: the lwIP 2.2.1 TCP/IP stack, an NE2000 driver (`ne2k.c`, port
-`0x300`, IRQ 9) and mbedTLS 3.6, in one process, so that a frame is a
-function call rather than a message. Protocol **net/1**
+`net`: the lwIP 2.2.1 TCP/IP stack, the card's driver and mbedTLS 3.6,
+in one process, so that a frame is a function call rather than a
+message. The card is a virtio one if there is one (`vnet.c`, over
+`libmynos`'s virtio transport: a receive queue with 32 buffers always
+offered, a transmit queue of 16, a shared PCI line), else an NE2000
+(`ne2k.c`, port `0x300`, IRQ 9). Protocol **net/1**
 (`mynos-lib/ocaml/net.ml`), whose case numbers netd follows:
 
 | Case | Request | Arguments | Reply | Safe |

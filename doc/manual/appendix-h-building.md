@@ -250,6 +250,7 @@ tests. Its environment:
 | `UDP` | none | with `NET`, a UDP port of the host forwarded to the same port of MyNOS |
 | `VERBOSE` | none | `verbose` on the kernel's command line: its messages stay on screen |
 | `KVM` | none | `-accel kvm`: the host's processor runs MyNOS's |
+| `VIRTIO` | none | the disk and the network card as virtio devices (`virtio-blk-pci`, `virtio-net-pci`) instead of IDE and NE2000 |
 | `SOUND` | none | a Sound Blaster 16 (`-device sb16`) heard through this QEMU audio backend, or recorded with `wav:FILE` |
 | `KERNEL` | `mynos-core/kernel/kernel.elf` | another kernel |
 | `KERNEL_ONLY` | none | with no module, boot the bare kernel |

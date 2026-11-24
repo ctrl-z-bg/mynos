@@ -16,6 +16,8 @@
 # port: doc/decisions/console.md), with the host's copy and paste,
 # scrollback and fonts; QEMU's window shows the same. Ctrl-C goes to MyNOS:
 # close the window, or type Ctrl-A then X, to stop QEMU.
+# VIRTIO=1 gives MyNOS virtio devices (a virtio disk, a virtio network
+# card) instead of the PC's IDE disk and NE2000 (doc/decisions/virtio.md).
 # PKG=local serves the packages just built (tmp/packages) to MyNOS from
 # this machine, and MyNOS upgrades the installed ones at boot: packages
 # tried before they are published.
