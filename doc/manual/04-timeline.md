@@ -55,9 +55,9 @@ through MyNOS's new serial driver, a process like any other. On the
 Spectrum, most likely, a small program read from the serial port and
 wrote to it.
 
-The serial port is still how MyNOS talks to the outside, in a way: since
-2026 the second serial port is a second terminal on the same shell
-(chapter 6), and the log that the test suite reads.
+The serial port still has a place, beside the network MyNOS has had
+since 2026 (chapter 9): the second serial port is a second terminal on
+the same shell (chapter 6), and the log that the test suite reads.
 
 ## 4.4 2026: the restart
 
