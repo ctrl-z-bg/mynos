@@ -41,8 +41,9 @@ writing of yet another OS (therefore the name)?" (chapter 2).
   protocol, so that a window, a program or a language model can call any
   service without knowing it in advance (chapter 17).
 - **Linux compatibility, underneath.** The kernel answers the Linux
-  system calls that a static C library needs, so musl and the OCaml
-  runtime run unchanged (appendix D).
+  system calls that a static C library needs, so musl (a small C library
+  for Linux, musl.libc.org) and the OCaml runtime run unchanged
+  (appendix D).
 - **A system that shows itself.** An event recorder in the kernel
   records every message; the System window replays them as arrows
   between processes, and the Tour explains what they mean (chapter 11).
