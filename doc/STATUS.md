@@ -1827,3 +1827,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   to mynos-packages: browser 1.6 (CSS) and Studio 1.4 rebuilt (its
   runner answers console/1 `ready`); the other packages stay as they
   were, since they run unchanged on this system.
+- **2026-11-24** — The old website's archive (doc/website) has all
+  fourteen SourceForge news items: the four older ones (2002), never
+  captured by the Wayback Machine, taken from SourceForge, which still
+  publishes them; the home page's "Site news archive" points to
+  `news.html`.

@@ -50,6 +50,8 @@ Only these edits were made to the HTML pages:
   open from disk: `why.php` becomes `why.html`, `screenshots.php?shot=N`
   becomes `screenshots-shot-N.html`, and `/` (and `index.php`, the same page)
   becomes `index.html`.
+- **The news archive link.** "Site news archive »" on the home page points
+  to `news.html` (see below) instead of SourceForge's list.
 - **Links.** Links (`href`/`src`) to archived files of `mynos.sourceforge.net`
   were rewritten as relative paths. Links to files of `mynos.sourceforge.net`
   that were never archived were rewritten as absolute original URLs
@@ -130,6 +132,20 @@ SourceForge (`http://sourceforge.net/forum/forum.php?forum_id=N`), not on
 and ads, so they were not stored. Instead, the text of each post (author,
 date, title and body) was extracted verbatim into `news.html`. The home
 page's news links still point to the original SourceForge URLs.
+
+The home page's "Site news archive »" linked SourceForge's list of all the
+project's news (`http://sourceforge.net/news/?group_id=35113`): fourteen
+items, the ten above and four older ones (2002-01-08 to 2002-10-22). That
+list held only titles (captures 2002 to 2009). The four older posts were
+never captured, but SourceForge still publishes all fourteen news items
+(`https://sourceforge.net/p/mynos/news/`, moved there in 2013). Their
+author, title and text were taken on 2026-11-24 from its REST interface
+(`https://sourceforge.net/rest/p/mynos/news/YYYY/MM/NAME/`) and their dates
+from its feed (`https://sourceforge.net/p/mynos/news/feed.rss?limit=100`,
+UTC, as the dates of the other ten), and added to `news.html`. The text
+is the feed's rendering: the REST interface gives Markdown, with `\(` for
+`(`; one line break, `<br />` in the feed, is written `&nbsp;<br />` as
+in the other posts. The home page's link now points to `news.html`.
 
 ## Missing or skipped
 
