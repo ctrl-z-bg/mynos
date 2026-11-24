@@ -86,6 +86,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .mynos_pager\n"\
 	 "   cmpl $38, %eax\n"\
 	 "   je .mynos_procstat\n"\
+	 "   cmpl $39, %eax\n"\
+	 "   je .mynos_dmaAlloc\n"\
 	 "   cmpl $31, %eax\n"\
 	 "   je .mynos_log\n"\
 	 "   cmpl $100, %eax\n"\
@@ -270,6 +272,12 @@ __asm__ (".pushsection .text\n" \
 	 "   pushl %ebx\n"\
 	 "   call _mynos_syscall_pager\n"\
 	 "   addl $20, %esp\n"\
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_dmaAlloc:\n"\
+	 "   pushl %ecx\n"\
+	 "   pushl %ebx\n"\
+	 "   call _mynos_syscall_dmaAlloc\n"\
+	 "   addl $8, %esp\n"\
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_procstat:\n"\
 	 "   pushl %ecx\n"\

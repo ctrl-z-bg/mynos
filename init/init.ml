@@ -93,7 +93,9 @@ let power_service () =
       ignore (Domain.spawn (fun () ->
           Mynos.sleep 0.2;
           (* the disk's cache, written before the power goes *)
-          (try Block.flush (Block.connect ()) with _ -> ());
+          List.iter (fun service ->
+              try Block.flush (Block.connect ~service ()) with _ -> ())
+            [ "ata0"; "vblk0" ];
           act ()));
       match r with Power.Shutdown -> () | Power.Reboot -> () }
 

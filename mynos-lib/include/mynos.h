@@ -43,6 +43,10 @@
 /* privileges of a process (doc/decisions/identity-and-permissions.md):
    given at spawn, at most the parent's own */
 #define MYNOS_PRIV_IO 1        /* port I/O and IRQs: drivers */
+/* with driverRegister's irq: a PCI line, level-triggered, which drivers
+   may share; the kernel masks it at each interrupt, and the driver
+   unmasks it with enableIrq once it has talked to its device */
+#define MYNOS_IRQ_PCI 0x100
 /* processInfo's result: the privileges, and this bit while it runs */
 #define MYNOS_PROC_ALIVE 0x100
 #define MYNOS_PROC_BYTECODE 0x200   /* processes(): an OCaml program, on ocamlrun */
@@ -237,6 +241,11 @@ void * mynos_mapPhysical(unsigned long phys, int npages);
    controller's); NULL without one. Drivers only. */
 #define MYNOS_DMA_AREA_SIZE 65536
 void * mynos_dmaArea(unsigned long * phys);
+/* npages (1 to 256) of RAM in one physical piece, zeroed, mapped here,
+   for a device that reads and writes memory by itself (virtio): its
+   address, its physical address in *phys; NULL if there is no such
+   piece. Drivers only. Freed when the process ends. */
+void * mynos_dmaAlloc(int npages, unsigned long * phys);
 /* the same, from an ELF image in memory */
 int mynos_spawnImage(void * elf, unsigned int len, char ** argv, char ** envp);
 

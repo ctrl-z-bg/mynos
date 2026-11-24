@@ -10,6 +10,7 @@ driver consoled
 start tmpfs.byte
 start clipboard.byte
 driver ata.byte
+driver vblkd
 start fatfs.byte
 driver pagerd.byte
 driver netd

@@ -1880,3 +1880,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   assembly left. Still i386-shaped in generic code, for the x86-64 step:
   the TSS as the thread, two-level page tables, the Linux ABI's
   handlers (doc/decisions/arch.md). Full suite unchanged, 174 checks.
+- **2026-11-24** — virtio, first part (mynos-btq.2, doc/decisions/virtio.md;
+  the owner chose C and virtio 1.x over PCI): the kernel's `dmaAlloc`
+  (call 39, contiguous RAM for a device, freed with its driver) and
+  shared, level-triggered PCI interrupt lines (`MYNOS_IRQ_PCI`, masked
+  at each interrupt until the driver unmasks them); `libmynos`'s virtio
+  transport (`mynos-lib/src/virtio.c`); `vblkd`, a virtio disk as
+  `vblk0` (block/1), which `fatfs` mounts when there is no `ata0`. A new
+  boot of the suite (lane c) writes a file on a virtio disk and the host
+  reads it: 176 checks.

@@ -49,6 +49,8 @@ system/displayd
 services/display/displayd
 system/soundd
 services/sound/soundd
+system/vblkd
+services/virtio/vblkd
 services/net/netd
 tests/net/sockets
 tests/net/netd

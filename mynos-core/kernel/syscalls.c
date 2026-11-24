@@ -101,6 +101,25 @@ int _mynos_syscall_dmaArea(uint32_t what) {
   return a ? (int)a : MYNOS_ERR_FULL;
 }
 
+/* dmaAlloc (39): npages (1 to 256) of RAM, physically contiguous and
+   zeroed, mapped into the caller, for a device that reads and writes
+   memory by itself (virtio's queues and buffers): their address, and in
+   *phys their physical address, which the driver gives the device.
+   Drivers only (the io privilege). The process's mapping is the pages'
+   only reference: they are freed when it ends. */
+int _mynos_syscall_dmaAlloc(uint32_t npages, uint32_t * phys) {
+  uint32_t p;
+  void * a;
+  if (!(processTable[currProcess]->privileges & MYNOS_PRIV_IO))
+    return MYNOS_ERR_DENY;
+  if (npages == 0 || npages > 256 || !__mem_userArea(phys, sizeof *phys))
+    return MYNOS_ERR_INVALID;
+  a = __OS_allocDma(npages, &p);
+  if (a == NULL) return MYNOS_ERR_FULL;
+  if (copy_to_user(phys, &p, sizeof p) < 0) return MYNOS_ERR_INVALID;
+  return (int)a;
+}
+
 /* processInfo (27): a process's privileges, with MYNOS_PROC_ALIVE while
    it runs; MYNOS_ERR_INVALID if there is no such pid (it ended and was
    collected, or never was) */
@@ -129,14 +148,14 @@ int32_t _mynos_syscall_setTimer(ulong32_t usec) {
 /* enableIrq (100), disableIrq (101): the caller's own lines only */
 int _mynos_syscall_enableIrq(ushort16_t n) {
   if (!__OS_irq_valid(n)) return MYNOS_ERR_INVALID;
-  if (__OS_irq_owner(n) != CURRPID) return MYNOS_ERR_DENY;
+  if (!__OS_irq_owns(n, CURRPID)) return MYNOS_ERR_DENY;
   enable_irq(n);
   return 0;
 }
 
 int _mynos_syscall_disableIrq(ushort16_t n) {
   if (!__OS_irq_valid(n)) return MYNOS_ERR_INVALID;
-  if (__OS_irq_owner(n) != CURRPID) return MYNOS_ERR_DENY;
+  if (!__OS_irq_owns(n, CURRPID)) return MYNOS_ERR_DENY;
   disable_irq(n);
   return 0;
 }

@@ -313,6 +313,15 @@ returns its physical address, for the DMA controller; `dmaArea(0)` maps
 it into the caller, one reference to each page, which the end of the
 process drops, as for shared pages. `soundd` plays from it (appendix E).
 
+**DMA memory for PCI devices** (call 39, `dmaAlloc`, `io` only) is the
+same idea without ISA's limits: 1 to 256 pages of RAM in one physical
+piece, anywhere above 16 MB, zeroed and mapped into the caller, with
+their physical address for the device. virtio's queues and buffers live
+there (`vblkd`, appendix E). The pages are found in the physical memory
+bitmap as a run of free ones, marked once each: the driver's mapping is
+their only reference, so they go back to the free pages when the driver
+ends, whatever the way it ends.
+
 ## B.10 Pointers from processes
 
 The kernel must not trust a process's pointers: an address below 1 GB

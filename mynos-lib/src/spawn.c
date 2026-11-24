@@ -47,6 +47,17 @@ void * mynos_dmaArea(unsigned long * phys) {
   return (void *)r;
 }
 
+/* dmaAlloc (39): npages of RAM in one physical piece, mapped here, its
+   physical address in *phys; NULL if there is none (or without the io
+   privilege). Freed when the process ends. */
+void * mynos_dmaAlloc(int npages, unsigned long * phys) {
+  unsigned int p = 0;
+  unsigned long r = (unsigned long)__mynos_syscall(39, npages, (int)&p, 0, 0, 0);
+  if (r >= (unsigned long)-4096) return NULL;
+  if (phys) *phys = p;
+  return (void *)r;
+}
+
 /* processInfo (27): MYNOS_PROC_ALIVE | privileges, or an error */
 int mynos_processInfo(int pid)
 {

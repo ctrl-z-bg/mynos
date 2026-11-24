@@ -276,6 +276,37 @@ void * __OS_mapDmaArea(void) {
   return (void *)(start << 12);
 }
 
+/* npages of RAM in one physical piece, above 16 MB (ISA DMA keeps the
+   memory below), mapped into the current process and zeroed: their
+   address, the physical one in *phys; NULL if no piece is free. The
+   mapping holds the pages' only reference (pmem_set once each): the
+   process's end frees them. */
+void * __OS_allocDma(uint32_t npages, uint32_t * phys) {
+  uint32_t first, run = 0, page, start, i;
+  for (page = 0x1000; page < __total_phy_pages; page++) {
+    if (__memory_bitmap[page / 8] & (1 << (page % 8))) { run = 0; continue; }
+    if (++run == npages) break;
+  }
+  if (run < npages) return NULL;
+  first = page + 1 - npages;
+  start = __lmt_allocArea(&(processTable[currProcess]->lmemmap), npages);
+  if (start < USERMINPAGE) return NULL;
+  if (__OS_askPagesFrom((void *)(start << 12), npages, 0, PF_USER | PF_READWRITE) == NULL) {
+    __lmt_freeArea(&(processTable[currProcess]->lmemmap), start, npages);
+    return NULL;
+  }
+  for (i = 0; i < npages; i++) {
+    uint32_t * pte = (uint32_t *)__GET_PAGE_TABLE_ENTRY(__PAGE_PD_INDEX(start + i),
+							 __PAGE_PT_INDEX(start + i));
+    pmem_set(first + i);
+    *pte = ((first + i) << 12) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED;
+    INVALIDATE_THE_CACHE((start + i) << 12);
+  }
+  kbzero((void *)(start << 12), npages * PAGE_SIZE);
+  *phys = first << 12;
+  return (void *)(start << 12);
+}
+
 void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
 			 int alloc_now, uint32_t flags) {
   uint32_t page;

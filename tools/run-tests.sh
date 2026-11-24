@@ -31,7 +31,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload sound_ok edit_utf8 log_shown"
+results="virtio_disk disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload sound_ok edit_utf8 log_shown"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -283,6 +283,38 @@ sys.exit(0 if b"nocom2-ok" in s else 1)' && nocom2=yes
         rebooted=yes
     fi
     wait $qemu || true
+fi
+}
+
+sec_virtio() {
+# a virtio disk only (mynos-btq.2): vblkd serves it as vblk0, fatfs mounts
+# it as /disk; a file written there is on the image the host reads
+virtio_disk=
+if [ -f system/ramdisk.dsk ] && [ -f system/vblkd ] && [ -f tests/fat/fat16.img ]; then
+    cp tests/fat/fat16.img tests/fat/run-virtio.img
+    : > "$tmp/logv"
+    MEM=256 tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        system/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$tmp/logv" \
+           -drive "file=tests/fat/run-virtio.img,format=raw,if=none,id=vd" \
+           -device virtio-blk-pci,drive=vd \
+           -monitor "unix:$tmp/mon-v,server,nowait" &
+    qemu=$!
+    i=0
+    while [ $i -lt 30 ] && ! grep -aq 'mynos:/' "$tmp/logv" 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    tools/type-keys.py "$tmp/mon-v" 'X=ok; echo virtio-$X > /disk/v.txt; cat /disk/v.txt\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-v" 'shutdown\n'
+    i=0
+    while [ $i -lt 20 ] && kill -0 $qemu 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
+    kill -0 $qemu 2>/dev/null && { printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-v" >/dev/null || true; }
+    wait $qemu || true
+    [ "$(tools/in-container.sh dev mtype -i tests/fat/run-virtio.img ::/v.txt 2>/dev/null)" = virtio-ok ] &&
+        virtio_disk=yes
+    cat "$tmp/logv" >> "$part"
+    rm -f tests/fat/run-virtio.img
 fi
 }
 
@@ -1001,7 +1033,7 @@ for lane in ${LANES:-a b c d e}; do
         case $lane in
             a) sec_first || true; sec_effects || true; sec_storage || true; sec_fat || true; sec_domains || true; sec_threads || true; sec_fpu || true ;;
             b) sec_mlib || true; sec_files || true; sec_libs || true; sec_stress || true; sec_spawn || true; sec_console || true ;;
-            c) sec_nocom2 || true; sec_reboots || true ;;
+            c) sec_nocom2 || true; sec_reboots || true; sec_virtio || true ;;
             d) sec_gui || true ;;
             e) sec_net || true; sec_seventh || true ;;
         esac
@@ -1300,6 +1332,12 @@ PY
     expect "keys: up x, held ESC[C"
     expect "keys: up ESC[C, held"
     expect "keys: up q, held"
+    expect "vblkd: virtio disk, 32768 sectors"
+    if [ -n "$virtio_disk" ]; then
+        echo "ok    virtio: a file written on a virtio disk, read by the host"
+    else
+        echo "FAIL  virtio: a file written on a virtio disk, read by the host"; fail=1
+    fi
     if [ -n "$files_ok" ]; then
         echo "ok    files: a file copied between services, a folder made; Ctrl-C and line editing in a terminal"
     else

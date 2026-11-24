@@ -1063,7 +1063,7 @@ block. Others: 0. A `MYNOS_ERR_*` on error.
 ## 24.22 driver(2)
 
 **NAME** — `mynos_driverRegister`, `mynos_enableIrq`,
-`mynos_disableIrq`, `mynos_mapPhysical`, `mynos_dmaArea`, `inportb`, `outportb`: device
+`mynos_disableIrq`, `mynos_mapPhysical`, `mynos_dmaArea`, `mynos_dmaAlloc`, `inportb`, `outportb`: device
 access, for processes with the `io` privilege.
 
 **SYNOPSIS**
@@ -1075,6 +1075,7 @@ int  mynos_enableIrq(unsigned short n);
 int  mynos_disableIrq(unsigned short n);
 void * mynos_mapPhysical(unsigned long phys, int npages);
 void * mynos_dmaArea(unsigned long * phys);
+void * mynos_dmaAlloc(int npages, unsigned long * phys);
 unsigned char inportb(unsigned short port);
 void outportb(unsigned short port, unsigned char value);
 ```
@@ -1082,16 +1083,22 @@ void outportb(unsigned short port, unsigned char value);
 **DESCRIPTION** — `driverRegister` makes the caller the driver of line
 `irq` (1, 3–15) and returns a semaphore that the kernel `V`s at each of
 its interrupts, after acknowledging the controllers; `io` and `mem` are
-not used (pass `NULL`). `enableIrq` and `disableIrq` unmask and mask one
+not used (pass `NULL`); with `irq | MYNOS_IRQ_PCI` the line is a PCI one,
+shared by up to four drivers and masked at each interrupt until a driver
+unmasks it (A.7). `enableIrq` and `disableIrq` unmask and mask one
 of the caller's lines. `mapPhysical` maps `npages` pages of device
 memory (page-aligned, beyond RAM) into the caller. `dmaArea` maps the
 kernel's DMA area (`MYNOS_DMA_AREA_SIZE`, 64 KB below 16 MB, for ISA
-DMA: appendix B) and puts its physical address in `*phys`. `inportb` and
+DMA: appendix B) and puts its physical address in `*phys`. `dmaAlloc`
+gives `npages` (1 to 256) pages of RAM in one physical piece, zeroed,
+for a PCI device, with their physical address in `*phys`; they are freed
+when the process ends. `inportb` and
 `outportb` are the `in` and `out` instructions.
 
 **RETURN VALUE** — `driverRegister`: a semaphore, or `DENY` (no
 privilege), `INVALID` (line 0, 2 or beyond 15), `BUSY` (another live
-driver's). `mapPhysical`: an address, or `NULL`.
+driver's, on an ISA line). `mapPhysical`, `dmaAlloc`: an address, or
+`NULL`.
 
 **SEE ALSO** — sem(2); chapter 23; appendix A.7, B.9.
 

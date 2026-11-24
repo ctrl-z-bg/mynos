@@ -24,6 +24,8 @@ displayd: ../services/display/displayd
 	strip -o $@ $<
 soundd: ../services/sound/soundd
 	strip -o $@ $<
+vblkd: ../services/virtio/vblkd
+	strip -o $@ $<
 
 # the bytecode compiler, to compile programs inside MyNOS
 ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2/bin/ocamlc.byte)
@@ -33,7 +35,7 @@ ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2
 NUM_CMI = $(addprefix ../third_party/num/, num.cmi big_int.cmi nat.cmi ratio.cmi \
 	arith_status.cmi arith_flags.cmi int_misc.cmi)
 
-FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo netd displayd soundd ../httpd/httpd.byte \
+FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo netd displayd soundd vblkd ../httpd/httpd.byte \
 	../gui/gui.byte ../gui/welcome.byte ../gui/clock.byte ../gui/services.byte ../gui/terminal.byte \
 	../gui/agent_window.byte ../gui/ask.byte ../gui/text.byte ../gui/recordings.byte ../gui/system.byte ../gui/files.byte \
 	../gui/tour.byte ../gui/tour.txt \
@@ -77,4 +79,4 @@ $(DISK):
 	rm -f $@.readme
 
 clean:
-	rm -f ocamlrun consoled kilo netd displayd soundd ocamlc.byte ramdisk.dsk
+	rm -f ocamlrun consoled kilo netd displayd soundd vblkd ocamlc.byte ramdisk.dsk

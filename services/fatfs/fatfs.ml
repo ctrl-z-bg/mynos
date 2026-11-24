@@ -39,11 +39,15 @@ let set_u32 b i v = set_u16 b i (v land 0xFFFF); set_u16 b (i + 2) (v lsr 16)
 
 (* ---- the volume ---- *)
 
+(* the disk: ata's (ata0), or a virtio disk's (vblk0, vblkd) *)
 let rec device tries =
   match Block.connect () with
   | d -> d
-  | exception Mynos.Error _ when tries > 0 ->
-    Mynos.sleep 0.1; device (tries - 1)
+  | exception Mynos.Error _ ->
+    match Block.connect ~service:"vblk0" () with
+    | d -> d
+    | exception (Mynos.Error _ as e) ->
+      if tries > 0 then (Mynos.sleep 0.1; device (tries - 1)) else raise e
 
 (* no block service after 10 s: no disk (ata found none, or is not there).
    Ending with 0 says so to init, which then does not start fatfs again

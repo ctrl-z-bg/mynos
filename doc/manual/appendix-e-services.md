@@ -125,7 +125,8 @@ lines in order:
 
 ```
 driver consoled          start tmpfs.byte         start clipboard.byte
-driver ata.byte          start fatfs.byte         driver pagerd.byte
+driver ata.byte          driver vblkd             start fatfs.byte
+driver pagerd.byte
 driver netd              driver displayd          driver soundd
 start llmd.byte          start httpd.byte         start pkg.byte boot
 respawn sh.byte
@@ -175,6 +176,7 @@ a service too: one of its domains serves **power/1** (E.17).
 | `tmpfs` | `services/tmpfs/tmpfs.ml` | OCaml | — | `start` | fs/1 |
 | `clipboard` | `services/clipboard/clipboard_service.ml` | OCaml | — | `start` | clipboard/1: `get`, `set` (the text copied last, for every program) |
 | `ata0` | `services/ata/ata.ml` | OCaml | io | `driver` | block/1 |
+| `vblk0` | `services/virtio/vblkd.c` | C | io | `driver` | block/1 (a virtio disk, E.8) |
 | `fatfs` | `services/fatfs/fatfs.ml` | OCaml | — | `start` | fs/1 |
 | `pager` | `services/pager/pagerd.ml` | OCaml | io | `driver` | pager/1: files mapped and memory that may go to the swap, the external pager (E.16) |
 | `net` | `services/net/netd.c` | C | io | `driver` | net/1 |
@@ -313,7 +315,7 @@ removed file stays readable through the descriptors still open on it;
 
 The driver of the first ATA disk (`services/ata/ata.ml`, OCaml, a
 `driver`), registered as `ata0`. Protocol **block/1**
-(`mynos-lib/ocaml/block.ml`; no C program speaks it):
+(`mynos-lib/ocaml/block.ml`; `vblkd`, below, speaks it in C):
 
 | Case | Request | Arguments | Reply | Safe |
 |---|---|---|---|---|
@@ -336,12 +338,21 @@ log. Without a disk, `ata` logs it and ends with code 0. Module `Block`
 also offers `read` and `write` of any length, split into requests of 32
 sectors.
 
+**vblkd** (`services/virtio/vblkd.c`, C, a `driver`) is the same service
+for a virtio disk, the disk of QEMU's `-device virtio-blk-pci` and of
+the virtual machines of a cloud, registered as `vblk0`. It finds the
+device on the PCI bus and talks to it through `libmynos`'s virtio
+transport (`mynos-lib/src/virtio.c`, virtio 1.x over PCI): one queue in
+DMA memory (B.9), one request at a time, a header, the data and a status
+byte; the device's interrupt, on a shared PCI line (A.7), wakes it.
+Without a virtio disk it logs it and ends with code 0, as `ata` does.
+
 ## E.9 fatfs: the disk's file system
 
 The FAT file system of the disk (`services/fatfs/fatfs.ml`, OCaml, no
 privilege), mounted at `/disk`. Protocol **fs/1**; it reads and writes
-sectors through `ata0`, which it waits for at start (100 attempts, 0.1 s
-apart). If none comes there is no disk: fatfs logs it and ends with
+sectors through `ata0`, or `vblk0` when there is no ATA disk, which it
+waits for at start (100 attempts, 0.1 s apart). If none comes there is no disk: fatfs logs it and ends with
 code 0, and there is no `/disk`.
 
 - *FAT16 and FAT32* as `mkfs.fat` makes them, 512-byte sectors only;

@@ -252,11 +252,19 @@ to its device. Lines 0 (the timer) and 2 (the cascade between the two
 controllers) are the kernel's; a line nobody registered for stays masked;
 a driver's lines are freed when it ends.
 
+A PCI device's line is different: level-triggered, and shared. A driver
+registers it with `irq | MYNOS_IRQ_PCI`; up to four drivers may then hold
+the same line (two virtio devices often share one). At each interrupt
+the kernel masks the line, `V`s every holder's semaphore, and leaves it
+masked: the line stays asserted until a driver has told its device it
+saw the interrupt, and unmasked at once it would interrupt for ever. Each
+driver, once it has talked to its device, unmasks it with `enableIrq`.
+
 The `io` privilege also sets the process's IOPL to 3, so that it can use
 the `in` and `out` instructions, and lets it map physical memory
 (`mapPhysical`, call 28: the display's frame buffer). The modules that
 GRUB loads have it; `init` gives it to the `driver` lines of `init.rc`
-(consoled, ata, netd, displayd); a child gets at most its parent's.
+(consoled, ata, vblkd, netd, displayd); a child gets at most its parent's.
 `sh` and what it starts have none: an `outb` in a program ends it. A
 finer permission, port by port, is mynos-37p.
 
@@ -297,6 +305,7 @@ The native calls:
 | 36 | `faults`: the page faults resolved for a process, or for the system since boot (`ps -f`) | B.7 |
 | 37 | `pager`: the external pager's operations (register, region, next, supply, query, evict, copy) | B.14 |
 | 38 | `procstat`: a process's CPU ticks, page faults, pages in memory, threads; pid 0: the idle time and the RAM (the package `sysmonitor`) | A.5 |
+| 39 | `dmaAlloc`: RAM in one physical piece, mapped, and its physical address (`io` only) | B |
 | 100, 101 | `enableIrq`, `disableIrq` | A.7 |
 | 200, 201, 202 | `createThread`, `exitThread`, `selfThread` | A.4 |
 | 300 | `setTimer` | A.5 |
