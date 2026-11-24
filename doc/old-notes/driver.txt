@@ -1,0 +1,57 @@
+> when i started to think about user level drivers which are able to do
+> in/out operations to selected ports (NOT ALL in pc), then i found just
+> 2 ways how to do it.
+> 1: creating a syscall which will do that. so that looks like at least
+> minimal part of driver MUST be serviced by kernel (actually just
+> checking if user level driver can access hw port and than doing the
+> in/out and passing values from hw port to user level driver)
+> 2: let user level driver perform in/out, than catch general protection
+> fault (which will occur) and let kernel check if driver can access
+> that port, do the in/out instruction in kernel mode and again pass the
+> result to the driver
+> both of this requies (for me) a lot of work which will probably make
+> the drivers MUCH slower than implementing them in kernel (and creating
+> BIG MONOLITHIC kernel, what we apparently dont want)
+> is this really as i wrote? is there something i didn't understand? 
+> IS THERE any way how to make these port access check make implicitly
+> by cpu WITHOUT TSS (and making the microkernel much more portable)?
+
+ There are four methods:
+  -syscall based (in and out calls)
+  -protection fault based (described above)
+  -memory mapped i/o space (you catch the pagefault, do the i/o, fill the
+   registers, then return)
+  -tss based port checking (fastest, but needs some hacking to be optimal)
+
+ On the x86 architecture, you can only do the ones above. What else you
+ need? (there is a software, two hardware assisted, and one fully hardware
+ based solution...)
+
+> and at the end, can anybody tell for sure, whats faster, tss switch or
+> software switch?
+
+ The software one could be faster. (if well written)
+
+ You only have to:
+  -save the old registers (or only a subset)
+  -load a new address space (CR3)
+  -load the new registers
+
+ The segment registers could be just loaded by mov-s, and in case of a
+ per cpu kernel stack system, you don't have to worry about anything else.
+ 
+ When you use multiple kernel stacks, and save registers on kernel entry,
+ then you only have to:
+  -save old stack pointer (esp0)
+  -load a new address space
+  -load a new stack pointer
+ And you are in another thread's kernel stack.
+
+ Remember, when you switch to another thread of the same process, you don't
+ have to reload CR3. (much faster!)
+
+> any ideas how to speedup port checking in user level drivers?
+
+ Use the TSS. (at least one per cpu)
+
+   Viktor

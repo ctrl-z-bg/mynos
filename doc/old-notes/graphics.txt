@@ -1,0 +1,11 @@
+
+Well, if it's sufficient for you to switch to this mode only once (upon
+bootup) and before (!) any of your kernel code gets executed than take a
+look at this hacked grub:
+
+http://www.djm.co.za/spoon/grub/vbe.php
+
+Using this grub version all I had to do was to parse the multiboot
+header (to be sure everything is set up), get the lfb from the multiboot
+header and then simply use the lfb :)
+No nasty realmode / vm86 or anything alike required.

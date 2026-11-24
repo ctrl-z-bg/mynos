@@ -1,0 +1,7 @@
+GCC expects functions to preserve the callee-save registers:
+
+        EBX, EDI, ESI, EBP, DS, ES, SS
+
+You need not save these registers:
+
+        EAX, ECX, EDX, FS, GS, EFLAGS, floating point registers

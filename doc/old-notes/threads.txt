@@ -1,0 +1,199 @@
+> To create a thread from process 'p', my idea is
+> to alloc a user space memory chunk (for new thread's
+> stack), to create another tss with the same page directory of
+> 'p' but with esp pointing to the memory chunk previously
+> allocated.
+
+You can do that, but the size of the GDT is limited and since TSSs have to
+be in there
+you could create at most 8189 threads (assuming NULL selector, one CS and
+one DS descriptor)
+For some people this might be enough :) ( but technically, creating a new
+TSS which is an exact copy
+- except ESP - of another TSS is a waste of resources)
+
+I personally allocate a new TSS per process, not per thread. A process can
+have multiple threads and all use
+the same VM space defined by the process' TSS. To switch threads, you only
+need to replace all registers
+(PUSHA -> change ESP -> POPA will do fine)
+
+> Do you have a fixed-size stack for threads?
+Yes, I use 1 page (4KB). So far it has been enough, but some (recursive)
+programs may need more
+which could be done by dynamically allocating more pages as needed.
+
+You should allocate a stack _per privilege level you use_, for instance
+RING0(kernelmode) and RING3 (user mode)
+It's possible to use a fixed stacksize for kernel mode (avoiding recursion
+and other stack-intensive things)
+and more dynamic stacks for user mode
+
+A particular case where you may run out of stack space quickly is when
+interrupts come in faster than you
+handle them. Each interrupt handler takes about 40 bytes when started (
+processor puts current EIP, EFLAGS, CS,
+and you need to save all registers in use too). If the next interrupt comes
+in when the handler has not returned yet
+(through IRET) the stack grows.
+
+>
+> What structures do you have to manage threads?
+I schedule based on threads, not processes. So all threads of all processes
+are in a priority queue (if possible
+sorted on process to avoid unnescessary context switches), you set a timer
+for the time slice of the next thread
+and let it run. When the timer fires (or the thread becomes blocked) you
+select the next runnable thread from
+the queue. If it belongs to a different process than the current one, you'll
+need to do a context switch too
+by jumping to the new process' TSS. This will replace CR3 too, so the new
+process gets a separate VM space
+
+To create a new process:
+- create a new PBT (page base table) and copy some entries from the current
+PBT (to be able to access kernel memory)
+- create a new TSS and set TSS.CR3 to new PBT
+- create a new main thread and set TSS.ESP0 / TSS.ESP3 to new thread's
+stacks. You can use 1 stack for both levels
+- put the new process' main thread in the priority queue of the scheduler
+
+As an optimization, I only have one TSS selector in my GDT, and do task
+switches by changing the TSS descriptor index in it
+before jumping to it
+
+>
+> Thank you very much
+>
+> --
+> Kirk
+
+
+
+-----------------------------------------------------------------------
+
+
+"Kirk" [address removed] wrote in message > Hi all,
+> I'm working on kernel threads for my OS and I need help :)
+> How do you implements kernel threads?
+> To create a thread from process 'p', my idea is 
+> to alloc a user space memory chunk (for new thread's 
+> stack), to create another tss with the same page directory of 
+> 'p' but with esp pointing to the memory chunk previously
+> allocated.
+> What do you think about that? I think Linux does the same,
+> isn't it?
+
+ When you have software switched user threads, then you have kernel
+ threads too. A kernel thread is a user thread, that don't have an
+ owner address space, and never returns into user mode. It should
+ belong to a process called 'kernel'.
+
+ The method:
+  -allocate a kernel mode stack (a few pages)
+  -create a thread structure in your kernel
+  -set up the new stack to hold the starting stack frame
+   (by copying the creator's stack, and modifying the eip field)
+  -put this new thread into the sheduler's queue
+
+ If it's a user mode thread: It will be able to return into user mode.
+ If it's a kernel mode thread: It won't be able to return into user mode.
+ (it shouldn't do that)
+
+ The only modification should be done in the address space witcher.
+ (the cr3 reload code) When you switch to a kernel thread, then it could
+ leave the previous address space in place, since the kernel thread won't
+ going to access user memory.
+
+> Do you have a fixed-size stack for threads?
+ 
+ For the kernel mode stacks: yes
+ For the user mode stacks: it is the user app's choice
+
+> What structures do you have to manage threads?
+ 
+ struct K_PROCESS{...
+ struct K_THREAD{...
+
+ K_PROCESS k_process[K_PROCESS_NUM];
+ K_THREAD  k_thread [K_THREAD_NUM];
+
+ But you could use dynamic allocation too...
+
+   Viktor
+
+
+--------------------------------------------------------------------
+
+
+
+Maxim S. Shatskih wrote:
+
+>> as far as I remember linux uses software threads for newer kernels.
+> I think
+>> at one point it used hardware threads. I am not sure on this though.
+> 
+> Sorry, what is "software threads" and "hardware threads"?
+> 
+ok, by hardware threads I had meant using "hardware" (ie: the tss) to pull 
+off context switches.
+by software threads I had meant either stack swapping or saving registers 
+manually.
+
+my swap code goes about:
+push ebp
+mov ebp, esp
+
+cli
+pushf
+push cs
+push exit_stub
+pusha
+
+<load esp into thread context>
+<call the scheduler, which changes the current thread>
+<load esp from thread context>
+
+popa
+iret
+
+exit_stub:
+sti
+pop ebp
+ret
+
+
+this seems to work well enough.
+calling this function causes the current thread to stop and another thread 
+to be restarted.
+
+> Linux abandoned using TSS for context switches some time ago.
+> 
+>> > Do you have a fixed-size stack for threads?
+>> >
+>> yes, I don't remember the size right now.
+> 
+> NT and Linux both have fixed size of a kernel stack for a thread,
+> though in NT the thread's kernel stack size is incremented from 12 to
+> 64KB when the thread makes GUI calls.
+> 
+I checked. presently I am using 256K for each thread stack. I could reduce 
+the cost by using smaller stacks.
+
+> Kernel threads immediately arise another question on - whether the
+> kernel is preemptive or not.
+> 
+not really sure what preemptive is referring to here though...
+
+-- 
+[address removed]
+<http://bgb1.hypermart.net/>
+
+
+
+
+
+-------------------------------------------------------------------
+
+
+

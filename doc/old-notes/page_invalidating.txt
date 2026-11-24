@@ -1,0 +1,33 @@
+Shouldn't that be INVLPG instead? It invalidates the page table entry.
+What I do is the following:
+1. Mark page (or set of pages) as not present in the PTE
+2. Invalidate the PTE(s) that correspond(s) to the page(s) being deallocated
+by doing INVLPG, which removes the item from the page translation cache (aka
+Translation Look-aside Buffer, TLB).
+If you free the page tables during memory deallocation, you should do the
+same with them too.
+If you want, take a look at the file pages.c in os.zip from my site.
+Relevant functions are:
+pages_add_page_table()
+pages_unmap_pages()
+pages_map_pages()
+
+HTH,
+Good Luck
+--
+Alexei A. Frounze
+http://alexfru.narod.ru
+http://members.tripod.com/protected_mode/
+
+
+
+
+
+Where INVLPG must be emitted? Any time you update the PTE - present to
+present (like copy-on-write) or present to non-present.
+
+
+When you make the PDE non-present, ALL PTEs in this PT are already
+non-present too.
+So - no problems with the PDE
+

@@ -1,0 +1,54 @@
+/*
+ * dcpu.c: Detect accurate CPU speed
+ * 
+ * by sysfree 2003/05/08
+ *
+ * [address removed]
+ *
+*/
+
+
+#define WAIT_SECOND() do{ \
+	int j0, j1; \
+	j0 = inportb(0x71); \
+	j1 = j0; \
+	while(j1 == j0){ \
+		j1 = inportb(0x71); \
+	} \
+} while(0)
+
+
+#define rdtsc(low,high) \
+     __asm__ __volatile__("rdtsc" : "=a" (low), "=d" (high))
+
+
+static inline unsigned long long read_tsc(void)
+{
+	unsigned long low, high;
+
+	rdtsc(low, high);
+	return (((unsigned long long) high << 32) | low); 
+}
+
+void cpu_speed(void)
+{
+	unsigned long khz, ticks;
+	unsigned long long prev, curr;
+
+	kprintf("Detect CPU speed..");
+
+	outportb(0x70, 0);
+
+	WAIT_SECOND();
+	prev = read_tsc();
+	WAIT_SECOND();
+	curr = read_tsc();
+
+	ticks = curr - prev;
+
+	khz = ticks / 1000;
+	kprintf("detected CPU as %u.%uMHZ\n", khz / 1000, khz%1000);
+}
+
+
+

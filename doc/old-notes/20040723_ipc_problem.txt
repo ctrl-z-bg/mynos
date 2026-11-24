@@ -1,0 +1,298 @@
+Subject:      Microkernel IPC
+From:         Julian Gunter [address removed]
+Newsgroups:   alt.os.development
+Date:         23 Jul 2004 01:27:14 -0700
+
+Hi there,
+
+i am programming a microkernel for the x86 (maybe some other platforms
+later). now i have problems designing my ipc. Because i know that ipc
+is VERY important in microkernels, i designed it for speed. This is
+what it looks like:
+
+struct MESSAGE
+{
+	int iPid;
+	UINT uiCode;
+	UINT uiDataSize;
+	char acData[];
+};
+
+
+struct MESSAGEBOX
+{
+	UINT uiWaitingMessages;
+	UINT uiSize;
+	UINT uiCurSize;
+	struct MESSAGE acMessages[];
+};
+
+...
+
+And these are my only systemcalls at the moment...
+struct MESSAGEBOX *CreateOutBox(UINT uiSize);
+struct MESSAGEBOX *CreateInBox(UINT uiSize);
+struct MESSAGEBOX *GetOutBox();
+struct MESSAGEBOX *GetInBox();
+int FlushOutBox();
+
+The CreateXXXBox() functions create a MESSAGEBOX somewhere in the
+process memory, and shares it with the kernel, so it(the kernel) can
+easily(and fast..) access the buffer. GetXXXBox() return the pointers
+if the process needs it. But storing it in a variable with the return
+value of CreateXXXBox() is faster...
+
+Now, at scheduling time, or via the FlushOutBox() function all the
+messages in the outbox are send to the destination processes via the
+kernel. (again, accessing the destination inbox is fast too, because
+of the shared buffer).
+
+The functions to (a)syncron send and receiving messages are in
+userlevel, because they just work with the shared buffers.
+
+Still, i need function to let a process wait for messages and so on,
+but i just wanted to know, what you think about my approach, and if i
+should go on with it, or try another (that you'll tell me :) ).
+
+P.S.: Excuse my bad english ;)
+MfG
+
+
+-----------------------------------------------------------------------
+I use blocking syscalls. The functions are send() recv() call() answ().
+ There are three other functions open() close() and connect(). The send()
+ and recv() functions will only block until the message gets through to
+ the other side. The call() function will do a blocking send() and recv().
+ (answ() will do the opposite) The classical blocking call is imlemented
+ with the call() method and a semi nonblocking call with a pair of send()
+ and recv() calls.
+
+ In the kernel I store message headers in the sender thread's context, and
+ message data in the user memory. On send the kernel checks if the other
+ side is recv()-ing. If it's true, then it passes the message and unblocks
+ both sides. If it's false, then it blocks the sender on the send queue.
+ On recv, the same happens. First the kernel checks the other side's send
+ queue, then if no messages are waiting, it blocks the thread on the recv
+ queue.
+
+ Essentially each side of an ipc connection has two queues:
+  -send: for threads waiting with outgoing messages
+  -recv: for threads waiting for incoming messages
+
+ Each thread is blocked in the queues until: success, timeout, unblock or
+ ipc connection close.
+
+ As you can see all my ipc traffic happens through ipc connections. They
+ can be open()-ed between two processes by any kernel level resource manager.
+ Two open connection ends can be connect()-ed together, and naturally they
+ can be closed. (and they are closed automatically on process exit)
+
+  Viktor
+
+ps:
+ If a service has enough waiting threads that are recv()-ing new requests,
+ then the send() syscall will never block, and this makes the send()/recv()
+ pair a nonblocking call from the user application's view. My ipc system
+ runs on both shared/separated/remote memory configurations. The messages
+ can be passed in shared memory, with zero copy page remapping, with normal
+ copy and with network transfer.
+
+
+
+-------------------------------------------------------------------------
+Here are my ideas. They borrow heavily from classic microkernel
+theory and the L4 family.
+
+The message box structure looks like this.
+
+typedef struct {
+    int n_dat;
+    int n_ptr;
+    int data[];
+} jgos_ipc_msg;
+
+The number of items in the data[] array is n_dat+(n_ptr*2).
+
+The first n_dat items in the array are direct data. The next
+n_ptr*2 items are a list of n_ptr pairs of ints, each pair
+comprising: first, an address; second, a length. Both are in
+addresssing units (bytes on the IA-32). I'm assuming an int
+is 32 bits, for the IA-32.
+
+Each address-length pair describes an area in the process'
+address space of a data exchange area, either for sending
+data or for receiving it. A sending area is allowed to
+overlap (fully or partially) a receiving area. If both the
+address and length are page aligned (n%4096==0) the data is
+transferred by manipulating page tables; this mode will be
+preferable whenever there is much data to be transferred.
+
+Message sending is done to and from 'queues'. A queue is
+an entity maintained by the kernel, independent of
+processes, and is identified by a unique 'queue id'.
+
+    typedef int jgos_ipc_queue;
+
+Every queue has an associated owner, which is one process,
+and a 'permissions list' which is a set of processes. The
+owner is always in this set. A process is only permitted (by
+the kernel) to send to or receive from a queue if it is in
+the queue's permissions list. Only the owner of a queue is
+permitted (by the kernel) to perform any other operation
+on a queue. Any process is permitted to create queues, but
+each process has a limit to the number of queues it may own
+(which is pre-set by the process which created it).
+
+A process manipulates queues with the following functions.
+
+    jgos_ipc_queue jgos_ipc_create_queue();
+
+This function creats a queue, and returns its id. Initially,
+the queue's owner is the creating process, and the queue has
+only the creating process in its permissions list.
+
+    void jgos_ipc_queue_perms_add(jgos_process_id process);
+
+This function adds a process to the queue's permissions
+list (or does nothing if the process is already on the
+list).
+
+    void jgos_ipc_queue_perms_rmv(jgos_process_id process);
+
+This functions removes a process from the queue's
+permissions list (or does nothing if the process is already
+off the list). If a process is removed from a queue it is
+waiting on, the process immediately receives an error
+indication.
+
+    void jgos_ipc_destroy_queue(jgos_ipc_queue queue);
+
+This function removes all processes from the queue's
+permissions list (as if by jgos_ipc_queue_perms_rmv), and
+then deletes the queue.
+
+    void jgos_ipc_grant_queue(jgos_ipc_queue queue,
+                              jgos_process_id process);
+
+This function transfers ownership of the queue to another
+process. The function does nothing if the process is the
+calling process. If the process is not already in the
+queue's permissions list, it is added.
+
+The functions for both sending and receiving a message are
+as follows.
+
+    jgos_error_code jgos_ipc_send(
+       jgos_ipc_queue queue,
+       int r1, int r2, int r3,
+       jgos_ipc_msg *msg );
+
+This function sends a message to a queue (but does not wait
+for a reply).
+
+    jgos_error_code jgos_ipc_sndrcv(
+       jgos_ipc_queue queue,
+       int &r1, int &r2, int &r3,
+       jgos_ipc_msg * &snd,
+       jgos_ipc_msg * &rcv );
+
+This function causes a transferrance of data between
+two processes. The calling process waits (blocked) until
+another message (a 'reply') is sent to the queue.
+
+    jgos_error_code jgos_ipc_receive(
+       jgos_ipc_queue queue,
+       int &r1, int &r2, int &r3,
+       jgos_ipc_msg * &msg );
+
+This function waits until a process sends a message to the
+queue.
+
+The idea is that all the arguments are both sent and
+received in machine registers. For example: queue EAX; r1
+EDX; r2 ECX; snd/msg or snd EDI; rcv/msg or rcv ESI; return
+value EAX. In reality it may be necessary to expose these
+functions as #define macros.
+
+The arguments msg, snd, and rcv are permitted to by NULL,
+which indicates that the message is transferring data
+only in registers (there is no message box). Otherwise, it
+points to a message box, which specifies data for
+transmission and reception in addition to the arguments r1,
+r2, and r3.
+
+If the n_dat and n_ptr of a sending message box and its
+corresponding receive message box are not equal, the
+message fails, and an error indication is returned.
+
+For all three of these functions, an error indication is
+returned in the return value. A value of 0 indicates no
+error. Other values indicate various errors.
+
+    typedef unsigned int jgos_error_code;
+
+    #define jgos_ipc_ERR_none 0
+
+There are special pre-existing queues, with predefined
+queue ids, which have no owner (and so cannot be
+manipulated by any process) and whose permissions list
+includes all processes. These queues are used to send
+special messages to the kernel.
+
+    #define jgos_ipc_Q1 1
+
+The special queue Q1 is used to send messages to the
+kernel which perform queue manipulation. In fact, the
+queue manipulation functions above would be implemented
+as follows.
+
+    #define jgos_ipc_Q1_create_queue 1
+
+    jgos_ipc_queue jgos_ipc_create_queue() {
+       jgos_error_code err;
+       int r1 = jgos_ipc_Q1_create_queue;
+       int r2=0, r3=0;
+       jgos_ipc_msg *m1 = NULL, *m2 = NULL;
+       err = jgos_ipc_sndrcv(jgos_ipc_Q1,r1,r2,r3,m1,m2);
+       if (err != jgos_ipc_ERR_none) {
+          return -1; /* indicate error */
+       } else {
+          return r1;
+       };
+    };
+
+They may be implemented as #define macros instead.
+
+I'll stop here. I hope I've given you a 'flavour'.
+
+I think the address-length pairs in the message box are
+important, since they permit efficient 'scatter-gather'
+transfer of data between processes.
+
+I think the use of queues as transfer targets (rather
+than processes directly) is important, because this
+permits the server-client relationship to maintained
+independent of the process structure of either. The
+ability to control who can send or receive messages via
+a particular queue provides a basic security mechanism.
+
+Does this give you a starter?
+
+-- 
+Nick Roberts
+
+
+
+PS: If you want to impress your friends, make all your
+processes obey a convention on the page colour of the
+address at which they allocate a message box for a
+particular queue. It would be reasonable to work out
+the page colour of a page p as p%256. (Page p is the
+page which starts at address p*4096.) This will make
+the transfer of direct data in a message box cache-
+efficient.
+
+PPS: Do please scrutinise the logic of what I've
+written here. It is likely to have some mistakes!
+
+

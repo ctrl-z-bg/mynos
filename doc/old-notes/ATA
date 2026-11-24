@@ -1,0 +1,38 @@
+First I would recommend reading some of Hale Landis' tutorials at
+ATA-ATAPI.COM. That has some great information on the different ATA
+addressing schemes and BIOS limitations. Then get a copy of ATA-1 and
+see if you can't write a simple hard disk driver (implement IDENTIFY
+DRIVE, READ SECTOR(S) and WRITE SECTOR(S)). Later, if you really want
+to support advanced things like LBA and 48-bit addressing, you should
+pick up the latest copy of the ATA specification (6 or 7). ATAPI is
+SCSI commands over IDE wires (as Maxim put it to me some time ago).
+You probably don't want to try that before you get your hard disk
+driver working, so don't worry about it for now. One more thing to get
+you started:
+
+ATA Host Bus Adapter Defaults
+----------------------------------------------
+                  Primary            Secondary
+IRQ:              14                 15
+Command I/O Base: 1F0                170
+Control I/O Base: 3F6                376
+
+Please note that with control registers, only the byte at 3F6 or 376
+(read or write -- 2 separate registers -- device control (W) and
+alternate int. status (R)) is still used. The others are obsolete,
+nevermind what the ATA-1 says.
+
+Cheers,
+Frank Millea
+
+-------------------------------------------------------------------
+
+ The basic method is:
+   -wait until the device is ready (with polling or irq handling)
+   -write out the address (in chs or lba)
+   -write out the command
+   -write until the data is ready (with polling or irq handling)
+   -transfer the data (from/to the data port)
+
+ There are more advanced methods too, that use bus mastering to avoid
+ the transfer phase. (the controller transfers the data by itself)

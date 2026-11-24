@@ -1,0 +1,17 @@
+It's saying there is memory from 0 to 0x9FBFF.  The missing 1K is used
+for the 'extended BIOS data area.'  That 1K stores stuff the BIOS uses
+that won't fit in the standard BIOS data area, which is from 0 to
+0x3FF (thereabouts).
+
+So don't use the memory from 0x9FC00 to 0x9FFFF if you intend to use
+the BIOS.  Once you are all done with the BIOS, you can use that
+memory if you want.
+
+-------------------------------------------------------
+
+> so I must load my kernel from 0x3FF to 0x9FBFF?
+
+no - start at 0x600 (which is what DOS does, AFAIR). 0-0x3ff is the
+real-mode interrupt vectors, 0x400-0x500(!) is the standard BIOS data
+area, and 0x501-0x5ff *may* be reserved/used for BIOS as well.
+

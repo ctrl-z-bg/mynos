@@ -1,0 +1,241 @@
+[On Fri, 15 Feb 2002, sefirot wrote:]
+> hello,
+> would you explain the way of software task-switching
+> ( namely, switching without using tss ) on x86 in detail ?
+
+ It's simple:
+  -push all regs to the stack
+  -load a new value into ss:esp (switch kernel stacks)
+  -pop all regs from the new stack
+  -load a new value into cr3 (pd base reg)
+  -load a new ss:esp value into the system tss (patch it)
+  -iret (when the task switcher is placed into an interrupt handler)
+
+ OR even simplier: (faster; only for microkernels)
+  -save all regs to the thread data struct
+  -load all regs from the new thread data struct
+  -reload cr3 (on process switches only)
+  -iret
+
+    Viktor
+
+ps1:
+ It can be as fast as 64 mov-s in case of a thread switch.
+ (about 32 cycles on a P6 core /Ppro-PIII/)
+
+ The 1st method modifies the tss. The x86 reads the ss0:esp values from
+ the tss on a ring3->ring0 switch. This is the only required field.
+ (Using one kernel stack per cpu saves the patch and the reload, but makes
+ the kernel ring0 code uninterruptable. Actually... who wants to
+ interrupt the task switcher in a critical section?)
+
+ps2: the code in unoptimized inline gcc assembly:
+
+asm("_kernel_lbl_int_00:                   ");
+asm("    pushl   $0                        ");
+asm("    jmp     _kernel_lbl_to_kernel     ");
+[...]
+asm("_kernel_lbl_int_40:                   ");
+asm("    pushl   $0                        "); /* filler for the err code */
+asm("    pushl   $64                       "); /* irq number */
+asm("    jmp     _kernel_lbl_to_kernel     ");
+[...]
+asm("_kernel_lbl_to_kernel:                ");
+asm("    pushl   %gs                       "); /* could be optimized */
+asm("    pushl   %fs                       "); /* to one instr. */
+asm("    pushl   %es                       ");
+asm("    pushl   %ds                       ");
+asm("    pushl   %ebp                      ");
+asm("    pushl   %edi                      ");
+asm("    pushl   %esi                      ");
+asm("    pushl   %edx                      ");
+asm("    pushl   %ecx                      ");
+asm("    pushl   %ebx                      ");
+asm("    pushl   %eax                      ");
+asm("                                      ");
+asm("    movl    %esp, %ebx                ");
+asm("    movl    $_kernel_stack_top, %esp  "); /* single kstack mode */
+asm("    pushl   %ebx                      ");
+asm("    movw    $16, %ax                  "); /* KERNEL_DATA_SEG!!!! */
+asm("    movw    %ax, %ds                  ");
+asm("    movw    %ax, %es                  ");
+asm("    movw    %ax, %fs                  ");
+asm("    movw    %ax, %gs                  ");
+asm("    call    _kernel_entry             "); /* => eax: retval */
+asm("    popl    %ebx                      ");
+asm("    movl    %ebx, %esp                ");
+asm("                                      ");
+asm("    popl    %eax                      ");
+asm("    popl    %ebx                      ");
+asm("    popl    %ecx                      ");
+asm("    popl    %edx                      ");
+asm("    popl    %esi                      ");
+asm("    popl    %edi                      ");
+asm("    popl    %ebp                      ");
+asm("    popl    %ds                       ");
+asm("    popl    %es                       ");
+asm("    popl    %fs                       ");
+asm("    popl    %gs                       ");
+asm("    addl    $8, %esp                  "); /* drop err and irq num */
+asm("    iretl                             ");
+
+[...]
+uint kernel_entry(uint* regs)
+{
+ /* put your microkernel here */
+
+ return(0); /* ignored now, could be used to flag new cr3 (pid) value */
+} 
+
+
+
+
+
+---------------------------------------------------------------------------
+
+
+;example switcher: 
+entry_XXX: 
+  push IRQ_NUMBER_XXX ; interrupt gate number 
+  jmp kernel_entry 
+ 
+kernel_entry: 
+  push ;regs 
+  mov  eax, esp 
+  mov  esp, KERNEL_STACK 
+  push eax 
+  call kernel_code_in_c    ; DWORD kernel(DWORD* regs); 
+  cmp  eax, 0 
+  jz   skip_switch 
+  ;switch here 
+  mov  eax, new_cr3 
+  mov  cr3, eax 
+;the tss is patched by the kernel (*) 
+;the new esp0 is set with: regs=new_thread->kernel_stack_ptr; (**) 
+skip_switch: 
+  pop  eax 
+  mov  esp, eax 
+  pop  ;regs 
+  iret 
+ 
+
+nice, huh? i have a couple questions : 
+i believe that after pushing regs and saving/loading stack pointer
+there
+could be a code to set data segment regs with kernel data selector.  
+1.) i would like to know in which case man can skip this step, like
+Viktor did.
+2.) my kernel is mapped to start at 3 gig (0xC0000000) loaded at 1
+meg. what happened when i want to use a c function like
+kernel_code_in_c(), when i have mapped kernel code not in 1:1 ratio.
+it looks like that to have access to my kernel data variables i have
+to reload cr3 with my kernel page dir. thats not very wise, it costs a
+lot of time. does it mean that to skip reloading cr3 with kernel page
+dir i cannot have kernel mapped like i have now?
+3.) if the kernel is not mapped 1:1 is there any way how to skip
+reloading cr3 with kernel page dir if i want to work with kernel data,
+accessing vector of tasks and such stuff?
+4.) you (Viktor) are using just one KERNEL_STACK for all threads. does
+it mean that to have just one kernel stack you need probably have this
+stack mapped in all user address spaces to point the same physical
+memory (i think one page is enough for the switcher), because an
+access to that stack is made through user page dir which is actually
+loaded?
+5.) at line marked with (*) Viktor wrote : tss is patched by the
+kernel. what does it mean? esp0 in tss (that only one tss we have) set
+with new_thread->kernel_stack_ptr on line (**)? if so, why to do
+setting esp with KERNEL_STACK? when cpu detects the ring3 to ring0
+transition,the stack pointer is got from tss, or not? aaaaah!!
+ 
+maybe all this questions are wrong.  
+i am just confused with accessing kernel data in timer_irq when cr3
+has user task page dir.
+maybe accessing through kernel descriptors which's base starts at 3
+gig? probably no, address
+translation will still go through user pdbr. 
+ 
+thanks a lot to everybody which will make this software task switch
+clear for me.
+
+
+
+
+---------------------------------------------------------------------
+
+
+
+
+hi
+even i had some problems with software task switching..very
+frustrating..
+sometimes the task switch occurs 2-3 times and then the irq0 stops
+occoring
+
+finally i got it to work..here's the relavant code...
+
+// c scheduler.. "round robin" i think
+void c_sched () {
+asm ("mov %%esp, %0": "=r"(task_st[current_task].esp): );
+task_st[current_task].esp+=16;
+
+do {
+current_task++;
+if (current_task == max_tasks+1)
+ current_task = 0;
+} while (task_st[current_task].status != RUNNING);
+
+asm ("mov %0, %%esp" :: "r" (task_st[current_task].esp));
+
+asm ("popa");
+outb (0x20, 0x20);
+asm ("iret");
+}
+
+ the task struct...statically alloc'd stack 
+struct {
+char stack[20000];
+unsigned long int esp;
+char name[256];
+byte status;
+} task_st[10];
+
+// the irq0 handler.
+irq0_asm:
+pushad
+call c_sched ; call the C 'scheduler'
+
+// struct used to 'push' values artificially.
+struct da_stuff {
+unsigned int regs[8];
+unsigned int eip;
+unsigned int cs;
+unsigned int eflags;
+unsigned int ret_eip; // this is for 'return' to work from tasks.
+};
+
+// init_task function
+// just a init_task (&func_name, "this is a task!");
+void init_task (unsigned long eip, char*name) {
+struct da_stuff *da;
+int num ;
+num = max_tasks+1;
+da = (struct da_stuff*)(task_st[num].stack +
+sizeof(task_st[num].stack) - sizeof(struct da_stuff));
+da->eip = eip;
+da->cs = 0x8;
+da->eflags = 0x202;
+task_st[num].esp = (unsigned long)da;
+strcpy1 (task_st[num].name, name);
+task_st[num].status = RUNNING;
+da->ret_eip = (unsigned int long)&exit_h;
+max_tasks++;
+}
+
+void exit_h() {
+task_st[current_task].status = STOPPED;
+asm ("hlt"); // wait till next interrupt
+}
+
+
+
+

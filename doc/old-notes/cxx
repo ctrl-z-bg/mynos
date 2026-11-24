@@ -1,0 +1,42 @@
+> I have decided to rewrite my C (GCC) kernel into C++ (Gpp).
+
+Interesting.
+
+> Obviously,
+> before I can use objects I have to redefine new, new[] and delete to
+> point to my actual memory allocator.
+>
+> How do I do it? Just define a void *new(int size)?
+
+    void *operator new( size_t size)
+and
+    void operator delete(void *, size_t)
+
+Have a look at <new.h> as well, specifically :-
+
+    extern void (*set_new_handler(void(*)()))();
+
+> I know this sounds newbie-ish, but what exactly is new[]? :-(
+
+An array allocator.
+
+> What else should I watch out (besides RTTI)?
+
+Name mangling ? Do you have any pure assembler (MASM/AS) that accesses your
+C Code ?
+
+> Thank You very much for your help. :)
+
+It may well be worth you getting the ANSI/ISO C++ Standard documentation :-
+
+
+http://webstore.ansi.org/ansidocstore/product.asp?sku=ISO%2FIEC+14882%2D1998
+
+It is only 18 dollars and well worth having as a reference and a good read
+if you enjoy that sort of thing.
+
+Best of luck,
+
+Aaron
+
+

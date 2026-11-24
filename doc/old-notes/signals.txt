@@ -1,0 +1,21 @@
+"Kirk" [address removed] wrote in message 
+> I'd like to implement posix-signals in my kernel,
+> how can a process be interrupted by a signal?
+> Thank you very much!
+
+ There are many ways:
+  a) You send signals as messages. This requires a signal handler
+     thread, and of course an IPC system.
+
+  b) The traditional way: You push the program's ip (or pc) on the
+     _user_ stack, and load the signal handler function's address
+     into the ip register's place on the _kernel_ stack, then iret
+     back to the program. The code will continue at the handler, and
+     on return from that handler, you will get back to your old code.
+
+ The second is more traditional, but the first one is more secure,
+ and gives more control over the signal handling to the user app.
+ (and your kernel don't have to mess with the user stack, which is
+ a user controlled area)
+
+   Viktor

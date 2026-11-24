@@ -1832,3 +1832,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   captured by the Wayback Machine, taken from SourceForge, which still
   publishes them; the home page's "Site news archive" points to
   `news.html`.
+- **2026-11-24** — doc/old-notes: twelve notes kept in the original
+  project (excerpts of alt.os.development and other discussions,
+  2002-2004: software task switch, threads, signals, microkernel IPC,
+  drivers in user space, ATA, INVLPG), e-mail addresses removed, with a
+  README that sets them beside MyNOS's history.
