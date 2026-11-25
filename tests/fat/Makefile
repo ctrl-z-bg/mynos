@@ -1,3 +1,5 @@
+# the build host's strip, or the target's (AArch64: aarch64-linux-gnu-strip)
+STRIP ?= strip
 # FAT test: a RAM disk with the runtime, the ATA driver, fatfs and init.byte
 # (fat.ml); and two disk images, FAT16 and FAT32, made with mkfs.fat and
 # mtools. Built in the dev container (tools/build-all.sh).
@@ -12,7 +14,7 @@ init.byte: fat.ml $(MYNOS)
 	$(OCAMLC) mynos.cma -o $@ fat.ml
 
 ocamlrun: ../../mynos-runtime/ocamlrun
-	strip -o $@ $<
+	$(STRIP) -o $@ $<
 
 ramdisk.dsk: init.byte ocamlrun $(DRIVERS)
 	../../services/fs/memrofs/tool/createDisk init.byte ocamlrun $(DRIVERS) >/dev/null

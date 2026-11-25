@@ -1,3 +1,5 @@
+# the build host's strip, or the target's (AArch64: aarch64-linux-gnu-strip)
+STRIP ?= strip
 # Test of Mynos.spawn: a RAM disk with the runtime, init.byte (spawn.ml)
 # and child.byte. Built in the dev container (tools/build-all.sh).
 
@@ -15,7 +17,7 @@ child.byte: child.ml $(MYNOS)
 
 # the runtime without its debugging information: 0.5 MB instead of 1.7
 ocamlrun: ../../mynos-runtime/ocamlrun
-	strip -o $@ $<
+	$(STRIP) -o $@ $<
 
 ramdisk.dsk: init.byte child.byte ocamlrun
 	../../services/fs/memrofs/tool/createDisk init.byte child.byte ocamlrun >/dev/null

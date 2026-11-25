@@ -68,6 +68,7 @@ static int fb_rows_skipped;              /* rows of FB_SKIP, rounded up */
 
 /* ---- port I/O ---- */
 
+#if defined(__i386__) || defined(__x86_64__)
 static inline void outw(unsigned short port, unsigned short v)
 { __asm__ volatile ("outw %0, %1" : : "a"(v), "Nd"(port)); }
 static inline unsigned short inw(unsigned short port)
@@ -76,6 +77,14 @@ static inline void outl(unsigned short port, unsigned int v)
 { __asm__ volatile ("outl %0, %1" : : "a"(v), "Nd"(port)); }
 static inline unsigned int inl(unsigned short port)
 { unsigned int v; __asm__ volatile ("inl %1, %0" : "=a"(v) : "Nd"(port)); return v; }
+
+#else
+/* no I/O ports (AArch64): no Bochs display or VGA on the ports' PCI */
+static inline void outw(unsigned short port, unsigned short v) { (void)port; (void)v; }
+static inline unsigned short inw(unsigned short port) { (void)port; return 0xFFFF; }
+static inline void outl(unsigned short port, unsigned int v) { (void)port; (void)v; }
+static inline unsigned int inl(unsigned short port) { (void)port; return 0xFFFFFFFF; }
+#endif
 
 /* ---- the card ---- */
 
@@ -1200,7 +1209,11 @@ static void wheel(int dz)
 static void vmport(unsigned int cmd, unsigned int arg, unsigned int r[4])
 {
   unsigned int a = 0x564D5868, b = arg, c = cmd, d = 0x5658;
+#if defined(__i386__) || defined(__x86_64__)
   __asm__ volatile ("inl %%dx, %%eax" : "+a"(a), "+b"(b), "+c"(c), "+d"(d));
+#else
+  a = b = c = d = 0;                    /* no VMware port: no vmmouse */
+#endif
   r[0] = a; r[1] = b; r[2] = c; r[3] = d;
 }
 

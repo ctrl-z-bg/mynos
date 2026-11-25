@@ -52,7 +52,12 @@ int mynos_threadCreate(void * (*start_routine)(void *),
 /* AArch64: the routine and its argument on the thread's stack, as on
    x86-64 */
 void __mynos_thread_start(void);
+/* (a global symbol: gcc takes the address of a function through the GOT,
+   and a GOT relocation against a local label loses its offset: the
+   pointer was the section's start, __mynos_syscall) */
 __asm__ (".text\n"
+         ".global __mynos_thread_start\n"
+         ".type __mynos_thread_start, %function\n"
          "__mynos_thread_start:\n"
          "  ldp x9, x0, [sp], #16\n"
          "  blr x9\n"

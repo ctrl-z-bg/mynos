@@ -3962,3 +3962,33 @@ held for ever after `ocamlrun`'s first sleep.
 **Lesson.** A port finds assumptions, not only missing code: the sign of
 `char`, a bootloader's contract, a buffer sized for one instruction set's
 save format.
+
+## 2026-11-25 — AArch64: from OCaml's hello to the shell
+
+**Symptoms and causes**, in the order met:
+- *init.byte "has not the right magic number"*: ocamlrun found no file
+  system, memrofs could not register. The registry had opened its port
+  before `mynos_main` called `initIPC()`, which cleared the port table:
+  the processes of the boot modules are made, the timer is on, and a
+  quick process runs before the kernel goes on. Under emulated AArch64
+  the registry was quick enough; on the PC never so far. `initIPC()` now
+  runs before the modules' processes (all architectures).
+- *consoled jumped to 0*: the thread start code of libmynos is a label in
+  top-level assembly, local. Debian's gcc builds position-independent
+  code and takes a function's address through the GOT; a GOT relocation
+  against a local label keeps the section and loses the offset: the
+  thread started at the section's first function. The label is global.
+- *no keys*: the virtio queues' addresses given to the device were
+  MyNOS's physical ones, numbered from RAM's base (doc/decisions/
+  aarch64.md, choice 3); the device needs the real ones. `allocDma`
+  returns `ARCH_BUS_ADDR`, the real address on AArch64.
+- *no virtio device found*: `mapPhysical` took any address below RAM's
+  size for RAM and refused any above 4 GB (the i386's rules); on AArch64
+  devices have real addresses, which RAM's numbering does not share:
+  `ARCH_DEVICE_PHYS_OK`. And no firmware assigns PCI windows on `virt`:
+  libmynos's `virtio_find` gives each slot its own 1 MB and the line of
+  virt's swizzle.
+
+**Lesson.** Moving RAM's numbering made three kinds of address: the
+kernel's (from 0), the CPU's (real) and the device's (real): every place
+where an address leaves the kernel says which it is.

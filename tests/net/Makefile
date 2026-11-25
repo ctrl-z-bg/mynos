@@ -1,3 +1,5 @@
+# the build host's strip, or the target's (AArch64: aarch64-linux-gnu-strip)
+STRIP ?= strip
 # Network test: a RAM disk with the runtime, netd, init.byte
 # (net_test.ml), the test authority's certificate, and llmd with its
 # test configuration. Built in the dev container (tools/build-all.sh).
@@ -19,13 +21,13 @@ net_child.byte: net_child.ml $(MYNOS)
 sockets: sockets.c ../../mynos-lib/lib/libmynos.a
 	$(MYNOS_CC) -Wall -Os -I../../mynos-lib/include sockets.c -o $@ \
 		-L../../mynos-lib/lib -lmynos $(MYNOS_LDFLAGS)
-	strip $@
+	$(STRIP) $@
 
 ocamlrun: ../../mynos-runtime/ocamlrun
-	strip -o $@ $<
+	$(STRIP) -o $@ $<
 
 netd: ../../services/net/netd
-	strip -o $@ $<
+	$(STRIP) -o $@ $<
 
 # netd trusts the test authority (tls/ca.pem), as /cacert.pem
 cacert.pem: tls/ca.pem

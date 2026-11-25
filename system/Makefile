@@ -4,6 +4,8 @@
 # Built in the dev container (tools/build-all.sh).
 
 STDLIB = $(shell ocamlc -where)
+# the build host's strip, or the target's (AArch64: aarch64-linux-gnu-strip)
+STRIP ?= strip
 
 # the disk image (tools/make-iso.sh makes a clean one elsewhere with
 # DISK=...)
@@ -13,19 +15,19 @@ all: ramdisk.dsk $(DISK)
 
 # the runtime and consoled without their debugging information
 ocamlrun: ../mynos-runtime/ocamlrun
-	strip -o $@ $<
+	$(STRIP) -o $@ $<
 consoled: ../services/console/consoled
-	strip -o $@ $<
+	$(STRIP) -o $@ $<
 kilo: ../third_party/kilo/kilo
-	strip -o $@ $<
+	$(STRIP) -o $@ $<
 netd: ../services/net/netd
-	strip -o $@ $<
+	$(STRIP) -o $@ $<
 displayd: ../services/display/displayd
-	strip -o $@ $<
+	$(STRIP) -o $@ $<
 soundd: ../services/sound/soundd
-	strip -o $@ $<
+	$(STRIP) -o $@ $<
 vblkd: ../services/virtio/vblkd
-	strip -o $@ $<
+	$(STRIP) -o $@ $<
 
 # the bytecode compiler, to compile programs inside MyNOS
 ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2/bin/ocamlc.byte)

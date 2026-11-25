@@ -60,6 +60,12 @@
 /* the page tables' shape: the architecture's (arch/ARCH/paging.h) */
 #include "paging.h"
 
+/* the address a device uses for a page of RAM (DMA): the physical one,
+   unless the architecture numbers RAM from its own base (aarch64) */
+#ifndef ARCH_BUS_ADDR
+#define ARCH_BUS_ADDR(P) (P)
+#endif
+
 /* a page's translation forgotten, after its entry changed */
 #define INVALIDATE_THE_CACHE(LADDR) arch_flush_page((vaddr_t)(LADDR))
 

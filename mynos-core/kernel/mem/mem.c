@@ -183,9 +183,17 @@ void * __OS_askPages(unsigned int npages, int alloc_now, pte_t flags) {
    (PF_SHARED: a fork keeps them as they are) and never counted as RAM. */
 void * __OS_mapPhysical(paddr_t phys, uint32_t npages) {
   uint32_t start, i;
-  if (npages == 0 || (phys & 0xFFF) || (phys >> 12) < __total_phy_pages ||
-      (phys >> 12) + npages > 0x100000)
+  if (npages == 0 || (phys & 0xFFF))
     return NULL;
+#ifdef ARCH_DEVICE_PHYS_OK
+  /* the architecture's devices' addresses (aarch64: real ones, which
+     RAM's numbering does not share) */
+  if (!ARCH_DEVICE_PHYS_OK(phys, npages)) return NULL;
+#else
+  /* not RAM, below 4 GB */
+  if ((phys >> 12) < __total_phy_pages || (phys >> 12) + npages > 0x100000)
+    return NULL;
+#endif
   start = __lmt_allocArea(&(processTable[currProcess]->lmemmap), npages);
   if (start < USERMINPAGE) return NULL;
   if (__OS_askPagesFrom((void *)((vaddr_t)start << 12), npages, 0, PF_USER | PF_READWRITE) == NULL) {
@@ -257,7 +265,7 @@ void * __OS_allocDma(uint32_t npages, paddr_t * phys) {
     INVALIDATE_THE_CACHE((start + i) << 12);
   }
   kbzero((void *)((vaddr_t)start << 12), npages * PAGE_SIZE);
-  *phys = first << 12;
+  *phys = ARCH_BUS_ADDR((paddr_t)first << 12);   /* as the device sees it */
   return (void *)((vaddr_t)start << 12);
 }
 

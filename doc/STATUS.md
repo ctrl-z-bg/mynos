@@ -1993,3 +1993,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   store on x86), and its flags are 64-bit. Built by
   `tools/build-aarch64.sh`; modules passed as one archive
   (`tools/mkmodules.py`).
+- **2026-11-25** — AArch64: the whole system builds (but four C tests
+  with x86 assembly) and boots on QEMU `virt` to `sh`, typed on a virtio
+  keyboard; the OCaml toplevel runs (`Sys.word_size` 64). PCI devices get
+  their memory windows from MyNOS (no firmware), DMA addresses are the
+  real ones. The PC's services (ata, the Sound Blaster, the Bochs display)
+  end, finding nothing. Fixed on the way, for every architecture:
+  `initIPC` ran after the boot's processes, which could have opened a
+  port already (JOURNAL).

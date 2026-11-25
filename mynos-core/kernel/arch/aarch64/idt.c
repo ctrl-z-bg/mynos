@@ -86,6 +86,16 @@ static void page_fault(struct frame * f, int user)
       !(f->esr & (1 << 8)))
     err |= 2;                                     /* a write (not a cache op) */
   if (user) err |= 4;
+  /* a jump to nothing (a null function pointer): where it came from */
+  if (user && f->pc < 0x1000) {
+    printk("process ");
+    print_ulong(CURRPID);
+    printk(": a jump to ");
+    print_ulong_hex(f->pc);
+    printk(" from ");
+    print_ulong_hex(f->x[30]);
+    print_char('\n');
+  }
   /* copy_user's loop (entry.S): its faults resume as the i386's single
      instruction's (mem.c's copy_user_fixup) */
   if (!user && f->pc >= (uint64_t)copy_user_insn && f->pc < (uint64_t)copy_user_end)

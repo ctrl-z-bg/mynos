@@ -74,6 +74,7 @@
 
 static unsigned short base;
 
+#if defined(__i386__) || defined(__x86_64__)
 static inline void outb(unsigned short port, unsigned char v) {
   __asm__ volatile ("outb %0, %1" : : "a"(v), "Nd"(port));
 }
@@ -90,6 +91,14 @@ static inline unsigned short inw(unsigned short port) {
   __asm__ volatile ("inw %1, %0" : "=a"(v) : "Nd"(port));
   return v;
 }
+
+#else
+/* no I/O ports (AArch64): no NE2000 answers the probe */
+static inline void outb(unsigned short port, unsigned char v) { (void)port; (void)v; }
+static inline unsigned char inb(unsigned short port) { (void)port; return 0; }
+static inline void outw(unsigned short port, unsigned short v) { (void)port; (void)v; }
+static inline unsigned short inw(unsigned short port) { (void)port; return 0; }
+#endif
 
 #define REG(r) (unsigned short)(base + (r))
 

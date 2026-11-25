@@ -292,6 +292,12 @@ void mynos_main(multiboot_info_t *boot_info) {
   arch_write_protect_kernel();
   tsksw();
 
+  /* the ports and channels before the processes: the timer is on, and a
+     process may run (and open its port) before mynos_main goes on. Set
+     after them, the tables lost the registry's port when it was quick:
+     on AArch64 under emulation */
+  initIPC();
+
   /* start the elf modules */
   {
     uint32_t i;
@@ -316,8 +322,6 @@ void mynos_main(multiboot_info_t *boot_info) {
       }
     }
   }
-
-  initIPC();
 
   printk("\n-----------------------\n");
 

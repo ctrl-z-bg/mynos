@@ -24,6 +24,14 @@
 #define ARCH_PTE_BITS
 /* no ISA bus: no DMA area below 16 MB (mem.c) */
 #define ARCH_NO_ISA_DMA
+/* a device's view of RAM (DMA, mem.c's allocDma): the real address */
+#define ARCH_BUS_ADDR(P) ((P) + ARCH_RAM_BASE)
+/* mapPhysical's devices: real addresses, outside the real RAM, within
+   48 bits (paging.h's ARCH_RAM_BASE; mem.c) */
+#define ARCH_DEVICE_PHYS_OK(P, N) \
+  ((((P) + ((unsigned long)(N) << 12) <= ARCH_RAM_BASE) || \
+    (P) >= ARCH_RAM_BASE + ((unsigned long)__total_phy_pages << 12)) && \
+   (((P) + ((unsigned long)(N) << 12)) >> 48) == 0)
 
 /* ---- interrupts (IRQ: PSTATE.I) ---- */
 
