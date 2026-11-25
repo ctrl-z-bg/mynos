@@ -1951,3 +1951,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   fatfs, the disk's reads and the serial terminal), each with its own
   disk, log, sockets and host ports. Lane d (the graphical session, 480 s)
   now sets the time.
+- **2026-11-25** — x86-64: the whole suite passes at 64 bits (181
+  checks, in the same 8 minutes as the i386). The cause of most of its
+  failures: futex's timeout pointer typed `uint32_t`, cut on x86-64, so
+  every timed wait returned at once and `netd` spun (JOURNAL). The
+  virtio graphical check clicks again until the Clock shows (it missed
+  the welcome window on a loaded machine).

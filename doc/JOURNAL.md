@@ -3789,3 +3789,34 @@ reload.
 
 **Lesson.** Files that belong together and change together must change
 their names together; a cache only knows names.
+
+## 2026-11-25 — x86-64: every network request four seconds late
+
+**Symptom.** On x86-64 `ask` took 14 s where the i386 took 2 to 8, the
+network test needed 124 s against 22, and in the suite the keyboard-
+driven boot fell behind the keys typed into it. Alone, the system was as
+fast as the i386 at everything tried: files, the console, `spawn`, the
+toplevel.
+
+**Diagnosis.** Timing one command at a time on both architectures, with
+the network on: `fetch` from the host 3.3 s on the i386, 7.5 s on
+x86-64; `llm` 2.6 s against 7.2. A constant of about four seconds per
+connection. `netd`'s main loop sleeps in `pthread_cond_timedwait` (at
+most 100 ms) and is woken by the card's interrupt thread.
+
+**Cause.** `_linux_syscall_futex_time64` took its fourth argument, the
+pointer to the timeout, as `uint32_t`. On x86-64 a program's stack is
+above 4 GB: the pointer was cut, the kernel found it outside the
+program's memory and answered `-EFAULT` at once. Every timed wait
+returned immediately, and `netd`'s loop spun, taking the processor from
+the other threads until each tick. Without a network card `netd` ends at
+boot, which is why the system looked as fast when tried alone.
+
+**Fix.** `vaddr_t arg4` in both futex entries. The other Linux and
+native calls x86-64 uses were checked for 32-bit parameters: all are
+values, not addresses. After it, `fetch` and `llm` take the i386's time.
+
+**Lesson.** A parameter typed `uint32_t` that holds an address is a
+64-bit bug waiting; and a fast system "alone" may only mean that the
+spinning service did not start. Measure with the same devices the slow
+case had.

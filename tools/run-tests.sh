@@ -325,12 +325,21 @@ if [ -f system/ramdisk.dsk ] && [ -f system/vblkd ] && [ -f tests/fat/fat16.img 
     qmp() { printf '{"execute":"qmp_capabilities"}\n%s\n' "$1" |
                 socat -t1 - "UNIX-CONNECT:$tmp/qmp-v" >/dev/null; sleep 0.3; }
     tools/type-keys.py "$tmp/mon-v" 'gui\n'; sleep 8
-    qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"abs","data":{"axis":"x","value":7454}},{"type":"abs","data":{"axis":"y","value":18271}}]}}'
-    qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":true,"button":"left"}}]}}'
-    qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":false,"button":"left"}}]}}'
-    sleep 6
-    printf 'screendump %s\n' "$tmp/gv.ppm" | socat - "UNIX-CONNECT:$tmp/mon-v" >/dev/null; sleep 1
-    python3 - "$tmp/gv.ppm" <<'PY' && virtio_gui=yes
+    # the welcome window's Clock button, clicked again while no Clock shows
+    # (a loaded machine draws the welcome window late), then the screen
+    # looked at until the Clock is drawn: at most 8 tries
+    click_clock=yes i=0
+    while [ $i -lt 8 ]; do
+        if [ -n "$click_clock" ]; then
+            qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"abs","data":{"axis":"x","value":7454}},{"type":"abs","data":{"axis":"y","value":18271}}]}}'
+            qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":true,"button":"left"}}]}}'
+            qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":false,"button":"left"}}]}}'
+        fi
+        sleep 3
+        printf 'screendump %s\n' "$tmp/gv.ppm" | socat - "UNIX-CONNECT:$tmp/mon-v" >/dev/null; sleep 1
+        # 0: the Clock, focused, a hand on its dial; 2: no Clock yet
+        rc=0
+        python3 - "$tmp/gv.ppm" <<'PY' || rc=$?
 import sys
 d = open(sys.argv[1], "rb").read()
 parts = d.split(b"\n", 3)
@@ -339,10 +348,13 @@ pix = parts[3]
 def px(x, y):
     i = (y * w + x) * 3
     return (pix[i] << 16) | (pix[i + 1] << 8) | pix[i + 2]
-assert (w, h) == (1024, 768), (w, h)
-assert px(150, 114) == 0x2D6CA2, hex(px(150, 114))   # the Clock's title bar, focused
-assert px(214, 236) != px(214, 300)                 # a hand, on the dial
+if (w, h) != (1024, 768): sys.exit(1)
+if px(150, 114) != 0x2D6CA2: sys.exit(2)          # the Clock's title bar, focused
+sys.exit(0 if px(214, 236) != px(214, 300) else 1)  # a hand, on the dial
 PY
+        case $rc in 0) virtio_gui=yes; break ;; 2) click_clock=yes ;; *) click_clock= ;; esac
+        i=$((i + 1))
+    done
     # (the session holds the keys: QEMU is stopped from its monitor, which
     # closes the disk's image with what was written)
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-v" >/dev/null || true

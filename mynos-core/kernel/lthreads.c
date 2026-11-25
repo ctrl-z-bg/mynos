@@ -171,12 +171,12 @@ static int32_t futex(int32_t * addr, int op, int32_t val, vaddr_t arg4,
 }
 
 int32_t _linux_syscall_futex(int32_t * addr, int op, int32_t val,
-			     uint32_t arg4, int32_t * addr2, int32_t val3) {
+			     vaddr_t arg4, int32_t * addr2, int32_t val3) {
   return futex(addr, op, val, arg4, addr2, val3, 0);
 }
 
 int32_t _linux_syscall_futex_time64(int32_t * addr, int op, int32_t val,
-				    uint32_t arg4, int32_t * addr2,
+				    vaddr_t arg4, int32_t * addr2,
 				    int32_t val3) {
   return futex(addr, op, val, arg4, addr2, val3, 1);
 }
