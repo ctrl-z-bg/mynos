@@ -17,6 +17,9 @@ tty=
 
 [ $# -eq 0 ] && set -- bash
 
-exec podman run --rm $tty --platform linux/386 \
+# the image's architecture: dev-x86_64 is amd64, the others i386
+case $name in *x86_64*) platform=linux/amd64 ;; *) platform=linux/386 ;; esac
+
+exec podman run --rm $tty --platform $platform \
     -v "$root:/mynos:Z" -w /mynos \
     "mynos-$name" "$@"
