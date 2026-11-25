@@ -65,8 +65,6 @@ drivers written once on i386 are the drivers of every port.
 
 ## Next
 
-- **virtio-input** (keyboard and mouse) and **the screen** (virtio-gpu,
-  or QEMU's `ramfb`): what the graphical session needs on `virt`.
 - On AArch64 and RISC-V, PCI's configuration space is memory (ECAM)
   instead of ports: `pci_read32` and `pci_write32` are the only part of
   the transport to change.

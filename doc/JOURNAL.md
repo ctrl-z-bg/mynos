@@ -3746,3 +3746,24 @@ bits it is 2^61: truncated to 32 bits it is −1, and the loop
 that narrows `Long_val` to `int` is safe only for values bounded by
 something real (a pixel, a length), not for "no limit" defaults built on
 `max_int`.
+
+## 2026-11-25 — Two test binaries in git
+
+**Symptom.** At 64 bits the FPU test did not start ("module is not a
+valid MyNOS program") and the stdio test was killed by a general
+protection fault, though both had been rebuilt.
+
+**Diagnosis.** In `build/x86_64/tree`, `tests/fpu/fpu.o` was a 64-bit
+object and `tests/fpu/fpu` a 32-bit program. `git ls-files` listed
+`tests/fpu/fpu` and `tests/stdio/stdio`.
+
+**Cause.** Both binaries had been committed with the sources
+(ee0aa74). The copy of the tracked files made them newer than their
+objects, so make did not link them again: the i386 programs ran on the
+x86-64 kernel.
+
+**Fix.** Out of git, into `.gitignore` next to their sources.
+
+**Lesson.** A build product in git is invisible on one architecture and
+wrong on the next. Look for ELF files among the tracked ones when a
+second toolchain arrives.

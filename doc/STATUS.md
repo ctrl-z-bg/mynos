@@ -1920,3 +1920,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   ping, HTTPS, `httpd`) and the graphical session tried by hand; the
   text of the session was missing (`Gfx.text`'s `max_int` default
   narrowed to an `int`: JOURNAL).
+- **2026-11-25** — x86-64: the suite runs at 64 bits (`ARCH=x86_64
+  tools/run-tests.sh` in `build/x86_64/tree`; `run-qemu.sh` picks QEMU,
+  processor and kernel by `ARCH`). 94 of its checks pass; the rest wait
+  on the keyboard-driven session's timing and on a slow `ask` in the
+  network test (beads). `tests/fpu/fpu` and `tests/stdio/stdio`, i386
+  binaries committed by mistake, left git (JOURNAL). `abi` and `stress`
+  make their raw Linux calls in either ABI; x86-64's `times` and
+  `getrusage` give the CPU time; `brk` and `readlink` answered quietly.

@@ -12,7 +12,9 @@
 #
 # Environment:
 #   KERNEL_ONLY  if set and no module is given, boot the bare kernel
-#   KERNEL   kernel image (default: mynos-core/kernel/kernel.elf)
+#   ARCH     i386 (default) or x86_64 (QEMU, processor, kernel)
+#   KERNEL   kernel image (default: mynos-core/kernel/kernel.elf; for
+#            x86_64 build/x86_64/kernel.elf)
 #   MEM      RAM in MB (default 32)
 #   CPU      QEMU's processor (default qemu32 with RDRAND and RDSEED, which
 #            seed the kernel's random numbers)
@@ -37,7 +39,14 @@
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-kernel=${KERNEL:-$root/mynos-core/kernel/kernel.elf}
+# the architecture: i386 (the default) or x86_64, whose kernel
+# tools/build-x86_64.sh makes in build/x86_64
+case ${ARCH:-i386} in
+    x86_64) qemu=qemu-system-x86_64 cpu=qemu64,+rdrand,+rdseed
+            kernel=${KERNEL:-$root/build/x86_64/kernel.elf} ;;
+    *)      qemu=qemu-system-i386 cpu=qemu32,+rdrand,+rdseed
+            kernel=${KERNEL:-$root/mynos-core/kernel/kernel.elf} ;;
+esac
 
 modules=
 while [ $# -gt 0 ] && [ "$1" != "--" ]; do
@@ -71,19 +80,19 @@ fi
 
 # shellcheck disable=SC2086
 set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "${MEM:-32}" \
-    -cpu "${CPU:-qemu32,+rdrand,+rdseed}" \
+    -cpu "${CPU:-$cpu}" \
     ${VERBOSE:+-append verbose} ${KVM:+-accel kvm} \
     ${DISK:+-drive file=$DISK,format=raw,if=$disk_if} ${DISK:+$disk_dev} \
     ${NET:+-netdev user,id=n0${HTTP:+,hostfwd=tcp:127.0.0.1:$HTTP-:80}${UDP:+,hostfwd=udp::$UDP-:$UDP}} \
     ${NET:+-device $net_dev} $audio "$@"
 
 if [ -z "${SHOT:-}" ]; then
-    exec qemu-system-i386 "$@"
+    exec $qemu "$@"
 fi
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-qemu-system-i386 "$@" -display none \
+$qemu "$@" -display none \
     -monitor "unix:$tmp/mon,server,nowait" &
 pid=$!
 sleep "${WAIT:-3}"

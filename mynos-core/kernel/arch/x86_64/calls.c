@@ -28,6 +28,7 @@
 #include "mem/mem.h"
 #include "mynos.h"
 #include "kutils.h"
+#include "pit.h"
 
 #define MSR_EFER  0xC0000080
 #define MSR_STAR  0xC0000081
@@ -210,20 +211,36 @@ static long l_futex(long addr, long op, long val, long ts, long addr2, long val3
 }
 static long l_exit(long s) { _linux_syscall_exit_thread(s); return 0; }
 static long l_exit_group(long s) { _linux_syscall_exit(s); return 0; }
+/* getrusage and times: the process's CPU time, as on the i386
+   (linux_syscalls.c), in x86-64's layouts (longs of 8 bytes) */
 static long l_getrusage(long who, long ru)
 {
-  if (!__mem_userArea((void *)ru, 144)) return -14;
-  kbzero((void *)ru, 144);
+  long * r = (long *)ru, t, i;
+  if (!__mem_userArea(r, 144)) return -14;
+  if (who != 0 && who != -1 && who != 1) return -22;
+  t = who == -1 ? 0 : (long)processTable[currProcess]->cpuTicks;
+  for (i = 0; i < 18; i++) r[i] = 0;
+  r[0] = t / PIT_FREQ;                                  /* ru_utime */
+  r[1] = (t % PIT_FREQ) * (1000000 / PIT_FREQ);
   return 0;
 }
 static long l_times(long buf)
 {
   if (buf) {
-    if (!__mem_userArea((void *)buf, 32)) return -14;
-    kbzero((void *)buf, 32);
+    long * b = (long *)buf;
+    if (!__mem_userArea(b, 32)) return -14;
+    b[0] = USER_TICKS(processTable[currProcess]->cpuTicks);  /* tms_utime */
+    b[1] = b[2] = b[3] = 0;
   }
-  return timerTicks;
+  return USER_TICKS(timerTicks);
 }
+
+/* brk: no heap of that kind; 0, the break that never moves, and musl's
+   malloc takes its memory with mmap. readlink: no /proc, where ocamlrun
+   looks for its own name (/proc/self/exe). Both answered quietly: known
+   calls, not unknown ones */
+static long l_brk(long addr) { (void)addr; return 0; }
+static long l_readlink(long path, long buf, long size) { return -2; }
 
 /* arch_prctl: the thread's TLS is FS's base */
 static long l_arch_prctl(long code, long addr)
@@ -252,6 +269,7 @@ static const struct { int n; call_t f; int wide; } linux_calls[] = {
   { 13, C(_linux_syscall_nosignals) }, { 14, C(_linux_syscall_nosignals) },
   { 16, C(_linux_syscall_ioctl) }, { 20, C(_linux_syscall_writev) },
   { 24, C(_linux_syscall_sched_yield) }, { 25, C(_linux_syscall_mremap) },
+  { 12, C(l_brk), 1 }, { 89, C(l_readlink) },
   { 34, C(_linux_syscall_pause) }, { 35, C(l_nanosleep) },
   { 39, C(_linux_syscall_getpid) }, { 56, C(arch_clone) },
   { 57, C(_linux_syscall_fork) }, { 60, C(l_exit) },

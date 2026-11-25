@@ -69,6 +69,28 @@ static int client(int port, unsigned int size) {
 
 /* raw system calls (the library's wrappers would touch the pointers
    first, in user mode) */
+#ifdef __x86_64__
+static long native(long n, long a, long b, long c) {
+  long ret = n;
+  __asm__ volatile ("int $0x90" : "+a"(ret), "+D"(a), "+S"(b), "+d"(c)
+                    : : "memory", "r10", "r8");
+  return ret;
+}
+static long linux3(long n, long a, long b, long c) {
+  long ret;
+  __asm__ volatile ("syscall" : "=a"(ret) : "a"(n), "D"(a), "S"(b), "d"(c)
+                    : "rcx", "r11", "memory");
+  return ret;
+}
+/* Linux's numbers on x86-64 */
+#define NR_clock_gettime 228
+#define NR_write 1
+#define NR_nanosleep 35
+#define NR_wait 61                              /* wait4 */
+#define NR_getrandom 318
+#define NR_futex 202
+#define NR_munmap 11
+#else
 static long native(long n, long a, long b, long c) {
   long ret = n;
   __asm__ volatile ("int $0x90" : "+a"(ret), "+b"(a), "+c"(b), "+d"(c)
@@ -81,6 +103,15 @@ static long linux3(long n, long a, long b, long c) {
                     : : "memory");
   return ret;
 }
+/* Linux's numbers on the i386 */
+#define NR_clock_gettime 265
+#define NR_write 4
+#define NR_nanosleep 162
+#define NR_wait 7                               /* waitpid */
+#define NR_getrandom 355
+#define NR_futex 240
+#define NR_munmap 91
+#endif
 
 /* bad pointers: the kernel must refuse them (or end this process), never
    fault itself or write into its own memory. Each refused call counts. */
@@ -104,14 +135,14 @@ static int badptr(int port) {
   R(native(12, (long)unmapped, 0, 0));             /* clientRegister */
   R(native(10, (long)"x", 1000, 0));               /* driverRegister irq */
   R(native(100, 300, 0, 0));                       /* enableIrq */
-  R(linux3(265, 0, (long)kernel, 0));              /* clock_gettime */
-  R(linux3(4, 1, (long)kernel, 50));               /* write */
-  R(linux3(4, 1, (long)unmapped, 50));
-  R(linux3(162, (long)kernel, 0, 0));              /* nanosleep */
-  R(linux3(7, -1, (long)kernel, 0));               /* waitpid */
-  R(linux3(355, (long)kernel, 16, 0));             /* getrandom */
-  R(linux3(240, (long)kernel, 0, 1));              /* futex */
-  R(linux3(91, (long)kernel, 4096, 0));            /* munmap the kernel */
+  R(linux3(NR_clock_gettime, 0, (long)kernel, 0));              /* clock_gettime */
+  R(linux3(NR_write, 1, (long)kernel, 50));               /* write */
+  R(linux3(NR_write, 1, (long)unmapped, 50));
+  R(linux3(NR_nanosleep, (long)kernel, 0, 0));              /* nanosleep */
+  R(linux3(NR_wait, -1, (long)kernel, 0));               /* waitpid */
+  R(linux3(NR_getrandom, (long)kernel, 16, 0));             /* getrandom */
+  R(linux3(NR_futex, (long)kernel, 0, 1));              /* futex */
+  R(linux3(NR_munmap, (long)kernel, 4096, 0));            /* munmap the kernel */
   native(400, (long)kernel, 0, 0);                 /* stats: no result */
 #undef R
   mynos_freeChannel(ch);

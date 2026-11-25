@@ -9,7 +9,10 @@ tree=$root/build/x86_64/tree
 mkdir -p "$tree"
 # the sources: what git tracks, and the third-party files the build needs
 (cd "$root" && git ls-files -z) | (cd "$root" && rsync -a --from0 --files-from=- ./ "$tree/")
-cp "$root/VERSION" "$tree/" 2>/dev/null || true
+# the version (tools/version.sh: the tree is not a git checkout), rewritten
+# only when it changes, as build-all.sh does
+version=$("$root/tools/version.sh")
+[ "$(cat "$tree/VERSION" 2>/dev/null)" = "$version" ] || echo "$version" > "$tree/VERSION"
 # what to run there: the arguments, or the whole build of build-all.sh
 # (its commands, but the kernel's: tools/build-kernel-x86_64.sh's)
 if [ $# -gt 0 ]; then
