@@ -1057,6 +1057,14 @@ assert any(e["ph"] == "f" for e in d)' "$tmp/t.json" 2>/dev/null && trace_json=y
 fi
 }
 
+# a section, timed: the seconds it took, by lane, in $tmp/times (printed
+# at the end, to see where the suite's time goes)
+timed() {
+    t0=$(date +%s)
+    "$1" || true
+    echo "$lane $1 $(($(date +%s) - t0))" >> "$tmp/times"
+}
+
 for v in $results; do eval "$v="; done   # a lane not run finds nothing
 pids=
 for lane in ${LANES:-a b c d e}; do
@@ -1065,11 +1073,11 @@ for lane in ${LANES:-a b c d e}; do
         part=$tmp/part-$lane
         : > "$part"
         case $lane in
-            a) sec_first || true; sec_effects || true; sec_storage || true; sec_fat || true; sec_domains || true; sec_threads || true; sec_fpu || true ;;
-            b) sec_mlib || true; sec_files || true; sec_libs || true; sec_stress || true; sec_spawn || true; sec_console || true ;;
-            c) sec_nocom2 || true; sec_reboots || true; sec_virtio || true ;;
-            d) sec_gui || true ;;
-            e) sec_net || true; sec_seventh || true ;;
+            a) timed sec_first; timed sec_effects; timed sec_storage; timed sec_fat; timed sec_domains; timed sec_threads; timed sec_fpu ;;
+            b) timed sec_mlib; timed sec_files; timed sec_libs; timed sec_stress; timed sec_spawn; timed sec_console ;;
+            c) timed sec_nocom2; timed sec_reboots; timed sec_virtio ;;
+            d) timed sec_gui ;;
+            e) timed sec_net; timed sec_seventh ;;
         esac
         save_results "$lane"
     ) &
@@ -1452,6 +1460,13 @@ reject "page fault (?)"
 reject "Problems releasing pages"
 reject "kernel heap:"
 reject "FAIL"
+
+# the time of each section, and of each lane (the suite's is the longest)
+if [ -f "$tmp/times" ]; then
+    awk '{ printf "time  %s %-14s %4d s\n", $1, $2, $3; t[$1] += $3 }
+         END { for (l in t) printf "time  %s (lane)         %4d s\n", l, t[l] }' \
+        "$tmp/times" | sort
+fi
 
 if [ $fail -ne 0 ]; then
     echo "--- console log ---"
