@@ -1,5 +1,6 @@
 Terminus, a bitmap font by Dimitar Toshkov Zhekov (https://terminus-font.sourceforge.net/),
-under the SIL Open Font License 1.1. These are its 8x16 regular and bold
+under the SIL Open Font License 1.1 (its text and Terminus's copyright:
+OFL.TXT, from terminus-font 4.49.1). These are its 8x16 regular and bold
 faces in PSF (version 1, 512 glyphs, with a Unicode table), as Debian's
 console-setup ships them (console-setup-linux 1.237: Uni2-Terminus16.psf.gz,
 Uni2-TerminusBold16.psf.gz, uncompressed):

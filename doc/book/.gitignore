@@ -1,0 +1,3 @@
+# the typeset book: built here by build.sh, kept out of git
+build-book/
+*.pdf

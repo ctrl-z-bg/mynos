@@ -1,0 +1,49 @@
+% How to use this manual; typographic conventions (front matter)
+\chapter*{HOW TO USE THIS MANUAL}
+\markboth{HOW TO USE THIS MANUAL}{HOW TO USE THIS MANUAL}
+
+This manual describes MyNOS in one volume: why it was made, how to use
+it, how to program it, and how it works inside.
+
+\textbf{Part I, Introduction}, tells what MyNOS is, why it was begun in
+2001, and the systems and ideas of its time.
+
+\textbf{Part II, User's Guide}, is for using MyNOS. It assumes only some
+familiarity with a command line. Chapter 13 describes every command, in
+alphabetical order.
+
+\textbf{Part III, Programmer's Guide}, is for writing programs for MyNOS,
+in OCaml or in C. Chapter 24 holds the reference pages of the libraries,
+one page per module.
+
+\textbf{The appendices} explain the inside, for readers who know what a
+page table is or want to learn.
+
+The book can be read from the beginning; it can also be consulted. The
+contents list every section; the index at the end lists the commands,
+the modules and the terms that the text defines.
+
+\section*{TYPOGRAPHIC CONVENTIONS}
+
+\begin{tabular}{@{}p{33mm}@{}p{\dimexpr\linewidth-33mm}@{}}
+\texttt{ls /disk} & something you type, or a name in the source tree;\\
+\texttt{file.c:123} & a line of the source tree;\\
+\texttt{doc/manual} & a path without a slash in front: in the source
+tree, the repository \texttt{github.com/ctrl-z-bg/mynos};\\
+\texttt{/disk/a.txt} & a path with one: in a running MyNOS;\\
+\texttt{mynos-awn} & a bug or a task in the authors' tracker (beads), not
+published: \texttt{doc/STATUS.md} and \texttt{doc/JOURNAL.md} use its name;\\
+FILE & in a command's syntax, a word you choose;\\
+(appendix C.4, p.~1) & a cross-reference: the section, and its page.\\
+\end{tabular}
+
+Diagrams are drawn with characters, as they would appear on a terminal.
+
+\begin{mynosfactor}{What these boxes are}
+The boxes headed THE MyNOS FACTOR point to what is characteristic of
+MyNOS: ideas it takes further than most systems, or does in its own
+way. Other systems, past and present, share some of them (chapter 3).
+\end{mynosfactor}
+
+The complete programs of Part III are in \texttt{doc/manual/examples} of
+the repository, one directory per chapter; the build compiles them all.

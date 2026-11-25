@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-24
+Last updated: 2026-11-25
 
 ---
 
@@ -1870,3 +1870,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   its first start. `httpd /disk 8081 &` still serves the whole disk.
   Hidden and `.env` files stay refused in any directory. The manual's
   chapter 9 lost its warning about what is on `/disk`.
+- **2026-11-25** — The book's sources join the repository in `doc/book`
+  (they were kept outside it, in `tmp/`): `build.sh` typesets
+  `doc/manual` with them; the PDF stays out of git. `doc/README.md` says
+  what `doc/` holds (mynos-1cf). The licences' texts next to what uses
+  them: `third_party/fonts/OFL.TXT` (Terminus), `third_party/
+  ca-certificates/MPL-2.0.txt` (Mozilla's authorities).
