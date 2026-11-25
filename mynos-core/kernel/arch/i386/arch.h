@@ -145,6 +145,10 @@ static inline void arch_load_task_register(unsigned short selector) {
     __asm__ volatile ("movl %0, %%ebp" : : "m"((t)->ebp));              \
   } while (0)
 
+/* an entry's saved registers, as the page fault handler gets them: where
+   the interrupted instruction's address is, in words */
+#define ARCH_FRAME_IP 9
+
 /* ---- the FPU ---- */
 
 static inline void arch_fpu_reset(void) { __asm__ volatile ("finit"); }

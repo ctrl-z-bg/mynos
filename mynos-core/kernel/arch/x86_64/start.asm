@@ -14,7 +14,7 @@
 
 [BITS 32]
 section .text.boot
-extern arch_start64
+extern mynos_main
 global _start
 
 MB_MAGIC equ 0x1BADB002
@@ -105,10 +105,15 @@ long_mode:
 	mov	fs, ax
 	mov	gs, ax
 	mov	rsp, boot_stack_top
-	; arch_start64(magic, multiboot information)
-	mov	edi, edi
-	mov	esi, esi
-	call	arch_start64
+	; the memory's size, in MB, as the i386's start.asm finds it: from
+	; multiboot's mem_upper (KB above the first MB)
+	mov	eax, [rsi + 8]
+	shr	eax, 10
+	add	eax, 1
+	mov	[rel _asm_global_mem_size], eax
+	; mynos_main(multiboot information)
+	mov	edi, esi
+	call	mynos_main
 .halt:	cli
 	hlt
 	jmp	.halt
@@ -122,6 +127,13 @@ gdt64:
 gdt64_ptr:
 	dw $ - gdt64 - 1
 	dd gdt64
+
+global _asm_global_mem_size
+_asm_global_mem_size:			dd 0
+global _asm_last_kernel_page_dir_entry_used
+_asm_last_kernel_page_dir_entry_used:	dd 510
+global _asm_first_free_physical_page_address
+_asm_first_free_physical_page_address:	dd 0x400000
 
 section .bss
 align 16

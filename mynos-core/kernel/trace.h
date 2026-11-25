@@ -73,7 +73,7 @@ int _mynos_syscall_trace(uint32_t op, vaddr_t arg1, uint32_t arg2);
 int _mynos_syscall_processes(vaddr_t buf, uint32_t max);
 int _mynos_syscall_faults(int32_t pid, vaddr_t buf);
 int _mynos_syscall_procstat(int32_t pid, vaddr_t buf);
-int _mynos_syscall_pager(uint32_t op, uint32_t a, uint32_t b, uint32_t c, uint32_t d);
+int _mynos_syscall_pager(uint32_t op, unsigned long a, unsigned long b, unsigned long c, unsigned long d);
 
 /* a process's name from its argv (base name; for "ocamlrun X.byte", X) */
 void trace_setName(char * name, char ** argv);

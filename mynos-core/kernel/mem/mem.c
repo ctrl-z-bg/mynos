@@ -21,7 +21,6 @@
 #define NEWMEM
 
 #include "mem.h"
-#include "gdt.h"
 #include "video.h"
 #include "kutils.h"
 #include "process.h"
@@ -155,7 +154,7 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
     if (start < USERMINPAGE) return NULL;   /* no room */
     flags &= (~PF_SUPERVISOR_IN_USER_SPACE); // remove, if present
     //printk("====   "); print_uint_hex(start);
-    ret = __OS_askPagesFrom((void *)(start<<12), npages, alloc_now, flags);
+    ret = __OS_askPagesFrom((void *)((vaddr_t)start << 12), npages, alloc_now, flags);
     if (ret == NULL)   /* give the linear area back */
       __lmt_freeArea(&(processTable[currProcess]->lmemmap), start, npages);
     return ret;
@@ -168,7 +167,7 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
   last_page = ARCH_KERNEL_LAST_PAGE;
   for (; page_addr + npages - 1 <= last_page; page_addr++) {
     if (__pg_free_pages_from_page(page_addr, npages, &not_used) == npages)
-      return __OS_askPagesFrom((void *)(page_addr<<12), npages, alloc_now,
+      return __OS_askPagesFrom((void *)((vaddr_t)page_addr << 12), npages, alloc_now,
 			       flags);
   }
 
@@ -187,7 +186,7 @@ void * __OS_mapPhysical(paddr_t phys, uint32_t npages) {
     return NULL;
   start = __lmt_allocArea(&(processTable[currProcess]->lmemmap), npages);
   if (start < USERMINPAGE) return NULL;
-  if (__OS_askPagesFrom((void *)(start << 12), npages, 0, PF_USER | PF_READWRITE) == NULL) {
+  if (__OS_askPagesFrom((void *)((vaddr_t)start << 12), npages, 0, PF_USER | PF_READWRITE) == NULL) {
     __lmt_freeArea(&(processTable[currProcess]->lmemmap), start, npages);
     return NULL;
   }
@@ -195,9 +194,9 @@ void * __OS_mapPhysical(paddr_t phys, uint32_t npages) {
     uint32_t page = start + i;
     pte_t * pte = arch_pte((vaddr_t)page << 12);
     *pte = (phys + (i << 12)) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED;
-    INVALIDATE_THE_CACHE(page << 12);
+    INVALIDATE_THE_CACHE((vaddr_t)page << 12);
   }
-  return (void *)(start << 12);
+  return (void *)((vaddr_t)start << 12);
 }
 
 /* the DMA area, mapped into the current process (one reference to each
@@ -208,7 +207,7 @@ void * __OS_mapDmaArea(void) {
   if (__dma_area == 0) return NULL;
   start = __lmt_allocArea(&(processTable[currProcess]->lmemmap), npages);
   if (start < USERMINPAGE) return NULL;
-  if (__OS_askPagesFrom((void *)(start << 12), npages, 0, PF_USER | PF_READWRITE) == NULL) {
+  if (__OS_askPagesFrom((void *)((vaddr_t)start << 12), npages, 0, PF_USER | PF_READWRITE) == NULL) {
     __lmt_freeArea(&(processTable[currProcess]->lmemmap), start, npages);
     return NULL;
   }
@@ -217,9 +216,9 @@ void * __OS_mapDmaArea(void) {
     pte_t * pte = arch_pte((vaddr_t)page << 12);
     pmem_set((__dma_area >> 12) + i);
     *pte = (__dma_area + (i << 12)) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED;
-    INVALIDATE_THE_CACHE(page << 12);
+    INVALIDATE_THE_CACHE((vaddr_t)page << 12);
   }
-  return (void *)(start << 12);
+  return (void *)((vaddr_t)start << 12);
 }
 
 /* npages of RAM in one physical piece, above 16 MB (ISA DMA keeps the
@@ -234,7 +233,7 @@ void * __OS_allocDma(uint32_t npages, paddr_t * phys) {
      was, and zeroing the piece zeroed its own page table) */
   start = __lmt_allocArea(&(processTable[currProcess]->lmemmap), npages);
   if (start < USERMINPAGE) return NULL;
-  if (__OS_askPagesFrom((void *)(start << 12), npages, 0, PF_USER | PF_READWRITE) == NULL) {
+  if (__OS_askPagesFrom((void *)((vaddr_t)start << 12), npages, 0, PF_USER | PF_READWRITE) == NULL) {
     __lmt_freeArea(&(processTable[currProcess]->lmemmap), start, npages);
     return NULL;
   }
@@ -254,15 +253,15 @@ void * __OS_allocDma(uint32_t npages, paddr_t * phys) {
     *pte = ((first + i) << 12) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED;
     INVALIDATE_THE_CACHE((start + i) << 12);
   }
-  kbzero((void *)(start << 12), npages * PAGE_SIZE);
+  kbzero((void *)((vaddr_t)start << 12), npages * PAGE_SIZE);
   *phys = first << 12;
-  return (void *)(start << 12);
+  return (void *)((vaddr_t)start << 12);
 }
 
 void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
 			 int alloc_now, uint32_t flags) {
   uint32_t page;
-  uint32_t first_page = (((uint32_t)pageaddr)>>12);
+  uint32_t first_page = (uint32_t)(((vaddr_t)pageaddr) >> 12);
   uint32_t last_page  = (first_page + npages -1);
   uint32_t new_pts_required = 0;     /* how many new page tables are
 					required */
@@ -302,8 +301,8 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
       /* a fresh frame reads as zeros: after a reset (shutdown -r) memory
 	 holds the previous run's data, and it must not leak between
 	 processes either */
-      INVALIDATE_THE_CACHE(page << 12);
-      kbzero((void *)(page << 12), PAGE_SIZE);
+      INVALIDATE_THE_CACHE((vaddr_t)page << 12);
+      kbzero((void *)((vaddr_t)page << 12), PAGE_SIZE);
     } else
       *pte = flags | PF_LOGICAL_PRESENT;
   }
@@ -313,7 +312,7 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
 
 void * __OS_releasePages(void *pageaddr, unsigned int npages,
 			 int free, int check) {
-  uint32_t addr = (uint32_t)pageaddr;
+  vaddr_t addr = (vaddr_t)pageaddr;
   pte_t * pte;
   paddr_t phyaddr;
   uint32_t i;
@@ -416,13 +415,6 @@ uint32_t __pg_free_pages_from_page(uint32_t first_page, uint32_t npages,
   return (page - first_page);
 }
 
-void SEG_createStandardDescriptor(uint32_t * address,
-				  uint32_t base, uint32_t limit,
-				  ushort16_t control) {
-  union DT_entry newdesc = stnd_desc(base, limit, control);
-
-  kmemcpy((void *)address, (const void *)&newdesc, sizeof(union DT_entry));
-}
 
 
 extern void _page_fault_handler_TRAP();
@@ -515,7 +507,7 @@ int __mem_userArea(const void * start, uint32_t size) {
   end = a + size;
   if (end < a || a < USER_AREA_START || end > USER_AREA_END) return 0;
   for (page = a >> 12; page <= (end - 1) >> 12; page++) {
-    pte_t pte, * e = arch_pte(page << 12);
+    pte_t pte, * e = arch_pte((vaddr_t)page << 12);
     if (e == NULL) return 0;
     pte = *e;
     if (!(pte & PF_USER)) return 0;      /* a kernel stack of a thread */
@@ -528,7 +520,7 @@ int __mem_userString(const char * s, uint32_t max) {
   uint32_t i;
   for (i = 0; i < max; i++) {
     /* a page at a time */
-    if ((i == 0 || (((uint32_t)(s + i)) & 0xFFF) == 0) &&
+    if ((i == 0 || (((vaddr_t)(s + i)) & 0xFFF) == 0) &&
 	!__mem_userArea(s + i, 1))
       return -1;
     if (s[i] == 0) return i;
@@ -572,9 +564,9 @@ int copy_from_user(void * kernel, const void * user, uint32_t n) {
 
 /* a fault in copy_user: resume at its fix-up (frame: pushal's registers,
    the error code, then eip) */
-static int copy_user_fixup(uint32_t * frame) {
-  if (frame[9] != (uint32_t)copy_user_insn) return 0;
-  frame[9] = (uint32_t)copy_user_fault;
+static int copy_user_fixup(unsigned long * frame) {
+  if (frame[ARCH_FRAME_IP] != (unsigned long)copy_user_insn) return 0;
+  frame[ARCH_FRAME_IP] = (unsigned long)copy_user_fault;
   return 1;
 }
 
@@ -591,7 +583,7 @@ void __mem_userSegfault(uint32_t addr) {
 /* the faults resolved since boot, by kind (mynos-0ho) */
 uint32_t mem_faultsAlloc, mem_faultsCow;
 
-void _page_fault_handler(vaddr_t addr, uint32_t errcode, uint32_t * frame) {
+void _page_fault_handler(vaddr_t addr, uint32_t errcode, unsigned long * frame) {
   pte_t * pte;
 
 #ifdef DEBUG
@@ -665,7 +657,7 @@ void _page_fault_handler(vaddr_t addr, uint32_t errcode, uint32_t * frame) {
       printk(", pte ");
       print_ulong_hex(*pte);
       printk(", eip ");
-      print_ulong_hex(frame[9]);
+      print_ulong_hex(frame[ARCH_FRAME_IP]);
       print_char('\n');
     }
     if (copy_user_fixup(frame)) return;

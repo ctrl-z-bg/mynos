@@ -87,7 +87,7 @@ static void wake(pager_wait_t * w, int failed) {
   for (i = 0; i < n; i++) __OS_sem_V(w->sem);
 }
 
-void __pager_fault(uint32_t entry, uint32_t addr, uint32_t errcode) {
+void __pager_fault(pte_t entry, vaddr_t addr, uint32_t errcode) {
   pid_t pid = CURRPID;
   uint32_t page = addr >> 12;
   pager_wait_t * w;
@@ -174,7 +174,7 @@ static int pagerRegion(pid_t pid, uint32_t npages, uint32_t token, uint32_t writ
 }
 
 /* the next page waited for, not told yet: 1, or 0 for none */
-static int pagerNext(uint32_t buf) {
+static int pagerNext(vaddr_t buf) {
   uint32_t e[4];
   int i;
   if (pagerPid != CURRPID) return MYNOS_ERR_DENY;
@@ -194,7 +194,7 @@ static int pagerNext(uint32_t buf) {
 
 /* the answer: the pager's page at src moves to pid at addr (src 0: no
    page, the waiting process ends) */
-static int pagerSupply(pid_t pid, uint32_t addr, uint32_t src) {
+static int pagerSupply(pid_t pid, vaddr_t addr, vaddr_t src) {
   pager_wait_t * w;
   process_descriptor_t * p = proc(pid);
   pte_t * pte, * target;
@@ -238,7 +238,7 @@ static int pagerSupply(pid_t pid, uint32_t addr, uint32_t src) {
 /* a page the pager gave, in pid at addr: its entry, if it is a page of
    that process's own (present, user, not shared with another process:
    not copy-on-write, not PF_SHARED, one reference) */
-static pte_t * givenPage(pid_t pid, uint32_t addr) {
+static pte_t * givenPage(pid_t pid, vaddr_t addr) {
   process_descriptor_t * p = proc(pid);
   pte_t * e;
   if (!p || !p->isAlive || p->pid != pid || pid == CURRPID) return NULL;
@@ -254,7 +254,7 @@ static pte_t * givenPage(pid_t pid, uint32_t addr) {
    last copy: bits 0, 1, 2; its use forgotten (the clock's second chance).
    The process is not running now (one processor: the pager is), so no
    stale translation of it is cached. */
-static int pagerQuery(pid_t pid, uint32_t addr) {
+static int pagerQuery(pid_t pid, vaddr_t addr) {
   pte_t * e;
   int r;
   if (pagerPid != CURRPID) return MYNOS_ERR_DENY;
@@ -266,7 +266,7 @@ static int pagerQuery(pid_t pid, uint32_t addr) {
 }
 
 /* the pager's page at dst: its own, present, its frame to replace */
-static pte_t * pagerOwnPage(uint32_t dst) {
+static pte_t * pagerOwnPage(vaddr_t dst) {
   pte_t * pte;
   if ((dst & 0xFFF) || !__mem_userArea((void *)dst, PAGE_SIZE)) return NULL;
   pte = arch_pte(dst);
@@ -279,7 +279,7 @@ static pte_t * pagerOwnPage(uint32_t dst) {
 /* the page at pid's addr taken back: its frame moves to the pager at dst
    (the frame there freed), and pid's entry is the pager's again, with
    token and writable: its next use faults to the pager */
-static int pagerEvict(pid_t pid, uint32_t addr, uint32_t dst, uint32_t tokenw) {
+static int pagerEvict(pid_t pid, vaddr_t addr, vaddr_t dst, uint32_t tokenw) {
   pte_t * e, * mine;
   paddr_t frame;
   uint32_t token = tokenw >> 1;
@@ -299,7 +299,7 @@ static int pagerEvict(pid_t pid, uint32_t addr, uint32_t dst, uint32_t tokenw) {
 
 /* a copy of the page at pid's addr into the pager's page at dst, and its
    writes forgotten (written back to its file: clean again) */
-static int pagerCopy(pid_t pid, uint32_t addr, uint32_t dst) {
+static int pagerCopy(pid_t pid, vaddr_t addr, vaddr_t dst) {
   pte_t * e, * mine;
   uint32_t saved, * from;
   if (pagerPid != CURRPID) return MYNOS_ERR_DENY;
@@ -312,7 +312,7 @@ static int pagerCopy(pid_t pid, uint32_t addr, uint32_t dst) {
   return 0;
 }
 
-int _mynos_syscall_pager(uint32_t op, uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
+int _mynos_syscall_pager(uint32_t op, unsigned long a, unsigned long b, unsigned long c, unsigned long d) {
   switch (op) {
   case MYNOS_PAGER_REGISTER: return pagerRegister();
   case MYNOS_PAGER_REGION:   return pagerRegion((pid_t)a, b, c, d);

@@ -24,7 +24,6 @@
 #include "global.h"
 #include "physicalmem.h"
 
-#define __LAST_LINEAR_PAGE 0xFFFFF
 #define PAGE_SIZE          0x1000
 #define FOURMB             0x400000
 
@@ -103,7 +102,7 @@ void SEG_createStandardDescriptor(uint32_t * address,
 
 /* PAGE FAULT STUFF!!! */
 void _page_fault_handler_TRAP();  /* the wrapper... */
-void _page_fault_handler(vaddr_t addr, uint32_t errcode, uint32_t * frame); /* ... and the 
+void _page_fault_handler(vaddr_t addr, uint32_t errcode, unsigned long * frame); /* ... and the 
 							      real handler */
 /* special cases */
 // it returns the new copy physical address
@@ -115,9 +114,7 @@ void __mem_allocateOnUse(vaddr_t addr);
    from USERMINPAGE to the bottom of its kernel stack (process.c: the
    process info pages and the kernel stack sit above the user stack, under
    the page table mirrors). */
-#define USER_AREA_START ((uint32_t)USERMINPAGE << 12)
-#define USER_AREA_END   ((uint32_t)(0 - (0x400000 + 0x1000)) - \
-                         PAGE_SIZE * (PROCESS_INFO_NPAGES + KERNEL_STACK_NPAGES))
+/* USER_AREA_START, USER_AREA_END: arch/ARCH/layout.h */
 
 /* is [start, start + size) memory of the current process the kernel may
    read or write for it? user pages, allocated or to be allocated on use;
@@ -127,7 +124,7 @@ int __mem_userArea(const void * start, uint32_t size);
 void __mem_userSegfault(uint32_t addr);
 /* pager.c: a user thread's fault on a page given to the external pager
    (entry: its page table entry); returns once the page is there */
-void __pager_fault(uint32_t entry, uint32_t addr, uint32_t errcode);
+void __pager_fault(pte_t entry, vaddr_t addr, uint32_t errcode);
 /* pager.c: a process has ended (the pager itself, or one that waited) */
 void __pager_processEnded(pid_t pid);
 
