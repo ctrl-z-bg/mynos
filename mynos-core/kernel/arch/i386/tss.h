@@ -104,4 +104,8 @@ typedef struct {
 
 } tss_t;
 
+/* a thread's address space: its page directory, physical */
+#define THREAD_SPACE(T)        ((paddr_t)(T)->pgdir)
+#define THREAD_SET_SPACE(T, P) ((T)->pgdir = (uint32_t **)(P))
+
 #endif

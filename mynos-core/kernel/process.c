@@ -129,7 +129,7 @@ static process_descriptor_t * zombies = NULL;
  * descriptor stays until the parent collects the status (wait4), or goes
  * at once if nobody can.
  */
-static void endProcess(process_descriptor_t * self, int status, uint32_t pgdir) {
+static void endProcess(process_descriptor_t * self, int status, paddr_t pgdir) {
   uint32_t saved;
   tss_t * tss;
   process_queue_t * q;
@@ -224,7 +224,7 @@ static void endProcess(process_descriptor_t * self, int status, uint32_t pgdir) 
 }
 
 void killProcess(int status) {
-  endProcess(processTable[currProcess], status, (uint32_t)currThread->pgdir);
+  endProcess(processTable[currProcess], status, THREAD_SPACE(currThread));
 }
 
 /* kill (34): end another process, as if it had been killed (SIGKILL).
@@ -248,7 +248,7 @@ int _mynos_syscall_kill(pid_t pid) {
     killProcess(SIGNAL_STATUS(SIGKILL));
     sched();                      /* never returns */
   }
-  endProcess(p, SIGNAL_STATUS(SIGKILL), (uint32_t)p->tss->pgdir);
+  endProcess(p, SIGNAL_STATUS(SIGKILL), THREAD_SPACE(p->tss));
   return 0;
 }
 

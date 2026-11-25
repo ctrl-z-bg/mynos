@@ -252,33 +252,6 @@ int _linux_syscall_mprotect(void * addr, size_t len, int prot) {
 }
 
 
-/* Thread-local storage: a single GDT slot (GDT_TLS_INDEX) shared by all
-   threads, rewritten from the incoming thread's tss on every switch. */
-void tls_load(void * t) {
-  tss_t * thread = (tss_t *)t;
-  if (thread->tls_limit == 0 && thread->tls_base == 0)
-    gdt_set_entry(GDT_TLS_INDEX, 0, 0xFFFFF,
-		  D_DATA + D_WRITE + D_BIG + D_BIG_LIM + D_DPL3);
-  else
-    gdt_set_entry(GDT_TLS_INDEX, thread->tls_base, thread->tls_limit,
-		  D_DATA + D_WRITE + D_BIG + D_DPL3 +
-		  (thread->tls_pages ? D_BIG_LIM : 0));
-}
-
-int _linux_syscall_set_thread_area(struct user_desc * u_info) {
-  USER(u_info, sizeof *u_info);
-  if (u_info->entry_number != (uint32_t)-1 &&
-      u_info->entry_number != GDT_TLS_INDEX)
-    return -22; /* EINVAL */
-
-  currThread->tls_base = u_info->base_addr;
-  currThread->tls_limit = u_info->limit & 0xFFFFF;
-  currThread->tls_pages = (u_info->flags >> 4) & 1;
-  u_info->entry_number = GDT_TLS_INDEX;
-  tls_load(currThread);
-  return 0;
-}
-
 /* unknown Linux system call: fail with -ENOSYS, as Linux does, so that
    libcs and runtimes can fall back. Report each number once. */
 int32_t _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id) {
@@ -652,7 +625,6 @@ int _linux_syscall_fork() {
   mirror->justForked = 1;
   
   /* copy eip and esp and call the scheduler */
-  mirror->esp0 = currThread->esp0;
   ARCH_FORK_SWITCH(mirror);
 
   /* this process was just forked, restore some register */
@@ -677,7 +649,7 @@ static tss_t * copyThread(process_descriptor_t * ddest,
 
   dest = ddest->tss = (tss_t*)kmalloc(sizeof(tss_t));
   kmemcpy((void*)dest, (void*)currThread, sizeof(tss_t));
-  dest->pgdir = (uint32_t**)pdPhys;
+  THREAD_SET_SPACE(dest, pdPhys);
   dest->privSem = __OS_sem_allocateSemaphore(0);
   dest->semHeld = 0;
   dest->tid = pid;          /* the child's first thread: its pid */

@@ -122,6 +122,7 @@ static inline void arch_load_task_register(unsigned short selector) {
     __asm__ volatile ("movw %%fs, %0" : "=m"((t)->fs));      \
     __asm__ volatile ("movw %%gs, %0" : "=m"((t)->gs));      \
     __asm__ volatile ("movw %%ss, %0" : "=m"((t)->ss));      \
+    (t)->esp0 = currThread->esp0;    /* its kernel stack's top */ \
   } while (0)
 
 /* the child resumes here, in the parent's frame: its eip is the label

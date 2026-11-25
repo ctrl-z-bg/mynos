@@ -40,3 +40,5 @@ CFLAGS += -MMD -MP
 # the architecture's ("gdt.h") by name
 ARCH ?= i386
 CFLAGS += -I$(MYNOS_CORE_ROOT)/kernel -I$(MYNOS_CORE_ROOT)/kernel/arch/$(ARCH)
+# the architecture's own flags and the kernel's link (arch/ARCH/arch.mk)
+include $(MYNOS_CORE_ROOT)/kernel/arch/$(ARCH)/arch.mk

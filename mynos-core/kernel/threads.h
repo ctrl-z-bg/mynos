@@ -35,6 +35,8 @@ void __OS_threadExit(void * retval);
    threadStart makes it run (see threads.c) */
 tss_t * threadAlloc(void);
 void threadStart(tss_t * tss);
+/* a new thread's registers and first kernel stack (arch/ARCH/thread.c) */
+void arch_thread_init(tss_t * tss, uint32_t entry, uint32_t stack);
 uint32_t __OS_threadSelf();
 
 #endif

@@ -84,7 +84,7 @@ typedef struct {
      the list of ended processes whose memory is still to be freed (it can
      be freed only from another process: see reapZombies) */
   tss_t * deadThreads;
-  uint32_t pgdirPhys;
+  paddr_t pgdirPhys;
   uint32_t memFreed;
   void * nextZombie;
 

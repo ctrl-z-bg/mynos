@@ -103,14 +103,8 @@ int32_t __OS_threadCreate(uint32_t entry_point,
   /* TODO: check the parameters */
   if ((tss = threadAlloc()) == NULL) return MYNOS_ERR_FULL;
 
-  tss->eip = entry_point;
-  tss->esp = stack;
-  tss->eflags = INITIAL_EFLAGS |
-    ((processTable[currProcess]->privileges & MYNOS_PRIV_IO) ? IOPL3 : 0);
-  tss->esp0 = tss->kstack + KERNEL_STACK_NPAGES * PAGE_SIZE - 1;
-
-  /* initialize the kernel stack for the new thread */
-  initStack(tss->esp0, tss);
+  /* its registers and its first kernel stack: the architecture's */
+  arch_thread_init(tss, entry_point, stack);
 
   threadStart(tss);
   return tss->tid;

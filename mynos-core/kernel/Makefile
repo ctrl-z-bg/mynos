@@ -60,8 +60,7 @@ $(ALL_OBJ):
 	$(AS) $(ASFLAGS) $<
 
 kernel: $(ALL_OBJ) $(OFILESC)
-	$(LD) $(START) $(OFILESC) $(ALL_OBJ) \
-		--oformat elf32-i386 -Ttext 0x200000 -o kernel.elf 
+	$(ARCH_LINK)
 
 clean:
 	for i in $(SUBDIRS) ; do \
