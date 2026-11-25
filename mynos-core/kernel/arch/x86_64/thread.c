@@ -53,12 +53,11 @@ void tsksw(void)
 /* a thread's first kernel stack: a frame for user mode at [entry] on the
    user stack [stack], under a switch frame that returns to trap_return
    (switch_stacks pops six registers, then returns) */
-void arch_thread_frame(tss_t * t, uint64_t entry, uint64_t stack, uint64_t rax)
+void arch_thread_frame(tss_t * t, uint64_t entry, uint64_t stack, uint64_t rax,
+		       int privileged)
 {
   uint64_t * sp = (uint64_t *)t->rsp0;
   struct frame * f;
-  int privileged = processTable[currProcess] &&
-    (processTable[currProcess]->privileges & MYNOS_PRIV_IO);
   sp -= sizeof(struct frame) / 8;
   f = (struct frame *)sp;
   kbzero(f, sizeof *f);
@@ -74,8 +73,51 @@ void arch_thread_frame(tss_t * t, uint64_t entry, uint64_t stack, uint64_t rax)
   t->rsp = (uint64_t)sp;
 }
 
-void arch_thread_init(tss_t * tss, uint32_t entry, uint32_t stack)
+static int privileged(void)
+{
+  return (processTable[currProcess]->privileges & MYNOS_PRIV_IO) != 0;
+}
+
+void arch_thread_init(tss_t * tss, vaddr_t entry, vaddr_t stack)
 {
   tss->rsp0 = tss->kstack + KERNEL_STACK_NPAGES * PAGE_SIZE;
-  arch_thread_frame(tss, entry, stack, 0);
+  arch_thread_frame(tss, entry, stack, 0, privileged());
+}
+
+/* Linux's clone (56) for threads: flags, stack, ptid, ctid, tls (FS's
+   base); the new thread returns from clone with 0, on [stack] */
+#define CLONE_VM             0x00000100
+#define CLONE_THREAD         0x00010000
+#define CLONE_SETTLS         0x00080000
+#define CLONE_PARENT_SETTID  0x00100000
+#define CLONE_CHILD_CLEARTID 0x00200000
+#define CLONE_CHILD_SETTID   0x01000000
+extern struct frame * current_frame;
+
+long arch_clone(long flags, long stack, long ptid, long ctid, long tls)
+{
+  tss_t * t;
+  uint64_t * sp;
+  if ((flags & (CLONE_VM | CLONE_THREAD)) != (CLONE_VM | CLONE_THREAD)) return -38;
+  if (((flags & CLONE_PARENT_SETTID) && !__mem_userArea((void *)ptid, 4)) ||
+      ((flags & (CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID)) &&
+       !__mem_userArea((void *)ctid, 4)))
+    return -14;
+  if ((t = threadAlloc()) == NULL) return -12;
+  if (flags & CLONE_SETTLS) t->fs_base = tls;
+  if (flags & CLONE_CHILD_CLEARTID) t->clearTid = (int32_t *)ctid;
+  if (flags & CLONE_PARENT_SETTID) *(int32_t *)ptid = t->tid;
+  if (flags & CLONE_CHILD_SETTID) *(int32_t *)ctid = t->tid;
+  t->rsp0 = t->kstack + KERNEL_STACK_NPAGES * PAGE_SIZE;
+  sp = (uint64_t *)t->rsp0;
+  sp -= sizeof(struct frame) / 8;
+  kmemcpy(sp, current_frame, sizeof(struct frame));
+  ((struct frame *)sp)->rax = 0;
+  ((struct frame *)sp)->rsp = stack;
+  *--sp = (uint64_t)trap_return;
+  sp -= 6;
+  kbzero(sp, 6 * 8);
+  t->rsp = (uint64_t)sp;
+  threadStart(t);
+  return t->tid;
 }

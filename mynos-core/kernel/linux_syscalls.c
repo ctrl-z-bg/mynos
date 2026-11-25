@@ -229,7 +229,7 @@ int _linux_syscall_nosignals() {
 struct new_utsname { char f[6][65]; };
 int _linux_syscall_uname(struct new_utsname * u) {
   static const char * fields[6] =
-    { "MyNOS", "mynos", MYNOS_VERSION, "#1", "i386", "" };
+    { "MyNOS", "mynos", MYNOS_VERSION, "#1", ARCH_MACHINE, "" };
   int i, j;
   USER(u, sizeof *u);
   for (i = 0; i < 6; i++) {

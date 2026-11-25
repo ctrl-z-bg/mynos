@@ -49,7 +49,7 @@ extern tss_t * currThread;
 
 /* a new thread of the current process: it starts at [entry], on the user
    stack [stack] */
-void arch_thread_init(tss_t * tss, uint32_t entry, uint32_t stack) {
+void arch_thread_init(tss_t * tss, vaddr_t entry, vaddr_t stack) {
   tss->eip = entry;
   tss->esp = stack;
   tss->eflags = INITIAL_EFLAGS |

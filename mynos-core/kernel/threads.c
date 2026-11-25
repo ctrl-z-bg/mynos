@@ -95,8 +95,8 @@ void threadStart(tss_t * tss) {
   readyQueueInsert(tss);
 }
 
-int32_t __OS_threadCreate(uint32_t entry_point, 
-			   uint32_t stack,
+int32_t __OS_threadCreate(vaddr_t entry_point, 
+			   vaddr_t stack,
 			   uint32_t flags) {
   tss_t * tss;
 

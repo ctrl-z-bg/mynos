@@ -17,6 +17,9 @@
 #ifndef __ARCH_H__
 #define __ARCH_H__
 
+/* the machine, as uname says it */
+#define ARCH_MACHINE "x86_64"
+
 /* ---- interrupts ---- */
 
 static inline void arch_irq_disable(void) { __asm__ volatile ("cli" ::: "memory"); }

@@ -49,6 +49,7 @@ typedef unsigned int   uint32_t;
 typedef unsigned long long uint64_t;
 typedef unsigned short uint16_t;
 typedef unsigned char  uint8_t;
+typedef long long      int64_t;
 typedef int            int32_t;
 typedef unsigned long  ulong32_t;
 typedef long           long32_t;
@@ -61,7 +62,7 @@ typedef unsigned long vaddr_t;         /* linear (virtual) */
 typedef unsigned long paddr_t;         /* physical */
 
 typedef int pid_t;
-typedef unsigned int   __kernel_size_t;
+typedef unsigned long  __kernel_size_t;
 typedef __kernel_size_t size_t;
 typedef size_t ssize_t;
 typedef long int off_t;               /* Type of file sizes and offsets.  */

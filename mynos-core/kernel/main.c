@@ -131,25 +131,25 @@ void mynos_main(multiboot_info_t *boot_info) {
      reset the grub information
   */
   if (boot_info->flags & 0x4) {         /* a command line */
-    char * s = (char *)boot_info->cmdline;
+    char * s = (char *)(vaddr_t)boot_info->cmdline;
     for (i = 0; s[i] && i < (int)sizeof(kernel_cmdline) - 1; i++)
       kernel_cmdline[i] = s[i];
     kernel_cmdline[i] = 0;
   }
-  module = (module_t *)boot_info->mods_addr;
+  module = (module_t *)(vaddr_t)boot_info->mods_addr;
   nmodules = boot_info->mods_count;
   /* the bootloader's structures, read after init_memory: no DMA area
      (mem.c) on them */
   mem_reserveAtBoot((paddr_t)boot_info, sizeof(multiboot_info_t));
   mem_reserveAtBoot((paddr_t)module, nmodules * sizeof(module_t));
   for (i = 0; i < boot_info->mods_count; i++) {
-    modinfo[i].start = (uint32_t*)module[i].mod_start;
+    modinfo[i].start = (uint32_t*)(vaddr_t)module[i].mod_start;
     modinfo[i].len = module[i].mod_end - module[i].mod_start;
     mem_reserveAtBoot(module[i].mod_start, modinfo[i].len);
     if (module[i].string)
       mem_reserveAtBoot(module[i].string, MODULE_CMDLINE);
     if (i < MAXMODULES && module[i].string) {
-      char * s = (char *)module[i].string;
+      char * s = (char *)(vaddr_t)module[i].string;
       int j;
       for (j = 0; s[j] && j < MODULE_CMDLINE - 1; j++)
 	module_cmdline[i][j] = s[j];
@@ -296,7 +296,7 @@ void mynos_main(multiboot_info_t *boot_info) {
     //for (i = 0; i < boot_info->mods_count; i++) {
     for (i = 0; i < nmodules; i++) {
       //module = (module_t*)((uint32_t*)(boot_info->mods_addr) + i);
-      modinfo[i].start = (uint32_t*)module[i].mod_start;
+      modinfo[i].start = (uint32_t*)(vaddr_t)module[i].mod_start;
       modinfo[i].len = module[i].mod_end - module[i].mod_start;
       if (i < MAXMODULES && module_cut[i]) {
 	printk("module command line cut at ");

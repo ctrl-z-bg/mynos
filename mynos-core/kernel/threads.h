@@ -24,8 +24,8 @@
 #include "global.h"
 
 /* on success it returns the ID of the new thread */
-int32_t __OS_threadCreate(uint32_t entry_point, 
-			   uint32_t stack,
+int32_t __OS_threadCreate(vaddr_t entry_point, 
+			   vaddr_t stack,
 			   uint32_t flags);
 
 void __OS_threadExit(void * retval);
@@ -36,7 +36,7 @@ void __OS_threadExit(void * retval);
 tss_t * threadAlloc(void);
 void threadStart(tss_t * tss);
 /* a new thread's registers and first kernel stack (arch/ARCH/thread.c) */
-void arch_thread_init(tss_t * tss, uint32_t entry, uint32_t stack);
+void arch_thread_init(tss_t * tss, vaddr_t entry, vaddr_t stack);
 uint32_t __OS_threadSelf();
 
 #endif
