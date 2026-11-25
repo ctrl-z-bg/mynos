@@ -25,6 +25,7 @@
 #include "gdt.h"
 #include "tss.h"
 #include "sem.h"
+#include "random.h"
 #include "kutils.h"
 #include "elf.h"
 #include "process.h"
@@ -106,12 +107,20 @@ static int buildRamdiskPTs(void) {
 
 /*
  * The initial stack the Linux ABI expects, which modern libcs read at
- * startup: argc, argv[], NULL, envp[], NULL, auxv (AT_NULL), with the
- * strings above them. It must fit in the top page of the user stack.
+ * startup: argc, argv[], NULL, envp[], NULL, the auxiliary vector, with
+ * the strings above them. It must fit in the top page of the user stack.
  * Returns the bytes it takes (16-byte aligned), or 0 if it does not fit.
+ *
+ * The auxiliary vector tells the C library where the program's headers
+ * are (musl finds PT_TLS there: without it a thread's TLS block was taken
+ * as empty, and new threads' TLS lay on their stacks' tops), the entry,
+ * and 16 random bytes (the stack protector's canary).
  */
+struct auxinfo { uint32_t phdr, phnum, entry; };
+#define AUX_WORDS (2 * 6)               /* PHDR PHENT PHNUM PAGESZ ENTRY RANDOM */
+
 static uint32_t initialStackSize(char ** argv, char ** envp) {
-  uint32_t words = 1 + 1 + 1 + 2, bytes = 0, i;
+  uint32_t words = 1 + 1 + 1 + 2 + AUX_WORDS, bytes = 16, i;
   for (i = 0; argv && argv[i]; i++, words++)
     bytes += kstrlen(argv[i]) + 1;
   for (i = 0; envp && envp[i]; i++, words++)
@@ -122,10 +131,15 @@ static uint32_t initialStackSize(char ** argv, char ** envp) {
 
 /* writes it at the end of page, whose user address ends at topUser */
 static void buildInitialStack(uint32_t * page, uint32_t topUser,
-			      uint32_t size, char ** argv, char ** envp) {
+			      uint32_t size, char ** argv, char ** envp,
+			      struct auxinfo * aux) {
   uint32_t * vec = page + (PAGE_SIZE - size) / sizeof(uint32_t);
   char * str = (char *)page + PAGE_SIZE;
-  uint32_t i, n = 0;
+  uint32_t i, n = 0, random;
+
+  str -= 16;                                        /* AT_RANDOM's bytes */
+  random_get((ubyte_t *)str, 16);
+  random = topUser - ((char *)page + PAGE_SIZE - str);
 
   for (i = 0; argv && argv[i]; i++) ;
   vec[n++] = i;                                     /* argc */
@@ -143,6 +157,14 @@ static void buildInitialStack(uint32_t * page, uint32_t topUser,
     vec[n++] = topUser - ((char *)page + PAGE_SIZE - str);
   }
   vec[n++] = 0;
+  if (aux->phdr) {
+    vec[n++] = 3;  vec[n++] = aux->phdr;            /* AT_PHDR */
+    vec[n++] = 4;  vec[n++] = sizeof(Elf32_Phdr);   /* AT_PHENT */
+    vec[n++] = 5;  vec[n++] = aux->phnum;           /* AT_PHNUM */
+  }
+  vec[n++] = 6;  vec[n++] = PAGE_SIZE;              /* AT_PAGESZ */
+  vec[n++] = 9;  vec[n++] = aux->entry;             /* AT_ENTRY */
+  vec[n++] = 25; vec[n++] = random;                 /* AT_RANDOM */
   vec[n++] = 0;                                     /* auxv: AT_NULL */
   vec[n++] = 0;
 }
@@ -378,7 +400,15 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
     if ((top = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return NULL;
     ALIAS(top, 1);
     kbzero(top, PAGE_SIZE);
-    buildInitialStack(top, topUser, initialStack, argv, envp);
+    struct auxinfo aux = { 0, elf_ex.e_phnum, elf_ex.e_entry };
+    /* the headers in memory: inside the loaded segment that holds them */
+    for (i = 0; i < elf_ex.e_phnum; i++)
+      if (elf_phdata[i].p_type == PT_LOAD &&
+	  elf_phdata[i].p_offset <= elf_ex.e_phoff &&
+	  elf_ex.e_phoff + elf_ex.e_phnum * sizeof(Elf32_Phdr) <=
+	  elf_phdata[i].p_offset + elf_phdata[i].p_filesz)
+	aux.phdr = elf_phdata[i].p_vaddr + (elf_ex.e_phoff - elf_phdata[i].p_offset);
+    buildInitialStack(top, topUser, initialStack, argv, envp, &aux);
     *(pun++) = LINEAR_TO_PHYSICAL_ADDRESS(top)
       | PF_USER | PF_PRESENT | PF_READWRITE;
   }

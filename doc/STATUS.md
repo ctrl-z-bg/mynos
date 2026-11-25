@@ -1885,3 +1885,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `VERSION` against `version.sh` and ships the OFL and MPL texts.
   `tests/fpu/fpu` and `tests/stdio/stdio`, binaries committed by
   mistake, leave git (found on the x86-64 branch).
+- **2026-11-25** — MyNOS 1.0.1: the kernel gives programs a real
+  auxiliary vector (it was empty: a new thread's `__thread` variables
+  lay on its stack's top). Found on the version 2 line (JOURNAL);
+  `tests/abi` checks it.

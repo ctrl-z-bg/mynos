@@ -10,8 +10,21 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <sys/utsname.h>
+#include <sys/auxv.h>
 
 static int failures = 0;
+
+/* a new thread's TLS starts as the program's image says: zeros here. The
+   kernel's auxiliary vector was empty, musl found no PT_TLS and took the
+   TLS block as empty: a new thread's TLS lay on its stack's top, where
+   pthread_create writes */
+static __thread long tls_zeros[16];
+static void * tls_reader(void * unused) {
+  long n = 0;
+  int i;
+  for (i = 0; i < 16; i++) if (tls_zeros[i]) n++;
+  return (void *)n;
+}
 
 /* raw Linux system call with no arguments */
 static long linux_syscall0(long n) {
@@ -405,6 +418,17 @@ int main(int argc, char ** argv) {
   /* unknown Linux syscall: -ENOSYS, not a kernel panic */
   r = linux_syscall0(400);
   check("unknown Linux syscall gives -ENOSYS", r == -ENOSYS);
+
+  {
+    pthread_t t;
+    void * nonzero = (void *)-1;
+    int i;
+    for (i = 0; i < 16; i++) tls_zeros[i] = 0x5A5A;
+    check("the auxiliary vector: the program's headers, random bytes",
+          getauxval(AT_PHDR) != 0 && getauxval(AT_PHNUM) != 0 && getauxval(AT_RANDOM) != 0);
+    if (pthread_create(&t, NULL, tls_reader, NULL) == 0) pthread_join(t, &nonzero);
+    check("a new thread's TLS starts at zero", nonzero == NULL);
+  }
 
   /* TLS: errno lives in thread-local storage */
   errno = 1234;

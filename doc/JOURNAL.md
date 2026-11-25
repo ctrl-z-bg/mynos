@@ -3700,3 +3700,27 @@ reload.
 
 **Lesson.** Files that belong together and change together must change
 their names together; a cache only knows names.
+
+## 2026-11-25 — An empty auxiliary vector (MyNOS 1.0.1)
+
+**Symptom.** Found on the version 2 line, on x86-64: the Terminal window
+showed no program output. Its cause is in 1.0 too.
+
+**Diagnosis.** A `__thread` variable meant to start at 0 (Gfx's clip)
+read a return address and a function pointer in any thread but the
+first: the top of the new thread's stack.
+
+**Cause.** The kernel gave every program an empty auxiliary vector.
+Without `AT_PHDR` musl finds no `PT_TLS`, takes the TLS block as empty,
+and a new thread's `__thread` variables lie on its stack's top, where
+`pthread_create` writes its start arguments. On the i386 the offsets
+happened to miss what mattered; a C program with threads and
+thread-local variables could have met it.
+
+**Fix.** `process.c` builds a real vector: `AT_PHDR`, `AT_PHENT`,
+`AT_PHNUM`, `AT_PAGESZ`, `AT_ENTRY`, `AT_RANDOM` (musl's stack canary had
+no random bytes either). `tests/abi` checks a new thread's TLS and the
+vector. Released as MyNOS 1.0.1.
+
+**Lesson.** The libc's startup contract is part of the ABI; an empty
+one fails silently, and "it works" can be the layout's luck.
