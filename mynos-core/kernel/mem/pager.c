@@ -108,7 +108,7 @@ void __pager_fault(pte_t entry, vaddr_t addr, uint32_t errcode) {
       w->used = 1;
       w->pid = pid;
       w->page = page;
-      w->token = entry >> 12;
+      w->token = (entry >> 12) & (PAGER_TOKENS - 1);
       w->write = (errcode & 2) != 0;
       w->delivered = w->done = w->failed = 0;
       w->waiters = 0;
@@ -222,10 +222,10 @@ static int pagerSupply(pid_t pid, vaddr_t addr, vaddr_t src) {
     wake(w, 0);
     return MYNOS_ERR_INVALID;
   }
-  *target = (frame << 12) | PF_PRESENT | PF_USER | (*target & PF_READWRITE);
+  pte_set(target, (frame << 12) | PF_PRESENT | PF_USER | (*target & PF_READWRITE));
 
   /* the pager's address gets a fresh page at its next use */
-  *pte = PF_USER | PF_READWRITE | PF_LOGICAL_PRESENT;
+  pte_set(pte, PF_USER | PF_READWRITE | PF_LOGICAL_PRESENT);
   INVALIDATE_THE_CACHE(src);
 
   TRACE(TRACE_PAGE, CURRPID, pid, -1, PAGE_SIZE, addr >> 12, NULL, 0);
@@ -261,7 +261,7 @@ static int pagerQuery(pid_t pid, vaddr_t addr) {
   e = givenPage(pid, addr);
   if (e == NULL) return 0;
   r = 1 | ((*e & PF_ACCESSED) ? 2 : 0) | ((*e & PF_DIRTY) ? 4 : 0);
-  *e &= ~PF_ACCESSED;
+  pte_mark_old(e);
   return r;
 }
 
@@ -288,10 +288,10 @@ static int pagerEvict(pid_t pid, vaddr_t addr, vaddr_t dst, uint32_t tokenw) {
   if ((mine = pagerOwnPage(dst)) == NULL) return MYNOS_ERR_INVALID;
   if ((e = givenPage(pid, addr)) == NULL) return MYNOS_ERR_INVALID;
   frame = PTE_FRAME(*e) >> 12;
-  *e = (token << 12) | PF_PAGER | PF_USER | ((tokenw & 1) ? PF_READWRITE : 0);
+  pte_set(e, (token << 12) | PF_PAGER | PF_USER | ((tokenw & 1) ? PF_READWRITE : 0));
   /* (pid's own entry is read again through the window: mine is ours) */
   pmem_unset(PTE_FRAME(*mine) >> 12);
-  *mine = (frame << 12) | PF_PRESENT | PF_USER | PF_READWRITE;
+  pte_set(mine, (frame << 12) | PF_PRESENT | PF_USER | PF_READWRITE);
   INVALIDATE_THE_CACHE(dst);
   TRACE(TRACE_PAGE, CURRPID, pid, -1, 0, addr >> 12, NULL, 0);
   return 0;
@@ -305,7 +305,7 @@ static int pagerCopy(pid_t pid, vaddr_t addr, vaddr_t dst) {
   if (pagerPid != CURRPID) return MYNOS_ERR_DENY;
   if ((mine = pagerOwnPage(dst)) == NULL) return MYNOS_ERR_INVALID;
   if ((e = givenPage(pid, addr)) == NULL) return MYNOS_ERR_INVALID;
-  *e &= ~PF_DIRTY;
+  pte_mark_clean(e);
   from = __mem_mapFrame(PTE_FRAME(*e) >> 12, &saved);
   kmemcpy((void *)dst, from, PAGE_SIZE);
   __mem_unmapFrame(saved);

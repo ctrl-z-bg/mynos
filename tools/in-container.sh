@@ -24,7 +24,7 @@ if [ -n "${MYNOS_TEST_CONTAINER:-}" ]; then
 fi
 
 # the image's architecture: dev-x86_64 is amd64, the others i386
-case $name in *x86_64*|test) platform=linux/amd64 ;; *) platform=linux/386 ;; esac
+case $name in *x86_64*|*aarch64*|test) platform=linux/amd64 ;; *) platform=linux/386 ;; esac
 
 exec podman run --rm $tty --platform $platform \
     -v "$root:/mynos:Z" -w /mynos \

@@ -191,4 +191,12 @@ void arch_init_kernel_space(uint32_t first_free_phy_page, const paddr_t * start,
 			    const uint32_t * len, int n);
 void * arch_cow_window(paddr_t * phys);
 
+
+/* an entry written (mem/, the pager): on x86 a store; an architecture
+   whose entries carry more than MyNOS's bits sets them here (aarch64) */
+static inline void pte_set(pte_t * p, pte_t v) { *p = v; }
+/* the pager's clock: the page's use, its writes, forgotten */
+static inline void pte_mark_old(pte_t * p) { *p &= ~(pte_t)0x20; }      /* accessed */
+static inline void pte_mark_clean(pte_t * p) { *p &= ~(pte_t)0x40; }    /* dirty */
+
 #endif

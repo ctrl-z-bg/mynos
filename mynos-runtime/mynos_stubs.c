@@ -370,6 +370,16 @@ CAMLprim value caml_mynos_uptime(value unit)
    Processes with the io privilege (drivers) run with IOPL 3: in and out
    work in their user space; in any other process they end the program. */
 
+#ifdef __aarch64__
+/* no I/O ports on ARM (doc/decisions/aarch64.md): the PC's drivers in
+   OCaml (ata, the keyboard's) fail at their first access */
+CAMLprim value caml_mynos_inb(value port) { caml_failwith("Mynos.inb: no I/O ports"); }
+CAMLprim value caml_mynos_outb(value port, value v) { caml_failwith("Mynos.outb: no I/O ports"); }
+CAMLprim value caml_mynos_inw(value port) { caml_failwith("Mynos.inw: no I/O ports"); }
+CAMLprim value caml_mynos_outw(value port, value v) { caml_failwith("Mynos.outw: no I/O ports"); }
+CAMLprim value caml_mynos_insw(value port, value n) { caml_failwith("Mynos.insw: no I/O ports"); }
+CAMLprim value caml_mynos_outsw(value port, value s) { caml_failwith("Mynos.outsw: no I/O ports"); }
+#else
 CAMLprim value caml_mynos_inb(value port)
 {
   unsigned char v;
@@ -426,6 +436,8 @@ CAMLprim value caml_mynos_outsw(value port, value s)
 		    : "d"((unsigned short)Int_val(port)) : "memory");
   return Val_unit;
 }
+
+#endif
 
 /* register as the driver of an IRQ: returns the semaphore the kernel V's
    at each interrupt */

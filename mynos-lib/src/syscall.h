@@ -46,6 +46,23 @@ static inline long __mynos_syscall(long n, long b, long c, long d, long S, long 
                     : "rcx", "r11", "r9", "memory");
   return ret;
 }
+#elif defined(__aarch64__)
+/* AArch64 (doc/decisions/aarch64.md): svc #0x90, the number in x8, the
+   arguments in x0-x4, the result in x0 */
+static inline long __mynos_syscall(long n, long b, long c, long d, long S, long D)
+{
+  register long x8 __asm__("x8") = n;
+  register long x0 __asm__("x0") = b;
+  register long x1 __asm__("x1") = c;
+  register long x2 __asm__("x2") = d;
+  register long x3 __asm__("x3") = S;
+  register long x4 __asm__("x4") = D;
+  __asm__ volatile ("svc #0x90"
+                    : "+r"(x0)
+                    : "r"(x8), "r"(x1), "r"(x2), "r"(x3), "r"(x4)
+                    : "memory");
+  return x0;
+}
 #else
 static inline long __mynos_syscall(long n, long b, long c, long d, long S, long D)
 {

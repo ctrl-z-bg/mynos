@@ -202,7 +202,13 @@ static int available;   /* V'd when input (or an end of file) is queued */
 /* write to the screen through the kernel, without the C library */
 static void raw_write(const char * s, int n)
 {
-#ifdef __x86_64__
+#if defined(__aarch64__)
+  register long x8 __asm__("x8") = 64;             /* Linux write */
+  register long x0 __asm__("x0") = 1;
+  register long x1 __asm__("x1") = (long)s;
+  register long x2 __asm__("x2") = n;
+  __asm__ volatile ("svc #0" : "+r"(x0) : "r"(x8), "r"(x1), "r"(x2) : "memory");
+#elif defined(__x86_64__)
   long ret;
   __asm__ volatile ("syscall" : "=a"(ret) : "a"(1L), "D"(1L), "S"(s), "d"((long)n)
 		    : "rcx", "r11", "memory");

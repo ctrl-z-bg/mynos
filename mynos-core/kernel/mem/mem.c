@@ -74,6 +74,9 @@ static int overlaps_boot_reserved(uint32_t start, uint32_t len) {
    modules are marked by then). */
 static void reserve_dma_area(void) {
   uint32_t a, k, page;
+#ifdef ARCH_NO_ISA_DMA
+  return;                 /* no ISA bus, no RAM below 16 MB to give it */
+#endif
   for (a = 0x110000; a + DMA_AREA_SIZE <= 0x1000000; a += DMA_AREA_SIZE) {
     if (a >= 0x200000 && a < 0x400000) continue;   /* the kernel, its stack */
     if (overlaps_boot_reserved(a, DMA_AREA_SIZE)) continue;
@@ -130,7 +133,7 @@ void init_memory() {
   pmem_createPhyMemManager();
 }
 
-void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
+void * __OS_askPages(unsigned int npages, int alloc_now, pte_t flags) {
   uint32_t page_addr;
   uint32_t last_page;
   uint32_t not_used;
@@ -192,7 +195,8 @@ void * __OS_mapPhysical(paddr_t phys, uint32_t npages) {
   for (i = 0; i < npages; i++) {
     uint32_t page = start + i;
     pte_t * pte = arch_pte((vaddr_t)page << 12);
-    *pte = (phys + (i << 12)) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED;
+    pte_set(pte, (phys + (i << 12)) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED |
+            PF_DEVICE);
     INVALIDATE_THE_CACHE((vaddr_t)page << 12);
   }
   return (void *)((vaddr_t)start << 12);
@@ -214,7 +218,7 @@ void * __OS_mapDmaArea(void) {
     uint32_t page = start + i;
     pte_t * pte = arch_pte((vaddr_t)page << 12);
     pmem_set((__dma_area >> 12) + i);
-    *pte = (__dma_area + (i << 12)) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED;
+    pte_set(pte, (__dma_area + (i << 12)) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED);
     INVALIDATE_THE_CACHE((vaddr_t)page << 12);
   }
   return (void *)((vaddr_t)start << 12);
@@ -249,7 +253,7 @@ void * __OS_allocDma(uint32_t npages, paddr_t * phys) {
   for (i = 0; i < npages; i++) {
     pte_t * pte = arch_pte((vaddr_t)(start + i) << 12);
     pmem_set(first + i);
-    *pte = ((first + i) << 12) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED;
+    pte_set(pte, ((first + i) << 12) | PF_USER | PF_READWRITE | PF_PRESENT | PF_SHARED);
     INVALIDATE_THE_CACHE((start + i) << 12);
   }
   kbzero((void *)((vaddr_t)start << 12), npages * PAGE_SIZE);
@@ -258,7 +262,7 @@ void * __OS_allocDma(uint32_t npages, paddr_t * phys) {
 }
 
 void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
-			 int alloc_now, uint32_t flags) {
+			 int alloc_now, pte_t flags) {
   uint32_t page;
   uint32_t first_page = (uint32_t)(((vaddr_t)pageaddr) >> 12);
   uint32_t last_page  = (first_page + npages -1);
@@ -295,7 +299,7 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
 
     if (alloc_now) {
       paddr_t frame = (paddr_t)pmem_findAFreePhysicalPage() << 12;
-      *pte = frame | flags | PF_PRESENT;
+      pte_set(pte, frame | flags | PF_PRESENT);
       pmem_set(frame >> 12);
       /* a fresh frame reads as zeros: after a reset (shutdown -r) memory
 	 holds the previous run's data, and it must not leak between
@@ -303,7 +307,7 @@ void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
       INVALIDATE_THE_CACHE((vaddr_t)page << 12);
       kbzero((void *)((vaddr_t)page << 12), PAGE_SIZE);
     } else
-      *pte = flags | PF_LOGICAL_PRESENT;
+      pte_set(pte, flags | PF_LOGICAL_PRESENT);
   }
 
   return pageaddr;
@@ -455,8 +459,7 @@ static void __cowManager(pte_t * pte, vaddr_t addr) {
 #ifdef DEBUG
     printk("So now it's mine!\n");
 #endif
-    *pte = *pte & ~PF_COW;
-    *pte |= PF_READWRITE;
+    pte_set(pte, (*pte & ~PF_COW) | PF_READWRITE);
     INVALIDATE_THE_CACHE(addr);
   } else { // else...
     paddr_t paddr = __mem_copyPageToCOWSpace(addr);
@@ -466,9 +469,7 @@ static void __cowManager(pte_t * pte, vaddr_t addr) {
     pmem_unset(PTE_FRAME(*pte) >> 12);
 
     /* bind the linear page to the new physical one */
-    *pte = paddr | PTE_FLAGS(*pte);
-    *pte = *pte & ~PF_COW;
-    *pte |= PF_READWRITE;
+    pte_set(pte, ((paddr | PTE_FLAGS(*pte)) & ~PF_COW) | PF_READWRITE);
     INVALIDATE_THE_CACHE(addr);
   }
 }
@@ -479,8 +480,8 @@ static void __allocateOnUse(pte_t * pte, vaddr_t addr) {
 
   void * fresh;
 
-  flags = *pte & 0x7FF; /* save the page flags, but not the
-			   PF_LOGICAL_PRESENT */
+  flags = PTE_FLAGS(*pte) & ~PF_LOGICAL_PRESENT; /* the page's flags, but
+						    not PF_LOGICAL_PRESENT */
   /* fresh memory must read as zeros (as on Linux: libcs rely on it), and
      must not leak what the frame held for its previous owner. Zeroed
      before it is mapped: once mapped, a thread of the process on another
@@ -488,7 +489,7 @@ static void __allocateOnUse(pte_t * pte, vaddr_t addr) {
      that (doc/decisions/smp.md) */
   fresh = arch_cow_window(&new_phy_page);
   kbzero(fresh, PAGE_SIZE);
-  *pte = new_phy_page | flags | PF_PRESENT;
+  pte_set(pte, new_phy_page | flags | PF_PRESENT);
   /* the entry was not present: no other processor holds it */
   arch_flush_page_local(addr);
 #ifdef DEBUG
@@ -649,7 +650,7 @@ void _page_fault_handler(vaddr_t addr, uint32_t errcode, unsigned long * frame) 
      tried again (doc/decisions/smp.md) */
   if ((*pte & PF_PRESENT) && (!(errcode & 2) || (*pte & PF_READWRITE)) &&
       (!(errcode & 4) || (*pte & PF_USER))) {
-    __asm__ volatile ("invlpg (%0)" : : "r"(addr) : "memory");
+    arch_flush_page_local(addr);
     return;
   }
 

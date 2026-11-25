@@ -1,0 +1,90 @@
+# MyNOS dev build environment for AArch64 (version 2, mynos-btq.6): an
+# amd64 image with a cross toolchain, and QEMU's AArch64 system emulator
+# to try what it builds (QEMU virt).
+#
+# Debian 13 "trixie", amd64: gcc 14 for aarch64-linux-gnu, binutils.
+# musl 1.2.5 built for AArch64: /opt/musl-aarch64 (its musl-gcc wraps the
+# cross gcc). User-space programs are static Linux AArch64 binaries.
+# OCaml 5.5.2:
+#   /opt/ocaml-5.5.2            the compiler (bytecode only, on the build
+#                               host): bytecode is the same on every
+#                               architecture
+#   /opt/ocaml-runtime-musl     the bytecode runtime cross-built for
+#                               AArch64 with musl, as in dev-x86_64
+#
+# Build:  tools/containers/build-image.sh dev-aarch64
+# Use:    tools/in-container.sh dev-aarch64 <command>
+
+ARG OCAML_VERSION=5.5.2
+ARG MUSL_VERSION=1.2.5
+
+FROM docker.io/library/debian:bookworm-slim AS fetch
+ARG OCAML_VERSION
+ARG MUSL_VERSION
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+RUN curl -fsSLO https://caml.inria.fr/pub/distrib/ocaml-5.5/ocaml-${OCAML_VERSION}.tar.gz \
+ && echo "0b2fa96469edb7dd770afba8bcab72808ebb308fe5d3b9379f42d7956523fa86  ocaml-${OCAML_VERSION}.tar.gz" \
+    | sha256sum -c -
+RUN curl -fsSLO https://musl.libc.org/releases/musl-${MUSL_VERSION}.tar.gz \
+ && sha256sum musl-${MUSL_VERSION}.tar.gz
+
+FROM docker.io/library/debian:trixie-slim AS build
+ARG OCAML_VERSION
+ARG MUSL_VERSION
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gcc libc6-dev make \
+      gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=fetch /src/ocaml-${OCAML_VERSION}.tar.gz /src/musl-${MUSL_VERSION}.tar.gz /tmp/
+# musl for AArch64
+RUN mkdir /tmp/musl && cd /tmp/musl \
+ && tar xzf /tmp/musl-${MUSL_VERSION}.tar.gz --strip-components=1 \
+ && ./configure --target=aarch64-linux-gnu CC=aarch64-linux-gnu-gcc \
+      --prefix=/opt/musl-aarch64 --disable-shared --enable-wrapper=gcc \
+ && make -j8 && make install
+# the compiler, for the build host (glibc), bytecode only
+RUN mkdir /tmp/host && cd /tmp/host \
+ && tar xzf /tmp/ocaml-${OCAML_VERSION}.tar.gz --strip-components=1 \
+ && ./configure --prefix=/opt/ocaml-${OCAML_VERSION} --disable-native-compiler \
+      --disable-ocamldoc --disable-ocamltest \
+ && make -j8 && make install
+# the bytecode runtime for MyNOS on AArch64: static, musl, cross-built
+# (OCaml's configure: --target, with the host's compiler of the same
+# version on PATH; the C toolchain then makes the target's code)
+RUN export PATH=/opt/ocaml-${OCAML_VERSION}/bin:$PATH \
+ && mkdir /tmp/rt && cd /tmp/rt \
+ && tar xzf /tmp/ocaml-${OCAML_VERSION}.tar.gz --strip-components=1 \
+ && ./configure --target=aarch64-linux-musl \
+      CC=/opt/musl-aarch64/bin/musl-gcc AR=aarch64-linux-gnu-ar \
+      RANLIB=aarch64-linux-gnu-ranlib LDFLAGS=-static --disable-shared \
+      --disable-native-compiler --disable-ocamldoc --disable-ocamltest \
+      --disable-debug-runtime --disable-instrumented-runtime \
+ && make -j8 runtime/ocamlrun \
+ && mkdir -p /opt/ocaml-runtime-musl \
+ && cp runtime/libcamlrun.a runtime/prims.o runtime/prims.c runtime/primitives \
+       runtime/build_config.h /opt/ocaml-runtime-musl/ \
+ && cp -r runtime/caml /opt/ocaml-runtime-musl/caml \
+ && mkdir -p /opt/ocaml-runtime-musl/otherlibs \
+ && cp -r otherlibs/unix otherlibs/systhreads otherlibs/str /opt/ocaml-runtime-musl/otherlibs/ \
+ && cp Makefile.config /opt/ocaml-runtime-musl/ \
+ && echo "${OCAML_VERSION}" > /opt/ocaml-runtime-musl/VERSION
+
+FROM docker.io/library/debian:trixie-slim
+ARG OCAML_VERSION
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      gcc libc6-dev make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+      dosfstools mtools qemu-system-arm socat python3 \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=build /opt/ocaml-${OCAML_VERSION} /opt/ocaml-${OCAML_VERSION}
+COPY --from=build /opt/ocaml-runtime-musl /opt/ocaml-runtime-musl
+COPY --from=build /opt/musl-aarch64 /opt/musl-aarch64
+ENV PATH=/opt/ocaml-${OCAML_VERSION}/bin:/opt/musl-aarch64/bin:$PATH
+ENV MYNOS_CC=musl-gcc \
+    MYNOS_LDFLAGS="-static -Wl,-Ttext-segment=0x40000000 -Wl,-z,noseparate-code -Wl,--build-id=none" \
+    OCAML_RUNTIME_LIB=/opt/ocaml-runtime-musl \
+    MYNOS_ARCH=aarch64
+WORKDIR /mynos

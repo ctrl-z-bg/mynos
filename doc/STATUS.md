@@ -1983,3 +1983,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   found and fixed (JOURNAL). Both suites green but for the sound check,
   flaky under the host's load (mynos-cea); domains that allocate are
   13 times slower on one processor (mynos-c6a).
+- **2026-11-25** — AArch64 begun (mynos-btq.6, branch `aarch64`,
+  doc/decisions/aarch64.md): a `dev-aarch64` container (cross gcc, musl
+  and OCaml's runtime for AArch64, QEMU), `arch/aarch64` (EL1 boot, MMU,
+  GICv2, the generic timer, exceptions, calls, context switch). On QEMU
+  `virt` the kernel boots, runs musl programs in EL0, and `ocamlrun`
+  prints "Hello from OCaml on MyNOS!" with registry and memrofs. The
+  generic memory code writes page table entries through `pte_set` (a
+  store on x86), and its flags are 64-bit. Built by
+  `tools/build-aarch64.sh`; modules passed as one archive
+  (`tools/mkmodules.py`).

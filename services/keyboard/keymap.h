@@ -160,7 +160,9 @@ static unsigned int keymap_translate(unsigned int key)
 	{
 		while(inportb(0x64) & 2);
 		outportb(0x64, 0xFE);
+#if defined(__i386__) || defined(__x86_64__)
 		asm ("cli;hlt");
+#endif
 	}
 
 	if(key == 0x3A)	/* Caps Lock */

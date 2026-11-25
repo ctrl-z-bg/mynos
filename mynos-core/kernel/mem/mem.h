@@ -27,6 +27,12 @@
 #define PAGE_SIZE          0x1000
 #define FOURMB             0x400000
 
+/* an entry's bits: x86's (the i386's and x86-64's); an architecture
+   whose entries differ defines ARCH_PTE_BITS and its own, with the same
+   names (arch/aarch64/ptebits.h) */
+#ifdef ARCH_PTE_BITS
+#include "ptebits.h"
+#else
 #define PF_USER            (1<<2)
 #define PF_SUPERVISOR      0x0
 #define PF_READWRITE       (1<<1)
@@ -44,6 +50,9 @@
 #define PF_ACCESSED        0x20     /* set by the processor at a use */
 #define PF_DIRTY           0x40     /* set by the processor at a write */
 #define PF_NOTPRESENT      0x0
+/* x86's entries carry no device or memory type for mapPhysical */
+#define PF_DEVICE          0x0
+#endif
 
 /* this is used to allocate kernel pages in user space */
 #define PF_SUPERVISOR_IN_USER_SPACE 0x1000
@@ -75,9 +84,9 @@ extern uint32_t __dma_area;
 void * __OS_mapDmaArea(void);
 void * __OS_allocDma(uint32_t npages, paddr_t * phys);
 void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
-			 int alloc_now, uint32_t flags);
+			 int alloc_now, pte_t flags);
 
-void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags);
+void * __OS_askPages(unsigned int npages, int alloc_now, pte_t flags);
 /* if free is false the physical page is left allocated 
    if check is false no check is made on the page permissions */
 void * __OS_releasePages(void *pageaddr, unsigned int npages, 

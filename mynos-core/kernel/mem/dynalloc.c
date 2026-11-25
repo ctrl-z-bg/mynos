@@ -13,11 +13,10 @@
 
 #include "global.h"
 #include "dynalloc.h"
+#include "mem.h"
 #include "kutils.h"
 #include "video.h"
 
-extern void * __OS_askPages(unsigned int npages, int alloc_now,
-			    uint32_t flags);
 extern void * __OS_releasePages(void *pageaddr, unsigned int npages,
 				int free, int check);
 

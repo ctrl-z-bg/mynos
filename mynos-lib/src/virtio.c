@@ -20,6 +20,35 @@
 /* the device sees memory in the order the driver writes it: a fence */
 #define mb() __sync_synchronize()
 
+#ifdef __aarch64__
+/* ---- PCI's configuration space on QEMU virt: memory (ECAM) ----
+   bus 0's 1 MB at 0x4010000000 (virt's high ECAM), mapped at the first
+   use (doc/decisions/aarch64.md, choice 8) */
+
+#define ECAM_BASE 0x4010000000UL
+
+static volatile unsigned int * ecam;
+
+static volatile unsigned int * pci_reg(int bus, int dev, int fn, int reg)
+{
+  if (bus != 0) return 0;
+  if (!ecam) ecam = mynos_mapPhysical(ECAM_BASE, 256);
+  if (!ecam) return 0;
+  return ecam + (((dev << 15) | (fn << 12) | (reg & 0xFFC)) >> 2);
+}
+
+unsigned int pci_read32(int bus, int dev, int fn, int reg)
+{
+  volatile unsigned int * r = pci_reg(bus, dev, fn, reg);
+  return r ? *r : 0xFFFFFFFF;
+}
+
+void pci_write32(int bus, int dev, int fn, int reg, unsigned int v)
+{
+  volatile unsigned int * r = pci_reg(bus, dev, fn, reg);
+  if (r) *r = v;
+}
+#else
 /* ---- PCI's configuration space: ports 0xCF8 (address), 0xCFC (data) ---- */
 
 static inline void outl(unsigned short port, unsigned int v)
@@ -43,6 +72,8 @@ void pci_write32(int bus, int dev, int fn, int reg, unsigned int v)
   outl(0xCF8, pci_address(bus, dev, fn, reg));
   outl(0xCFC, v);
 }
+
+#endif
 
 static unsigned int pci_read8(int bus, int dev, int fn, int reg)
 {

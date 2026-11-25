@@ -3932,3 +3932,33 @@ suite passes at four processors; `tests/smp` covers 1-3.
 first. Anything the kernel does to a process's memory in two steps
 (map, then fill) is now visible half-done; and anything decided before
 waiting for the lock may be false after it.
+
+## 2026-11-25 — AArch64: three things a PC had been hiding
+
+**Symptom.** The first AArch64 kernel (a) panicked in the physical page
+finder, "KERNEL ERROR IN __find_first_free_physical_page"; (b) received
+no modules from QEMU; (c) once programs ran, hung: the big kernel lock
+held for ever after `ocamlrun`'s first sleep.
+
+**Causes.**
+- (a) `char` is unsigned on AArch64, signed on x86. The bitmap's bytes
+  are `byte_t` (a `char`): `~byte` of a full byte is 0 when it is -1, and
+  0xFFFFFF00 when it is 255, so a full byte looked like one with room.
+  The kernel's C, and MyNOS's user-space C, were written where `char` is
+  signed: both are built with `-fsigned-char` on AArch64.
+- (b) QEMU passes `-initrd` and `-append` to Linux images only (its
+  bootloader stub writes them into the device tree's `/chosen`); an ELF
+  kernel gets neither. The modules now come as one archive that QEMU puts
+  at 64 MB into RAM (`-device loader`), carrying the kernel's command line
+  too (`tools/mkmodules.py`, `arch/aarch64/dtb.c`).
+- (c) The thread's FP and SIMD state is 528 bytes (32 Q registers, FPCR,
+  FPSR), stored at the first 16-byte boundary inside a 528-byte area: up
+  to 15 bytes past it, over `kdepth`, the thread's big-lock depth. The
+  idle thread came back with depth 0, `kernel_exit` never released the
+  lock, and the next entry spun on it. Found by recording the lock's
+  taker (an `svc #0x90` of `mynos_sleep`) and printing switches whose
+  depths were not 1. The area is 16 bytes larger on AArch64.
+
+**Lesson.** A port finds assumptions, not only missing code: the sign of
+`char`, a bootloader's contract, a buffer sized for one instruction set's
+save format.

@@ -1,0 +1,103 @@
+# Decision: MyNOS on AArch64 (QEMU virt)
+
+- **Issues:** mynos-btq.6, in the version 2 line (mynos-btq); the step
+  before the Raspberry Pis (btq.7, btq.8)
+- **Date:** 2026-11-25
+- **Status:** accepted (the plan, `tmp/mynos-64bit-multicore-arm.md`,
+  approved by the owner on 2026-11-25); in progress on branch `aarch64`.
+
+## What changes, and what does not
+
+As for x86-64 (`doc/decisions/x86-64.md`): above the kernel almost
+nothing. OCaml's bytecode is the same, the C services are rebuilt by an
+AArch64 toolchain. The kernel's architecture layer (`arch/aarch64`),
+`libmynos`'s calls and the start code are new. What has no AArch64
+counterpart goes: I/O ports (the PC's drivers: ATA, PS/2, NE2000, Sound
+Blaster, the VGA and the Bochs display), the 8259, the PIT. On QEMU's
+`virt` machine the devices are virtio (btq.2 wrote the drivers), behind
+PCI Express.
+
+## Choices
+
+**1. The toolchain.** A container `dev-aarch64` (amd64, so it runs at the
+host's speed): Debian's cross gcc 14 for aarch64, musl 1.2.5 built for
+AArch64 (`/opt/musl-aarch64`, its `musl-gcc`), the OCaml 5.5.2 compiler
+for the host (bytecode does not depend on the processor) and the
+bytecode runtime cross-built for AArch64 with musl. QEMU's AArch64
+system emulator is in the image too: the host has none.
+
+**2. The machine.** QEMU `virt`, a Cortex-A72 (the Raspberry Pi 4's and
+the Pi 400's core: ARMv8.0, no hardware dirty bits, no permission
+indirection), GICv2, the generic timer, one PL011 UART. QEMU's `-kernel`
+loads the kernel's ELF image at its physical addresses and starts it at
+EL1 with the MMU off; the device tree is at the start of RAM; the
+modules come as one archive through `-initrd` (no multiboot): the start
+code reads the device tree (memory, the initrd, the command line) and
+fills the same `multiboot_info_t` that `mynos_main` reads on the PC.
+
+**3. Physical memory starts at 0, for the kernel.** On `virt` RAM begins
+at 1 GB; on a Raspberry Pi at 0. The generic kernel, from the i386,
+reads its boot data at "physical == linear" addresses in its low
+gigabyte, keeps its memory bitmap at 0x32000 and its image at 2 MB.
+Rather than change that, the AArch64 layer numbers physical pages from
+the start of RAM: the kernel's "physical" address is the real one minus
+the RAM's base. A page table entry of RAM carries the base back in an
+address bit (bit 30: RAM's base is 1 GB, and RAM is at most 1 GB on
+`virt`, so the OR is exact and doing it twice changes nothing);
+`PTE_FRAME` takes it away. On the Pis the base is 0 and the bit is not
+used. Devices' entries (marked as such) carry their real address.
+
+  Trade-off: at most 1 GB of RAM on `virt` with this trick (enough for
+  the tests; the Pi 400 has 4 GB at address 0 and needs no trick).
+
+**4. The address space**, as on x86-64: the kernel's gigabyte at linear
+0 (its image at 2 MB), shared by every process (TTBR0's first level-1
+entry points at the same table); the processes from 1 GB, the program at
+1 GB as everywhere; all of RAM mapped once in the higher half through
+TTBR1 (the direct map, at 0xFFFF800000000000); the devices' registers
+mapped in TTBR1 too, as device memory. 4 KB pages, 48-bit addresses,
+four levels: the same shape as x86-64's, so `paging.h`'s walk is the
+same with other bits.
+
+**5. Entries' bits.** ARM's entry says "read-only" where x86's says
+"writable", and a page's entry needs bits x86 has not (the access flag,
+shareability, the memory type). The generic code (`mem/`, the pager,
+`mmap`) builds and changes entries with x86's bit names: those writes go
+through `pte_set`, which on AArch64 sets the hardware bits from MyNOS's
+(software "writable" bit, valid, access flag, the RAM's base bit); on
+x86 it is a plain store. MyNOS's own bits (copy-on-write, shared, "to
+allocate on use", pager) are in the bits the hardware leaves to
+software (55-58).
+
+**6. Ways into the kernel.** An exception vector table (`VBAR_EL1`):
+from EL0 and EL1, synchronous (calls, faults) and IRQ; the same `struct
+frame` on the thread's kernel stack, the same `kernel_enter`,
+`trap_return`, big lock as x86-64. Linux's calls are `svc #0` with the
+number in x8 (AArch64's "generic" numbers: `openat`, not `open`; `clone`,
+not `fork`); MyNOS's own calls `svc #0x90` (the immediate, read from the
+exception's syndrome). The processor's `struct cpu` is in `TPIDR_EL1`,
+the thread's TLS in `TPIDR_EL0` (saved per thread, as FS's base).
+
+**7. Interrupts and time.** GICv2; the generic timer's virtual timer at
+1000 Hz in place of the PIT (`pit_handler` unchanged); the kernel's log
+on the PL011 (the PC's COM2: the suite reads it). One processor first;
+SMP (PSCI's `CPU_ON`, SGIs as IPIs) after the system runs.
+
+**8. Devices** (btq.2's drivers, in user space): virtio over PCI
+Express. Without firmware nobody assigns the PCI devices' memory
+windows: the PCI code does, from the window the device tree gives. The
+configuration space is memory (ECAM), not the ports 0xCF8/0xCFC.
+Console and log on the UART; disk, network, keyboard and mouse, display
+(virtio-gpu or ramfb) as on x86 with virtio.
+
+## Risks
+
+- **The amount**: the plan's estimate is 15-25 days for `virt` and the
+  suite. Each step leaves something that runs: the banner, the timer,
+  a C program in EL0, `ocamlrun`, the shell on the UART, the drivers,
+  the suite.
+- **Memory ordering**: ARM reorders memory accesses where x86 does not.
+  The kernel's locks and the user-space ones (musl's are right; MyNOS's
+  own, `safe_alloc.c`'s, and the IPC rings) need barriers.
+- **Caches and DMA**: on QEMU coherent; on a real Pi, buffers shared
+  with devices need cache maintenance (btq.7/8).

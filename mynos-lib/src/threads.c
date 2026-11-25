@@ -48,6 +48,25 @@ int mynos_threadCreate(void * (*start_routine)(void *),
   *--sp = (void *)start_routine;
   return __mynos_syscall(200, (long)__mynos_thread_start, (long)sp, (long)flags, 0, 0);
 }
+#elif defined(__aarch64__)
+/* AArch64: the routine and its argument on the thread's stack, as on
+   x86-64 */
+void __mynos_thread_start(void);
+__asm__ (".text\n"
+         "__mynos_thread_start:\n"
+         "  ldp x9, x0, [sp], #16\n"
+         "  blr x9\n"
+         "  bl mynos_threadExit\n"
+         "1: b 1b\n");
+
+int mynos_threadCreate(void * (*start_routine)(void *),
+		       void * arg, void * stack, unsigned int flags) {
+  void ** sp = (void **)((unsigned long)stack & ~15UL);
+  __mynos_native_threads = 1;
+  *--sp = arg;
+  *--sp = (void *)start_routine;
+  return __mynos_syscall(200, (long)__mynos_thread_start, (long)sp, (long)flags, 0, 0);
+}
 #else
 int mynos_threadCreate(void * (*start_routine)(void *), 
 		       void * arg, void * stack, unsigned int flags) {

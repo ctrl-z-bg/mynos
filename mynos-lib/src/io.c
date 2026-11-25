@@ -20,6 +20,11 @@
 
 #include "../include/mynos.h"
 
+#ifdef __aarch64__
+/* no I/O ports on ARM: the PC's drivers find nothing (0xFF) */
+void outportb(unsigned short port, unsigned char value) { (void)port; (void)value; }
+unsigned char inportb(unsigned short port) { (void)port; return 0xFF; }
+#else
 void outportb(unsigned short port,unsigned char value)
 {
    __asm__ volatile ("outb %%al,%%dx"::"d" (port), "a" (value));
@@ -32,4 +37,5 @@ unsigned char inportb(unsigned short port)
    __asm__ volatile ("inb %%dx,%%al":"=a" (ret):"d" (port));
    return ret;
 }
+#endif
 

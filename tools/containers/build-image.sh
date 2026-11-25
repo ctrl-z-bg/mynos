@@ -6,7 +6,7 @@ set -eu
 name=${1:?usage: $0 dev}
 here=$(cd "$(dirname "$0")" && pwd)
 
-case $name in *x86_64*|test) platform=linux/amd64 ;; *) platform=linux/386 ;; esac
+case $name in *x86_64*|*aarch64*|test) platform=linux/amd64 ;; *) platform=linux/386 ;; esac
 
 exec podman build --platform $platform \
     -t "mynos-$name" \

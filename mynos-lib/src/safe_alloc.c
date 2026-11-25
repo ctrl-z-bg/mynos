@@ -33,21 +33,12 @@ extern void *__libc_malloc(size_t size);
 extern void* __libc_realloc(void* ptr, size_t size);
 extern int __mynos_native_threads;
 
-static int __testnset(int *m) {
-  int result;
-  
-  __asm__ volatile ("lock bts $1, %1; sbbl %0, %0"
-		    :"=r" (result):"m" (*m):"memory");
-  return(result);
-}
-
 static inline void __lock(int *m) {
-    while (__testnset(m));
+  while (__atomic_exchange_n(m, 1, __ATOMIC_ACQUIRE)) ;
 }
-
 
 static inline void __unlock(int *m) {
-    __asm__ volatile("lock btr $1, %0\n"::"m" (*m):"memory");
+  __atomic_store_n(m, 0, __ATOMIC_RELEASE);
 }
 
 static int mutex = 0;

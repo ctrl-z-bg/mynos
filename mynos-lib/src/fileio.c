@@ -69,7 +69,35 @@ const struct mynos_sock_ops * __mynos_sock_ops;
 
 /* ---- raw Linux system calls, independent of the C library ---- */
 
-#ifdef __x86_64__
+#if defined(__aarch64__)
+/* AArch64: svc #0, the generic numbers (doc/decisions/aarch64.md); open
+   is openat from the current directory */
+#define NR_read 63
+#define NR_write 64
+#define NR_openat 56
+#define NR_close 57
+#define NR_fstat 80
+#define NR_lseek 62
+#define NR_ioctl 29
+#define NR_fcntl 25
+#define NR_clock_gettime 113
+static long sys4(long n, long a, long b, long c, long d)
+{
+  register long x8 __asm__("x8") = n;
+  register long x0 __asm__("x0") = a;
+  register long x1 __asm__("x1") = b;
+  register long x2 __asm__("x2") = c;
+  register long x3 __asm__("x3") = d;
+  __asm__ volatile ("svc #0" : "+r"(x0) : "r"(x8), "r"(x1), "r"(x2), "r"(x3) : "memory");
+  return x0;
+}
+#define NR_open (-1)
+static long sys3(long n, long a, long b, long c)
+{
+  if (n == NR_open) return sys4(NR_openat, -100, a, b, c);    /* AT_FDCWD */
+  return sys4(n, a, b, c, 0);
+}
+#elif defined(__x86_64__)
 /* x86-64: syscall, its own numbers (doc/decisions/x86-64.md) */
 #define NR_read 0
 #define NR_write 1
@@ -1129,7 +1157,7 @@ int fstat(int fd, struct stat * st)
     return 0;
   }
   if (slot < 0) {
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     struct stat k;                       /* the kernel's is the libc's */
 #else
     struct kstat64 k;
