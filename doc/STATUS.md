@@ -1957,3 +1957,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   every timed wait returned at once and `netd` spun (JOURNAL). The
   virtio graphical check clicks again until the Clock shows (it missed
   the welcome window on a loaded machine).
+- **2026-11-25** — Both architectures' suites at once, each in a test
+  container with a network of its own (`tools/run-tests-all.sh`,
+  `tools/containers/test`); the graphical session in two boots (lanes d
+  and i: its windows are made in the same order, so displayd places
+  them where the clicks expect). i386 and x86_64, 181 checks each, in
+  335 s together (mynos-f18; they took 11 minutes for the i386 alone).

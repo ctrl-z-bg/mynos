@@ -3,18 +3,20 @@
 # to COM2) and check the expected output. Build first with tools/build-all.sh.
 #
 # Usage: tools/run-tests.sh            exit status 0 if all checks pass
-# The boots run in eight lanes at once (about 8 minutes in all, lane d):
+# The boots run in nine lanes at once (about 5 minutes in all):
 #   a  the first boots: bytecode, effects, the ATA disk, FAT, domains
 #   b  the library, files, the kernel stress test, spawning, the console
 #   c  without COM2, and restarting again and again
-#   d  the graphical session (its windows, Graphics, the Packages window)
+#   d  the graphical session: its windows, the recorder, Files, the Tour
 #   e  the network, then the whole system driven by the keyboard, in four
 #      parts that boot at once: e the shell, the toplevel and the editors;
 #   f  the agent, services, httpd, stdio; g packages; h Ctrl-C, fatfs
 #      coming back, the disk's reads, the serial terminal
+#   i  the graphical session again: Graphics, keys, resizing, Packages,
+#      Text, Studio
 # Environment: WAIT seconds to let the system run (default 10); SHOTS a
 # directory where the graphical session's screens are kept; LANES the
-# lanes to run (default "a b c d e f g h": the checks of the others fail);
+# lanes to run (default "a b c d e f g h i": the checks of the others fail);
 # KEEP keeps the temporary files (logs, screens) and says where
 set -eu
 
@@ -401,7 +403,7 @@ sec_gui() {
 # the graphical session (doc/decisions/gui.md): displayd, windows of
 # programs, the mouse, back to text mode. QEMU's monitor moves the mouse
 # relatively: vmmouse (absolute) is off, the PS/2 mouse is used
-gui_ok= powered_off= gui_hangup= files_ok= pkgwin_ok=
+gui_ok= powered_off= gui_hangup= files_ok=
 if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     : > "$tmp/logg"
     # the agent window's model: the fake provider, as in the seventh boot,
@@ -537,44 +539,11 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     click 732 117; sleep 1                   # its first note: sh looks at hello.byte;
     click 732 117; sleep 2                   # the second: the birth of hello
     mon "screendump $tmp/gui21.ppm"
-    # OCaml's Graphics (graphics/), from a new terminal window: its test
-    # draws, reads the pixels back, writes the result to the log and
-    # closes its window
-    click 20 10; sleep 1; click 40 39; sleep 10
-    tools/type-keys.py "$tmp/mon-g" '/disk/gtest.byte\n'; sleep 12
-    # key releases (mynos-ap3): a window (tests/keys) gets Right and X held
-    # at once, then their releases, then q, which ends it
-    tools/type-keys.py "$tmp/mon-g" '/disk/keys.byte\n'; sleep 6
-    # resizable windows (mynos-1e9): the same window (at 200,300, 240 x 60)
-    # by its grip to 340 x 110, then maximized by a double click on its title
-    to 437 357; mon "mouse_button 1"; to 537 407; mon "mouse_button 0"; sleep 2
-    to 300 289; mon "mouse_button 1"; mon "mouse_button 0"; mon "mouse_button 1"; mon "mouse_button 0"; sleep 2
-    mon "sendkey right-x 400"; sleep 1
-    mon "sendkey q"; sleep 2
-    # the Packages window (pkg/packages_window.ml), the menu's eleventh
-    # item: with no index on the disk it reads one, through pkg, from the
-    # repository /disk/pkg/url names (the host's copy)
-    click 20 10; sleep 1; click 40 259; sleep 15
-    mon "screendump $tmp/gui22.ppm"
-    # Text, the session's text editor (the menu's thirteenth item, mynos-y87):
-    # a line typed, Ctrl-S, the name it offers (/disk/untitled.txt) taken;
-    # the file is read back from text mode
-    click 20 10; sleep 1; click 40 303; sleep 6
-    tools/type-keys.py "$tmp/mon-g" 'typed-in-text'; sleep 1
-    mon "sendkey ctrl-s"; sleep 1
-    tools/type-keys.py "$tmp/mon-g" '\n'; sleep 3
-    # MyNOS Studio (the package studio, mynos-y87): installed from a
-    # Terminal, started; Run builds its first program (/disk/studio/hello.ml)
-    # with the ocamlc inside MyNOS and runs it (hello.byte, seen from text mode)
-    click 20 10; sleep 1; click 40 39; sleep 8
-    tools/type-keys.py "$tmp/mon-g" 'pkg install studio; studio &\n'; sleep 25
-    click 265 91; sleep 20
     click 20 10; sleep 1; click 30 369; sleep 4    # the MyNOS menu, Exit
-    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /tmp/sel.txt /tmp/hist.txt /disk/untitled.txt; ls /disk /disk/studio\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /tmp/sel.txt /tmp/hist.txt; ls /disk\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too
     tools/type-keys.py "$tmp/mon-g" 'ps\n'; sleep 3
-    tools/type-keys.py "$tmp/mon-g" 'cat /disk/pkg/index.json\n'; sleep 3
     # turning the machine off: init does it, QEMU ends by itself
     tools/type-keys.py "$tmp/mon-g" 'shutdown\n'
     i=0
@@ -603,7 +572,6 @@ assert "newdir" in s, "a folder made by Files"
 assert "ctrlc-137" in s, "Ctrl-C in the terminal window"
 assert re.search(r"hist-up\s+hist-up\s+Hist-up", s), "Up, Home, Delete in the terminal window's line mode"
 PY
-    grep -aq '"name": "windtree"' "$tmp/logg" && pkgwin_ok=yes
     cat "$tmp/logg" >> "$part"
     python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
               "$tmp"/gui6.ppm "$tmp"/gui7.ppm "$tmp"/gui8.ppm "$tmp"/gui9.ppm \
@@ -700,6 +668,95 @@ assert px(g20, 400, 108) == 0x1B3A57, "the tour's window"
 assert count(g21, 0x2E8B57, 132, 140, 1010, 520, 1) > 100, "a lesson: hello is born"
 assert count(g21, 0xF8F9FA, 132, 140, 1010, 400) > 300, "a lesson: the others faint"
 PY
+fi
+}
+
+sec_gui2() {
+# the graphical session's second part, a boot of its own (lane i): OCaml's
+# Graphics, key releases, a resizable window, the Packages window, Text,
+# MyNOS Studio. Its windows are made in the same order as when this part
+# followed the first in one session (the welcome window, the Clock, then
+# a terminal: displayd places a window by its number, modulo 8), so they
+# are where the clicks expect them
+pkgwin_ok=
+if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ] && [ -f tests/fat/fat16.img ]; then
+    : > "$tmp/logg2"
+    gdisk=tests/fat/run-gui2.img
+    cp tests/fat/fat16.img "$gdisk"
+    # the packages' repository: the host's copy (tools/pkg-build.sh)
+    printf 'http://10.0.2.2:47106/\n' > tests/fat/run-gui2.url
+    tools/in-container.sh dev sh -c "mcopy -i $gdisk graphics/gtest.byte ::/gtest.byte && mcopy -i $gdisk tests/keys/keys.byte ::/keys.byte && mmd -i $gdisk ::/pkg && mcopy -i $gdisk tests/fat/run-gui2.url ::/pkg/url"
+    rm -f tests/fat/run-gui2.url
+    tools/net-peer.py files 47106 tmp/packages & filesg_pid=$!
+    NET=1 DISK=$gdisk MEM=256 tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        system/ramdisk.dsk \
+        -- -machine vmport=off -display none -serial null -serial "file:$tmp/logg2" \
+           -monitor "unix:$tmp/mon-g2,server,nowait" &
+    qemu=$!
+    i=0
+    while [ $i -lt 30 ] && ! grep -aq 'mynos:/' "$tmp/logg2" 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    mon() { printf '%s\n' "$1" | socat - "UNIX-CONNECT:$tmp/mon-g2" >/dev/null; sleep 0.12; }
+    gx=512 gy=384                        # the pointer starts in the middle
+    to() {
+        dx=$(($1 - gx)) dy=$(($2 - gy)); gx=$1 gy=$2
+        while [ $dx -ne 0 ] || [ $dy -ne 0 ]; do
+            sx=$dx sy=$dy
+            [ $sx -gt 40 ] && sx=40; [ $sx -lt -40 ] && sx=-40
+            [ $sy -gt 40 ] && sy=40; [ $sy -lt -40 ] && sy=-40
+            mon "mouse_move $sx $sy"; dx=$((dx - sx)) dy=$((dy - sy))
+        done
+    }
+    click() { to "$1" "$2"; mon "mouse_button 1"; mon "mouse_button 0"; }
+    tools/type-keys.py "$tmp/mon-g2" 'gui check\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g2" 'gui\n'; sleep 8
+    click 233 428; sleep 4               # the welcome window's Clock button
+    # OCaml's Graphics (graphics/), from a new terminal window: its test
+    # draws, reads the pixels back, writes the result to the log and
+    # closes its window
+    click 20 10; sleep 1; click 40 39; sleep 10
+    tools/type-keys.py "$tmp/mon-g2" '/disk/gtest.byte\n'; sleep 12
+    # key releases (mynos-ap3): a window (tests/keys) gets Right and X held
+    # at once, then their releases, then q, which ends it
+    tools/type-keys.py "$tmp/mon-g2" '/disk/keys.byte\n'; sleep 6
+    # resizable windows (mynos-1e9): the same window (at 200,300, 240 x 60)
+    # by its grip to 340 x 110, then maximized by a double click on its title
+    to 437 357; mon "mouse_button 1"; to 537 407; mon "mouse_button 0"; sleep 2
+    to 300 289; mon "mouse_button 1"; mon "mouse_button 0"; mon "mouse_button 1"; mon "mouse_button 0"; sleep 2
+    mon "sendkey right-x 400"; sleep 1
+    mon "sendkey q"; sleep 2
+    # the Packages window (pkg/packages_window.ml), the menu's eleventh
+    # item: with no index on the disk it reads one, through pkg, from the
+    # repository /disk/pkg/url names (the host's copy)
+    click 20 10; sleep 1; click 40 259; sleep 15
+    mon "screendump $tmp/gui22.ppm"
+    # Text, the session's text editor (the menu's thirteenth item, mynos-y87):
+    # a line typed, Ctrl-S, the name it offers (/disk/untitled.txt) taken;
+    # the file is read back from text mode
+    click 20 10; sleep 1; click 40 303; sleep 6
+    tools/type-keys.py "$tmp/mon-g2" 'typed-in-text'; sleep 1
+    mon "sendkey ctrl-s"; sleep 1
+    tools/type-keys.py "$tmp/mon-g2" '\n'; sleep 3
+    # MyNOS Studio (the package studio, mynos-y87): installed from a
+    # Terminal, started; Run builds its first program (/disk/studio/hello.ml)
+    # with the ocamlc inside MyNOS and runs it (hello.byte, seen from text mode)
+    click 20 10; sleep 1; click 40 39; sleep 8
+    tools/type-keys.py "$tmp/mon-g2" 'pkg install studio; studio &\n'; sleep 25
+    click 265 91; sleep 20
+    click 20 10; sleep 1; click 30 369; sleep 4    # the MyNOS menu, Exit
+    tools/type-keys.py "$tmp/mon-g2" 'X=ok; echo text2-$X; cat /disk/untitled.txt; ls /disk/studio\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g2" 'cat /disk/pkg/index.json\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g2" 'shutdown\n'
+    i=0
+    while [ $i -lt 20 ] && kill -0 $qemu 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
+    kill -0 $qemu 2>/dev/null && { printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-g2" >/dev/null || true; }
+    wait $qemu || true
+    kill $filesg_pid 2>/dev/null; wait $filesg_pid 2>/dev/null || true
+    grep -aq '"name": "windtree"' "$tmp/logg2" && pkgwin_ok=yes
+    cat "$tmp/logg2" >> "$part"
+    rm -f "$gdisk"
 fi
 }
 
@@ -1144,7 +1201,7 @@ timed() {
 
 for v in $results; do eval "$v="; done   # a lane not run finds nothing
 pids=
-for lane in ${LANES:-a b c d e f g h}; do
+for lane in ${LANES:-a b c d e f g h i}; do
     (
         trap - EXIT
         part=$tmp/part-$lane
@@ -1154,6 +1211,7 @@ for lane in ${LANES:-a b c d e f g h}; do
             b) timed sec_mlib; timed sec_files; timed sec_libs; timed sec_stress; timed sec_spawn; timed sec_console ;;
             c) timed sec_nocom2; timed sec_reboots; timed sec_virtio ;;
             d) timed sec_gui ;;
+            i) timed sec_gui2 ;;
             e) timed sec_net; timed sec_seventh_a ;;
             f) timed sec_seventh_b ;;
             g) timed sec_seventh_c ;;
