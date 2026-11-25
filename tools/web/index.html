@@ -61,7 +61,7 @@
 <script>
   const status = document.getElementById("status");
   const auto = new URLSearchParams(location.search).get("auto");   // a command to type, for tests
-  const image = (name, size) => ({ url: "images/" + name, size, async: true,
+  const image = (name, size) => ({ url: "images/@IMAGES@/" + name, size, async: true,
                                    use_parts: true, fixed_chunk_size: @CHUNK@ });
   let log = "", ready = false;
   const emulator = new V86({
