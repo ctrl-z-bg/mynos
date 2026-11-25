@@ -27,6 +27,8 @@ static inline struct cpu * arch_cpu(void)
 /* the boot processor's struct cpu, first thing in mynos_main (gdt.c) */
 void arch_cpu_boot(void);
 static inline void arch_smp_start(void) { }
+static inline void arch_boot_lock(void) { }      /* one processor so far */
+static inline void arch_boot_unlock(void) { }
 static inline void arch_smp_kick(void) { }
 static inline void arch_smp_kick_process(pid_t pid) { (void)pid; }
 static inline void smp_leave_if_dead(void) { }

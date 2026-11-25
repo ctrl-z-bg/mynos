@@ -371,14 +371,32 @@ CAMLprim value caml_mynos_uptime(value unit)
    work in their user space; in any other process they end the program. */
 
 #ifdef __aarch64__
-/* no I/O ports on ARM (doc/decisions/aarch64.md): the PC's drivers in
-   OCaml (ata, the keyboard's) fail at their first access */
-CAMLprim value caml_mynos_inb(value port) { caml_failwith("Mynos.inb: no I/O ports"); }
-CAMLprim value caml_mynos_outb(value port, value v) { caml_failwith("Mynos.outb: no I/O ports"); }
-CAMLprim value caml_mynos_inw(value port) { caml_failwith("Mynos.inw: no I/O ports"); }
-CAMLprim value caml_mynos_outw(value port, value v) { caml_failwith("Mynos.outw: no I/O ports"); }
-CAMLprim value caml_mynos_insw(value port, value n) { caml_failwith("Mynos.insw: no I/O ports"); }
-CAMLprim value caml_mynos_outsw(value port, value s) { caml_failwith("Mynos.outsw: no I/O ports"); }
+/* no I/O ports on ARM (doc/decisions/aarch64.md): libmynos's inportb and
+   outportb ask the kernel, which answers the few its machine has (COM2 on
+   the UART) and reads 0xFF for the rest, as an empty bus on the PC: the
+   PC's drivers in OCaml (ata) find no device and end. No 16-bit ports */
+CAMLprim value caml_mynos_inb(value port)
+{
+  return Val_int(inportb((unsigned short)Int_val(port)));
+}
+CAMLprim value caml_mynos_outb(value port, value v)
+{
+  outportb((unsigned short)Int_val(port), (unsigned char)Int_val(v));
+  return Val_unit;
+}
+CAMLprim value caml_mynos_inw(value port) { return Val_int(0xFFFF); }
+CAMLprim value caml_mynos_outw(value port, value v) { return Val_unit; }
+CAMLprim value caml_mynos_insw(value port, value n)
+{
+  CAMLparam2(port, n);
+  CAMLlocal1(s);
+  int words = Int_val(n);
+  if (words < 0) caml_invalid_argument("Mynos.insw");
+  s = caml_alloc_string(2 * words);
+  memset(Bytes_val(s), 0xFF, 2 * words);
+  CAMLreturn(s);
+}
+CAMLprim value caml_mynos_outsw(value port, value s) { return Val_unit; }
 #else
 CAMLprim value caml_mynos_inb(value port)
 {

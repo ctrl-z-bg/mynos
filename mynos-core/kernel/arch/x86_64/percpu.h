@@ -27,8 +27,13 @@ static inline struct cpu * arch_cpu(void)
 
 /* the boot processor's GS, first thing in mynos_main (gdt.c) */
 void arch_cpu_boot(void);
-/* the other processors started, before the boot one becomes idle (smp.c) */
+/* the other processors started, before the first process (smp.c) */
 void arch_smp_start(void);
+/* the big lock (smp.c); the boot's work after arch_smp_start under it */
+void kernel_enter(void);
+void kernel_exit(void);
+static inline void arch_boot_lock(void) { kernel_enter(); }
+static inline void arch_boot_unlock(void) { kernel_exit(); }
 /* a thread became ready: an idle processor woken to run it */
 void arch_smp_kick(void);
 /* a process ended: the processors running its threads leave them */

@@ -69,8 +69,11 @@ static struct {
   int timed;               /* waiting with a timeout */
 } waiters[MAXFUTEXWAITERS];
 
+static tss_t * firstWoken;      /* futexWake's first, for the handoff */
+
 static int futexWake(int32_t * addr, int n) {
   int i, woken = 0;
+  firstWoken = NULL;
   for (i = 0; i < MAXFUTEXWAITERS && woken < n; i++)
     if (waiters[i].thread && waiters[i].pid == CURRPID &&
 	waiters[i].addr == addr) {
@@ -79,8 +82,10 @@ static int futexWake(int32_t * addr, int n) {
       woken++;
       /* a waiter whose timeout expired was woken by the timer already:
 	 waking it twice would leave its private semaphore at 1 */
-      if (!waiters[i].timed || timerQueueExtractThread(t) != NULL)
+      if (!waiters[i].timed || timerQueueExtractThread(t) != NULL) {
 	privV(t);
+	if (!firstWoken) firstWoken = t;
+      }
     }
   return woken;
 }
@@ -158,8 +163,13 @@ static int32_t futex(int32_t * addr, int op, int32_t val, vaddr_t arg4,
     }
     return futexWait(addr, val, ms);
   case FUTEX_WAKE:
-  case FUTEX_WAKE_BITSET:
-    return futexWake(addr, val);
+  case FUTEX_WAKE_BITSET: {
+    /* the woken thread runs at once, before the waker, if no other
+       processor will (sched_handoff, mynos-c6a) */
+    int n = futexWake(addr, val);
+    if (firstWoken) sched_handoff(firstWoken);
+    return n;
+  }
   case FUTEX_CMP_REQUEUE:
     if (*addr != val3) return -EAGAIN;
     /* fall through */

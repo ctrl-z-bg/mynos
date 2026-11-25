@@ -46,6 +46,15 @@
 
 #include "multiboot.h"
 
+/* the boot's messages name the interrupt controller and the timer: the
+   PC's, unless the architecture says (arch/ARCH/arch.h) */
+#ifndef ARCH_PIC_NAME
+#define ARCH_PIC_NAME "the 8259 Programmable Interrupt Controller"
+#endif
+#ifndef ARCH_TIMER_NAME
+#define ARCH_TIMER_NAME "the Intel 8253 Programmable Interval Timer"
+#endif
+
 #ifdef TRY_VGA
 #include "vga.h"
 #endif
@@ -182,7 +191,7 @@ void mynos_main(multiboot_info_t *boot_info) {
   initProcessTable();
   initScheduler();
 
-  printk("Initializing the 8259 Programmable Interrupt Controller... ");
+  printk("Initializing " ARCH_PIC_NAME "... ");
   init_pics();
   printk("done.\n");
 
@@ -199,7 +208,7 @@ void mynos_main(multiboot_info_t *boot_info) {
   print_uint(__memory_bitmap_size);
   printk(" bytes allocated for memory map\n");
 
-  printk("Initializing the Intel 8253 Programmable Interval Timer... ");
+  printk("Initializing " ARCH_TIMER_NAME "... ");
   init_pit(PIT_FREQ, 0);
   set_vector(pit_ISR, M_VEC, (D_INT + D_PRESENT));
   printk("done.\n");
@@ -292,6 +301,16 @@ void mynos_main(multiboot_info_t *boot_info) {
   arch_write_protect_kernel();
   tsksw();
 
+  /* the other processors, if any (doc/decisions/smp.md), before any
+     process, as Linux starts them before init: a program that asks at
+     once how many there are (sched_getaffinity) finds them all, and its
+     threads have them from the start. Started at the end, they came up
+     only when processor 0 had nothing else to run (this is its idle
+     thread). From here on they may run the scheduler: the boot's work on
+     the kernel's tables under the big lock */
+  arch_smp_start();
+  arch_boot_lock();
+
   /* the ports and channels before the processes: the timer is on, and a
      process may run (and open its port) before mynos_main goes on. Set
      after them, the tables lost the registry's port when it was quick:
@@ -329,6 +348,7 @@ void mynos_main(multiboot_info_t *boot_info) {
      the log port only (tools/run-tests.sh reads it), unless "verbose" */
   if (!cmdline_has("verbose"))
     kernel_on_screen = 0;
+  arch_boot_unlock();
 
 
 #if 0
@@ -357,9 +377,6 @@ void mynos_main(multiboot_info_t *boot_info) {
     //__OS_ipc_send(1, (char*)&ramdisk, sizeof(uint32_t), 1);
   }
 #endif
-
-  /* the other processors, if any (doc/decisions/smp.md) */
-  arch_smp_start();
 
   // this is the idle process: wait for the next interrupt
   while(1) {

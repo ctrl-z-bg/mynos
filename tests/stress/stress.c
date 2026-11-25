@@ -69,7 +69,33 @@ static int client(int port, unsigned int size) {
 
 /* raw system calls (the library's wrappers would touch the pointers
    first, in user mode) */
-#ifdef __x86_64__
+#if defined(__aarch64__)
+static long native(long n, long a, long b, long c) {
+  register long x8 __asm__("x8") = n;
+  register long x0 __asm__("x0") = a;
+  register long x1 __asm__("x1") = b;
+  register long x2 __asm__("x2") = c;
+  __asm__ volatile ("svc #0x90" : "+r"(x0) : "r"(x8), "r"(x1), "r"(x2) : "memory");
+  return x0;
+}
+static long linux3(long n, long a, long b, long c) {
+  register long x8 __asm__("x8") = n;
+  register long x0 __asm__("x0") = a;
+  register long x1 __asm__("x1") = b;
+  register long x2 __asm__("x2") = c;
+  register long x3 __asm__("x3") = 0;
+  __asm__ volatile ("svc #0" : "+r"(x0) : "r"(x8), "r"(x1), "r"(x2), "r"(x3) : "memory");
+  return x0;
+}
+/* Linux's numbers on AArch64 (the generic ones) */
+#define NR_clock_gettime 113
+#define NR_write 64
+#define NR_nanosleep 101
+#define NR_wait 260                             /* wait4 */
+#define NR_getrandom 278
+#define NR_futex 98
+#define NR_munmap 215
+#elif defined(__x86_64__)
 static long native(long n, long a, long b, long c) {
   long ret = n;
   __asm__ volatile ("int $0x90" : "+a"(ret), "+D"(a), "+S"(b), "+d"(c)
@@ -178,8 +204,12 @@ static int unprivileged(int port, int sem) {
 
 /* port I/O without the privilege: the process ends (protection fault) */
 static int unprivileged_io(void) {
+#if defined(__aarch64__)
+  native(102, 0, 0x70, 0);      /* no ports: the kernel's port I/O call */
+#else
   unsigned char v;
   __asm__ volatile ("inb $0x70, %0" : "=a"(v));
+#endif
   return 0;                     /* not reached */
 }
 
@@ -232,10 +262,22 @@ static int permissions(int port, char * ps) {
 /* ---- a page that goes away while the kernel waits to write into it ---- */
 
 static long native5(long n, long a, long b, long c, long d, long e) {
+#if defined(__aarch64__)
+  register long x8 __asm__("x8") = n;
+  register long x0 __asm__("x0") = a;
+  register long x1 __asm__("x1") = b;
+  register long x2 __asm__("x2") = c;
+  register long x3 __asm__("x3") = d;
+  register long x4 __asm__("x4") = e;
+  __asm__ volatile ("svc #0x90" : "+r"(x0) : "r"(x8), "r"(x1), "r"(x2), "r"(x3), "r"(x4)
+                    : "memory");
+  return x0;
+#else
   long ret = n;
   __asm__ volatile ("int $0x90" : "+a"(ret), "+b"(a), "+c"(b), "+d"(c),
                     "+S"(d), "+D"(e) : : "memory");
   return ret;
+#endif
 }
 
 /* the child: connect, wait, send a short message */

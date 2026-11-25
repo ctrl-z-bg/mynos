@@ -190,6 +190,19 @@ int _linux_syscall_clock_nanosleep64(uint32_t clock, int flags,
 		   (uint32_t)req->tv_nsec);
 }
 
+/* sched_getaffinity (i386 242, x86-64 204, AArch64 123): every thread may
+   run on every processor. What musl's sysconf(_SC_NPROCESSORS_ONLN) (nproc)
+   and OCaml's Domain.recommended_domain_count count: the processors. The
+   mask's size, a long's, as Linux's with at most 32 or 64 processors. */
+int _linux_syscall_sched_getaffinity(int pid, uint32_t len, uint8_t * mask) {
+  uint32_t i, n = sizeof(long);
+  if (len < n) return -22; /* EINVAL */
+  USER(mask, n);
+  for (i = 0; i < n; i++) mask[i] = 0;
+  for (i = 0; i < ncpus && i < 8 * n; i++) mask[i / 8] |= 1 << (i % 8);
+  return n;
+}
+
 /* kill (37), tkill (238), tgkill (270). No signal delivery yet: a signal a
    process sends to itself (what abort() and raise() do) terminates it, as
    the default action of a fatal signal would; signal 0 only checks that

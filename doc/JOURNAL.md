@@ -3992,3 +3992,113 @@ save format.
 **Lesson.** Moving RAM's numbering made three kinds of address: the
 kernel's (from 0), the CPU's (real) and the device's (real): every place
 where an address leaves the kernel says which it is.
+
+## 2026-11-25 — OCaml domains 13 times slower on one processor (mynos-c6a)
+
+**Symptom.** `par.byte` (tests/cpu/par.ml) building and dropping lists
+in one domain: 6.93 s on one processor, 0.51 s on four, under KVM.
+Computation alone ran at the same speed on both.
+
+**Diagnosis.** A first guess, that the runtime's back-off sleeps of some
+microseconds lasted a whole tick on MyNOS, was measured and was wrong
+(sub-tick sleeps made a yield: no change). Counting the system calls
+showed almost the same on one processor as on four: the time was not in
+the kernel. The timer then sampled the user program counter at each
+tick, and a snapshot of the process's threads at each time slice:
+the domain's thread was in `caml_try_run_on_all_domains_with_spin_work`
+and `caml_empty_minor_heaps_once`, and another thread of the process,
+the main domain's backup thread, was ready, at every slice. OCaml's GC
+log (`OCAMLRUNPARAM=v=0x800`) told the rest: 2220 retries of
+"requesting stw empty_minor_heap" by domain 1 while domain 0 had not yet
+closed the previous section.
+
+**Cause.** At a minor collection the allocating domain leads a
+stop-the-world section and wakes the main domain's backup thread (a
+futex). Both do their part; the domain finishes first, allocates again,
+and at the next collection finds the section still open (the last one
+out closes it): it retries in a loop, without a system call. The backup
+thread, woken and ready, ran only when the domain's 10 ms slice ended:
+about 10 ms lost at each of some 50 collections. On Linux the woken
+thread preempts its waker (CFS's wake-up preemption), and nobody waits.
+
+**Fix.** `FUTEX_WAKE` hands the processor to the first thread it woke
+(`sched_handoff`), the waker staying ready in its place, unless another
+processor idles and takes it. One domain: 6.93 s to 1.05 s on one
+processor (0.48 on four). With more domains than processors the leader
+also waits for domains that are ready but were not woken by it: the
+slice's length still decides there (a 4 ms slice halves those times;
+left to the owner, doc/decisions/smp.md).
+
+**Lesson.** A spin that is not in the kernel cannot be seen by counting
+calls: sample where the processor is. And a mere "the thread I woke is
+ready" means nothing to a scheduler that lets the waker keep its slice.
+
+## 2026-11-25 — The other processors started after the first programs
+
+**Symptom.** A new check, `tests/smp` printing `sysconf(_SC_NPROCESSORS_ONLN)`
+(which musl answers with `sched_getaffinity`, added today), read 1 on
+x86-64 with four processors; `nproc` typed in `sh` read 4.
+
+**Cause.** `mynos_main` started the other processors last, in what then
+becomes processor 0's idle thread: after the boot's processes had been
+made, with the timer on. The idle thread runs only when nothing else is
+ready, so the first program (here the test, a module) ran before the
+others were up; under load the processors could come up later still.
+
+**Fix.** `arch_smp_start` before the ports and the boot's processes, as
+Linux starts its processors before init; the boot's work that follows,
+on the kernel's tables, under the big lock (`arch_boot_lock`, a no-op on
+the i386 and on AArch64, one processor), since the other processors may
+run the scheduler from then on.
+
+**Lesson.** "Started at boot" must mean before the first program, or
+the first program sees a different machine from the others.
+
+## 2026-11-25 — AArch64: the console on the UART, run-demo.sh
+
+**Symptom.** `ARCH=aarch64 tools/run-demo.sh` booted the i386 system:
+run-demo.sh knew only i386 and x86_64. Once it booted AArch64, nothing
+could be typed: the system has no display there yet, and consoled read
+COM2's keys with `inb`, which on ARM user space was a stub reading 0xFF.
+
+**Fix.** The kernel's table of the PC ports it answers on AArch64
+(`arch/aarch64/io.c`, already COM2's output for the log) gained COM2's
+input from the PL011 (data, line status, scratch, receive interrupt);
+drivers reach it through a native call (102) that libmynos's `inportb`
+and `outportb`, and OCaml's `Mynos.inb`/`outb`, use on ARM. The rest
+reads 0xFF: ata now finds no disk and ends with 0, where it raised
+"no I/O ports" and init restarted it five times. The PL011's interrupt
+is level-triggered: consoled registers it as a PCI line (masked at each
+interrupt, unmasked after reading), on line 1. run-qemu.sh and
+run-demo.sh take `ARCH=aarch64` (doc/decisions/aarch64.md, choice 9).
+On the way: virtio-net-pci wanted a boot ROM the container's QEMU has
+not (`romfile=`); a test of mine, `pkill -f` with a pattern in its own
+command line, killed its own shell.
+
+**Lesson.** A port I/O table in the kernel, which was there for the log,
+was the shortest way to a serial console: the driver did not change.
+
+## 2026-11-25 — AArch64: the pager's dirty bit, kept by faults
+
+**Symptom.** `tests/abi`, ported to AArch64, failed one check: "pager:
+copy: the page, its writes forgotten". After `mynos_pagerCopy` the page
+still read as written.
+
+**Cause.** ARMv8.0 (the Cortex-A72 of the Pi 4) has no dirty bit the
+kernel can use, and AArch64's `pte_mark_clean` did nothing: a writable
+page was "written" until given again (a limit noted in the code). The
+accessed bit was the same: `pte_mark_old` cleared MyNOS's bit, but the
+hardware's access flag stayed on, and nothing set the bit again.
+
+**Fix.** Kept by faults, as on processors without them: forgetting the
+use clears the access flag too, and the next access faults; writing a
+page back makes it read-only for the hardware (MyNOS's writable bit
+kept), and the next write faults. The page fault handler's "the access
+is allowed" path (a fault resolved meanwhile by another processor) calls
+`pte_fault_fixup`, which on AArch64 sets the access flag and the
+accessed bit, and on a write the hardware's writable bit and the dirty
+one; on x86 it does nothing (the processor keeps the bits). Only pages
+the pager has looked at pay the extra fault.
+
+**Lesson.** A test ported to a new architecture finds the shortcuts
+taken there: this one was written down, and still wrong.

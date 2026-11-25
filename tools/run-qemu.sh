@@ -12,8 +12,14 @@
 #
 # Environment:
 #   KERNEL_ONLY  if set and no module is given, boot the bare kernel
-#   ARCH     i386 (default) or x86_64 (QEMU, processor, kernel); x86_64
-#            runs in build/x86_64/tree, its build (tools/build-x86_64.sh)
+#   ARCH     i386 (default), x86_64 or aarch64 (QEMU, processor, kernel);
+#            x86_64 runs in build/x86_64/tree, its build
+#            (tools/build-x86_64.sh), aarch64 in build/aarch64/tree
+#            (tools/build-aarch64.sh) on QEMU's virt machine: the modules
+#            in one archive (tools/mkmodules.py), virtio devices only, one
+#            UART (a caller's two -serial: the second, COM2's, is kept),
+#            RAM 128 MB to 1 GB; the host's qemu-system-aarch64, or the
+#            dev-aarch64 container's (no window from there)
 #   KERNEL   kernel image (default: mynos-core/kernel/kernel.elf; for
 #            x86_64 build/x86_64/kernel.elf)
 #   MEM      RAM in MB (default 32)
@@ -45,11 +51,16 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 if [ "${ARCH:-i386}" = x86_64 ] && [ -d "$root/build/x86_64/tree/tools" ]; then
     cd "$root/build/x86_64/tree" && exec tools/run-qemu.sh "$@"
 fi
+if [ "${ARCH:-i386}" = aarch64 ] && [ -d "$root/build/aarch64/tree/tools" ]; then
+    cd "$root/build/aarch64/tree" && exec tools/run-qemu.sh "$@"
+fi
 # the architecture: i386 (the default) or x86_64, whose kernel
 # tools/build-x86_64.sh makes in build/x86_64
 case ${ARCH:-i386} in
     x86_64) qemu=qemu-system-x86_64 cpu=qemu64,+rdrand,+rdseed smp=${SMP:-4}   # four processors (mynos-btq.5)
             kernel=${KERNEL:-$root/build/x86_64/kernel.elf} ;;
+    aarch64) qemu=qemu-system-aarch64 cpu=cortex-a72 smp=     # one processor, so far
+            kernel=${KERNEL:-$root/build/aarch64/kernel.elf} ;;
     *)      qemu=qemu-system-i386 cpu=qemu32,+rdrand,+rdseed smp=      # one processor
             kernel=${KERNEL:-$root/mynos-core/kernel/kernel.elf} ;;
 esac
@@ -75,30 +86,87 @@ case ${SOUND:-} in
     *) audio="-audiodev $SOUND,id=snd -device sb16,audiodev=snd" ;;
 esac
 
+# AArch64 (QEMU virt, doc/decisions/aarch64.md): virtio devices only, no
+# sound card, no KVM (the host is a PC); one UART, COM2's part: of a
+# caller's two -serial (COM1's, COM2's) the second is kept
+if [ "${ARCH:-i386}" = aarch64 ]; then
+    VIRTIO=1 audio= KVM= rom=,romfile=     # (no network boot ROM: no firmware)
+    n=0
+    for a; do [ "$a" = -serial ] && n=$((n + 1)); done
+    drop=$((n >= 2)) skip=
+    for a; do
+        shift
+        if [ -n "$skip" ]; then skip=; continue; fi
+        if [ "$a" = -serial ] && [ "$drop" = 1 ]; then drop=0 skip=1; continue; fi
+        set -- "$@" "$a"
+    done
+fi
+
 # the disk and the network card: virtio devices, or the PC's IDE and NE2000
 if [ -n "${VIRTIO:-}" ]; then
     disk_if=none,id=vd disk_dev="-device virtio-blk-pci,drive=vd"
-    net_dev=virtio-net-pci,netdev=n0
+    net_dev=virtio-net-pci,netdev=n0${rom:-}
 else
     disk_if=ide,index=0 disk_dev=
     net_dev=ne2k_isa,netdev=n0,iobase=0x300,irq=9
 fi
 
+# how the kernel and its modules are loaded: multiboot (-kernel, -initrd,
+# -append), or on AArch64 the kernel's ELF image and one archive of the
+# modules that QEMU puts at 64 MB into RAM (tools/mkmodules.py: the
+# kernel's command line in it); RAM from 128 MB (the archive's place) to
+# 1 GB (the kernel's physical numbering, choice 3)
 # shellcheck disable=SC2086
-set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "${MEM:-32}" \
-    -cpu "${CPU:-$cpu}" \
-    ${VERBOSE:+-append verbose} ${KVM:+-accel kvm} ${smp:+-smp $smp} \
+set -- -cpu "${CPU:-$cpu}" \
+    ${KVM:+-accel kvm} ${smp:+-smp $smp} \
     ${DISK:+-drive file=$DISK,format=raw,if=$disk_if} ${DISK:+$disk_dev} \
     ${NET:+-netdev user,id=n0${HTTP:+,hostfwd=tcp:127.0.0.1:$HTTP-:80}${UDP:+,hostfwd=udp::$UDP-:$UDP}} \
     ${NET:+-device $net_dev} $audio "$@"
+mem=${MEM:-32} archive=
+if [ "${ARCH:-i386}" = aarch64 ]; then
+    [ "$mem" -lt 128 ] && mem=128
+    [ "$mem" -gt 1024 ] && mem=1024
+    mkdir -p "$root/tmp"
+    archive=$(mktemp "$root/tmp/modules-XXXXXX")
+    old_ifs=$IFS; IFS=,
+    # shellcheck disable=SC2086
+    python3 "$root/tools/mkmodules.py" ${VERBOSE:+-c verbose} "$archive" $modules
+    IFS=$old_ifs
+    # (virt's own network card, without NET, would want a boot ROM)
+    nonic=; [ -z "${NET:-}" ] && nonic="-nic none"
+    # shellcheck disable=SC2086
+    set -- -M virt -kernel "$kernel" -m "$mem" $nonic \
+        -device "loader,file=$archive,addr=0x44000000,force-raw=on" \
+        -device virtio-keyboard-pci "$@"
+else
+    set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "$mem" \
+        ${VERBOSE:+-append verbose} "$@"
+fi
+
+# QEMU: the host's, or (qemu-system-aarch64, which a PC may not have) the
+# dev-aarch64 container's, with this tree, /tmp and the disk's folder at
+# their own paths, the host's network (HTTP's forwarding), no window
+run=$qemu
+if ! command -v "$qemu" >/dev/null 2>&1 && [ "${ARCH:-i386}" = aarch64 ]; then
+    tty=; [ -t 0 ] && tty=-it
+    disk_dir=; [ -n "${DISK:-}" ] && disk_dir=$(cd "$(dirname "$DISK")" && pwd)
+    case $disk_dir in "$root"|"$root"/*|/tmp|/tmp/*) disk_dir= ;; esac
+    run="podman run --rm $tty --platform linux/amd64 --network host -v $root:$root:Z -v /tmp:/tmp ${disk_dir:+-v $disk_dir:$disk_dir} -w $root mynos-dev-aarch64 $qemu"
+    case " $* " in *" -display "*|*" -nographic "*) ;; *) [ -n "${SHOT:-}" ] || set -- "$@" -display none ;; esac
+fi
 
 if [ -z "${SHOT:-}" ]; then
-    exec $qemu "$@"
+    if [ -z "$archive" ]; then exec $run "$@"; fi
+    trap 'rm -f "$archive"' EXIT
+    trap 'exit 143' TERM INT
+    status=0
+    $run "$@" || status=$?
+    exit $status
 fi
 
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
-$qemu "$@" -display none \
+trap 'rm -rf "$tmp" ${archive:+"$archive"}' EXIT
+$run "$@" -display none \
     -monitor "unix:$tmp/mon,server,nowait" &
 pid=$!
 sleep "${WAIT:-3}"

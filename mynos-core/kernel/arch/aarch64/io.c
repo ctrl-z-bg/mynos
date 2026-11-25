@@ -14,7 +14,11 @@
  * (doc/decisions/aarch64.md): there are no ports, and these few are
  * answered by the machine's devices, so that video.c and time.c stay as
  * they are:
- *   - COM2 (0x2F8-0x2FF), the kernel's log: the PL011 UART;
+ *   - COM2 (0x2F8-0x2FF), the kernel's log and a terminal's keys (the
+ *     console's serial input, consoled's): the PL011 UART. The data
+ *     register, the line status (a byte waiting, the transmitter empty),
+ *     the scratch register, the interrupt enable's "a byte came" (the
+ *     PL011's receive and receive-timeout interrupts, SPI 1: line 1);
  *   - the CMOS clock (0x70, 0x71): the PL031 real-time clock's seconds,
  *     as the CMOS's registers in binary, 24-hour mode;
  *   - the rest (the VGA's registers, the 8259's EOI): nothing.
@@ -26,7 +30,9 @@
 
 #define UART      0x09000000UL          /* PL011 */
 #define UART_DR   0x00
-#define UART_FR   0x18                  /* bit 5: transmit FIFO full */
+#define UART_FR   0x18                  /* bit 4: nothing received, 5: transmit FIFO full */
+#define UART_IMSC 0x38                  /* interrupt mask: bit 4 receive, 6 receive timeout */
+#define FR_RXFE   (1 << 4)
 #define RTC       0x09010000UL          /* PL031: RTCDR, seconds since 1970 */
 
 #define REG32(BASE, OFF) (*(volatile uint32_t *)DEVICE((BASE) + (OFF)))
@@ -68,9 +74,14 @@ static unsigned char cmos_value(unsigned char reg)
   }
 }
 
+static unsigned char com2_scratch;
+
 unsigned char inportb(unsigned short port)
 {
-  if (port == 0x2F8 + 5) return 0x20;            /* COM2: transmitter empty */
+  int ready = !(REG32(UART, UART_FR) & FR_RXFE);
+  if (port == 0x2F8) return ready ? REG32(UART, UART_DR) & 0xFF : 0;
+  if (port == 0x2F8 + 5) return 0x60 | ready;    /* transmitter empty; a byte */
+  if (port == 0x2F8 + 7) return com2_scratch;
   if (port == 0x71) return cmos_value(cmos_index);
   return 0xFF;
 }
@@ -78,6 +89,9 @@ unsigned char inportb(unsigned short port)
 void outportb(unsigned short port, unsigned char value)
 {
   if (port == 0x2F8) uart_putc(value);
+  else if (port == 0x2F8 + 1)                    /* interrupt enable */
+    REG32(UART, UART_IMSC) = (value & 1) ? (1 << 4) | (1 << 6) : 0;
+  else if (port == 0x2F8 + 7) com2_scratch = value;
   else if (port == 0x70) cmos_index = value & 0x7F;
 }
 

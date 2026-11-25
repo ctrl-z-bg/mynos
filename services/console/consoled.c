@@ -858,6 +858,17 @@ static void * vkbd_thread(void * arg)
 /* ---- the second serial port: a terminal's bytes ---- */
 
 #define COM2 0x2F8
+/* its interrupt line: the PC's IRQ 3. On AArch64 the kernel answers
+   COM2's ports with the UART (a PL011, its line 1), whose interrupt is
+   level-triggered: registered as such (masked by the kernel at each
+   interrupt, unmasked here once the bytes are read) */
+#ifdef __aarch64__
+#define COM2_IRQ 1
+#define COM2_REG (COM2_IRQ | MYNOS_IRQ_PCI)
+#else
+#define COM2_IRQ 3
+#define COM2_REG COM2_IRQ
+#endif
 
 /* is there a UART at COM2? its scratch register keeps what is written */
 static int serial_present(void)
@@ -925,7 +936,11 @@ static void * serial_thread(void * arg)
       else input(b);
       last_cr = b == '\r';
     }
+#ifdef __aarch64__
+    mynos_enableIrq(COM2_IRQ);         /* read: the line again */
+#else
     outportb(0x20, 0x20);
+#endif
   }
   return NULL;
 }
@@ -1048,14 +1063,14 @@ int main()
   /* COM2: interrupts when a byte comes (the kernel writes to it, polling).
      Only if there is one: a missing port reads 0xFF, "a byte waiting"
      forever (QEMU with its window has COM1 only) */
-  irq = serial_present() ? mynos_driverRegister("serial2", 3, NULL, NULL)
+  irq = serial_present() ? mynos_driverRegister("serial2", COM2_REG, NULL, NULL)
                          : MYNOS_ERR_INVALID;
   if (irq >= 0) {
     int i;
     for (i = 0; i < 64 && (inportb(COM2 + 5) & 1); i++) inportb(COM2);
     outportb(COM2 + 1, 0x01);          /* receive interrupts */
     outportb(COM2 + 4, 0x0B);          /* DTR, RTS, OUT2 (the IRQ line) */
-    mynos_enableIrq(3);
+    mynos_enableIrq(COM2_IRQ);
     stack = malloc(0x4000);
     mynos_threadCreate(serial_thread, (void *)irq, stack + 0x4000, 0);
   } else

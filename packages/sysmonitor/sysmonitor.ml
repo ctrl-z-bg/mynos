@@ -8,10 +8,15 @@
 
 let history = 120                               (* samples kept: 2 minutes *)
 
+(* the processors (x86-64 has several, mynos-btq.5): the kernel's idle
+   time is theirs together, a process's CPU time can be more than one
+   processor's. 1 where the kernel does not tell (sched_getaffinity). *)
+let processors = max 1 (Domain.recommended_domain_count ())
+
 type row = {
   pid : int;
   name : string;
-  cpu : float;                                  (* % of the processor *)
+  cpu : float;                                  (* % of one processor *)
   mem_kb : int;
   threads : int;
   faults : float;                               (* a second *)
@@ -71,7 +76,9 @@ let sample st =
   st.prev <- List.map (fun ((p : Mynos.process), (s : Mynos.process_stats)) ->
       (p.p_pid, (s.cpu_ticks, s.faults_alloc + s.faults_cow))) now;
   let idle = k.cpu_ticks in
-  st.busy <- if first then 0. else max 0. (100. -. 100. *. float (idle - st.prev_idle) /. float dt);
+  st.busy <- if first then 0. else
+      min 100. (max 0. (100. -. 100. *. float (idle - st.prev_idle)
+                                 /. float (dt * processors)));
   st.prev_idle <- idle;
   st.prev_clock <- clock;
   st.uptime <- clock / 100;
@@ -141,10 +148,14 @@ let frame ui st =
   let up = Printf.sprintf "%d:%02d:%02d" (st.uptime / 3600) (st.uptime / 60 mod 60) (st.uptime mod 60) in
   let threads = List.fold_left (fun n r -> n + r.threads) 0 st.rows in
   Gui.label ~bold:true ui 12 10
-    (Printf.sprintf "Up %s   %d processes, %d threads   CPU %.0f%%   Memory %s of %s"
-       up (List.length st.rows) threads st.busy (mb st.mem_used_kb) (mb st.mem_total_kb));
+    (Printf.sprintf "Up %s   %d processes, %d threads   CPU %.0f%%%s   Memory %s of %s"
+       up (List.length st.rows) threads st.busy
+       (if processors > 1 then Printf.sprintf " of %d processors" processors else "")
+       (mb st.mem_used_kb) (mb st.mem_total_kb));
   let gw = (w - 36) / 2 in
-  graph ui 12 34 gw 120 "Processor" st.busy 0x2D6CA2 st.cpu_hist;
+  graph ui 12 34 gw 120
+    (if processors > 1 then Printf.sprintf "Processors (%d)" processors else "Processor")
+    st.busy 0x2D6CA2 st.cpu_hist;
   graph ui (24 + gw) 34 gw 120
     (Printf.sprintf "Memory, %s of %s" (mb st.mem_used_kb) (mb st.mem_total_kb))
     (100. *. float st.mem_used_kb /. float (max 1 st.mem_total_kb)) 0x3C9A5F st.mem_hist;

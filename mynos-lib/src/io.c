@@ -21,9 +21,17 @@
 #include "../include/mynos.h"
 
 #ifdef __aarch64__
-/* no I/O ports on ARM: the PC's drivers find nothing (0xFF) */
-void outportb(unsigned short port, unsigned char value) { (void)port; (void)value; }
-unsigned char inportb(unsigned short port) { (void)port; return 0xFF; }
+#include "syscall.h"
+/* no I/O ports on ARM: the kernel answers the few its machine has (102:
+   COM2, the UART), the rest read 0xFF (the PC's drivers find nothing) */
+void outportb(unsigned short port, unsigned char value)
+{
+  __mynos_syscall(102, 1, port, value, 0, 0);
+}
+unsigned char inportb(unsigned short port)
+{
+  return (unsigned char)__mynos_syscall(102, 0, port, 0, 0, 0);
+}
 #else
 void outportb(unsigned short port,unsigned char value)
 {

@@ -27,7 +27,25 @@ static void * tls_reader(void * unused) {
 }
 
 /* raw Linux system call with no arguments */
-#ifdef __x86_64__
+#if defined(__aarch64__)
+static long linux_syscall0(long n) {
+  register long x8 __asm__("x8") = n;
+  register long x0 __asm__("x0");
+  __asm__ volatile ("svc #0" : "=r"(x0) : "r"(x8) : "memory");
+  return x0;
+}
+/* raw Linux system call with three arguments */
+static long linux_syscall3(long n, long a, long b, long c) {
+  register long x8 __asm__("x8") = n;
+  register long x0 __asm__("x0") = a;
+  register long x1 __asm__("x1") = b;
+  register long x2 __asm__("x2") = c;
+  __asm__ volatile ("svc #0" : "+r"(x0) : "r"(x8), "r"(x1), "r"(x2) : "memory");
+  return x0;
+}
+#define NR_gettid 178
+#define NR_uname 160
+#elif defined(__x86_64__)
 static long linux_syscall0(long n) {
   long ret;
   __asm__ volatile ("syscall" : "=a"(ret) : "a"(n) : "rcx", "r11", "memory");
@@ -58,7 +76,7 @@ static int cow_port, cow_sem, cow_ok = -1;
 
 /* a message larger than the receiver's free linear space is refused, not
    mapped into the kernel's memory (mynos-py9); the i386 only, below */
-#ifndef __x86_64__
+#if !defined(__x86_64__) && !defined(__aarch64__)
 static int big_port, big_sem;
 
 static void * big_listener(void * unused) {
@@ -337,6 +355,7 @@ static void wait_checks(void) {
    (rep movs) need it clear. Before every entry did cld, the timer's switch
    copied a TLS descriptor backwards over the user data segment's, and the
    next process to load 0x23 faulted in the kernel (NetSurf on Slashdot). */
+#if defined(__i386__) || defined(__x86_64__)
 static volatile int df_stop;
 
 /* spin with DF set, in assembly only (C code may not run with DF = 1) */
@@ -385,6 +404,8 @@ static void direction_flag_checks(void) {
           WIFEXITED(st) && WEXITSTATUS(st) == 7);
   }
 }
+
+#endif
 
 /* thread ids (2026-11-24): mynos_threadSelf is gettid, in the first
    thread (the pid) and in another; fork's child has one thread, the
@@ -484,7 +505,12 @@ int main(int argc, char ** argv) {
   {
     void * kernel = (void *)0x200000;
     long r;
-#ifdef __x86_64__
+#if defined(__aarch64__)
+    r = linux_syscall3(101 /* nanosleep */, (long)kernel, 0, 0);
+    check("nanosleep refuses a request in the kernel", r == -14);
+    r = linux_syscall3(115 /* clock_nanosleep */, CLOCK_MONOTONIC, 0, (long)kernel);
+    check("clock_nanosleep refuses a request in the kernel", r == -14);
+#elif defined(__x86_64__)
     asm volatile("syscall" : "=a"(r)
                  : "a"(35 /* nanosleep */), "D"(kernel), "S"(0) : "rcx", "r11", "memory");
     check("nanosleep refuses a request in the kernel", r == -14);
@@ -522,7 +548,7 @@ int main(int argc, char ** argv) {
     mynos_freeChannel(ch);
   }
 
-#ifndef __x86_64__
+#if !defined(__x86_64__) && !defined(__aarch64__)
   /* (the i386 only: its 3 GB of user space are filled with 64 MB
      reservations; x86-64's 512 GB are not, and the page tables of a
      try would fill a small machine's memory) */
@@ -571,7 +597,11 @@ int main(int argc, char ** argv) {
                                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
       /* EAX = 7 (frame 0, present, writable, user) at a page fault the
          kernel resolves (a fresh page, allocated on use) */
+#if defined(__i386__) || defined(__x86_64__)
       asm volatile("movl $7, %%eax\n\tmovb $1, (%0)" :: "r"(fresh) : "eax", "memory");
+#else
+      *fresh = 1;
+#endif
       (void)*(volatile int *)0x3FC00000;
       _exit(0);
     }
@@ -653,7 +683,9 @@ int main(int argc, char ** argv) {
 
   wait_checks();
   pager_checks();
-  direction_flag_checks();
+#if defined(__i386__) || defined(__x86_64__)
+  direction_flag_checks();             /* x86's direction flag */
+#endif
   thread_id_checks();
 
   printf("abi: %s\n", failures ? "SOME CHECKS FAILED" : "all checks passed");

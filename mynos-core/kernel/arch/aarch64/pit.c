@@ -34,6 +34,9 @@ void init_pit(int freq, unsigned char channel)
   (void)channel;
   __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(f));
   tick_counts = f / freq;
+  /* programs may read the virtual counter (CNTVCT_EL0, as x86's rdtsc:
+     tests/bench), not the timers */
+  __asm__ volatile ("msr cntkctl_el1, %0" : : "r"(1UL << 1));
   timer_arm();
   gic_enable(GIC_TIMER);
 }

@@ -37,6 +37,12 @@ int main()
 {
   int sem;
 
+  /* no UART at COM1 (AArch64: its ports read 0xFF, "a byte waiting" for
+     ever): nothing to drive, and line 4 is another device's there */
+  if (inportb(PORT1 + 5) == 0xFF) {
+    mynos_log("seriald: no serial port at COM1\n");
+    return 0;
+  }
   sem = mynos_driverRegister("serial", 4, NULL, NULL);
   initSerial();
   mynos_log("seriald: sem = %d\n", sem);

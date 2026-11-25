@@ -1298,7 +1298,11 @@ expect "fpu: all checks passed"
 expect "Welcome to MyNOS $(cat VERSION 2>/dev/null) (${ARCH:-i386})"  # the boot's banner
 expect "MyNOS $(cat VERSION 2>/dev/null)"                    # sh's version (uname)
 expect "threads: all checks passed"
-if [ -f tests/smp/smp ]; then expect "smp: all checks passed"; fi
+if [ -f tests/smp/smp ]; then
+    expect "smp: all checks passed"
+    case ${ARCH:-i386} in x86_64) n=${SMP:-4} ;; *) n=1 ;; esac
+    expect "smp: $n processors"                 # sched_getaffinity
+fi
 expect "abi: all checks passed"
 if [ -f tests/stress/ramdisk.dsk ]; then
     expect "stress: all checks passed"

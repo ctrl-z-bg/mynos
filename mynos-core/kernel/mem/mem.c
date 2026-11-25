@@ -121,9 +121,11 @@ void init_memory() {
   }
   //__SET_MEMORY_BITMAP_PAGE_BIT(i);
   reserve_dma_area();
+#ifndef ARCH_NO_ISA_DMA
   printk("DMA area (64 KB, ISA): ");
   if (__dma_area) print_uint_hex(__dma_area); else printk("none");
   printk("\n");
+#endif
 
   /* the kernel's own space: the architecture's (arch/ARCH/mm.c) */
   arch_init_kernel_space(first_free_phy_page, boot_reserved_start,
@@ -658,6 +660,10 @@ void _page_fault_handler(vaddr_t addr, uint32_t errcode, unsigned long * frame) 
      tried again (doc/decisions/smp.md) */
   if ((*pte & PF_PRESENT) && (!(errcode & 2) || (*pte & PF_READWRITE)) &&
       (!(errcode & 4) || (*pte & PF_USER))) {
+    /* (or, on AArch64, the first access since the pager forgot the
+       page's use, or the first write since it wrote the page back: the
+       accessed and dirty bits kept by these faults) */
+    pte_fault_fixup(pte, errcode & 2);
     arch_flush_page_local(addr);
     return;
   }

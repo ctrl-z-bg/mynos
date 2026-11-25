@@ -320,6 +320,7 @@ The native calls:
 | 38 | `procstat`: a process's CPU ticks, page faults, pages in memory, threads; pid 0: the idle time and the RAM (the package `sysmonitor`) | A.5 |
 | 39 | `dmaAlloc`: RAM in one physical piece, mapped, and its physical address (`io` only) | B |
 | 100, 101 | `enableIrq`, `disableIrq` | A.7 |
+| 102 | `portio`: on AArch64, which has no I/O ports, a driver's `inportb` and `outportb`; the kernel answers the ports its machine has (COM2 on the UART), the rest read 0xFF (`io` only) | — |
 | 200, 201, 202 | `createThread`, `exitThread`, `selfThread` | A.4 |
 | 300 | `setTimer` | A.5 |
 | 400 | `stats`: counters for `free` and the System window | — |

@@ -1,6 +1,6 @@
 # The package sysmonitor (tools/pkg-build.sh)
 NAME=sysmonitor
-VERSION=1.0
+VERSION=1.1
 DESCRIPTION='The system at work, in a window: CPU and memory with their graphs, the disks, the processes (CPU, memory, threads, page faults), ending one'
 LICENSE=GPL-2.0-or-later
 SRC=packages/sysmonitor

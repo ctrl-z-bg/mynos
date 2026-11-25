@@ -21,6 +21,10 @@
 # PKG=local serves the packages just built (tmp/packages) to MyNOS from
 # this machine, and MyNOS upgrades the installed ones at boot: packages
 # tried before they are published.
+# ARCH=x86_64 runs the x86-64 build (tools/build-x86_64.sh), ARCH=aarch64
+# the AArch64 one (tools/build-aarch64.sh) on QEMU's virt machine: no
+# display there yet, so this terminal is its console (SERIAL=1), no sound,
+# no KVM; QEMU from the host, or from the dev-aarch64 container.
 # (The system as it was in 2004-2008: git checkout legacy-last, see
 # doc/STATUS.md.)
 #
@@ -33,6 +37,16 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 # its own programs, RAM disk and disk: from the sources, run there
 if [ "${ARCH:-i386}" = x86_64 ] && [ -d "$root/build/x86_64/tree/tools" ]; then
     cd "$root/build/x86_64/tree" && exec tools/run-demo.sh "$@"
+fi
+if [ "${ARCH:-i386}" = aarch64 ]; then
+    if [ ! -d "$root/build/aarch64/tree/tools" ] && [ ! -f "$root/build/aarch64/kernel.elf" ]; then
+        echo "run-demo.sh: no AArch64 build: tools/build-aarch64.sh first" >&2
+        exit 1
+    fi
+    [ -d "$root/build/aarch64/tree/tools" ] && cd "$root/build/aarch64/tree" && exec tools/run-demo.sh "$@"
+    # AArch64 (doc/decisions/aarch64.md): no display yet: the console on
+    # this terminal; no Sound Blaster; the host's processor is not ARM
+    export SERIAL=${SERIAL-1} SOUND= KVM=
 fi
 cd "$root"
 
@@ -125,6 +139,7 @@ case " $* " in
     *" -display "*|*" -nographic "*) ;;
     *)
         ui=${QEMU_DISPLAY:-}
+        [ "${ARCH:-i386}" = aarch64 ] && ui=${ui:-none}     # no display device yet
         if [ -z "$ui" ] && [ -n "${SOUND:-}" ] &&
            qemu-system-i386 -display help 2>/dev/null | grep -qx sdl; then ui=sdl; fi
         [ -n "$ui" ] && set -- -display "$ui" "$@" ;;

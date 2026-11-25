@@ -385,7 +385,7 @@ let rec run_program ?(background = false) file args c =
 let builtins = [ "cd"; "pwd"; "echo"; "cat"; "ls"; "cp"; "mv"; "rm"; "mkdir";
                  "rmdir"; "touch"; "export"; "unset"; "env"; "which"; "source";
                  "free"; "ps"; "kill"; "clear"; "help"; "exit"; "true"; "false"; "ocaml";
-                 "ifconfig"; "ping"; "host"; "ask"; "keymap"; "version" ]
+                 "ifconfig"; "ping"; "host"; "ask"; "keymap"; "version"; "nproc" ]
 
 (* every command: built-ins, and the programs of PATH (NAME.byte as NAME,
    and files without an extension) *)
@@ -443,7 +443,7 @@ let copy src dst =
 let help out =
   output_string out
     "MyNOS sh. Built in: cd pwd echo cat ls [-l] [-a] cp mv rm mkdir rmdir touch\n\
-     export unset env which source free ps kill clear help exit version;\n\
+     export unset env which source free nproc ps kill clear help exit version;\n\
      PROGRAM & runs it in the background ($! its pid); kill PID|SERVICE;\n\
      network: ifconfig, ping HOST [COUNT], host NAME.\n\
      Programs: edit FILE, ocamlc, kilo, hello, ocaml (the OCaml toplevel),\n\
@@ -516,7 +516,7 @@ let ask_context () =
      (run one after the other), * and ? in file names, # comments. There is \
      no arithmetic, no if/for/while, no functions, no command substitution.";
     "Built in: cd pwd echo cat ls (ls -l: sizes) cp mv rm mkdir rmdir touch \
-     export unset env which source free clear help exit true false; \
+     export unset env which source free nproc clear help exit true false; \
      ifconfig, ping HOST [COUNT], host NAME (DNS). Programs: fetch [-i] [-o \
      FILE] [-H 'Name: value'] [-d DATA] URL (HTTP and HTTPS); llm QUESTION \
      (a language model); trace COMMAND; edit FILE and kilo FILE (editors); \
@@ -636,6 +636,9 @@ let rec builtin name args c out =
            | None -> ok := 1) args
    | ("source" | "."), f :: rest -> ok := run_file f rest
    | "version", _ -> Printf.fprintf out "MyNOS %s\n" (Mynos.version ())
+   | "nproc", [] ->
+     (* the processors (sched_getaffinity's, as Linux's nproc) *)
+     Printf.fprintf out "%d\n" (Domain.recommended_domain_count ())
    | "free", _ ->
      let p = (Mynos.stats ()).Mynos.free_pages in
      Printf.fprintf out "%d KB free\n" (p * 4)
@@ -733,7 +736,7 @@ and is_builtin = function
   | "cd" | "pwd" | "echo" | "cat" | "ls" | "cp" | "mv" | "rm" | "mkdir" | "rmdir"
   | "touch" | "export" | "unset" | "env" | "which" | "source" | "." | "free" | "ps" | "kill"
   | "clear" | "help" | "exit" | "true" | "false" | "ifconfig" | "ping" | "host"
-  | "ask" | "keymap" | "version" -> true
+  | "ask" | "keymap" | "version" | "nproc" -> true
   | _ -> false
 
 (* ---- running ---- *)

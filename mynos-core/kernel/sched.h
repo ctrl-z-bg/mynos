@@ -29,6 +29,7 @@ void readyQueueInsert(tss_t * t);
 tss_t * readyQueueNext();
 tss_t * readyQueueExtractThread(tss_t * t);
 uint32_t readyQueueNElem();
+void sched_handoff(tss_t * t);
 void sched();
 
 // timer queue stuff

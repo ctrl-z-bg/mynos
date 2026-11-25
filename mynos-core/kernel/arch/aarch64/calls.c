@@ -28,6 +28,7 @@
 #include "mem/mem.h"
 #include "mynos.h"
 #include "kutils.h"
+#include "io.h"
 #include "pit.h"
 
 extern uint32_t timerTicks;
@@ -55,6 +56,26 @@ extern int _mynos_syscall_setTimer();
 extern int __OS_threadCreate();
 extern void __OS_threadExit(void *), __OS_fillStats(void *);
 
+/* port I/O (102): no ports on ARM; a driver's inportb and outportb come
+   here, and the machine's devices answer the few ports io.c knows (COM2
+   on the UART: the console's serial input). op 0 reads, 1 writes. The io
+   privilege only: as `in` and `out` on the PC, without it the process
+   ends (the PC's protection fault, signal 11) */
+static long native_portio(long op, long port, long value)
+{
+  if (!(processTable[currProcess]->privileges & MYNOS_PRIV_IO)) {
+    printk("process ");
+    print_ulong(CURRPID);
+    printk(" killed: port I/O without the io privilege\n");
+    killProcess(SIGNAL_STATUS(11));
+    sched();
+    return MYNOS_ERR_DENY;                       /* not reached */
+  }
+  if (op == 0) return inportb((unsigned short)port);
+  outportb((unsigned short)port, (unsigned char)value);
+  return 0;
+}
+
 static long native_threadExit(long r) { __OS_threadExit((void *)r); return 0; }
 static long native_fillStats(long p) { __OS_fillStats((void *)p); return 0; }
 
@@ -75,6 +96,7 @@ static const struct { int n; call_t f; int wide; } natives[] = {
   { 36, C(_mynos_syscall_faults) }, { 37, C(_mynos_syscall_pager) },
   { 38, C(_mynos_syscall_procstat) }, { 39, C(_mynos_syscall_dmaAlloc), 1 },
   { 100, C(_mynos_syscall_enableIrq) }, { 101, C(_mynos_syscall_disableIrq) },
+  { 102, C(native_portio) },
   { 200, C(__OS_threadCreate) }, { 201, C(native_threadExit), 1 },
   { 202, C(__OS_threadSelf) }, { 300, C(_mynos_syscall_setTimer) },
   { 400, C(native_fillStats), 1 },
@@ -109,6 +131,7 @@ extern int _linux_syscall_nosignals(), _linux_syscall_uname(), _linux_syscall_wa
 extern int _linux_syscall_getrandom(), _linux_syscall_ioctl(), _linux_syscall_getuid();
 extern int _linux_syscall_clock_gettime64(), _linux_syscall_clock_nanosleep64();
 extern int _linux_syscall_futex_time64(), _linux_syscall_gettid(), _linux_syscall_sched_yield();
+extern int _linux_syscall_sched_getaffinity();
 extern int _linux_syscall_set_tid_address();
 extern void _linux_syscall_exit(int), _linux_syscall_exit_thread(int);
 extern int _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id);
@@ -225,6 +248,7 @@ static const struct { int n; call_t f; int wide; } linux_calls[] = {
   { 96, C(_linux_syscall_set_tid_address) }, { 98, C(l_futex) },
   { 101, C(l_nanosleep) }, { 113, C(_linux_syscall_clock_gettime64) },
   { 115, C(_linux_syscall_clock_nanosleep64) }, { 124, C(_linux_syscall_sched_yield) },
+  { 123, C(_linux_syscall_sched_getaffinity) },
   { 129, C(_linux_syscall_kill) }, { 130, C(_linux_syscall_kill) },
   { 131, C(_linux_syscall_tgkill) }, { 132, C(_linux_syscall_nosignals) },
   { 134, C(_linux_syscall_nosignals) }, { 135, C(_linux_syscall_nosignals) },

@@ -2001,3 +2001,22 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   end, finding nothing. Fixed on the way, for every architecture:
   `initIPC` ran after the boot's processes, which could have opened a
   port already (JOURNAL).
+- **2026-11-25** — mynos-c6a: a thread woken by `FUTEX_WAKE` runs at
+  once, before its waker, unless another processor idles (Linux's
+  wake-up preemption, in short): OCaml domains that allocate, on one
+  processor, 6.6 times faster (6.93 s to 1.05 s; doc/decisions/smp.md).
+  `sched_getaffinity` on the three architectures: `nproc` (new in `sh`),
+  musl's `sysconf` and OCaml's `Domain.recommended_domain_count` count
+  the processors; `tests/smp` checks it. The other processors now start
+  before the first process (the first programs saw one). sysmonitor 1.1
+  (not published): the load of all the processors together, their
+  number. AArch64: `ARCH=aarch64` for `run-qemu.sh` and `run-demo.sh`
+  (QEMU from the host or the `dev-aarch64` container), the console on
+  the UART (COM2's registers answered by the PL011, a native call for
+  drivers' port I/O, 102), virtio disk and network card running (FAT32,
+  DHCP, httpd); the four C tests in x86 assembly ported (`abi`, `fpu`,
+  `stress` passing there, `bench` running: the generic timer's counter
+  readable from EL0); the accessed and dirty bits the external pager
+  reads kept by faults on AArch64 (ARMv8.0 has none for software); the
+  PC's drivers (ata, keyboardd, seriald) end cleanly when their hardware
+  is absent. `build-aarch64.sh` builds everything by default. JOURNAL.

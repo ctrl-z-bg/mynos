@@ -21,11 +21,21 @@
 #define PAGE 4096
 #define RUNS 5
 
+#if defined(__aarch64__)
+/* AArch64: the generic timer's virtual counter (its rate: CNTFRQ, 62.5
+   MHz on QEMU virt), measured as the TSC's; its "cycles" are its counts */
+static inline unsigned long long rdtsc(void) {
+  unsigned long long v;
+  __asm__ volatile ("isb; mrs %0, cntvct_el0" : "=r"(v));
+  return v;
+}
+#else
 static inline unsigned long long rdtsc(void) {
   unsigned lo, hi;
   __asm__ volatile ("rdtsc" : "=a"(lo), "=d"(hi));
   return ((unsigned long long)hi << 32) | lo;
 }
+#endif
 
 static double mhz;                    /* the TSC's rate */
 
@@ -48,8 +58,14 @@ static double one_syscall(void) {
   int i, n = 20000;
   unsigned long long t = rdtsc();
   for (i = 0; i < n; i++) {
+#if defined(__aarch64__)
+    register long x8 __asm__("x8") = 172;          /* getpid */
+    register long x0 __asm__("x0");
+    __asm__ volatile ("svc #0" : "=r"(x0) : "r"(x8) : "memory");
+#else
     long r = 20;
     __asm__ volatile ("int $0x80" : "+a"(r) : : "memory");
+#endif
   }
   return (double)(rdtsc() - t) / n;
 }
@@ -208,7 +224,11 @@ int main(int argc, char ** argv) {
   clock_gettime(CLOCK_MONOTONIC, &t1);
   mhz = (double)(c1 - c0) /
         ((t1.tv_sec - t0.tv_sec) * 1e6 + (t1.tv_nsec - t0.tv_nsec) / 1e3);
+#if defined(__aarch64__)
+  printf("bench: the counter runs at %.0f MHz (its counts are the cycles below)\n", mhz);
+#else
   printf("bench: the TSC runs at %.0f MHz\n", mhz);
+#endif
 
   for (r = 0; r < RUNS; r++) v[r] = one_syscall();
   report("a system call (getpid)", median(v, RUNS));

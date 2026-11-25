@@ -26,7 +26,11 @@ is not: it is written for one processor, whose critical section is
   stage, decided by measurements.
 - **The other processors**: found in the ACPI MADT, started with
   INIT-SIPI-SIPI from a trampoline below 1 MB; each has its LAPIC, whose
-  timer gives it its time slices.
+  timer gives it its time slices. They are started before the first
+  process (until 2026-11-25 after, in processor 0's idle thread: the
+  first programs saw one processor); programs learn how many there are
+  from `sched_getaffinity` (`nproc`, `sysconf`, OCaml's
+  `Domain.recommended_domain_count`).
 - **Devices' interrupts stay on the 8259, delivered to processor 0
   only.** The IOAPIC would spread them, which no device needs today.
   Processors talk with inter-processor interrupts (IPIs): to wake a
@@ -122,6 +126,31 @@ stop-the-world barrier waits, spinning, for domains that are not running
 (the main one, blocked in `join`): on one processor each wait lasts until
 the next preemption. The same with more domains than processors (four
 domains and the main one on four). mynos-c6a.
+
+What it was (measured with the timer sampling the user program counter):
+at each minor collection the allocating domain leads a stop-the-world
+section, wakes the main domain's backup thread through a futex, finishes
+its own part first, goes back to allocating, and at the next collection
+finds the section not yet closed: it retries in a loop
+(`caml_empty_minor_heaps_once`), without a system call, while the backup
+thread, woken and ready, waits for the end of the time slice. Linux lets
+a woken thread preempt its waker; MyNOS now runs a thread woken by
+`FUTEX_WAKE` at once, before the waker, unless another processor idles
+(`sched_handoff`). Seconds, KVM, after:
+
+| domains | 1 CPU before | 1 CPU after | 4 CPUs after |
+|--------:|-------------:|------------:|-------------:|
+| 1       | 6.93         | 1.05        | 0.48         |
+| 2       | 18.20        | 13.79       | 0.53         |
+| 4       | 59.36        | 42.55       | 3.45         |
+
+With more domains than processors the leader also waits for domains
+that are ready but not woken by it (running OCaml, they answer the
+interrupt at their next poll): that wait lasts the time slice. With a
+4 ms slice instead of 10 ms, on one processor: 0.68, 6.44 and 19.06 s,
+and the computation of the first table unchanged (3.50 s for one
+domain, 7.01 for two). Not adopted: the time slice is every program's,
+the owner's decision (asked on 2026-11-25).
 
 The suite (TCG, multi-threaded) takes the same 230 s at four processors:
 its time is set by fixed waits, not by the processor.

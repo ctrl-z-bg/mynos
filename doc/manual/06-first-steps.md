@@ -79,6 +79,7 @@ A command is either **built into** `sh` or a **program**: a file that
 | `which NAME` | where a command comes from |
 | `source FILE` (or `. FILE`) | run the commands of a file in this shell |
 | `free` | free memory |
+| `nproc` | the number of processors (4 on x86-64, 1 on the i386) |
 | `ps`, `kill PID` or `kill SERVICE` | processes (6.10) |
 | `keymap [us\|it]` | the keyboard layout (6.4) |
 | `ifconfig`, `ping HOST [COUNT]`, `host NAME` | the network (chapter 9) |

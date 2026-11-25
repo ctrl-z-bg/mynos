@@ -86,11 +86,25 @@ static inline pte_t pte_hw(pte_t v)
   return v;
 }
 static inline void pte_set(pte_t * p, pte_t v) { *p = pte_hw(v); }
-/* the pager's clock: the use forgotten (only MyNOS reads the bit) */
-static inline void pte_mark_old(pte_t * p) { *p &= ~(1UL << 60); }
-/* written back: a writable page is counted as written until it is
-   given again (no hardware dirty bit) */
-static inline void pte_mark_clean(pte_t * p) { (void)p; }
+/* ARMv8.0 keeps no accessed and dirty bits for MyNOS: they are kept by
+   software, with faults (the pager's clock and write-back, pager.c).
+   Use forgotten: the access flag off too, the next access faults;
+   written back: a writable page read-only for the hardware (MyNOS's own
+   writable bit kept), the next write faults. pte_fault_fixup, from the
+   page fault handler, gives the access flag (and the accessed bit), and
+   on a write the hardware's writable bit (and the dirty one) back. */
+/* (ptebits.h's bits: 55 PF_READWRITE, 60 PF_ACCESSED, 61 PF_DIRTY) */
+static inline void pte_mark_old(pte_t * p) { *p &= ~((1UL << 60) | PTE_AF); }
+static inline void pte_mark_clean(pte_t * p)
+{
+  *p &= ~(1UL << 61);
+  if (*p & (1UL << 55)) *p |= PTE_AP_RO;
+}
+static inline void pte_fault_fixup(pte_t * p, int write)
+{
+  *p |= PTE_AF | (1UL << 60);
+  if (write && (*p & (1UL << 55))) *p = (*p & ~PTE_AP_RO) | (1UL << 61);
+}
 
 /* the entry of [va] in the address space whose top table is [top]; NULL
    if a table on the way does not exist */

@@ -19,6 +19,9 @@
 
 /* the machine, as uname says it */
 #define ARCH_MACHINE "aarch64"
+/* the boot's messages: what plays the PC's 8259 and 8253 */
+#define ARCH_PIC_NAME   "the GICv2 interrupt controller"
+#define ARCH_TIMER_NAME "the generic timer (virtual, 1000 Hz)"
 
 /* page table entries with ARM's bits (ptebits.h, paging.h's pte_set) */
 #define ARCH_PTE_BITS

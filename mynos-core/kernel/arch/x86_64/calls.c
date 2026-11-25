@@ -137,6 +137,7 @@ extern int _linux_syscall_nosignals(), _linux_syscall_uname(), _linux_syscall_wa
 extern int _linux_syscall_getrandom(), _linux_syscall_ioctl(), _linux_syscall_getuid();
 extern int _linux_syscall_clock_gettime64(), _linux_syscall_clock_nanosleep64();
 extern int _linux_syscall_futex_time64(), _linux_syscall_gettid(), _linux_syscall_sched_yield();
+extern int _linux_syscall_sched_getaffinity();
 extern int _linux_syscall_set_tid_address();
 extern void _linux_syscall_exit(int), _linux_syscall_exit_thread(int);
 extern int _linux_syscall_NOTIMPLEMENTED(uint32_t syscall_id);
@@ -269,6 +270,7 @@ static const struct { int n; call_t f; int wide; } linux_calls[] = {
   { 13, C(_linux_syscall_nosignals) }, { 14, C(_linux_syscall_nosignals) },
   { 16, C(_linux_syscall_ioctl) }, { 20, C(_linux_syscall_writev) },
   { 24, C(_linux_syscall_sched_yield) }, { 25, C(_linux_syscall_mremap) },
+  { 204, C(_linux_syscall_sched_getaffinity) },
   { 12, C(l_brk), 1 }, { 89, C(l_readlink) },
   { 34, C(_linux_syscall_pause) }, { 35, C(l_nanosleep) },
   { 39, C(_linux_syscall_getpid) }, { 56, C(arch_clone) },

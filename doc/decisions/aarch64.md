@@ -90,6 +90,30 @@ configuration space is memory (ECAM), not the ports 0xCF8/0xCFC.
 Console and log on the UART; disk, network, keyboard and mouse, display
 (virtio-gpu or ramfb) as on x86 with virtio.
 
+  The UART plays the PC's COM2, the log's port and the serial console's
+  (doc/decisions/console.md): the kernel answers COM2's registers with
+  the PL011's (`arch/aarch64/io.c`: the data, the line status, the
+  scratch register, the "byte received" interrupt). A driver's
+  `inportb` and `outportb`, which on ARM cannot reach ports, are a
+  native call (102) that the kernel answers from the same table, the
+  rest reading 0xFF as an empty bus: consoled reads a terminal's keys
+  from it unchanged, the PC's drivers (ata, keyboardd, seriald) find
+  nothing and end. Without the io privilege the call ends the process,
+  as `in` does on the PC (signal 11). The
+  PL011's interrupt is the GIC's 33, line 1 (free: no PS/2 keyboard),
+  level-triggered: consoled registers it as a PCI line's, masked at each
+  interrupt until it has read the bytes.
+
+**9. Running.** `ARCH=aarch64` for `tools/run-qemu.sh`,
+`tools/run-demo.sh`: the modules made into one archive
+(`tools/mkmodules.py`), `-M virt -cpu cortex-a72`, virtio devices only,
+RAM from 128 MB (the archive at 64 MB) to 1 GB (choice 3); of a caller's
+two `-serial` the second (COM2's) is the UART. No display yet:
+`run-demo.sh` makes the terminal the console. QEMU's AArch64 emulator
+is the host's, or the `dev-aarch64` container's (the tree, `/tmp` and the
+disk's folder mounted at their own paths, the host's network for
+`HTTP`'s forwarding).
+
 ## Risks
 
 - **The amount**: the plan's estimate is 15-25 days for `virt` and the

@@ -32,6 +32,12 @@ int main()
 {
   int sem;
 
+  /* no PC keyboard controller (AArch64: its ports read 0xFF): nothing to
+     drive, and its line is another device's there */
+  if (inportb(0x64) == 0xFF) {
+    mynos_log("keyboardd: no PC keyboard controller\n");
+    return 0;
+  }
   sem = mynos_driverRegister("keyboard", 1, NULL, NULL);
   mynos_log("keyboardd: sem = %d\n", sem);
 

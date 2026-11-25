@@ -182,6 +182,7 @@ counts from the boot.
 | 258 | `set_tid_address` | the word to clear and wake when the thread ends |
 | 224 | `gettid` | the thread id |
 | 158 | `sched_yield` | gives the processor to the next ready thread |
+| 242 | `sched_getaffinity` | every processor: what `nproc`, musl's `sysconf(_SC_NPROCESSORS_ONLN)` and OCaml's `Domain.recommended_domain_count` count |
 
 **Signals** (D.8).
 
@@ -423,7 +424,7 @@ value", and "wake N sleepers on this word".
 |---|---|
 | `FUTEX_WAIT` | if the word still holds the value, wait, with an optional relative timeout; `-EAGAIN` if it changed, `-ETIMEDOUT` |
 | `FUTEX_WAIT_BITSET` | the same, with an absolute time (`CLOCK_MONOTONIC`, or `CLOCK_REALTIME` with that flag); the bit set is ignored |
-| `FUTEX_WAKE`, `FUTEX_WAKE_BITSET` | wake up to N waiters on the word; the number woken |
+| `FUTEX_WAKE`, `FUTEX_WAKE_BITSET` | wake up to N waiters on the word; the number woken. The first one woken runs at once, before the caller, unless another processor idles and takes it |
 | `FUTEX_REQUEUE` | wake N, move up to M others to a second word |
 | `FUTEX_CMP_REQUEUE` | the same, if the word still holds a given value (the two requeues serve musl's condition variables) |
 | anything else | `-ENOSYS` |
@@ -437,6 +438,17 @@ already woken it must not be woken again by a `FUTEX_WAKE` before it
 runs, or its private semaphore is left at 1 and its next blocking call
 returns at once. A wake therefore signals a timed waiter only if it can
 still take it off the timer queue.
+
+A woken thread runs **before the thread that woke it** (when no other
+processor idles to take it): the waker stays ready, in its place in the
+round. Until 2026-11-25 the waker went on to the end of its time slice,
+up to 10 ms; Linux's scheduler instead lets a thread that has slept
+preempt the one that woke it. OCaml 5's domains showed the difference:
+at each minor collection, the domain that needs it wakes the others
+(or, for a domain blocked in `Domain.join`, its backup thread), and
+later spins waiting for the one it woke to finish. On one processor a
+program whose second domain allocated was 6.6 times slower than now
+(mynos-c6a).
 
 **The end of a thread.** `exit` (1) ends the calling thread. If its
 `clear_child_tid` word is set (by `CLONE_CHILD_CLEARTID` or

@@ -14,7 +14,9 @@
    processor has them) and their own rounding mode, while each spins long
    enough to be preempted many times; then each checks that it finds
    everything as it left it. Without the kernel saving the FPU at context
-   switches, the other thread's FNINIT and loads change them. */
+   switches, the other thread's FNINIT and loads change them. On AArch64
+   the same with the floating-point and SIMD registers (d16-d18, all of
+   v19) and FPCR's rounding mode. */
 
 #include <pthread.h>
 #include <stdio.h>
@@ -36,6 +38,30 @@ static void * worker(void * arg)
   /* thread 0: round toward zero; thread 1: round to nearest */
   unsigned short cw = id == 0 ? 0x0F7F : 0x037F, cw_out;
   int round;
+#if defined(__aarch64__)
+  /* thread 0: round toward zero (FPCR.RMode 3); thread 1: to nearest */
+  unsigned long fpcr = id == 0 ? 3ul << 22 : 0, fpcr_out;
+  double v_in[2] = { 7.75 * (id + 1), -0.5 * (id + 1) }, v_out[2];
+  (void)cw; (void)cw_out;
+  for (round = 0; round < ROUNDS; round++) {
+    asm volatile("msr fpcr, %[fpcr]\n\t"
+                 "ldr d16, [%[in]]\n\t" "ldr d17, [%[in], #8]\n\t" "ldr d18, [%[in], #16]\n\t"
+                 "ld1 {v19.2d}, [%[vin]]\n\t"
+                 "mov x9, %[spin]\n"
+                 "1:\tsubs x9, x9, #1\n\tb.ne 1b\n\t"
+                 "str d16, [%[out]]\n\t" "str d17, [%[out], #8]\n\t" "str d18, [%[out], #16]\n\t"
+                 "st1 {v19.2d}, [%[vout]]\n\t"
+                 "mrs %[fo], fpcr\n\t"
+                 "msr fpcr, xzr"
+                 : [fo] "=&r"(fpcr_out)
+                 : [fpcr] "r"(fpcr), [in] "r"(in), [out] "r"(out), [vin] "r"(v_in),
+                   [vout] "r"(v_out), [spin] "r"((long)SPIN)
+                 : "x9", "v16", "v17", "v18", "v19", "memory");
+    if (memcmp(in, out, sizeof in)) r->x87_bad++;
+    if (fpcr_out != fpcr) r->cw_bad++;
+    if (memcmp(v_in, v_out, sizeof v_in)) r->sse_bad++;
+  }
+#else
   for (round = 0; round < ROUNDS; round++) {
     asm volatile("fninit\n\t"
                  "fldcw %4\n\t"
@@ -59,21 +85,30 @@ static void * worker(void * arg)
       if (s_out != s_in) r->sse_bad++;
     }
   }
+#endif
   return r;
 }
 
 int main(void)
 {
-  unsigned a = 1, b, c, d;
   pthread_t t[2];
   struct result * r[2];
   int i, ok = 1;
+#if defined(__aarch64__)
+  has_sse2 = 1;                         /* SIMD: always there */
+#else
+  unsigned a = 1, b, c, d;
   asm volatile("cpuid" : "+a"(a), "=b"(b), "=c"(c), "=d"(d));
   has_sse2 = (d >> 26) & 1;
+#endif
   for (i = 0; i < 2; i++) pthread_create(&t[i], NULL, worker, (void *)i);
   for (i = 0; i < 2; i++) pthread_join(t[i], (void **)&r[i]);
   for (i = 0; i < 2; i++) {
+#if defined(__aarch64__)
+    printf("fpu: thread %d: FP registers %s, FPCR %s, SIMD %s\n", i,
+#else
     printf("fpu: thread %d: x87 registers %s, control word %s, SSE %s\n", i,
+#endif
            r[i]->x87_bad ? "CHANGED" : "kept", r[i]->cw_bad ? "CHANGED" : "kept",
            !has_sse2 ? "absent" : r[i]->sse_bad ? "CHANGED" : "kept");
     if (r[i]->x87_bad || r[i]->cw_bad || r[i]->sse_bad) ok = 0;

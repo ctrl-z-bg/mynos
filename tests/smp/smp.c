@@ -127,6 +127,10 @@ int main(void) {
   pthread_t t[THREADS], w;
   long i, bad;
 
+  /* the processors, as programs see them (sched_getaffinity: musl's
+     sysconf, nproc, OCaml's Domain.recommended_domain_count) */
+  printf("smp: %ld processors\n", sysconf(_SC_NPROCESSORS_ONLN));
+
   /* counters */
   count_sem = mynos_initSem(1);
   for (i = 0; i < THREADS; i++) pthread_create(&t[i], NULL, counter, NULL);

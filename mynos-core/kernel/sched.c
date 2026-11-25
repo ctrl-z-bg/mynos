@@ -56,6 +56,25 @@ uint32_t readyQueueNElem() {
   return pqNElem(&readyQueue);
 }
 
+/* a thread just woken (a futex's waiter) runs now, before the thread that
+   woke it, which stays ready: Linux's wake-up preemption, in short. A
+   waker that went on running kept the woken thread waiting until its
+   time slice ended (up to 10 ms): OCaml 5's domains, which wake each
+   other at every stop-the-world section and then spin waiting for the
+   one they woke, were 13 times slower on one processor (mynos-c6a).
+   Nothing to do if another processor idles: it takes the thread. */
+void sched_handoff(tss_t * t) {
+  tss_t * oldThread = currThread;
+  uint32_t i;
+  for (i = 0; i < ncpus; i++)
+    if (&cpus[i] != arch_cpu() && cpus[i].thread == cpus[i].idle) return;
+  if (t == oldThread || t->queue != (void *)&readyQueue || running_elsewhere(t))
+    return;
+  currThread = t;
+  currProcess = PSLOT(t->pid);
+  switchTo(oldThread, t);
+}
+
 #if 0
 void prova() {
   tss_t * a;

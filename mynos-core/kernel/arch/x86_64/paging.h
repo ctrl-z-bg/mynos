@@ -76,5 +76,8 @@ static inline void pte_set(pte_t * p, pte_t v) { *p = v; }
 /* the pager's clock: the page's use, its writes, forgotten */
 static inline void pte_mark_old(pte_t * p) { *p &= ~(pte_t)0x20; }      /* accessed */
 static inline void pte_mark_clean(pte_t * p) { *p &= ~(pte_t)0x40; }    /* dirty */
+/* a fault on an entry that allows the access: the hardware keeps these
+   bits itself, nothing to do (AArch64 keeps them by faults) */
+static inline void pte_fault_fixup(pte_t * p, int write) { (void)p; (void)write; }
 
 #endif

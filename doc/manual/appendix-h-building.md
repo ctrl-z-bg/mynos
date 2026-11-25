@@ -147,6 +147,18 @@ the test programs and RAM disks; `tools/clean-all.sh` then
 `tools/build-all.sh` is a build from scratch. It keeps `system/disk.img`
 on purpose (H.5).
 
+**Other architectures** (the version 2 line, branch `next`) build apart,
+each in its own copy of the sources, so that objects never mix:
+
+```
+  tools/build-x86_64.sh       x86-64, in build/x86_64/tree (dev-x86_64)
+  tools/build-aarch64.sh      AArch64, in build/aarch64/tree (dev-aarch64:
+                              a cross toolchain and QEMU's AArch64 emulator)
+```
+
+Each runs `build-all.sh`'s list in its container, with its own kernel
+build (`tools/build-kernel-x86_64.sh`, `tools/build-kernel-aarch64.sh`).
+
 ## H.5 The two disks
 
 **The RAM disk** is a GRUB module (a QEMU `-initrd` module) whose first
@@ -191,6 +203,15 @@ layout). Neither `make clean` nor `clean-all.sh` removes it; to start
 again with an empty disk, delete it and build. It is not in git (`*.img`).
 
 ## H.6 Running
+
+**Other architectures.** `ARCH=x86_64 tools/run-demo.sh` runs the
+x86-64 build, with four processors (`SMP=N` for another number);
+`ARCH=aarch64 tools/run-demo.sh` the AArch64 one on QEMU's `virt`
+machine, with virtio's disk, network card and keyboard. AArch64 has no
+display yet: its console is the terminal, on the machine's one UART
+(which plays COM2: the log and a terminal's keys); `Ctrl-A X` stops it.
+QEMU's AArch64 emulator is the host's if it has one (Debian and Ubuntu:
+the package `qemu-system-arm`), else the `dev-aarch64` container's.
 
 **A release.** `tools/make-release.sh` makes
 `tmp/release/mynos-VERSION.tar.gz` and its `.sha256`, for people who
@@ -303,6 +324,7 @@ which is what the tests do.
   tools/run-tests-all.sh                  every architecture's suite at once
   tools/run-tests.sh                      everything; exit status 0 if all passed
   ARCH=x86_64 tools/run-tests.sh          the same, in build/x86_64/tree
+                                          (four processors; SMP=1 for one)
   LANES="d" tools/run-tests.sh            only lane d
   KEEP=1 tools/run-tests.sh               keep the logs and screens, say where
   SHOTS=DIR tools/run-tests.sh            copy the graphical session's screens to DIR

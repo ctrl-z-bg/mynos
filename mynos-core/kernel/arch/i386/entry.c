@@ -380,6 +380,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .linux_gettid\n"\
 	 "   cmpl $158, %eax\n"\
 	 "   je .linux_sched_yield\n"\
+	 "   cmpl $242, %eax\n"\
+	 "   je .linux_sched_getaffinity\n"\
 	 "   cmpl $2, %eax\n"\
 	 "   je .linux_fork\n"\
 	 "   cmpl $3, %eax\n"\
@@ -502,6 +504,9 @@ __asm__ (".pushsection .text\n" \
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_sched_yield:\n"\
 	 "   call _linux_syscall_sched_yield\n"\
+	 "   jmp .exit_linux_syscall\n"\
+	 ".linux_sched_getaffinity:\n"\
+	 "   call _linux_syscall_sched_getaffinity\n"\
 	 "   jmp .exit_linux_syscall\n"\
 	 ".linux_fork:\n"\
 	 "   call _linux_syscall_fork\n"\

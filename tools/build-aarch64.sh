@@ -12,18 +12,14 @@ mkdir -p "$tree"
 (cd "$root" && git ls-files -z) | (cd "$root" && rsync -a --from0 --files-from=- ./ "$tree/")
 version=$("$root/tools/version.sh")
 [ "$(cat "$tree/VERSION" 2>/dev/null)" = "$version" ] || echo "$version" > "$tree/VERSION"
-# what builds on AArch64 so far (the rest of build-all.sh's list comes
-# as its pieces are ported)
-default='
-mkdir -p mynos-lib/lib
-sh tools/build-kernel-aarch64.sh
-make -C mynos-lib
-make -C services
-make -C mynos-runtime
-make -C mynos-lib/ocaml
-(cd tests/hello && ocamlc -o hello.byte hello.ml)
-(cd tests/ramdisk && ../../services/fs/memrofs/tool/createDisk AUTOEXEC.BAT)
-'
+# what to run there: the arguments, or the whole build of build-all.sh
+# (its commands, but the kernel's: tools/build-kernel-aarch64.sh's), with
+# the cross toolchain's strip for the programs
+default=$(sed -n "/^exec \"\$root\/tools\/in-container.sh\" dev sh -euc '/,/^'\$/p" "$root/tools/build-all.sh" |
+          sed '1d;$d' |
+          sed 's@^make -C mynos-core/kernel$@sh tools/build-kernel-aarch64.sh@')
+default="export STRIP=aarch64-linux-gnu-strip
+$default"
 script=${*:-$default}
 # MyNOS's C code was written where char is signed (x86): the same here
 exec podman run --rm --platform linux/amd64 -v "$tree:/mynos:Z" -w /mynos \
