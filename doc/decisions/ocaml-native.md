@@ -2,9 +2,10 @@
 
 - **Issues:** mynos-btq.4, in the version 2 line (mynos-btq)
 - **Date:** 2026-11-25
-- **Status:** measured first, as the owner asked ("it counts as much as
-  the measurements do, to see whether it is worth it"); the design, its
-  trade-offs and risks are kept here for when it is.
+- **Status:** deferred by the owner (2026-11-25), after the
+  measurements below: with a real processor bytecode is not what is
+  slow. The design, its trade-offs and risks are kept here for when it
+  is worth it (the browser version, a slow processor).
 
 ## The design proposed
 
@@ -79,6 +80,7 @@ idle 75-95% of the time: its time is waiting, not computing.
 
 ## Next
 
-Recommended to the owner: native code deferred (the design above kept);
-the disk driver's waiting fixed instead (mynos-9rw: the interrupt, not a
-loop on the status port).
+Deferred (the owner, 2026-11-25); the disk driver's waiting fixed
+instead (mynos-9rw: the interrupt, not a loop on the status port). A
+table of bytecode against native times needs the prototype: the
+toolchain above and the services built with it.
