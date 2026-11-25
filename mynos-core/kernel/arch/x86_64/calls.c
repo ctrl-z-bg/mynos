@@ -48,7 +48,6 @@ static uint64_t rdmsr(uint32_t msr)
 }
 
 extern void syscall_entry(void);
-extern tss_t * currThread;
 extern uint32_t timerTicks;
 
 /* the syscall instruction: on (EFER.SCE), its entry, the kernel's code

@@ -35,7 +35,6 @@ uint32_t __total_phy_pages;
 static void __cowManager(pte_t * pte, vaddr_t addr);
 static void __allocateOnUse(pte_t * pte, vaddr_t addr);
 
-extern uint32_t currProcess;
 
 /* Physical ranges already in use at boot outside the first 4MB (the
    multiboot modules), registered by mynos_main before init_memory so that

@@ -50,7 +50,7 @@
 
 static char * default_argv[] = { "mynos", NULL };
 extern process_descriptor_t * processTable[];
-extern uint32_t currProcess, numProcesses, numThreads;
+extern uint32_t numProcesses, numThreads;
 extern modinfo_t bytecode;
 
 extern void startThread();

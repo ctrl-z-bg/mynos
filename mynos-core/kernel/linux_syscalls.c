@@ -35,7 +35,6 @@
 #include "random.h"
 #include "softtaskswitch.h"
 
-extern uint32_t currProcess;
 
 typedef unsigned long int clock_t;
 struct tms {

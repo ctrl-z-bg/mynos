@@ -10,7 +10,6 @@ section .text
 
 extern x86_trap
 extern x86_syscall
-extern kernel_rsp0
 
 %macro SAVE 0
 	cld
@@ -36,8 +35,16 @@ global int_null
 int_null:
 	iretq
 
+; from a process (its cs's privilege 3, in the frame): GS's base the
+; processor's (percpu.h); and back to one, the process's
+%define FRAME_CS 144
+
 global trap_return
 trap_return:
+	test	byte [rsp + FRAME_CS], 3
+	jz	.kernel
+	swapgs
+.kernel:
 	pop	r15
 	pop	r14
 	pop	r13
@@ -74,6 +81,10 @@ EXC i
 
 trap_common:
 	SAVE
+	test	byte [rsp + FRAME_CS], 3
+	jz	.kernel
+	swapgs
+.kernel:
 	mov	rdi, rsp
 	call	x86_trap
 	jmp	trap_return
@@ -87,14 +98,16 @@ native_call_entry:
 	jmp	trap_common
 
 ; Linux's calls: syscall (the processor saves rip in rcx, rflags in r11,
-; and switches nothing else): the kernel stack from kernel_rsp0, then the
+; and switches nothing else): GS the processor's, the kernel stack from
+; its struct cpu (gs:8, the user's stack pointer kept at gs:16), then the
 ; same frame as an interrupt's, so that every way out is trap_return
 global syscall_entry
 syscall_entry:
-	mov	[rel user_rsp], rsp
-	mov	rsp, [rel kernel_rsp0]
+	swapgs
+	mov	[gs:16], rsp
+	mov	rsp, [gs:8]
 	push	0x23                    ; ss: user data
-	push	qword [rel user_rsp]    ; rsp
+	push	qword [gs:16]           ; rsp
 	push	r11                     ; rflags
 	push	0x1B                    ; cs: user code
 	push	rcx                     ; rip
@@ -105,9 +118,6 @@ syscall_entry:
 	call	x86_syscall
 	jmp	trap_return
 
-section .data
-user_rsp:	dq 0
-section .text
 
 ; switch_stacks(&old->rsp, new rsp): the callee-saved registers of the
 ; thread switched out stay on its stack, its stack pointer in *old

@@ -33,7 +33,6 @@
 #include "mynos.h"
 #include "ipc/channel.h"
 
-extern uint32_t currProcess;
 
 void _mynos_syscalls_trap_TRAP();
 /* the entry, by number: arch/i386/entry.c */

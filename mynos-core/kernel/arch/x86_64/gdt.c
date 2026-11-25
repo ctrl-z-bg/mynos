@@ -14,6 +14,7 @@
 #include "global.h"
 #include "gdt.h"
 #include "video.h"
+#include "process.h"
 
 struct tss64 {
   uint32_t reserved0;
@@ -39,13 +40,33 @@ static uint64_t gdt[7] __attribute__((aligned(16))) = {
 static struct { uint16_t limit; uint64_t base; } __attribute__((packed)) gdtr;
 
 /* the kernel stack's top for the current kernel entries; also read by the
-   syscall entry (entry.asm), which the processor does not switch */
-uint64_t kernel_rsp0;
-
+   syscall entry (entry.asm), which the processor does not switch: the
+   processor's struct cpu holds it */
 void gdt_set_rsp0(uint64_t rsp0)
 {
   tss.rsp0 = rsp0;
-  kernel_rsp0 = rsp0;
+  arch_cpu()->rsp0 = rsp0;
+}
+
+#define MSR_GS_BASE        0xC0000101
+#define MSR_KERNEL_GS_BASE 0xC0000102
+static void wrmsr(uint32_t msr, uint64_t v)
+{
+  __asm__ volatile ("wrmsr" : : "c"(msr), "a"((uint32_t)v), "d"((uint32_t)(v >> 32)));
+}
+
+/* this processor's struct cpu in GS's base; the processes' GS (0) in the
+   one swapgs exchanges it with */
+void arch_cpu_set(struct cpu * c)
+{
+  c->self = c;
+  wrmsr(MSR_GS_BASE, (uint64_t)c);
+  wrmsr(MSR_KERNEL_GS_BASE, 0);
+}
+
+void arch_cpu_boot(void)
+{
+  arch_cpu_set(&cpus[0]);
 }
 
 void _init_gdt(void)
@@ -69,7 +90,6 @@ void _init_gdt(void)
                     "movw %%ax, %%ss\n\t"
                     "xorw %%ax, %%ax\n\t"
                     "movw %%ax, %%fs\n\t"
-                    "movw %%ax, %%gs\n\t"
                     : : "m"(gdtr) : "rax", "memory");
   __asm__ volatile ("ltr %w0" : : "r"(GDT_TSS_SEL));
   printk("GDT and TSS (64 bits) loaded\n");

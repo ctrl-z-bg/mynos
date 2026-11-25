@@ -118,6 +118,8 @@ void mynos_main(multiboot_info_t *boot_info) {
   module_t * module;
   modinfo_t modinfo[MAXMODULES];
   int i;
+
+  arch_cpu_boot();                /* this processor's struct cpu (percpu.h) */
   int nmodules;
 
   arch_irq_disable();

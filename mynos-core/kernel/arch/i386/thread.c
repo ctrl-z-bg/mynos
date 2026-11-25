@@ -44,8 +44,6 @@
 #define CLONE_THREAD         0x00010000
 
 extern process_descriptor_t * processTable[];
-extern uint32_t currProcess;
-extern tss_t * currThread;
 
 /* a new thread of the current process: it starts at [entry], on the user
    stack [stack] */

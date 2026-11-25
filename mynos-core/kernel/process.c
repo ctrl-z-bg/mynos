@@ -43,12 +43,13 @@
 
 process_descriptor_t * processTable[MAXPROCESSES];
 uint32_t numProcess = 1;
-uint32_t currProcess = 0;  /* the first process is the idle process */
+/* the processors (process.h); the first runs process 0's thread at boot */
+struct cpu cpus[MAXCPUS];
+uint32_t ncpus = 1;
 
 uint32_t numProcesses = 0;
 uint32_t numThreads = 0;
 
-tss_t * currThread;
 
 extern modinfo_t bytecode;
 

@@ -45,8 +45,7 @@
 #include "mynos.h"
 
 extern process_descriptor_t * processTable[];
-extern uint32_t currProcess, numProcesses, numThreads;
-extern tss_t * currThread;
+extern uint32_t numProcesses, numThreads;
 extern paddr_t kernel_pml4, kernel_pd;
 extern struct frame * current_frame;
 extern void trap_return(void);

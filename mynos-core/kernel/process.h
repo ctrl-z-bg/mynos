@@ -107,8 +107,25 @@ typedef struct {
 
 extern process_descriptor_t * processTable[];
 extern uint32_t numProcess;
-extern uint32_t currProcess;      /* the current process's slot */
-extern tss_t * currThread;
+/* what each processor runs (doc/decisions/smp.md): the current thread and
+   process are the processor's own; arch_cpu() is the one running this
+   code (percpu.h: one on the i386; on x86-64 found through GS) */
+#define MAXCPUS 8
+struct cpu {
+  struct cpu * self;              /* x86-64: %gs:0 */
+  uint64_t rsp0;                  /* x86-64: %gs:8, the thread's kernel stack (syscall) */
+  uint64_t user_rsp;              /* x86-64: %gs:16, syscall's scratch */
+  tss_t * thread;                 /* the current thread */
+  uint32_t process;               /* the current process's slot */
+  uint32_t id;                    /* 0: the processor that booted */
+  uint32_t apic_id;               /* its local APIC's */
+  tss_t * idle;                   /* its idle thread */
+};
+extern struct cpu cpus[MAXCPUS];
+extern uint32_t ncpus;
+#include "percpu.h"
+#define currThread (arch_cpu()->thread)
+#define currProcess (arch_cpu()->process)
 
 /* the current process's pid */
 #define CURRPID (processTable[currProcess]->pid)

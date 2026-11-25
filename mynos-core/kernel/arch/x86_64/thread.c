@@ -26,8 +26,6 @@
 #include "mem/dynalloc.h"
 
 extern process_descriptor_t * processTable[];
-extern uint32_t currProcess;
-extern tss_t * currThread;
 extern paddr_t kernel_pml4;
 extern void trap_return(void);
 
