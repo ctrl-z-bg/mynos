@@ -354,6 +354,9 @@ void mynos_main(multiboot_info_t *boot_info) {
   }
 #endif
 
+  /* the other processors, if any (doc/decisions/smp.md) */
+  arch_smp_start();
+
   // this is the idle process: wait for the next interrupt
   while(1) {
     arch_wait_interrupt();

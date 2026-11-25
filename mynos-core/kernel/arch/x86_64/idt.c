@@ -52,6 +52,12 @@ extern void int_null(void);
 void __OS_initExternalIRQs(void);
 void arch_init_calls(void);
 
+/* another processor's: the same IDT (smp.c) */
+void idt_load(void)
+{
+  __asm__ volatile ("lidt %0" : : "m"(idtr));
+}
+
 void init_idt(void)
 {
   int i;

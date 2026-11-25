@@ -26,15 +26,16 @@ struct tss64 {
   uint16_t iomap;                 /* past the limit: no I/O bitmap */
 } __attribute__((packed));
 
-static struct tss64 tss __attribute__((aligned(16)));
+/* one per processor (doc/decisions/smp.md) */
+static struct tss64 tss[MAXCPUS] __attribute__((aligned(16)));
 
-static uint64_t gdt[7] __attribute__((aligned(16))) = {
+static uint64_t gdt[5 + 2 * MAXCPUS] __attribute__((aligned(16))) = {
   0,
   0x00AF9A000000FFFFULL,          /* kernel code, 64 bits */
   0x00CF92000000FFFFULL,          /* kernel data */
   0x00AFFA000000FFFFULL,          /* user code, 64 bits, DPL 3 */
   0x00CFF2000000FFFFULL,          /* user data, DPL 3 */
-  0, 0                            /* the TSS: 16 bytes, filled in */
+  /* then each processor's TSS: 16 bytes, filled in */
 };
 
 static struct { uint16_t limit; uint64_t base; } __attribute__((packed)) gdtr;
@@ -44,8 +45,9 @@ static struct { uint16_t limit; uint64_t base; } __attribute__((packed)) gdtr;
    processor's struct cpu holds it */
 void gdt_set_rsp0(uint64_t rsp0)
 {
-  tss.rsp0 = rsp0;
-  arch_cpu()->rsp0 = rsp0;
+  struct cpu * c = arch_cpu();
+  tss[c->id].rsp0 = rsp0;
+  c->rsp0 = rsp0;
 }
 
 #define MSR_GS_BASE        0xC0000101
@@ -69,13 +71,9 @@ void arch_cpu_boot(void)
   arch_cpu_set(&cpus[0]);
 }
 
-void _init_gdt(void)
+/* the GDT loaded, the code and data segments reloaded */
+static void load_gdt(void)
 {
-  uint64_t base = (uint64_t)&tss, limit = sizeof tss - 1;
-  tss.iomap = sizeof tss;
-  gdt[5] = (limit & 0xFFFF) | ((base & 0xFFFFFF) << 16) | (0x89ULL << 40) |
-           (((limit >> 16) & 0xF) << 48) | (((base >> 24) & 0xFF) << 56);
-  gdt[6] = base >> 32;
   gdtr.limit = sizeof gdt - 1;
   gdtr.base = (uint64_t)gdt;
   __asm__ volatile ("lgdt %0\n\t"
@@ -91,6 +89,26 @@ void _init_gdt(void)
                     "xorw %%ax, %%ax\n\t"
                     "movw %%ax, %%fs\n\t"
                     : : "m"(gdtr) : "rax", "memory");
+}
+
+void _init_gdt(void)
+{
+  int i;
+  for (i = 0; i < MAXCPUS; i++) {
+    uint64_t base = (uint64_t)&tss[i], limit = sizeof tss[i] - 1;
+    tss[i].iomap = sizeof tss[i];
+    gdt[5 + 2 * i] = (limit & 0xFFFF) | ((base & 0xFFFFFF) << 16) | (0x89ULL << 40) |
+                     (((limit >> 16) & 0xF) << 48) | (((base >> 24) & 0xFF) << 56);
+    gdt[6 + 2 * i] = base >> 32;
+  }
+  load_gdt();
   __asm__ volatile ("ltr %w0" : : "r"(GDT_TSS_SEL));
   printk("GDT and TSS (64 bits) loaded\n");
+}
+
+/* another processor's: the same GDT, its own TSS */
+void gdt_load_ap(uint32_t id)
+{
+  load_gdt();
+  __asm__ volatile ("ltr %w0" : : "r"(GDT_TSS_SEL + 16 * id));
 }

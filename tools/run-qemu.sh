@@ -87,7 +87,7 @@ fi
 # shellcheck disable=SC2086
 set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "${MEM:-32}" \
     -cpu "${CPU:-$cpu}" \
-    ${VERBOSE:+-append verbose} ${KVM:+-accel kvm} \
+    ${VERBOSE:+-append verbose} ${KVM:+-accel kvm} ${SMP:+-smp $SMP} \
     ${DISK:+-drive file=$DISK,format=raw,if=$disk_if} ${DISK:+$disk_dev} \
     ${NET:+-netdev user,id=n0${HTTP:+,hostfwd=tcp:127.0.0.1:$HTTP-:80}${UDP:+,hostfwd=udp::$UDP-:$UDP}} \
     ${NET:+-device $net_dev} $audio "$@"

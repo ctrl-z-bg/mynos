@@ -26,5 +26,6 @@
 void _init_gdt(void);
 /* the kernel stack's top for the next entry into the kernel */
 void gdt_set_rsp0(uint64_t rsp0);
+void gdt_load_ap(uint32_t id);       /* another processor's (smp.c) */
 
 #endif

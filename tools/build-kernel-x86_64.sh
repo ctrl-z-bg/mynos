@@ -26,6 +26,7 @@ done
 [ -z "$fails" ] || { echo "failed:$fails"; exit 1; }
 nasm -f elf64 $k/arch/x86_64/start.asm -o $out/start.o
 nasm -f elf64 $k/arch/x86_64/entry.asm -o $out/entry.o
-ld -m elf_x86_64 -nostdlib $out/start.o $out/entry.o $objs -Ttext 0x200000 -o $out/../kernel64.elf
+nasm -f elf64 $k/arch/x86_64/ap.asm -o $out/ap.o
+ld -m elf_x86_64 -nostdlib $out/start.o $out/entry.o $out/ap.o $objs -Ttext 0x200000 -o $out/../kernel64.elf
 objcopy -O elf32-i386 $out/../kernel64.elf $out/../kernel.elf
 echo "build/x86_64/kernel.elf"

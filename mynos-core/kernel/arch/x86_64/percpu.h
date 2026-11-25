@@ -27,5 +27,7 @@ static inline struct cpu * arch_cpu(void)
 
 /* the boot processor's GS, first thing in mynos_main (gdt.c) */
 void arch_cpu_boot(void);
+/* the other processors started, before the boot one becomes idle (smp.c) */
+void arch_smp_start(void);
 
 #endif
