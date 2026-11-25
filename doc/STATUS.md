@@ -1943,3 +1943,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `VERSION` against `version.sh` and ships the OFL and MPL texts.
   `tests/fpu/fpu` and `tests/stdio/stdio`, binaries committed by
   mistake, leave git (found on the x86-64 branch).
+- **2026-11-25** — The suite in about 8 minutes, not 11 (mynos-f18):
+  each section timed, and printed at the end by lane; the keyboard-driven
+  boot waits for the toplevel's prompt and for marks that sh echoes, not
+  fixed times, and is four boots at once (lanes e, f, g, h: the shell and
+  the editors; the agent, services, httpd and stdio; packages; Ctrl-C,
+  fatfs, the disk's reads and the serial terminal), each with its own
+  disk, log, sockets and host ports. Lane d (the graphical session, 480 s)
+  now sets the time.
