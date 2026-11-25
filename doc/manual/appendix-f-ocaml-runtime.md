@@ -273,9 +273,11 @@ also gives the lock up whenever it waits in a call that releases it
 (F.4): `tests/threads` checks that the others run while one waits in a
 MyNOS sleep or an IPC receive.
 
-**One processor.** The kernel runs on one CPU (mynos-awn): domains and
-threads take turns, and their speed adds up to that of one domain. What
-they give on MyNOS is a structure for programs, not speed.
+**Processors.** On x86-64 domains run in parallel on four processors;
+on the i386 they take turns on one, and their speed adds up to that of
+one domain. On one processor, domains that allocate much are slow: a
+minor collection stops every domain, and the runtime waits for them
+spinning, which there lasts until the next preemption (mynos-c6a).
 
 **Effect handlers** need nothing from the kernel. The runtime implements
 them by switching between stacks it allocates itself. `tests/effects`

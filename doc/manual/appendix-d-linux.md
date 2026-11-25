@@ -445,8 +445,10 @@ waiter on it: that is how `pthread_join` learns that the thread ended.
 If it was the last thread, the whole process ends. `exit_group` (252)
 ends the process at once; musl's `exit` uses it.
 
-**One processor.** Threads take turns on the single CPU, under the
-round robin of appendix A.5; they do not run in parallel (mynos-awn).
+**Processors.** On the i386, threads take turns on the single CPU,
+under the round robin of appendix A.5. On x86-64 they run in parallel on
+up to four processors (appendix A.4); the kernel stays one call at a
+time (a big lock).
 
 ## D.8 Signals without delivery
 
@@ -489,4 +491,6 @@ service learns that a client went away when its channel breaks
 - The clocks tick at 1000 Hz: no time is finer than 1 ms, and a sleep
   lasts what it asked plus up to a tick. The tick counter has 32 bits:
   the clocks since boot wrap after 49.7 days.
-- Threads share one processor (mynos-awn).
+- On the i386, threads share one processor; on x86-64 the kernel is one
+  call at a time (a big lock): two threads that call the kernel often
+  take turns.

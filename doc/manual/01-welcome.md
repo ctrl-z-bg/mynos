@@ -57,7 +57,8 @@ writing programs for it, in OCaml or in C. The appendices explain the
 inside, for readers who know what a page table is or want to learn.
 
 MyNOS is an experimental system, not a product: it runs in
-an emulator, on one processor, for one user.
+an emulator, for one user: on one processor (the i386) or on four
+(x86-64).
 
 ## 1.3 What you need to try it
 

@@ -335,8 +335,11 @@ present, reserved or copy-on-write, and a user page. The last test
 excludes the kernel stacks of later threads, which live among the user
 pages. `__mem_userString` and `__mem_userVector` extend it to a string
 and to a NULL-terminated `argv`. Every system call that takes a pointer
-checks it at entry; until it returns, nothing else runs (system calls run
-with interrupts off, on one processor).
+checks it at entry; until it returns, nothing else in the kernel runs
+(system calls run with interrupts off, under the big kernel lock on
+x86-64's several processors). On x86-64, another thread of the process
+may run on another processor meanwhile, and change or unmap the memory
+the pointer names: the checked copies below fault safely if it does.
 
 **`copy_to_user` and `copy_from_user`** cover the calls that block before
 they write: `recv` waits for a message and then writes its description,
@@ -499,8 +502,10 @@ process ends, its waits are freed.
 
 `query`, `evict` and `copy` refuse a page that is not the process's
 alone (copy-on-write after a `fork`, shared): the pager then leaves it
-where it is. They act on another process, which is not running while
-the pager is (one processor): no stale translation of it is cached.
+where it is. They act on another process, which on the i386 is not
+running while the pager is; on x86-64 it may run on another processor,
+and the change of its entry is told to it (a TLB shootdown, appendix
+A.4).
 
 **pagerd** (`services/pager/pagerd.ml`, started by `init` as a driver)
 is the pager of MyNOS (appendix E.16). It gives:

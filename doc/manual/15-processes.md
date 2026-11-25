@@ -365,8 +365,11 @@ fib 22 = 17711
 hits: 4000
 ```
 
-MyNOS runs on one processor (mynos-awn): domains take turns and are not
-faster than one. They are a way to structure a program: a terminal window
+On x86-64, MyNOS runs on four processors: domains run in parallel, and
+four domains computing take the time of one (a measurement:
+doc/decisions/smp.md). On the i386 there is one processor: domains take
+turns and are not faster than one. They are also a way to structure a
+program: a terminal window
 serves its console requests in one domain and draws in another, and
 `init` serves power/1 in a domain of its own. Each domain is a Linux
 thread, with a second "backup" thread of the runtime (appendix F.7).

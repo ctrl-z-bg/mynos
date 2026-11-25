@@ -196,8 +196,18 @@ thread ids (`gettid`'s: the pid for a process's first thread, from
   TLS (`set_thread_area`), and the `futex` calls on which the C library builds its
   mutexes and condition variables.
 
-All threads share **one processor**: MyNOS does not run on several CPUs
-yet (mynos-awn).
+On the i386, all threads share **one processor**. On x86-64, MyNOS runs
+on **several processors** (four by default, up to eight;
+doc/decisions/smp.md): the boot processor finds the others in ACPI's
+MADT table and starts them; each has its own current thread, kernel
+stack (in its TSS), idle thread and local APIC timer. The kernel itself
+stays one at a time: a **big kernel lock** is taken at every way in (a
+call, an interrupt, an exception) and left at the way out, so processes
+run in parallel and the kernel's code is the same as on one processor.
+Processors tell each other by inter-processor interrupts: a thread made
+ready wakes an idle processor, and a change to a page's mapping is told
+to the processors that may hold it in their TLB (a *shootdown*).
+Devices' interrupts stay on processor 0.
 
 ## A.5 The scheduler
 

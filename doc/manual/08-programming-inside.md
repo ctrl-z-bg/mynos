@@ -246,7 +246,8 @@ stops with `I/O error: dllunixbyt-...so: No such file or directory`.
 Add `mynos.cma` as well if the program also uses MyNOS's modules.
 
 OCaml 5's domains (`Domain.spawn`) need nothing special: they are in the
-standard library. MyNOS runs them on one processor, in turn.
+standard library. On x86-64 they run in parallel, one per processor; on
+the i386, on one processor, in turn.
 
 ## 8.8 Compiling and running from the toplevel
 
