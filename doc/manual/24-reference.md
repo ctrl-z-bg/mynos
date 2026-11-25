@@ -115,7 +115,7 @@ resolution). `log` writes a line to the kernel log (the serial log port,
 and the kernel's 64 KB ring); `log_position ()` is how many bytes have
 been logged since boot, `log_read from max` the logged bytes from a
 position (the oldest kept, if older). `version ()` is the system's
-version, as `uname` gives it (`2026.11-71dc1d2`). `faults pid` and
+version, as `uname` gives it (`1.0`; appendix A.2). `faults pid` and
 `process_stats pid` give a process's page faults (pid 0: the system's),
 CPU ticks (10 ms), resident pages and threads.
 

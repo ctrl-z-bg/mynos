@@ -1876,3 +1876,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   what `doc/` holds (mynos-1cf). The licences' texts next to what uses
   them: `third_party/fonts/OFL.TXT` (Terminus), `third_party/
   ca-certificates/MPL-2.0.txt` (Mozilla's authorities).
+- **2026-11-25** — Version 1.0 (the version the printed book describes).
+  `tools/version.sh` takes the version from git: `1.0` at the commit
+  tagged `v1.0`; after it the commits since, the branch when it is not
+  `main`, and the commit (`1.0+14-x86-64-591c1f4`); `-dirty` for a
+  build with changes not committed. The boot's banner adds the
+  processor (`Welcome to MyNOS 1.0 (i386)`). `make-release.sh` checks
+  `VERSION` against `version.sh` and ships the OFL and MPL texts.
+  `tests/fpu/fpu` and `tests/stdio/stdio`, binaries committed by
+  mistake, leave git (found on the x86-64 branch).

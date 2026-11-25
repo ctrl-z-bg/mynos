@@ -1037,7 +1037,7 @@ expect "keyboardd: sem = "                          # the drivers got their IRQs
 expect "seriald: sem = "
 expect "Hello from memrofs!"
 expect "fpu: all checks passed"
-expect "Welcome to MyNOS - v$(cat VERSION 2>/dev/null)"      # the boot's banner
+expect "Welcome to MyNOS $(cat VERSION 2>/dev/null) (i386)"  # the boot's banner
 expect "MyNOS $(cat VERSION 2>/dev/null)"                    # sh's version (uname)
 expect "threads: all checks passed"
 expect "abi: all checks passed"
