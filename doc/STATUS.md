@@ -1967,3 +1967,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `x86_64`): `ask`, the agent and the System window say the processor
   they run on, not always "i386". x86-64 done (mynos-btq.3): branch
   `x86-64` merged into `next`, both architectures' suites green.
+- **2026-11-25** — The kernel gives programs a real auxiliary vector
+  (AT_PHDR, AT_PHENT, AT_PHNUM, AT_PAGESZ, AT_ENTRY, AT_RANDOM) on both
+  architectures: it was empty, musl found no PT_TLS, and a new thread's
+  `__thread` variables lay on its stack's top. On x86-64 the Terminal
+  showed no program output (Gfx's clip, read as on, from the terminal's
+  service domain). JOURNAL; `tests/abi` checks it. Both suites green.

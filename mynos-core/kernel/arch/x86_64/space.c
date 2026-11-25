@@ -37,6 +37,7 @@
 #include "threads.h"
 #include "kutils.h"
 #include "sem.h"
+#include "random.h"
 #include "sched.h"
 #include "video.h"
 #include "ipc/port.h"
@@ -113,11 +114,18 @@ static paddr_t new_space(void)
   return top;
 }
 
-/* ---- the initial stack: argc, argv, envp, an empty auxv ---- */
+/* ---- the initial stack: argc, argv, envp, the auxiliary vector ---- */
+
+/* what the auxiliary vector tells the C library: where the program's
+   headers are (musl finds PT_TLS there: without it a thread's TLS block
+   was taken as empty, and new threads' TLS lay on their stacks' tops),
+   the entry, 16 random bytes (the stack protector's canary) */
+struct auxinfo { vaddr_t phdr; uint64_t phnum, entry; };
+#define AUX_WORDS (2 * 6)               /* PHDR PHENT PHNUM PAGESZ ENTRY RANDOM */
 
 static uint32_t initialStackSize(char ** argv, char ** envp)
 {
-  uint32_t words = 1 + 1 + 1 + 2, bytes = 0, i;
+  uint32_t words = 1 + 1 + 1 + 2 + AUX_WORDS, bytes = 16, i;
   for (i = 0; argv && argv[i]; i++, words++) bytes += kstrlen(argv[i]) + 1;
   for (i = 0; envp && envp[i]; i++, words++) bytes += kstrlen(envp[i]) + 1;
   bytes = (bytes + words * 8 + 15) & ~15;
@@ -125,11 +133,15 @@ static uint32_t initialStackSize(char ** argv, char ** envp)
 }
 
 static void buildInitialStack(char * page, vaddr_t topUser, uint32_t size,
-			      char ** argv, char ** envp)
+			      char ** argv, char ** envp, struct auxinfo * aux)
 {
   uint64_t * vec = (uint64_t *)(page + PAGE_SIZE - size);
   char * str = page + PAGE_SIZE;
   uint32_t i, n = 0;
+  vaddr_t random;
+  str -= 16;                                        /* AT_RANDOM's bytes */
+  random_get((ubyte_t *)str, 16);
+  random = topUser - (page + PAGE_SIZE - str);
   for (i = 0; argv && argv[i]; i++) ;
   vec[n++] = i;
   for (i = 0; argv && argv[i]; i++) {
@@ -146,7 +158,15 @@ static void buildInitialStack(char * page, vaddr_t topUser, uint32_t size,
     vec[n++] = topUser - (page + PAGE_SIZE - str);
   }
   vec[n++] = 0;
-  vec[n++] = 0;
+  if (aux->phdr) {
+    vec[n++] = 3;  vec[n++] = aux->phdr;            /* AT_PHDR */
+    vec[n++] = 4;  vec[n++] = sizeof(Elf64_Phdr);   /* AT_PHENT */
+    vec[n++] = 5;  vec[n++] = aux->phnum;           /* AT_PHNUM */
+  }
+  vec[n++] = 6;  vec[n++] = PAGE_SIZE;              /* AT_PAGESZ */
+  vec[n++] = 9;  vec[n++] = aux->entry;             /* AT_ENTRY */
+  vec[n++] = 25; vec[n++] = random;                 /* AT_RANDOM */
+  vec[n++] = 0;                                     /* AT_NULL */
   vec[n++] = 0;
 }
 
@@ -237,7 +257,13 @@ process_descriptor_t * spawnProcess(process_descriptor_t * desc,
   {
     paddr_t f = new_frame();
     *arch_pte_make_in(top, ustackTop - PAGE_SIZE) = f | PF_PRESENT | PF_READWRITE | PF_USER;
-    buildInitialStack(PHYS_TO_VIRT(f), ustackTop, initialStack, argv, envp);
+    struct auxinfo aux = { 0, eh.phnum, eh.entry };
+    /* the headers in memory: inside the loaded segment that holds them */
+    for (i = 0; i < eh.phnum; i++)
+      if (ph[i].type == PT_LOAD && ph[i].offset <= eh.phoff &&
+	  eh.phoff + eh.phnum * sizeof(Elf64_Phdr) <= ph[i].offset + ph[i].filesz)
+	aux.phdr = ph[i].vaddr + (eh.phoff - ph[i].offset);
+    buildInitialStack(PHYS_TO_VIRT(f), ustackTop, initialStack, argv, envp, &aux);
   }
 
   /* the process information and the first thread's kernel stack: the

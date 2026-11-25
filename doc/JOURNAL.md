@@ -3847,3 +3847,39 @@ bus-master DMA); the issue for it is in beads.
 **Lesson.** Measure the alternative before the fix: the virtio disk,
 tried first, would have said in one run that the cost was the device's
 emulation, not the loop.
+
+## 2026-11-25 — x86-64: the terminal shows no output (an empty auxiliary vector)
+
+**Symptom.** On x86-64 the Terminal window showed sh's prompt and what
+was typed, but nothing a program wrote: not sh's banner, not `echo`'s
+line, not `cat`'s file; a stray block at the start of each such line.
+
+**Diagnosis.** The terminal received the text (a log of each Write) and
+drew the rows (`Gfx.text` returned their cells), and displayd accepted
+the damage. A small program then showed it: a window filled from a
+second domain (or a Thread) stayed red on x86-64, green on the i386;
+the domain read back red right after its own `Gfx.fill`, while a direct
+`Bigarray.set` worked. `Gfx.fill` from any thread but the first drew
+nothing: `clip_on`, a `__thread` variable meant to start at 0, read
+-26000, and its neighbours held a return address in musl's `__clone`
+and the domain's start function: the top of the new thread's stack. The
+terminal draws programs' output from its service domain, and the
+prompt from its main thread: hence one seen, the other not.
+
+**Cause.** The kernel gave every program an empty auxiliary vector (on
+both architectures). Without `AT_PHDR` musl finds no `PT_TLS`, takes
+the TLS block as empty, and gives each new thread a TLS area of nothing:
+its `__thread` variables lie on its stack's top, where `pthread_create`
+writes its start arguments and `__clone` pushes a return address. On the
+i386 the offsets happened to miss what mattered.
+
+**Fix.** The kernel builds a real auxiliary vector on both
+architectures: `AT_PHDR` (the program's headers in memory, inside the
+loaded segment that holds them), `AT_PHENT`, `AT_PHNUM`, `AT_PAGESZ`,
+`AT_ENTRY`, and `AT_RANDOM` (16 bytes from the kernel's generator: musl's
+stack canary had none). `tests/abi` checks that a new thread's TLS
+starts at zero and that the vector is there.
+
+**Lesson.** "It works" on one architecture can be luck in the layout:
+a libc's startup contract (here the auxiliary vector) is part of the
+ABI, and an empty one fails silently.
