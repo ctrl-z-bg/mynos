@@ -29,6 +29,11 @@
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
+# x86_64 is built apart, in build/x86_64/tree (tools/build-x86_64.sh), with
+# its own programs, RAM disk and disk: from the sources, run there
+if [ "${ARCH:-i386}" = x86_64 ] && [ -d "$root/build/x86_64/tree/tools" ]; then
+    cd "$root/build/x86_64/tree" && exec tools/run-demo.sh "$@"
+fi
 cd "$root"
 
 ocamlrun=$(tools/ocamlrun-path.sh)

@@ -12,7 +12,8 @@
 #
 # Environment:
 #   KERNEL_ONLY  if set and no module is given, boot the bare kernel
-#   ARCH     i386 (default) or x86_64 (QEMU, processor, kernel)
+#   ARCH     i386 (default) or x86_64 (QEMU, processor, kernel); x86_64
+#            runs in build/x86_64/tree, its build (tools/build-x86_64.sh)
 #   KERNEL   kernel image (default: mynos-core/kernel/kernel.elf; for
 #            x86_64 build/x86_64/kernel.elf)
 #   MEM      RAM in MB (default 32)
@@ -39,6 +40,11 @@
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
+# x86_64 is built apart, in build/x86_64/tree (tools/build-x86_64.sh), with
+# its own programs, RAM disk and disk: from the sources, run there
+if [ "${ARCH:-i386}" = x86_64 ] && [ -d "$root/build/x86_64/tree/tools" ]; then
+    cd "$root/build/x86_64/tree" && exec tools/run-qemu.sh "$@"
+fi
 # the architecture: i386 (the default) or x86_64, whose kernel
 # tools/build-x86_64.sh makes in build/x86_64
 case ${ARCH:-i386} in
