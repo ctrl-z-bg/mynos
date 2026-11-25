@@ -3723,3 +3723,26 @@ every key was posted as kind 1: a mouse event.
 **Lesson.** A macro defined late silently overrides a name declared
 early, with no warning; constants taken from another vocabulary (Linux's
 input events) get a prefix of their own.
+
+## 2026-11-25 — x86-64: the graphical session without text
+
+**Symptom.** On x86-64 the graphical session came up with windows,
+buttons and the logo, but not a letter: every label empty. The font
+file read fine from the toplevel, and `Gfx.text t 0 0 "hi" 0` answered
+0 cells.
+
+**Diagnosis.** `Gfx.text` has an optional limit of cells, `?max`, whose
+default is `max_int / 2`. The stub `caml_gfx_text` read it with
+`int max = Long_val(vmax)`.
+
+**Cause.** On the i386 `max_int / 2` is 2^29, which fits an `int`. At 64
+bits it is 2^61: truncated to 32 bits it is −1, and the loop
+`cells < max` never ran.
+
+**Fix.** The stub reads the limit as a `long` and clamps it to
+`0x7FFFFFFF`.
+
+**Lesson.** OCaml's `int` follows the word; C's `int` does not. A stub
+that narrows `Long_val` to `int` is safe only for values bounded by
+something real (a pixel, a length), not for "no limit" defaults built on
+`max_int`.

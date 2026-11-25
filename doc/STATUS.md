@@ -1916,3 +1916,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   made 64-bit clean where it was 32-bit without saying so (multiboot,
   `size_t`, the RAM disk's directory, `libmynos`'s casts and raw calls).
   The i386 build and its suite unchanged (181 checks).
+- **2026-11-25** — x86-64: the disk (FAT on IDE), the network (NE2000:
+  ping, HTTPS, `httpd`) and the graphical session tried by hand; the
+  text of the session was missing (`Gfx.text`'s `max_int` default
+  narrowed to an `int`: JOURNAL).
