@@ -87,7 +87,7 @@ static inline void arch_clear(unsigned int * m) {
 /* ---- memory ---- */
 
 /* the translation of one page forgotten (after its entry changed) */
-static inline void arch_flush_page(unsigned int laddr) {
+static inline void arch_flush_page(unsigned long laddr) {
   __asm__ volatile ("invlpg %0" : : "m"(*(char *)laddr) : "memory");
 }
 
