@@ -21,6 +21,7 @@
 #   tests/mynos-ocaml/mynos_test.byte  test of the Mynos library
 #   tests/console/echo.byte          reads lines from the console
 #   tests/keys/keys.byte             a window that logs keys and releases
+#   tests/cpu/ticks.byte             each process's CPU ticks (measurements)
 #   tests/files/ramdisk.dsk          RAM disk with init.byte, a file I/O test
 #   tests/spawn/ramdisk.dsk          RAM disk with the runtime and a spawn test
 #   tests/storage/ramdisk.dsk        RAM disk with the ATA driver and a disk test
@@ -70,6 +71,8 @@ make -C tests/spawn
    -I ../../mynos-lib/ocaml mynos.cma -o greeter.byte greeter.ml)
 (cd tests/keys && ocamlc -use-prims ../../mynos-runtime/primitives \
    -I ../../mynos-lib/ocaml mynos.cma -o keys.byte keys.ml)
+(cd tests/cpu && ocamlc -use-prims ../../mynos-runtime/primitives \
+   -I ../../mynos-lib/ocaml mynos.cma -o ticks.byte ticks.ml)
 (cd tests/effects && ocamlc -o effects.byte effects.ml)
 (cd tests/domains && ocamlc -o domains.byte domains.ml)
 make -C tests/threads
