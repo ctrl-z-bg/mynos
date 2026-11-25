@@ -442,14 +442,41 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
         done
     }
     click() { to "$1" "$2"; mon "mouse_button 1"; mon "mouse_button 0"; }
+    # the screen looked at every half second until a condition on its
+    # pixels holds (px, count: as in the checks below), at most $1 seconds:
+    # not a fixed time
+    waitpx() {
+        n=$(($1 * 2)) cond=$2
+        while [ $n -gt 0 ]; do
+            mon "screendump $tmp/w.ppm"
+            python3 - "$tmp/w.ppm" "$cond" 2>/dev/null <<'PY' && return 0
+import sys
+d = open(sys.argv[1], "rb").read()
+parts = d.split(b"\n", 3)
+w, h = map(int, parts[1].split())
+pix = parts[3]
+def px(x, y):
+    i = (y * w + x) * 3
+    return (pix[i] << 16) | (pix[i + 1] << 8) | pix[i + 2]
+def count(c, x0, y0, x1, y1, step=4):
+    return sum(1 for x in range(x0, x1, step) for y in range(y0, y1, step) if px(x, y) == c)
+sys.exit(0 if (w, h) == (1024, 768) and eval(sys.argv[2]) else 1)
+PY
+            sleep 0.4; n=$((n - 1))
+        done
+        return 0
+    }
     tools/type-keys.py "$tmp/mon-g" 'gui check\n'; sleep 3
-    tools/type-keys.py "$tmp/mon-g" 'gui\n'; sleep 8
+    tools/type-keys.py "$tmp/mon-g" 'gui\n'
+    waitpx 20 'px(300, 86) == 0x2D6CA2'; sleep 1   # the welcome window, focused
     mon "screendump $tmp/gui1.ppm"
-    click 233 428; sleep 8               # the welcome window's Clock button
+    click 233 428                        # the welcome window's Clock button
+    waitpx 15 'px(150, 114) == 0x2D6CA2'; sleep 1
     mon "screendump $tmp/gui2.ppm"
     # a terminal window (the menu's first item): sh runs in it, its console
     # is the window (MYNOS_CONSOLE); what it writes is checked from text mode
-    click 20 10; sleep 1; click 40 39; sleep 10
+    click 20 10; sleep 1; click 40 39
+    waitpx 15 'px(500, 140) == 0x2D6CA2'; sleep 2
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo term-$X > /tmp/term.txt\n'; sleep 4
     mon "screendump $tmp/gui4.ppm"
     # its scrollback: a long listing, then the wheel up over the window
@@ -477,15 +504,19 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     sleep 1; mon "sendkey ctrl-d"; sleep 2
     # the agent window (the menu's fifth item, at 168,182): a task, the
     # confirmation it waits for, Allow (at the bottom of the window)
-    click 20 10; sleep 1; click 40 127; sleep 10
-    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo agentwin-$X > /tmp/aw.txt\n'; sleep 8
+    click 20 10; sleep 1; click 40 127
+    waitpx 15 'px(500, 172) == 0x2D6CA2'; sleep 2
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo agentwin-$X > /tmp/aw.txt\n'
+    waitpx 30 'sum(1 for x in range(176, 920, 4) for y in range(222, 672, 4) if px(x, y) == 0xFFF4E0) > 100'; sleep 1   # it asks
     mon "screendump $tmp/gui6.ppm"
-    click 230 695; sleep 8
+    click 230 695
+    waitpx 20 'sum(1 for x in range(176, 920, 4) for y in range(222, 672, 4) if px(x, y) == 0xFFF4E0) == 0'; sleep 2    # allowed
     mon "screendump $tmp/gui7.ppm"
     # the task's recording (the agent window's Recording button), in the
     # recordings window (at 80,124): its timeline, then its calls, one
     # selected
-    click 736 693; sleep 15
+    click 736 693
+    waitpx 25 'px(500, 114) == 0x2D6CA2 and sum(1 for x in range(220, 1004) if px(x, 230) == 0xF29B38) >= 2'; sleep 1
     mon "screendump $tmp/gui8.ppm"
     click 262 230; sleep 3                         # the first mark: its step
     mon "screendump $tmp/gui10.ppm"
@@ -494,7 +525,8 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     # the System window (the menu's seventh item, at 20,64): the system
     # live; the agent's recording replayed on it, three steps; then a new
     # process (a clock, from the menu) appears outlined
-    click 20 10; sleep 1; click 40 171; sleep 12
+    click 20 10; sleep 1; click 40 171
+    waitpx 20 'px(500, 54) == 0x2D6CA2 and count(0x24313C, 132, 412, 1010, 512) > 2000'; sleep 1
     mon "screendump $tmp/gui11.ppm"
     click 100 119; sleep 1
     tools/type-keys.py "$tmp/mon-g" '/tmp/agent.trc'; sleep 1
@@ -523,7 +555,8 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     # Files (the menu's eighth item, at 40,70): /tmp, aw.txt (the agent's),
     # Copy; /disk, Paste, Open (viewed); Back, New folder "newdir". The
     # copy and the folder are checked from text mode
-    click 20 10; sleep 1; click 40 193; sleep 8
+    click 20 10; sleep 1; click 40 193
+    waitpx 15 'px(500, 59) == 0x2D6CA2'; sleep 1
     mon "screendump $tmp/gui18.ppm"
     click 100 175; sleep 2; click 324 180; sleep 1; click 642 125; sleep 1
     click 100 199; sleep 2; click 762 125; sleep 2; click 310 125; sleep 2
@@ -532,10 +565,13 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     tools/type-keys.py "$tmp/mon-g" 'newdir\n'; sleep 2
     # the tour (the menu's ninth item, at 72,98): a lesson run and replayed
     # in a System window (at 20,64), at its first note
-    click 20 10; sleep 1; click 40 215; sleep 8
+    click 20 10; sleep 1; click 40 215
+    waitpx 15 'px(400, 108) == 0x1B3A57'; sleep 1
     mon "screendump $tmp/gui20.ppm"
     click 197 203; sleep 1                  # the third lesson: a program is born
-    click 402 469; sleep 30
+    click 402 469
+    # the lesson recorded, its System window opens, in front
+    waitpx 60 'px(500, 54) == 0x2D6CA2'; sleep 3
     click 732 117; sleep 1                   # its first note: sh looks at hello.byte;
     click 732 117; sleep 2                   # the second: the birth of hello
     mon "screendump $tmp/gui21.ppm"
