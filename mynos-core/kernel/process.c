@@ -140,6 +140,7 @@ static void endProcess(process_descriptor_t * self, int status, paddr_t pgdir) {
 
   TRACE(TRACE_EXIT, self->pid, -1, -1, 0, status, NULL, 0);
   self->isAlive = 0;
+  arch_smp_kick_process(self->pid);  /* its threads on other processors: off them */
   numThreads -= self->numThreads;
   numProcesses--;
   
@@ -271,7 +272,13 @@ void reapZombies(void) {
   while (*pz) {
     process_descriptor_t * z = *pz;
     tss_t * t, * next;
-    if (z == processTable[currProcess]) {
+    uint32_t i, busy = 0;
+    /* a processor still on one of its threads (not yet switched out: its
+       kernel stack, its address space): later. By pid: its slot in the
+       process table may be free already */
+    for (i = 0; i < ncpus; i++)
+      if (cpus[i].thread && cpus[i].thread->pid == z->pid) busy = 1;
+    if (busy) {
       pz = (process_descriptor_t **)&z->nextZombie;
       continue;
     }

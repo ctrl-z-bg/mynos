@@ -29,5 +29,12 @@ static inline struct cpu * arch_cpu(void)
 void arch_cpu_boot(void);
 /* the other processors started, before the boot one becomes idle (smp.c) */
 void arch_smp_start(void);
+/* a thread became ready: an idle processor woken to run it */
+void arch_smp_kick(void);
+/* a process ended: the processors running its threads leave them */
+void arch_smp_kick_process(pid_t pid);
+/* this processor's thread is of a process ended meanwhile (by another
+   processor, while this one waited for the big lock): it leaves it */
+void smp_leave_if_dead(void);
 
 #endif

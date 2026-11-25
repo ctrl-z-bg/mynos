@@ -27,7 +27,7 @@ suite() {   # ARCH
         *) echo "run-tests-all.sh: no architecture $1" >&2; return 2 ;;
     esac
     podman run --rm --platform linux/amd64 -v "$dir:/mynos:Z" -w /mynos \
-        -e ARCH="$1" ${LANES:+-e LANES="$LANES"} ${WAIT:+-e WAIT="$WAIT"} \
+        -e ARCH="$1" ${LANES:+-e LANES="$LANES"} ${WAIT:+-e WAIT="$WAIT"} ${SMP:+-e SMP="$SMP"} \
         mynos-test tools/run-tests.sh > "tmp/tests-$1.log" 2>&1
 }
 

@@ -36,7 +36,7 @@ extern int __mynos_native_threads;
 static int __testnset(int *m) {
   int result;
   
-  __asm__ volatile ("bts $1, %1; sbbl %0, %0"
+  __asm__ volatile ("lock bts $1, %1; sbbl %0, %0"
 		    :"=r" (result):"m" (*m):"memory");
   return(result);
 }

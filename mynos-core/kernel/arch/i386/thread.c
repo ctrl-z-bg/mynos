@@ -97,6 +97,7 @@ void tsksw() {
   processTable[0]->tss->ss0 = GDT_OS_DATA_SEL;
 
   currThread = processTable[0]->tss;
+  arch_cpu()->idle = currThread;   /* the boot's thread: processor 0's idle */
 
   // insert the thread into readyQueue
   readyQueueInsert(currThread);

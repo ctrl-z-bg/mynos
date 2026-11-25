@@ -48,9 +48,9 @@ fi
 # the architecture: i386 (the default) or x86_64, whose kernel
 # tools/build-x86_64.sh makes in build/x86_64
 case ${ARCH:-i386} in
-    x86_64) qemu=qemu-system-x86_64 cpu=qemu64,+rdrand,+rdseed
+    x86_64) qemu=qemu-system-x86_64 cpu=qemu64,+rdrand,+rdseed smp=${SMP:-4}   # four processors (mynos-btq.5)
             kernel=${KERNEL:-$root/build/x86_64/kernel.elf} ;;
-    *)      qemu=qemu-system-i386 cpu=qemu32,+rdrand,+rdseed
+    *)      qemu=qemu-system-i386 cpu=qemu32,+rdrand,+rdseed smp=      # one processor
             kernel=${KERNEL:-$root/mynos-core/kernel/kernel.elf} ;;
 esac
 
@@ -87,7 +87,7 @@ fi
 # shellcheck disable=SC2086
 set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "${MEM:-32}" \
     -cpu "${CPU:-$cpu}" \
-    ${VERBOSE:+-append verbose} ${KVM:+-accel kvm} ${SMP:+-smp $SMP} \
+    ${VERBOSE:+-append verbose} ${KVM:+-accel kvm} ${smp:+-smp $smp} \
     ${DISK:+-drive file=$DISK,format=raw,if=$disk_if} ${DISK:+$disk_dev} \
     ${NET:+-netdev user,id=n0${HTTP:+,hostfwd=tcp:127.0.0.1:$HTTP-:80}${UDP:+,hostfwd=udp::$UDP-:$UDP}} \
     ${NET:+-device $net_dev} $audio "$@"

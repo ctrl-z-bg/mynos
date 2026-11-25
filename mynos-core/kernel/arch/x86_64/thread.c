@@ -45,6 +45,7 @@ void tsksw(void)
   t->cr3 = kernel_pml4;
   t->privSem = __OS_sem_allocateSemaphore(0);
   currThread = t;
+  arch_cpu()->idle = t;           /* the boot's thread: processor 0's idle */
   readyQueueInsert(t);
 }
 
@@ -65,6 +66,7 @@ void arch_thread_frame(tss_t * t, uint64_t entry, uint64_t stack, uint64_t rax,
   f->rsp = stack;
   f->ss = GDT_USER_DATA_SEL | 3;
   f->rax = rax;
+  t->kdepth = 1;                       /* trap_return leaves the big lock */
   *--sp = (uint64_t)trap_return;
   sp -= 6;                                         /* rbx..r15: zeros */
   kbzero(sp, 6 * 8);
@@ -112,6 +114,7 @@ long arch_clone(long flags, long stack, long ptid, long ctid, long tls)
   kmemcpy(sp, current_frame, sizeof(struct frame));
   ((struct frame *)sp)->rax = 0;
   ((struct frame *)sp)->rsp = stack;
+  t->kdepth = 1;
   *--sp = (uint64_t)trap_return;
   sp -= 6;
   kbzero(sp, 6 * 8);

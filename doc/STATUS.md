@@ -75,8 +75,9 @@ talking through IPC.
   supported (`threads.c`): MyNOS's native ones (`mynos_threadCreate`,
   sharing their creator's TLS) and, since 2026, Linux threads through
   `clone`, each with its own TLS, with `futex` behind the C library's
-  pthreads (`lthreads.c`); OCaml 5's domains run on them. All threads share
-  one CPU (SMP: mynos-awn). Processes are created from
+  pthreads (`lthreads.c`); OCaml 5's domains run on them. On the i386
+  all threads share one CPU; on x86-64 they run on up to eight (four by
+  default), under one big kernel lock (doc/decisions/smp.md). Processes are created from
   an ELF image (`createProcess` in `process.c`): at boot from the GRUB
   modules, and since 2026 by a process through the native `spawn` call,
   with real `argv`/`envp` on the Linux initial stack. A parent collects a
@@ -1973,3 +1974,12 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `__thread` variables lay on its stack's top. On x86-64 the Terminal
   showed no program output (Gfx's clip, read as on, from the terminal's
   service domain). JOURNAL; `tests/abi` checks it. Both suites green.
+- **2026-11-25** — SMP on x86-64 (mynos-btq.5, branch `smp`,
+  doc/decisions/smp.md): the other processors found in the MADT and
+  started, a big kernel lock, a scheduler that knows processors, LAPIC
+  timers, IPIs for wake-ups and TLB shootdowns; four processors by
+  default (`SMP=N`), the i386 stays at one. `tests/smp` added. Domains
+  doing computation run 3.6 times faster on four. Six concurrency bugs
+  found and fixed (JOURNAL). Both suites green but for the sound check,
+  flaky under the host's load (mynos-cea); domains that allocate are
+  13 times slower on one processor (mynos-c6a).

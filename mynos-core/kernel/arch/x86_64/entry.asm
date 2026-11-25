@@ -10,6 +10,9 @@ section .text
 
 extern x86_trap
 extern x86_syscall
+extern kernel_enter
+extern kernel_exit
+extern smp_leave_if_dead
 
 %macro SAVE 0
 	cld
@@ -39,8 +42,15 @@ int_null:
 ; processor's (percpu.h); and back to one, the process's
 %define FRAME_CS 144
 
+; every way out leaves the big lock (smp.c), unless nested; a new thread
+; comes here first, its depth 1
 global trap_return
 trap_return:
+	test	byte [rsp + FRAME_CS], 3
+	jz	.leave
+	call	smp_leave_if_dead       ; back to a process that has ended: not
+.leave:
+	call	kernel_exit
 	test	byte [rsp + FRAME_CS], 3
 	jz	.kernel
 	swapgs
@@ -85,6 +95,7 @@ trap_common:
 	jz	.kernel
 	swapgs
 .kernel:
+	call	kernel_enter            ; the big lock (smp.c)
 	mov	rdi, rsp
 	call	x86_trap
 	jmp	trap_return
@@ -95,6 +106,19 @@ global native_call_entry
 native_call_entry:
 	push	0
 	push	0x90
+	jmp	trap_common
+
+; another processor's interrupt (a thread to run, a TLB to flush), and
+; this processor's local APIC timer (smp.c)
+global ipi_entry
+ipi_entry:
+	push	0
+	push	0xF0
+	jmp	trap_common
+global lapic_timer_entry
+lapic_timer_entry:
+	push	0
+	push	0xF1
 	jmp	trap_common
 
 ; Linux's calls: syscall (the processor saves rip in rcx, rflags in r11,
@@ -114,6 +138,7 @@ syscall_entry:
 	push	0
 	push	0x80
 	SAVE
+	call	kernel_enter
 	mov	rdi, rsp
 	call	x86_syscall
 	jmp	trap_return

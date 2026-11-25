@@ -56,7 +56,11 @@ extern void switch_stacks(uint64_t * old_rsp, uint64_t new_rsp);
 
 void switchTo(tss_t * old, tss_t * new)
 {
+  struct cpu * c = arch_cpu();
   if (old == new) return;
+  /* the big lock's depth is the thread's: it goes on where it left */
+  old->kdepth = c->depth;
+  c->depth = new->kdepth;
   fpu_save(old);
   __asm__ volatile ("fxrstor (%0)" : : "r"(new->fpu_valid ? FPU_AREA(new->fpu_area)
                                                          : FPU_AREA(fpu_clean)));

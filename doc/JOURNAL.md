@@ -3883,3 +3883,52 @@ starts at zero and that the vector is there.
 **Lesson.** "It works" on one architecture can be luck in the layout:
 a libc's startup contract (here the auxiliary vector) is part of the
 ABI, and an empty one fails silently.
+
+## 2026-11-25 — SMP: what one processor had been hiding
+
+**Symptom.** With the other processors started and the big kernel lock
+in place, the x86-64 suite at four processors failed 21 checks: programs
+killed by "invalid memory access" in musl's `free`, the graphical
+session gone, the abi test failing one run in three, a lost write in the
+new `tests/smp`, once a kernel panic (general protection) reading the
+current thread right after a semaphore wait.
+
+**Diagnosis and causes**, one at a time, each run several times in
+parallel QEMUs:
+1. *A fault resolved by another processor.* Two threads of a process
+   fault on the same page; the big lock serialises the handlers, and the
+   second finds the page already allocated (or copied): present and
+   writable. The handler knew only "not allocated, not copy-on-write":
+   the process was killed. On one processor the faulting thread is the
+   only one that can retry.
+2. *Fresh pages zeroed after being mapped.* `__allocateOnUse` set the
+   entry, then zeroed the page through the user's address: a thread on
+   another processor wrote into it in between, and the zeroing erased it
+   (`tests/smp`: a lost increment).
+3. *`fork` flushed only its own TLB*, after marking the parent's pages
+   copy-on-write: a processor running another of the parent's threads
+   kept writable translations, and wrote into the page now shared with
+   the child. The shootdown also missed the direct map.
+4. *A thread of a dead process going on.* Processor A kills a process
+   while B, running one of its threads, waits for the big lock to enter
+   a call: when B gets it, it runs the call for a process that no longer
+   exists. The panic was its trace. Fixed at a call's start and at the
+   way back to a process (not at the entry: an interrupt's handler must
+   run, for its EOI).
+5. *`reapZombies` checked "busy" by a process-table slot*, which may
+   already be free or reused: now by the pid of each processor's thread.
+6. *A test that assumed one processor* (`abi`: the connector freed its
+   channel before the listener had looked at it), and the user-space
+   malloc lock's `bts` without `lock`.
+
+**Fix.** Each as above; the page-fault handler returns when the access
+is allowed now (after flushing its own TLB entry); fresh pages are
+zeroed through the kernel's window before the entry is set; `fork`
+shoots down the address space; `smp_leave_if_dead` schedules away. The
+suite passes at four processors; `tests/smp` covers 1-3.
+
+**Lesson.** On one processor "the kernel runs one at a time" also meant
+"no user code runs while the kernel works": the big lock keeps only the
+first. Anything the kernel does to a process's memory in two steps
+(map, then fill) is now visible half-done; and anything decided before
+waiting for the lock may be false after it.

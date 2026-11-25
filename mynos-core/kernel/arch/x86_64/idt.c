@@ -84,6 +84,7 @@ static char * names[32] = {
   "machine check", "SIMD error" };
 
 extern void _mynos_native_call(struct frame * f);
+void smp_interrupt(uint64_t vector);
 
 /* every exception, and the native calls */
 void x86_trap(struct frame * f)
@@ -91,6 +92,10 @@ void x86_trap(struct frame * f)
   uint64_t cr2;
   if (f->vector == 0x90) {
     _mynos_native_call(f);
+    return;
+  }
+  if (f->vector == 0xF0 || f->vector == 0xF1) {   /* smp.c */
+    smp_interrupt(f->vector);
     return;
   }
   if (f->vector == 14) {

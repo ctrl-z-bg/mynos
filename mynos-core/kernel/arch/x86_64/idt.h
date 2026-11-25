@@ -41,7 +41,8 @@ struct frame {
    "   testb $3, 144(%rsp)\n" \
    "   jz 1f\n" \
    "   swapgs\n" \
-   "1: call "#NAME"_handler\n" \
+   "1: call kernel_enter\n" \
+   "   call "#NAME"_handler\n" \
    "   jmp trap_return\n" \
    ".popsection\n")
 

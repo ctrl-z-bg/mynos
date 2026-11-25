@@ -2,8 +2,8 @@
 
 - **Issues:** mynos-btq.5, in the version 2 line (mynos-btq)
 - **Date:** 2026-11-25
-- **Status:** accepted by the owner (2026-11-25), in progress on branch
-  `smp`.
+- **Status:** accepted by the owner (2026-11-25); built on branch `smp`
+  (four processors by default on x86-64).
 
 ## Why
 
@@ -61,7 +61,67 @@ is not: it is written for one processor, whose critical section is
   under TCG multi-threaded and KVM; a stress test (many threads, IPC
   across processors, `fork` and `munmap` together) is added.
 
-## Measurements
+## What was built (2026-11-25)
 
-To be made: a parallel workload in domains, and the suite, at 1, 2 and 4
-processors, with KVM.
+- `arch/x86_64/smp.c`: the MADT read, the trampoline (`ap.asm`) copied to
+  0x7000, INIT and two STARTUPs; each processor's `ap_main` (GS, its TSS,
+  the IDT, syscall's MSRs, the FPU, its local APIC with the 8259's lines
+  masked, its idle thread, its LAPIC timer at 10 ms, calibrated against
+  the PIT).
+- The big lock: `kernel_enter` at every entry (entry.asm, the IRQ
+  wrappers, the PIT's), `kernel_exit` in `trap_return`; a depth per
+  processor, saved per thread at a switch (`kdepth`: a new thread's is 1,
+  which its first `trap_return` ends). A processor waiting for the lock
+  flushes its TLB when asked.
+- The scheduler skips threads running on another processor and the idle
+  threads; a thread made ready wakes an idle processor (IPI 0xF0).
+- TLB shootdown in `arch_flush_page` (the kernel's half: every
+  processor; a process's: those running its address space), and after
+  `fork` marks the parent's pages copy-on-write.
+- `tests/smp` (C): counters (atomic, under a semaphore), faults on the
+  same fresh pages from four threads, `mmap`/`munmap` from three, `fork`
+  while a thread writes. In the suite (lane a), on both architectures.
+- `run-qemu.sh`: `SMP=N`, default 4 on x86-64; the i386 stays at 1.
+
+Bugs found on the way (JOURNAL, 2026-11-25): a fault resolved by another
+processor taken as invalid; fresh pages zeroed after being mapped; a
+thread of a process killed meanwhile going on into its call; `reapZombies`
+recognising a busy processor by a slot that may be reused; a test that
+assumed one processor (`abi`); the user-space malloc lock's `bts` without
+`lock`.
+
+## Measurements (2026-11-25, KVM, host CPU)
+
+`tests/cpu/par.ml`: N domains, each the same work.
+
+Computation (primes below 2,000,000 by trial division), seconds:
+
+| domains | 1 CPU | 2 CPUs | 4 CPUs |
+|--------:|------:|-------:|-------:|
+| 1       | 2.19  | 2.16   | 2.16   |
+| 2       | 4.37  | 2.17   | 2.17   |
+| 4       | 8.64  | 4.58   | 2.40   |
+| 8       | 17.35 | 8.88   | 4.93   |
+
+The speed-up is the number of processors (3.6x with four domains on
+four): computation does not touch the kernel, the big lock does not
+matter.
+
+Allocation (lists built and dropped: minor collections, which stop every
+domain together), seconds:
+
+| domains | 1 CPU | 4 CPUs |
+|--------:|------:|-------:|
+| 1       | 6.91  | 0.51   |
+| 2       | 18.29 | 0.55   |
+| 4       | 58.89 | 3.87   |
+
+Not a parallel speed-up but a uniprocessor problem shown up: with one
+domain the four processors are 13 times faster. The runtime's
+stop-the-world barrier waits, spinning, for domains that are not running
+(the main one, blocked in `join`): on one processor each wait lasts until
+the next preemption. The same with more domains than processors (four
+domains and the main one on four). mynos-c6a.
+
+The suite (TCG, multi-threaded) takes the same 230 s at four processors:
+its time is set by fixed waits, not by the processor.

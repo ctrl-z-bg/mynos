@@ -112,6 +112,7 @@ struct frame * current_frame;
 void _mynos_native_call(struct frame * f)
 {
   unsigned i;
+  smp_leave_if_dead();
   current_frame = f;
   for (i = 0; i < sizeof natives / sizeof natives[0]; i++)
     if (natives[i].n == (int)f->rax) {
@@ -290,6 +291,7 @@ static const struct { int n; call_t f; int wide; } linux_calls[] = {
 void x86_syscall(struct frame * f)
 {
   unsigned i;
+  smp_leave_if_dead();
   current_frame = f;
   for (i = 0; i < sizeof linux_calls / sizeof linux_calls[0]; i++)
     if (linux_calls[i].n == (int)f->rax) {

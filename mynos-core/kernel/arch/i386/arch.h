@@ -93,6 +93,9 @@ static inline void arch_clear(unsigned int * m) {
 static inline void arch_flush_page(unsigned long laddr) {
   __asm__ volatile ("invlpg %0" : : "m"(*(char *)laddr) : "memory");
 }
+static inline void arch_flush_page_local(unsigned long laddr) {
+  arch_flush_page(laddr);
+}
 
 /* the kernel's own writes respect read-only pages (CR0.WP): a system call
    writing into a copy-on-write page copies it first (mynos-bvz) */

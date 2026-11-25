@@ -130,6 +130,16 @@ if [ -f tests/fpu/fpu ]; then
 fi
 }
 
+sec_smp() {
+# several processors at once (mynos-btq.5): counters, faults on the same
+# pages, munmap and fork while threads run elsewhere
+if [ -f tests/smp/smp ]; then
+    timeout "${WAIT:-40}" tools/run-qemu.sh tests/smp/smp \
+        -- -display none -serial null -serial "file:$tmp/logp" || true
+    cat "$tmp/logp" >> "$part"
+fi
+}
+
 sec_threads() {
 # OCaml's threads (systhreads): Mutex, Condition, Event, and MyNOS calls
 # that wait without stopping the other threads
@@ -1243,7 +1253,7 @@ for lane in ${LANES:-a b c d e f g h i}; do
         part=$tmp/part-$lane
         : > "$part"
         case $lane in
-            a) timed sec_first; timed sec_effects; timed sec_storage; timed sec_fat; timed sec_domains; timed sec_threads; timed sec_fpu ;;
+            a) timed sec_first; timed sec_effects; timed sec_storage; timed sec_fat; timed sec_domains; timed sec_threads; timed sec_fpu; timed sec_smp ;;
             b) timed sec_mlib; timed sec_files; timed sec_libs; timed sec_stress; timed sec_spawn; timed sec_console ;;
             c) timed sec_nocom2; timed sec_reboots; timed sec_virtio ;;
             d) timed sec_gui ;;
@@ -1288,6 +1298,7 @@ expect "fpu: all checks passed"
 expect "Welcome to MyNOS $(cat VERSION 2>/dev/null) (${ARCH:-i386})"  # the boot's banner
 expect "MyNOS $(cat VERSION 2>/dev/null)"                    # sh's version (uname)
 expect "threads: all checks passed"
+if [ -f tests/smp/smp ]; then expect "smp: all checks passed"; fi
 expect "abi: all checks passed"
 if [ -f tests/stress/ramdisk.dsk ]; then
     expect "stress: all checks passed"

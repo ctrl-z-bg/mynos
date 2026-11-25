@@ -430,6 +430,8 @@ int arch_space_fork(paddr_t * pd, paddr_t * mirror)
   }
   /* the parent's entries changed: its TLB forgets them */
   __asm__ volatile ("movq %%cr3, %%rax; movq %%rax, %%cr3" : : : "rax", "memory");
+  /* and so do the other processors running its threads (smp.c) */
+  if (ncpus > 1) smp_tlb_shootdown(USER_AREA_START);
   *pd = top;
   *mirror = 0;
   return 0;
@@ -454,6 +456,7 @@ void arch_fork_child(void * v)
   sp -= sizeof(struct frame) / 8;
   kmemcpy(sp, current_frame, sizeof(struct frame));
   ((struct frame *)sp)->rax = 0;
+  t->kdepth = 1;
   *--sp = (uint64_t)trap_return;
   sp -= 6;
   kbzero(sp, 6 * 8);

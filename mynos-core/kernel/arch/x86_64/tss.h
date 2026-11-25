@@ -48,6 +48,10 @@ typedef struct {
   ubyte_t fpu_area[512 + 16];
 
   int semHeld;
+
+  /* its ways into the kernel when switched out (smp.c's big lock): a
+     new thread's first is 1, which trap_return ends */
+  uint32_t kdepth;
 } tss_t;
 
 #define THREAD_SPACE(T)        ((paddr_t)(T)->cr3)

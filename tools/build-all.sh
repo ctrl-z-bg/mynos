@@ -22,6 +22,7 @@
 #   tests/console/echo.byte          reads lines from the console
 #   tests/keys/keys.byte             a window that logs keys and releases
 #   tests/cpu/ticks.byte             each process's CPU ticks (measurements)
+#   tests/cpu/par.byte               the same work in N domains (SMP measurements)
 #   tests/files/ramdisk.dsk          RAM disk with init.byte, a file I/O test
 #   tests/spawn/ramdisk.dsk          RAM disk with the runtime and a spawn test
 #   tests/storage/ramdisk.dsk        RAM disk with the ATA driver and a disk test
@@ -31,6 +32,7 @@
 #   tests/abi/abi                    system call checks
 #   tests/bench/bench                page faults, system calls, IPC: their costs
 #   tests/fpu/fpu                    the FPU state of each thread
+#   tests/smp/smp                    threads on several processors at once
 #   tests/stdio/stdio                C stdio over libmynos
 #   tests/stress/stress, ramdisk.dsk kernel stress test
 #   tests/libs/ramdisk.dsk           Str, Num and the calls they need, on tmpfs
@@ -57,6 +59,7 @@ make -C third_party/num
 make -C tests/abi
 make -C tests/bench
 make -C tests/fpu
+make -C tests/smp
 make -C tests/stdio
 make -C tests/stress
 make -C mynos-lib/ocaml
@@ -73,6 +76,8 @@ make -C tests/spawn
    -I ../../mynos-lib/ocaml mynos.cma -o keys.byte keys.ml)
 (cd tests/cpu && ocamlc -use-prims ../../mynos-runtime/primitives \
    -I ../../mynos-lib/ocaml mynos.cma -o ticks.byte ticks.ml)
+(cd tests/cpu && ocamlc -use-prims ../../mynos-runtime/primitives -I +unix \
+   unix.cma -noautolink -o par.byte par.ml)
 (cd tests/effects && ocamlc -o effects.byte effects.ml)
 (cd tests/domains && ocamlc -o domains.byte domains.ml)
 make -C tests/threads

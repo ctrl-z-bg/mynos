@@ -32,6 +32,16 @@ static process_queue_t timerQueue;
 
 void readyQueueInsert(tss_t * t) {
   pqInsert(&readyQueue, t);
+  arch_smp_kick();                /* a processor that idles: woken */
+}
+
+/* the thread runs on another processor now */
+static int running_elsewhere(tss_t * t) {
+  struct cpu * me = arch_cpu();
+  uint32_t i;
+  for (i = 0; i < ncpus; i++)
+    if (&cpus[i] != me && cpus[i].thread == t) return 1;
+  return 0;
 }
 
 tss_t * readyQueueNext() {
@@ -155,12 +165,24 @@ void sched() {
   // free the memory of the processes that ended
   reapZombies();
 
-  currThread = readyQueueNext();
-  /* the idle thread (process 0) runs only when no other thread is ready:
-     it keeps the CPU until the next timer tick, and every IPC exchange
-     that reached it in the round robin waited up to a tick */
-  if (currThread->pid == 0 && readyQueueNElem() > 1)
-    currThread = readyQueueNext();
+  /* the next ready thread in the round robin that no other processor
+     runs; the idle threads (process 0, one per processor) only when no
+     other thread is ready: an idle thread keeps the processor until the
+     next timer tick, and every IPC exchange that reached it in the round
+     robin waited up to a tick (doc/decisions/smp.md) */
+  {
+    uint32_t n = readyQueueNElem(), k;
+    tss_t * next = NULL;
+    for (k = 0; k < n; k++) {
+      tss_t * t = readyQueueNext();
+      if (t->pid == 0) continue;
+      if (t != oldThread && running_elsewhere(t)) continue;
+      next = t;
+      break;
+    }
+    if (next == NULL) next = arch_cpu()->idle ? arch_cpu()->idle : oldThread;
+    currThread = next;
+  }
   currProcess = PSLOT(currThread->pid);
 
   if (currThread != oldThread)

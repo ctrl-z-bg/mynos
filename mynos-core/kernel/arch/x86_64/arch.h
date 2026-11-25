@@ -79,7 +79,17 @@ static inline void arch_clear(unsigned int * m) {
 
 /* ---- memory ---- */
 
+/* a page's translation out of this processor's TLB, and out of the
+   others' that may hold it (smp.c) */
+extern unsigned int ncpus;
+void smp_tlb_shootdown(unsigned long laddr);
 static inline void arch_flush_page(unsigned long laddr) {
+  __asm__ volatile ("invlpg (%0)" : : "r"(laddr) : "memory");
+  if (ncpus > 1) smp_tlb_shootdown(laddr);
+}
+/* an entry that was not present: no processor holds it, this one's TLB
+   may hold that it was not */
+static inline void arch_flush_page_local(unsigned long laddr) {
   __asm__ volatile ("invlpg (%0)" : : "r"(laddr) : "memory");
 }
 

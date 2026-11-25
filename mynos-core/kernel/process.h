@@ -120,6 +120,8 @@ struct cpu {
   uint32_t id;                    /* 0: the processor that booted */
   uint32_t apic_id;               /* its local APIC's */
   tss_t * idle;                   /* its idle thread */
+  uint32_t depth;                 /* x86-64: its ways into the kernel now (the big lock) */
+  volatile uint32_t flush;        /* x86-64: its TLB to flush (another processor asks) */
 };
 extern struct cpu cpus[MAXCPUS];
 extern uint32_t ncpus;

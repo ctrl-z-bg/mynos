@@ -18,5 +18,7 @@
 #define arch_cpu() (&cpus[0])
 static inline void arch_cpu_boot(void) { }
 static inline void arch_smp_start(void) { }
+static inline void arch_smp_kick(void) { }
+static inline void arch_smp_kick_process(pid_t pid) { (void)pid; }
 
 #endif

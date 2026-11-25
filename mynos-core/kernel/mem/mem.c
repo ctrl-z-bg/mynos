@@ -477,19 +477,20 @@ static void __allocateOnUse(pte_t * pte, vaddr_t addr) {
   paddr_t new_phy_page;
   pte_t flags;
 
+  void * fresh;
+
   flags = *pte & 0x7FF; /* save the page flags, but not the
 			   PF_LOGICAL_PRESENT */
-  new_phy_page = (paddr_t)pmem_findAFreePhysicalPage() << 12;
-  *pte = new_phy_page | flags | PF_PRESENT;
-  pmem_set((new_phy_page)>>12);
-  //__SET_MEMORY_BITMAP_PAGE_BIT((new_phy_page)>>12);
-
-  // QUESTION: should be invalidated now? To be sure...
-  INVALIDATE_THE_CACHE(addr);
-
   /* fresh memory must read as zeros (as on Linux: libcs rely on it), and
-     must not leak what the frame held for its previous owner */
-  kbzero((void *)(addr & ~(PAGE_SIZE - 1)), PAGE_SIZE);
+     must not leak what the frame held for its previous owner. Zeroed
+     before it is mapped: once mapped, a thread of the process on another
+     processor may write into it at once, and a zeroing after would erase
+     that (doc/decisions/smp.md) */
+  fresh = arch_cow_window(&new_phy_page);
+  kbzero(fresh, PAGE_SIZE);
+  *pte = new_phy_page | flags | PF_PRESENT;
+  /* the entry was not present: no other processor holds it */
+  arch_flush_page_local(addr);
 #ifdef DEBUG
   printk("new allocated page: ");
   print_ulong_hex(new_phy_page);
@@ -639,6 +640,17 @@ void _page_fault_handler(vaddr_t addr, uint32_t errcode, unsigned long * frame) 
     print_ulong(CURRPID);
     print_char('\n');
     KPANIC("page fault (?)");
+  }
+
+  /* the access is allowed now: another processor resolved the same fault
+     (a thread of this process, before it in the big lock: the page
+     allocated, the copy made) between the fault and this handler. This
+     processor's TLB may hold the old entry: forgotten, and the access is
+     tried again (doc/decisions/smp.md) */
+  if ((*pte & PF_PRESENT) && (!(errcode & 2) || (*pte & PF_READWRITE)) &&
+      (!(errcode & 4) || (*pte & PF_USER))) {
+    __asm__ volatile ("invlpg (%0)" : : "r"(addr) : "memory");
+    return;
   }
 
 #ifdef DEBUG

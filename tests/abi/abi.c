@@ -82,11 +82,14 @@ static void * wake_waiter(void * unused) {
   return NULL;
 }
 
-/* a live connector, after one that ended in the queue (mynos-blv) */
-static int queue_port;
+/* a live connector, after one that ended in the queue (mynos-blv); it
+   keeps its end until the listener has looked at the channel (on several
+   processors it would free it at once) */
+static int queue_port, queue_sem;
 
 static void * queue_connector(void * unused) {
   int ch = mynos_connectToPort(queue_port);
+  mynos_P(queue_sem);
   if (ch >= 0) mynos_freeChannel(ch);
   return NULL;
 }
@@ -595,6 +598,7 @@ int main(int argc, char ** argv) {
     int st, ch;
     pid_t child;
     queue_port = mynos_allocPort();
+    queue_sem = mynos_initSem(0);
     child = fork();
     if (child == 0) {                    /* queued, never listened to */
       mynos_connectToPort(queue_port);
@@ -607,8 +611,10 @@ int main(int argc, char ** argv) {
     ch = mynos_listenPort(queue_port);
     check("listen skips a connector that has ended",
           ch >= 0 && mynos_channelPeer(ch) == getpid());
+    mynos_V(queue_sem);
     if (ch >= 0) mynos_freeChannel(ch);
     pthread_join(t, NULL);
+    mynos_freeSem(queue_sem);
   }
 
   /* one recording at a time, its starter's (mynos-kwe) */
