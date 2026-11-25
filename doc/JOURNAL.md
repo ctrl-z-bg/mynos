@@ -3820,3 +3820,30 @@ values, not addresses. After it, `fetch` and `llm` take the i386's time.
 64-bit bug waiting; and a fast system "alone" may only mean that the
 spinning service did not start. Measure with the same devices the slow
 case had.
+
+## 2026-11-25 — The disk under KVM: not the driver's loop
+
+**Symptom.** With KVM, copying 1.5 MB to `/disk` and reading it twice
+took 11.5 s, and `ata` used 98% of the processor; with the processor
+emulated (TCG) it took 2.55 s.
+
+**Diagnosis.** `ata` waits for each sector by reading the status port in
+a loop; under KVM every port access leaves the virtual machine. The
+guess: the loop. The driver was changed to wait for the controller's
+interrupt (IRQ 14) instead. Nothing changed under KVM (11.6 s, `ata`
+95%), and under TCG it became 15% slower (2.94 s against 2.55, twice):
+waking a process at each interrupt costs more than a few status reads
+when the emulated disk answers at once. The same workload on the virtio
+disk (`VIRTIO=1`, `vblkd`, DMA): 0.20 s under KVM.
+
+**Cause.** QEMU's emulation of the IDE disk in PIO mode: each sector
+moves through the data port, and under KVM each transfer is an exit to
+QEMU's emulation. The driver's waiting was a small part of it.
+
+**Fix.** None to `ata`: the interrupts were taken out again. A disk that
+must be fast under KVM is the virtio one (or an IDE driver with
+bus-master DMA); the issue for it is in beads.
+
+**Lesson.** Measure the alternative before the fix: the virtio disk,
+tried first, would have said in one run that the cost was the device's
+emulation, not the loop.
