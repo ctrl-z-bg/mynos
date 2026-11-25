@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-24
+Last updated: 2026-11-25
 
 ---
 
@@ -1928,3 +1928,18 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   binaries committed by mistake, left git (JOURNAL). `abi` and `stress`
   make their raw Linux calls in either ABI; x86-64's `times` and
   `getrusage` give the CPU time; `brk` and `readlink` answered quietly.
+- **2026-11-25** — The book's sources join the repository in `doc/book`
+  (they were kept outside it, in `tmp/`): `build.sh` typesets
+  `doc/manual` with them; the PDF stays out of git. `doc/README.md` says
+  what `doc/` holds (mynos-1cf). The licences' texts next to what uses
+  them: `third_party/fonts/OFL.TXT` (Terminus), `third_party/
+  ca-certificates/MPL-2.0.txt` (Mozilla's authorities).
+- **2026-11-25** — Version 1.0 (the version the printed book describes).
+  `tools/version.sh` takes the version from git: `1.0` at the commit
+  tagged `v1.0`; after it the commits since, the branch when it is not
+  `main`, and the commit (`1.0+14-x86-64-591c1f4`); `-dirty` for a
+  build with changes not committed. The boot's banner adds the
+  processor (`Welcome to MyNOS 1.0 (i386)`). `make-release.sh` checks
+  `VERSION` against `version.sh` and ships the OFL and MPL texts.
+  `tests/fpu/fpu` and `tests/stdio/stdio`, binaries committed by
+  mistake, leave git (found on the x86-64 branch).

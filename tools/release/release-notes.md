@@ -1,3 +1,5 @@
+MyNOS 1.0 is the version described by *The MyNOS Reference Manual* (first edition, November 2026).
+
 MyNOS ("My! Not another Operating System") is an experimental operating system for 32-bit PCs: a microkernel in C, and above it the file systems, the drivers, the shells and the windows as processes, most of them in OCaml. Written in 2002–2004, taken up again and finished in 2026 with the help of AI.
 
 ## Try it in your browser

@@ -3767,3 +3767,25 @@ x86-64 kernel.
 **Lesson.** A build product in git is invisible on one architecture and
 wrong on the next. Look for ELF files among the tracked ones when a
 second toolchain arrives.
+## 2026-11-25 — The browser version, half old and half new
+
+**Symptom.** Right after MyNOS 1.0 was published, the browser version
+booted a kernel that said `v2026.11-89918d5`, the previous release, and
+its `sh.byte` failed: "has not the right magic number".
+
+**Diagnosis.** GitHub Pages served 1.0 (`index.html` said so), with
+`cache-control: max-age=600`. The page and the images' chunks have the
+same names in every release (`images/mynos-0-1048576.iso.zst`...).
+
+**Cause.** The browser still held, for up to ten minutes, the previous
+release's page and some of its chunks, and fetched the others new: one
+disk image made of two releases.
+
+**Fix.** `tools/make-web.sh` puts the chunks under a directory named by
+the version (`images/1.0/`), and the page asks for them there. A page
+held from before asks for its own directory (gone: it fails to load,
+for ten minutes at most), never for a mix. For the owner: a forced
+reload.
+
+**Lesson.** Files that belong together and change together must change
+their names together; a cache only knows names.

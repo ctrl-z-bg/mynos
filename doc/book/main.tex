@@ -1,0 +1,196 @@
+% The MyNOS Reference Manual: the book (160x235 mm), typeset from
+% doc/manual by build.sh (the chapters are in build/ch/, made by mynos.lua).
+\documentclass[paper=a5,fontsize=10pt,twoside,openany,parskip=half-,
+  headings=small,toc=indentunnumbered]{scrbook}
+% the page: paper.tex (the printer's format, 160x235 mm)
+\input{paper.tex}
+
+% --- the typefaces: style.tex (roman text, Courier code)
+\usepackage{fontspec}
+\directlua{luaotfload.add_fallback("mynosfallback",
+  {"DejaVuSansMono:mode=node;", "DejaVuSans:mode=node;"})}
+% the code's: FreeMono first, whose box-drawing characters and arrows
+% are as wide as Courier's letters (600 units), so that the diagrams'
+% right edges line up; DejaVu Sans Mono's are a little wider
+\directlua{luaotfload.add_fallback("mynosmonofallback",
+  {"FreeMono:mode=node;", "DejaVuSansMono:mode=node;", "DejaVuSans:mode=node;"})}
+\input{style.tex}
+% the text's size only now (paper.tex): Latin Modern at 9 pt does not load here
+\KOMAoptions{fontsize=\mynosfontsize}
+\setkomafont{disposition}{\normalfont\bfseries}
+\setkomafont{pageheadfoot}{\normalfont\footnotesize}
+
+\usepackage{ragged2e}
+\usepackage{fvextra}
+\fvset{xleftmargin=0pt,breaksymbolleft={},breakindent=2em}
+\usepackage{array,longtable,booktabs}
+\setlength\tabcolsep{3pt}
+\setlength\LTpre{\medskipamount}\setlength\LTpost{\medskipamount}
+\usepackage{graphicx}
+\usepackage{needspace}
+% a figure waiting to be placed goes before a box, not into its page break
+\usepackage{placeins}
+\usepackage[most]{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{imakeidx}
+\makeindex[intoc,columns=2,title=INDEX]
+
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\renewcommand\labelitemi{-}
+\renewcommand\labelitemii{-}
+\setlength\emergencystretch{3em}
+\clubpenalty=10000 \widowpenalty=10000
+
+% --- running heads and feet
+\newcommand\mynostitle{MyNOS Reference Manual}
+\newcommand\mynosrevision{Revision 1.0}
+\newcommand\mynosdate{November 2026}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{\leftmark}
+\fancyhead[RO]{\rightmark}
+\fancyfoot[LE,RO]{\thepage}
+\fancyfoot[RE,LO]{\mynostitle\ -- \mynosrevision, \mynosdate}
+\renewcommand\headrulewidth{.4pt}
+\fancypagestyle{mynosplain}{\fancyhf{}%
+  \fancyfoot[LE,RO]{\thepage}%
+  \fancyfoot[RE,LO]{\mynostitle\ -- \mynosrevision, \mynosdate}%
+  \renewcommand\headrulewidth{0pt}}
+\fancypagestyle{plain}{\fancyhf{}%
+  \fancyfoot[LE,RO]{\thepage}%
+  \fancyfoot[RE,LO]{\mynostitle\ -- \mynosrevision, \mynosdate}%
+  \renewcommand\headrulewidth{0pt}}
+
+% --- the headings: numbered as the text numbers them, in capitals
+\DeclareTOCStyleEntry[numwidth=4.5em,pagenumberwidth=2.4em]{tocline}{chapter}
+\DeclareTOCStyleEntry[indent=4.5em,numwidth=3.2em,pagenumberwidth=2.4em]{tocline}{section}
+\DeclareTOCStyleEntry[pagenumberwidth=2.4em]{part}{part}
+\newcommand\mynospart[2]{%
+  \cleardoublepage\thispagestyle{empty}%
+  \vspace*{55mm}%
+  \begin{center}\fontsize{14}{18}\selectfont\bfseries
+    \ifx\relax#1\relax\else PART #1\par\vspace{3mm}\fi #2\par
+  \end{center}%
+  \addcontentsline{toc}{part}{\ifx\relax#1\relax\else PART #1 -- \fi #2}%
+  \markboth{}{}\cleardoublepage}
+\newcommand\mynoschapter[4]{%
+  \clearpage\thispagestyle{mynosplain}%
+  \vspace*{8mm}%
+  {\fontsize{12}{15}\selectfont\bfseries\RaggedRight
+    \ifx\relax#2\relax\else #2\ \fi #3\par}%
+  \vspace{2mm}\hrule height .8pt\vspace{6mm}%
+  \ifx\relax#1\relax\else\label{ch:#1}\fi
+  \ifx\relax#1\relax
+    \addcontentsline{toc}{chapter}{#4}%
+  \else
+    \addcontentsline{toc}{chapter}{\protect\numberline{#1.}#4}%
+  \fi
+  \markboth{\ifx\relax#2\relax\else #2 \fi #3}{\ifx\relax#2\relax\else #2 \fi #3}}
+\newcommand\mynossection[3]{%
+  \par\Needspace{6\baselineskip}\vspace{\baselineskip}%
+  {\bfseries\RaggedRight\ifx\relax#1\relax\else #1\ \ \fi #2\par}\nopagebreak
+  \ifx\relax#1\relax\else\label{sec:#1}%
+    \addcontentsline{toc}{section}{\protect\numberline{#1}#3}%
+    \markright{#1 #2}\fi
+  \nopagebreak\vspace{.2\baselineskip}\nopagebreak}
+% a reference page, with the old UNIX header line
+\newcommand\mynosrefpage[3]{%
+  \par\Needspace{10\baselineskip}\vspace{1.5\baselineskip}%
+  \hrule height .8pt\vspace{1mm}%
+  {\bfseries #3\hfill MyNOS Programmer's Manual\hfill #3\par}%
+  \vspace{1mm}\hrule\nopagebreak
+  \label{sec:#1}%
+  \addcontentsline{toc}{section}{\protect\numberline{#1}#3}%
+  \markright{#1 #2}\nopagebreak\vspace{.4\baselineskip}\nopagebreak}
+% an entry of the command reference
+\newcommand\mynosentry[1]{%
+  \par\Needspace{8\baselineskip}\vspace{.8\baselineskip}%
+  {\fontsize{11}{13}\selectfont\bfseries #1\par}\nopagebreak\vspace{.2\baselineskip}\nopagebreak}
+\newcommand\mynosrule{\par\vspace{.3\baselineskip}\noindent\rule{\linewidth}{.3pt}\par}
+
+% a cross-reference's page: printed once LaTeX knows it (a second run)
+\makeatletter
+\newcommand\mynospage[1]{\@ifundefined{r@#1}{}{, p.~\pageref{#1}}}
+\makeatother
+\newcommand\mynosdef[1]{\textbf{#1}}
+% code blocks: exactly their leading, so that the box-drawing lines join
+\newcommand\mynoscodelines{\lineskiplimit=-\maxdimen\lineskip=0pt\relax}
+\newcommand\mynosstrike[1]{\sbox0{#1}\rlap{\rule[.3em]{\wd0}{.5pt}}\usebox0}
+
+% --- boxes: THE MyNOS FACTOR (double rule), quotations (single rule)
+\newtcolorbox{mynosfactor}[1]{enhanced,breakable,sharp corners,
+  colback=white,colframe=black,boxrule=.4pt,
+  borderline={.4pt}{1.2pt}{black},
+  left=3mm,right=3mm,top=1.5mm,bottom=2mm,
+  before skip=1.2\baselineskip,after skip=1.2\baselineskip,
+  before upper={\setlength\parskip{.5\baselineskip}},
+  title={THE MyNOS FACTOR\\[.3ex]\mdseries #1},
+  coltitle=black,colbacktitle=white,fonttitle=\bfseries,
+  titlerule=.4pt,toptitle=1mm,bottomtitle=1mm}
+\newtcolorbox{mynosquote}{breakable,sharp corners,colback=white,
+  colframe=black,boxrule=.4pt,left=3mm,right=3mm,top=1.5mm,bottom=1.5mm,
+  before skip=\baselineskip,after skip=\baselineskip,
+  before upper={\setlength\parskip{.5\baselineskip}}}
+
+\newcommand\mynosfigure[2]{%
+  \begin{figure}[htbp]\centering
+  \includegraphics[width=\linewidth]{#1}\par\smallskip
+  {\small\RaggedRight #2\par}\end{figure}}
+\renewcommand\topfraction{.9}\renewcommand\textfraction{.1}
+\renewcommand\floatpagefraction{.8}
+
+\AtBeginDocument{\renewcommand\contentsname{CONTENTS}}
+
+\begin{document}
+\mynosalign
+\frontmatter
+\pagestyle{empty}
+
+% --- title page (the cover will come later)
+\begin{titlepage}
+\centering
+\vspace*{35mm}
+{\fontsize{22}{26}\selectfont\bfseries MyNOS\par}
+\vspace{4mm}
+{\fontsize{12}{15}\selectfont\bfseries REFERENCE MANUAL\par}
+\vspace{2mm}
+{\small My! Not another Operating System\par}
+\vfill
+\mynosrevision\par
+\mynosdate\par
+\end{titlepage}
+
+% --- colophon
+\null\vfill
+{\small\RaggedRight
+\textbf{\mynostitle}\par
+\mynosrevision, \mynosdate. First draft: 2001.\par
+\medskip
+MyNOS was written by Cesare Zavattari, Alessandro Tommasi and Tommaso
+Schiavinotto, from 2001 to 2004, and finished in 2026 with Claude Code,
+Anthropic's AI coding agent. Logo by Luigi Ferrini (2003).\par
+\medskip
+This edition describes MyNOS 1.0. It is typeset from the working text
+of the manual, \texttt{doc/manual} in the MyNOS repository
+(\texttt{github.com/ctrl-z-bg/mynos}), at the commit tagged
+\texttt{v1.0}, \texttt{\input{commit.tex}\unskip}.\par
+\medskip
+\mynosfontsline\par\par}
+\clearpage
+
+\pagestyle{plain}
+\input{preface.tex}
+\begin{flushright}\itshape Claude (Opus 5.5), Anthropic\\ November 2026\end{flushright}
+
+\input{howto.tex}
+
+\pagestyle{fancy}
+\tableofcontents
+
+\mainmatter
+\pagestyle{fancy}
+\input{chapters.tex}
+
+\backmatter
+\printindex
+\end{document}

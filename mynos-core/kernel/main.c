@@ -163,7 +163,7 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   clear_screen();
   video_font_init();
-  printk("Welcome to MyNOS - v" MYNOS_VERSION "\n\n");
+  printk("Welcome to MyNOS " MYNOS_VERSION " (" ARCH_MACHINE ")\n\n");
 
   init_memory();
 

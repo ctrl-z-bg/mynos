@@ -71,10 +71,13 @@ its `argv`.
    only (the second serial port, `0x2F8`), leaving the screen to the
    programs, unless the kernel's command line says `verbose`.
 
-Its first line on the screen is `Welcome to MyNOS - v2026.11-71dc1d2`:
-the version, the year and month of the build and the commit, which
-`tools/build-all.sh` writes to `VERSION` (`tools/version.sh`) and the
-kernel's Makefile compiles in; programs read it with `uname`
+Its first line on the screen is `Welcome to MyNOS 1.0 (i386)`: the
+version and the processor. The version comes from git: `1.0` for the
+commit tagged `v1.0`; after it, how many commits later, the branch
+when it is not `main`, and the commit (`1.0+14-x86-64-591c1f4`);
+`-dirty` at the end when the build had changes not committed.
+`tools/build-all.sh` writes it to `VERSION` (`tools/version.sh`) and
+the kernel's Makefile compiles it in; programs read it with `uname`
 (appendix D), `sh` with `version`. Every message the kernel writes, and
 every line a service logs (call 31), is also kept in a ring of 64 KB,
 which native call 35 reads: the `log` command and the Log window.

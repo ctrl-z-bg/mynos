@@ -2,9 +2,8 @@
 
 This folder is the working text of the MyNOS manual: Markdown, in the
 repository, written against the code and checked by it. The typeset
-edition, in the style of the manuals of 1975–1990 (A5, LaTeX), will be
-made from it later (mynos-278). The table of contents follows the draft
-agreed for that edition.
+edition, in the style of the manuals of 1975–1990, is made from it by
+`doc/book` (mynos-278), with the same table of contents.
 
 Conventions:
 

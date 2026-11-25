@@ -112,7 +112,7 @@ The kernel answers the 55 call numbers below. Every other number gets
 | 114 | `wait4` | waits for a child (`pid` > 0: that one; -1 or 0: any, as there are no process groups) and collects its status; option `WNOHANG` only; the resource usage is not filled; `-ECHILD` without children |
 | 7 | `waitpid` | the same as `wait4` |
 | 20 | `getpid` | the pid (appendix A.4) |
-| 122 | `uname` | `MyNOS`, `mynos`, the version (`2026.11-71dc1d2`: the build's year and month and its commit), `#1`, `i386` |
+| 122 | `uname` | `MyNOS`, `mynos`, the version (`1.0`, appendix A.2), `#1`, `i386` |
 | 64 | `getppid` | the parent's pid |
 | 29 | `pause` | waits forever: no signal can end the wait (`-EINTR` if it ever returns) |
 | 43 | `times` | the process's CPU time in ticks of 10 ms (Linux's `USER_HZ`, whatever the timer's rate), all of it as user time; the children's is not kept (0); returns the ticks since boot |

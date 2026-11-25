@@ -1,0 +1,14 @@
+% The style, as Bell Labs: the text in a roman book face (Times), justified;
+% code and names in Courier, at the same size (as troff set it)
+\setmainfont{texgyretermes}[Extension=.otf, UprightFont=*-regular,
+  BoldFont=*-bold, ItalicFont=*-italic, BoldItalicFont=*-bolditalic,
+  Ligatures=TeX, RawFeature={fallback=mynosfallback}]
+\setmonofont{texgyrecursor}[Extension=.otf, UprightFont=*-regular,
+  BoldFont=*-bold, ItalicFont=*-italic, BoldItalicFont=*-bolditalic,
+  % no ligatures at all: "fi" or "ff" set as one glyph made a line of
+  % code a character short, and a diagram's right edge moved
+  Ligatures={TeXOff,NoCommon}, RawFeature={fallback=mynosmonofallback}]
+\newcommand\mynosalign{\justifying}
+\newcommand\mynosfontsline{Set in TeX Gyre Termes and TeX Gyre Cursor with LuaLaTeX.}
+\tolerance=1500
+\setlength\emergencystretch{5em}
