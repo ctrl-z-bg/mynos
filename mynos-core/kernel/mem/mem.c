@@ -46,7 +46,7 @@ static uint32_t boot_reserved_start[MAX_BOOT_RESERVED];
 static uint32_t boot_reserved_len[MAX_BOOT_RESERVED];
 static uint32_t n_boot_reserved = 0;
 
-void mem_reserveAtBoot(uint32_t start, uint32_t len) {
+void mem_reserveAtBoot(paddr_t start, uint32_t len) {
   if (n_boot_reserved < MAX_BOOT_RESERVED && len > 0) {
     boot_reserved_start[n_boot_reserved] = start;
     boot_reserved_len[n_boot_reserved] = len;
@@ -232,7 +232,7 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
 /* physical memory that is not RAM (a device's: a frame buffer), mapped
    into the current process: its address, or NULL. The pages are shared
    (PF_SHARED: a fork keeps them as they are) and never counted as RAM. */
-void * __OS_mapPhysical(uint32_t phys, uint32_t npages) {
+void * __OS_mapPhysical(paddr_t phys, uint32_t npages) {
   uint32_t start, i;
   if (npages == 0 || (phys & 0xFFF) || (phys >> 12) < __total_phy_pages ||
       (phys >> 12) + npages > 0x100000)
@@ -281,7 +281,7 @@ void * __OS_mapDmaArea(void) {
    address, the physical one in *phys; NULL if no piece is free. The
    mapping holds the pages' only reference (pmem_set once each): the
    process's end frees them. */
-void * __OS_allocDma(uint32_t npages, uint32_t * phys) {
+void * __OS_allocDma(uint32_t npages, paddr_t * phys) {
   uint32_t first, run = 0, page, start, i;
   /* the linear pages first: their page tables, if new, take physical
      pages, which must not be in the piece chosen next (2026-11-24: one

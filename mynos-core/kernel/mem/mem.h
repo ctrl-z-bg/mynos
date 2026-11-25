@@ -195,17 +195,17 @@ extern uint32_t __total_phy_pages;
 
 /* to call in mynos_main() */
 void init_memory();
-void mem_reserveAtBoot(uint32_t start, uint32_t len);
+void mem_reserveAtBoot(paddr_t start, uint32_t len);
 
 /* return value:
    'pageaddr' on success
    'NULL'     if some problem occours
 */
-void * __OS_mapPhysical(uint32_t phys, uint32_t npages);
+void * __OS_mapPhysical(paddr_t phys, uint32_t npages);
 #define DMA_AREA_SIZE 0x10000
 extern uint32_t __dma_area;
 void * __OS_mapDmaArea(void);
-void * __OS_allocDma(uint32_t npages, uint32_t * phys);
+void * __OS_allocDma(uint32_t npages, paddr_t * phys);
 void * __OS_askPagesFrom(void * pageaddr, unsigned int npages,
 			 int alloc_now, uint32_t flags);
 

@@ -64,15 +64,15 @@ void trace_event(int kind, int pid, int peer, int channel, uint32_t size,
 #define TRACE(k, pid, peer, ch, size, arg, data, n) \
   do { if (trace_on) trace_event(k, pid, peer, ch, size, arg, data, n); } while (0)
 
-int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2);
+int _mynos_syscall_trace(uint32_t op, vaddr_t arg1, uint32_t arg2);
 
 /* processes (33): the live processes, 32 bytes each (pid, parent,
    privileges | MYNOS_PROC_BYTECODE for OCaml programs, threads, name: 16
    bytes), into buf, at most max: how many */
 #define PROCESS_ENTRY 32
-int _mynos_syscall_processes(uint32_t buf, uint32_t max);
-int _mynos_syscall_faults(int32_t pid, uint32_t buf);
-int _mynos_syscall_procstat(int32_t pid, uint32_t buf);
+int _mynos_syscall_processes(vaddr_t buf, uint32_t max);
+int _mynos_syscall_faults(int32_t pid, vaddr_t buf);
+int _mynos_syscall_procstat(int32_t pid, vaddr_t buf);
 int _mynos_syscall_pager(uint32_t op, uint32_t a, uint32_t b, uint32_t c, uint32_t d);
 
 /* a process's name from its argv (base name; for "ocamlrun X.byte", X) */

@@ -601,14 +601,14 @@ static void endProcess(process_descriptor_t * self, int status, uint32_t pgdir) 
   // free process ports
   n = listNElem(self->portList);
   for (i = 0; i < n; i++) {
-    port = (int)listExtract(self->portList);
+    port = (int)(long)listExtract(self->portList);
     __OS_port_freeDead(port);
   }
 
   // free process channels
   n = listNElem(self->channelList);
   for (i = 0; i < n; i++) {
-    channel = (int)listExtract(self->channelList);
+    channel = (int)(long)listExtract(self->channelList);
     __OS_ipc_freeChannel(channel);
   }
 
@@ -748,7 +748,7 @@ uint32_t __OS_residentPages(process_descriptor_t * p) {
 /* whether [start, start + len) in the current process touches the RAM
    disk's page tables, shared by every process (munmap must leave them
    alone: mynos-q5b) */
-int __OS_touchesRamdisk(uint32_t start, uint32_t len) {
+int __OS_touchesRamdisk(vaddr_t start, uint32_t len) {
   uint32_t pd;
   if (len == 0) return 0;
   for (pd = start >> 22; pd <= (start + len - 1) >> 22; pd++) {

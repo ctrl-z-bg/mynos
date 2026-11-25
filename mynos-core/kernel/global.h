@@ -55,6 +55,11 @@ typedef long           long32_t;
 typedef unsigned short ushort16_t;
 typedef short          short16_t;
 
+/* addresses (doc/decisions/x86-64.md): as wide as a pointer, 32 bits on
+   the i386, 64 on x86-64 */
+typedef unsigned long vaddr_t;         /* linear (virtual) */
+typedef unsigned long paddr_t;         /* physical */
+
 typedef int pid_t;
 typedef unsigned int   __kernel_size_t;
 typedef __kernel_size_t size_t;

@@ -202,8 +202,8 @@ void mynos_main(multiboot_info_t *boot_info) {
   nmodules = boot_info->mods_count;
   /* the bootloader's structures, read after init_memory: no DMA area
      (mem.c) on them */
-  mem_reserveAtBoot((uint32_t)boot_info, sizeof(multiboot_info_t));
-  mem_reserveAtBoot((uint32_t)module, nmodules * sizeof(module_t));
+  mem_reserveAtBoot((paddr_t)boot_info, sizeof(multiboot_info_t));
+  mem_reserveAtBoot((paddr_t)module, nmodules * sizeof(module_t));
   for (i = 0; i < boot_info->mods_count; i++) {
     modinfo[i].start = (uint32_t*)module[i].mod_start;
     modinfo[i].len = module[i].mod_end - module[i].mod_start;

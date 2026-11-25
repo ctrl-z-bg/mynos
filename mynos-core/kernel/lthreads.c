@@ -137,7 +137,7 @@ static int32_t futexRequeue(int32_t * addr, int n, int nmove,
   return woken + moved;
 }
 
-static int32_t futex(int32_t * addr, int op, int32_t val, uint32_t arg4,
+static int32_t futex(int32_t * addr, int op, int32_t val, vaddr_t arg4,
 		     int32_t * addr2, int32_t val3, int ts64) {
   int32_t ms = -1;
   int cmd = op & FUTEX_CMD_MASK;
@@ -262,7 +262,7 @@ void _linux_syscall_exit_thread(int status) {
     *currThread->clearTid = 0;
     futexWake(currThread->clearTid, 0x7FFFFFFF);
   }
-  __OS_threadExit((void *)status);
+  __OS_threadExit((void *)(long)status);
 }
 
 int32_t _linux_syscall_gettid(void) {

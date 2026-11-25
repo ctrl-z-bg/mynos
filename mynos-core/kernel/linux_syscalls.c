@@ -531,13 +531,13 @@ int _linux_syscall_munmap(void *start, size_t length) {
   print_long((long32_t)length);
   print_char('\n');
 #endif
-  if (length == 0 || (uint32_t)start < USER_AREA_START ||
-      (uint32_t)start + length < (uint32_t)start ||
-      (uint32_t)start + length > USER_AREA_END)
+  if (length == 0 || (vaddr_t)start < USER_AREA_START ||
+      (vaddr_t)start + length < (vaddr_t)start ||
+      (vaddr_t)start + length > USER_AREA_END)
     return -22;
   npages = (length - 1) / PAGE_SIZE + 1;
   /* the RAM disk is every process's: not to be unmapped (mynos-q5b) */
-  if (__OS_touchesRamdisk((uint32_t)start, npages * PAGE_SIZE))
+  if (__OS_touchesRamdisk((vaddr_t)start, npages * PAGE_SIZE))
     return -22;
   if (__OS_releasePages(start, npages, 1, 1) == NULL)
     return -1;

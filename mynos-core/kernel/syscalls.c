@@ -79,26 +79,26 @@ int _mynos_syscall_channelPeer(int32_t c) {
 /* mapPhysical (28): npages of a device's memory (not RAM: a frame
    buffer) from physical address phys, mapped into the caller: their
    address. Drivers only (the io privilege). */
-int _mynos_syscall_mapPhysical(uint32_t phys, uint32_t npages) {
+long _mynos_syscall_mapPhysical(paddr_t phys, uint32_t npages) {
   void * a;
   if (!(processTable[currProcess]->privileges & MYNOS_PRIV_IO))
     return MYNOS_ERR_DENY;
   a = __OS_mapPhysical(phys, npages);
-  return a ? (int)a : MYNOS_ERR_INVALID;
+  return a ? (long)a : MYNOS_ERR_INVALID;
 }
 
 /* dmaArea (29): the DMA area (mem.c: 64 KB below 16 MB, for ISA DMA).
    what 0: mapped into the caller, its address; 1: its physical address,
    which the driver gives the DMA controller. Drivers only (the io
    privilege); MYNOS_ERR_INVALID if the boot found no place for it. */
-int _mynos_syscall_dmaArea(uint32_t what) {
+long _mynos_syscall_dmaArea(uint32_t what) {
   void * a;
   if (!(processTable[currProcess]->privileges & MYNOS_PRIV_IO))
     return MYNOS_ERR_DENY;
   if (__dma_area == 0) return MYNOS_ERR_INVALID;
-  if (what == 1) return (int)__dma_area;
+  if (what == 1) return (long)__dma_area;
   a = __OS_mapDmaArea();
-  return a ? (int)a : MYNOS_ERR_FULL;
+  return a ? (long)a : MYNOS_ERR_FULL;
 }
 
 /* dmaAlloc (39): npages (1 to 4096, 16 MB) of RAM, physically contiguous and
@@ -107,8 +107,8 @@ int _mynos_syscall_dmaArea(uint32_t what) {
    *phys their physical address, which the driver gives the device.
    Drivers only (the io privilege). The process's mapping is the pages'
    only reference: they are freed when it ends. */
-int _mynos_syscall_dmaAlloc(uint32_t npages, uint32_t * phys) {
-  uint32_t p;
+long _mynos_syscall_dmaAlloc(uint32_t npages, paddr_t * phys) {
+  paddr_t p;
   void * a;
   if (!(processTable[currProcess]->privileges & MYNOS_PRIV_IO))
     return MYNOS_ERR_DENY;
@@ -117,7 +117,7 @@ int _mynos_syscall_dmaAlloc(uint32_t npages, uint32_t * phys) {
   a = __OS_allocDma(npages, &p);
   if (a == NULL) return MYNOS_ERR_FULL;
   if (copy_to_user(phys, &p, sizeof p) < 0) return MYNOS_ERR_INVALID;
-  return (int)a;
+  return (long)a;
 }
 
 /* processInfo (27): a process's privileges, with MYNOS_PROC_ALIVE while
