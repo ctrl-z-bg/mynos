@@ -503,7 +503,7 @@ let ask_context () =
     | exception Sys_error _ -> "" in
   String.concat "\n" [
     "You are the assistant of the command shell (sh) of MyNOS, a small \
-     microkernel operating system written in C and OCaml, running on i386. \
+     microkernel operating system written in C and OCaml, running on " ^ Mynos.machine () ^ ". \
      The user writes a request in natural language; you answer by calling \
      propose_command with ONE command line for this shell that does it. The \
      user will see the command and run it only if they agree. Do not run \

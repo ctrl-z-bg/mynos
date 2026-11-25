@@ -1963,3 +1963,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   and i: its windows are made in the same order, so displayd places
   them where the clicks expect). i386 and x86_64, 181 checks each, in
   335 s together (mynos-f18; they took 11 minutes for the i386 alone).
+- **2026-11-25** — `Mynos.machine ()` (uname's machine: `i386`,
+  `x86_64`): `ask`, the agent and the System window say the processor
+  they run on, not always "i386". x86-64 done (mynos-btq.3): branch
+  `x86-64` merged into `next`, both architectures' suites green.

@@ -22,8 +22,11 @@ val log : string -> unit
     once the system has started. For services' messages. *)
 
 val version : unit -> string
-(** The system's version: the year and month it was built, and the commit
-    (["2026.11-71dc1d2"]), as the kernel's uname says. *)
+(** The system's version, as the kernel's uname says: ["1.0"] for the
+    commit tagged v1.0, ["1.0+14-x86-64-591c1f4"] after it (appendix A.2). *)
+
+val machine : unit -> string
+(** The processor MyNOS runs on, as uname says: ["i386"], ["x86_64"]. *)
 
 val log_position : unit -> int
 (** The kernel's log (its messages and the services', since boot) is a
