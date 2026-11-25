@@ -145,6 +145,10 @@ int allocPid(void);
 /* frees the frames of an address space given its page directory's and
    its mirror's frames (an ended process's, or a fork's that failed) */
 void __OS_freeSpaceFrames(uint32_t pdFrame, uint32_t mirrorFrame);
+/* the frames of an ended process's address space freed (arch/ARCH/space.c) */
+void freeAddressSpace(process_descriptor_t * d);
+/* fork's copy of the current address space (arch/ARCH/space.c) */
+int arch_space_fork(paddr_t * pd, paddr_t * mirror);
 void reapZombies(void);
 void freeProcessDescriptor(pid_t pid);
 

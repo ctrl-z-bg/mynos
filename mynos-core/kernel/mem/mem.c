@@ -139,13 +139,12 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
 
 #ifndef NEWMEM
   if ((flags & PF_USER) || (flags & PF_SUPERVISOR_IN_USER_SPACE)) {
-    page_addr = ((_asm_last_kernel_page_dir_entry_used+1) * FOURMB)>>12;
+    page_addr = ARCH_USER_FIRST_PAGE;
     last_page = __LAST_LINEAR_PAGE;
     flags &= (~PF_SUPERVISOR_IN_USER_SPACE); // remove, if present
   } else {
     page_addr = 0;
-    last_page = ((_asm_last_kernel_page_dir_entry_used+1) * FOURMB -
-		 PAGE_SIZE) >> 12;
+    last_page = ARCH_KERNEL_LAST_PAGE;
   }
 #else
   // TO TEST THE LINEAR SPACE MAP!!!
@@ -166,8 +165,7 @@ void * __OS_askPages(unsigned int npages, int alloc_now, uint32_t flags) {
   /* the kernel's pages: below its last page directory entry, which stays
      empty (init_memory) */
   page_addr = 0;
-  last_page = (_asm_last_kernel_page_dir_entry_used * FOURMB -
-	       PAGE_SIZE) >> 12;
+  last_page = ARCH_KERNEL_LAST_PAGE;
   for (; page_addr + npages - 1 <= last_page; page_addr++) {
     if (__pg_free_pages_from_page(page_addr, npages, &not_used) == npages)
       return __OS_askPagesFrom((void *)(page_addr<<12), npages, alloc_now,

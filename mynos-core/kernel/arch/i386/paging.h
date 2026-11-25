@@ -29,6 +29,13 @@ typedef uint32_t pte_t;
 #define PTE_FLAGS(E)     ((E) & 0xFFF)
 #define PAGES_PER_TABLE  1024           /* the pages one leaf table maps */
 
+/* the kernel's pages: below its last page directory entry, which stays
+   empty (arch_init_kernel_space); the processes' from the next one */
+#define ARCH_KERNEL_LAST_PAGE \
+  ((_asm_last_kernel_page_dir_entry_used * FOURMB - PAGE_SIZE) >> 12)
+#define ARCH_USER_FIRST_PAGE \
+  (((_asm_last_kernel_page_dir_entry_used + 1) * FOURMB) >> 12)
+
 /************************************************************************
 *                   PAGE DIRECTORY AND PAGE TABLES STUFF                *
 ************************************************************************/
