@@ -82,7 +82,7 @@ int main(int argc, char ** argv) {
   for (i = 1; i < argc; i++) {
     fd = open(argv[i], O_RDONLY);
     read(fd, index, header[i-1].size);
-    header[i-1].start = (char*)((int)index - (int)disk);
+    header[i-1].start = (uint32_t)(index - disk);
     index += header[i-1].size;
     close(fd);
   }
@@ -106,7 +106,7 @@ int main(int argc, char ** argv) {
   for (i = 0; i < argc-1; i++) {
     printf("file %s:\t size %d start from offset %d\n", header[i].filename, 
 	   header[i].size,
-	   (int)(header[i].start));
+	   (int)header[i].start);
   }
 
   free(disk);

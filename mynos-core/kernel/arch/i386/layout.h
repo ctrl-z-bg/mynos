@@ -30,4 +30,8 @@
 #define USER_AREA_END   ((uint32_t)(0 - (0x400000 + 0x1000)) - \
                          0x1000 * (PROCESS_INFO_NPAGES + KERNEL_STACK_NPAGES))
 
+/* where threads' kernel stacks are made (threads.c): the process's own
+   space, with superuser rights */
+#define ARCH_KSTACK_FLAGS PF_SUPERVISOR_IN_USER_SPACE
+
 #endif

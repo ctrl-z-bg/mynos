@@ -570,11 +570,19 @@ static int copy_user_fixup(unsigned long * frame) {
   return 1;
 }
 
-void __mem_userSegfault(uint32_t addr) {
+/* the instruction of the fault being handled, for the message */
+static unsigned long fault_ip;
+
+void __mem_userSegfault(vaddr_t addr) {
   printk("process ");
   print_ulong(CURRPID);
   printk(" killed: invalid memory access at ");
   print_ulong_hex(addr);
+  if (fault_ip) {
+    printk(" (instruction at ");
+    print_ulong_hex(fault_ip);
+    print_char(')');
+  }
   print_char('\n');
   killProcess(SIGNAL_STATUS(SIGSEGV));
   sched();         /* switches to another process, never returns */
@@ -585,6 +593,7 @@ uint32_t mem_faultsAlloc, mem_faultsCow;
 
 void _page_fault_handler(vaddr_t addr, uint32_t errcode, unsigned long * frame) {
   pte_t * pte;
+  fault_ip = frame[ARCH_FRAME_IP];
 
 #ifdef DEBUG
   print_char('\n');

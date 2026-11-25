@@ -31,14 +31,31 @@
  * statement between pushal/popal, which only worked by luck and broke
  * with modern gcc (position-independent code keeps the GOT in ebx).
  */
-static inline int __mynos_syscall(int n, int b, int c, int d, int S, int D)
+#ifdef __x86_64__
+/* x86-64 (doc/decisions/x86-64.md): the number in rax, the arguments in
+   rdi, rsi, rdx, r10, r8 (Linux's order), the result in rax; the kernel
+   may change rcx and r11 */
+static inline long __mynos_syscall(long n, long b, long c, long d, long S, long D)
 {
-  int ret = n;
+  register long r10 __asm__("r10") = S;
+  register long r8 __asm__("r8") = D;
+  long ret = n;
+  __asm__ volatile ("int $0x90"
+                    : "+a"(ret), "+D"(b), "+S"(c), "+d"(d), "+r"(r10), "+r"(r8)
+                    :
+                    : "rcx", "r11", "r9", "memory");
+  return ret;
+}
+#else
+static inline long __mynos_syscall(long n, long b, long c, long d, long S, long D)
+{
+  long ret = n;
   __asm__ volatile ("int $0x90"
                     : "+a"(ret), "+b"(b), "+c"(c), "+d"(d), "+S"(S), "+D"(D)
                     :
                     : "memory");
   return ret;
 }
+#endif
 
 #endif

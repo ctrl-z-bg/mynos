@@ -23,13 +23,13 @@
 
 int mynos_serviceRegister(char * name) {
   int ret;
-  ret = __mynos_syscall(11, (int)name, 0, 0, 0, 0);
+  ret = __mynos_syscall(11, (long)name, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_clientRegister(char * name) {
   int ret;
-  ret = __mynos_syscall(12, (int)name, 0, 0, 0, 0);
+  ret = __mynos_syscall(12, (long)name, 0, 0, 0, 0);
   return ret;    
 }
 

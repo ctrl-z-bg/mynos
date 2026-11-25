@@ -1905,3 +1905,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   through QMP) are all virtio's. A bug found on the way: dmaAlloc chose
   its physical pages before the page tables of its mapping were made,
   and one of those could be inside the piece (JOURNAL).
+- **2026-11-25** — x86-64 (mynos-btq.3, branch `x86-64`;
+  doc/decisions/x86-64.md): MyNOS boots on x86-64 to the shell. The
+  kernel in `arch/x86_64` (long mode, four-level page tables through a
+  direct map, the kernel's gigabyte shared, ELF64 processes, fork, the
+  native calls by `int 0x90` and Linux's x86-64 calls by `syscall`), the
+  whole user space rebuilt by the `dev-x86_64` container
+  (`tools/build-x86_64.sh`, in `build/x86_64/tree`): `init`, every
+  service, `sh`, the OCaml toplevel with 63-bit integers. Generic code
+  made 64-bit clean where it was 32-bit without saying so (multiboot,
+  `size_t`, the RAM disk's directory, `libmynos`'s casts and raw calls).
+  The i386 build and its suite unchanged (181 checks).

@@ -57,9 +57,10 @@ tss_t * threadAlloc(void) {
     kstack = tss->kstack;
   } else {
     if ((tss = (tss_t*)kmalloc(sizeof(tss_t))) == NULL) return NULL;
-    /* a kernel stack in user space but with superuser rights */
-    kstack = (vaddr_t)__OS_askPages(KERNEL_STACK_NPAGES, 1,
-				     PF_SUPERVISOR_IN_USER_SPACE);
+    /* a kernel stack: where the architecture keeps them (the i386: in
+       the process's space, with superuser rights; x86-64: in the
+       kernel's gigabyte, which every space shares) */
+    kstack = (vaddr_t)__OS_askPages(KERNEL_STACK_NPAGES, 1, ARCH_KSTACK_FLAGS);
     if (!kstack) { kfree(tss); return NULL; }
   }
 

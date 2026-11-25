@@ -15,12 +15,12 @@
 #include "syscall.h"
 
 int mynos_trace(int op, void * arg1, unsigned int arg2) {
-  return __mynos_syscall(32, op, (int)arg1, (int)arg2, 0, 0);
+  return __mynos_syscall(32, op, (long)arg1, (long)arg2, 0, 0);
 }
 
 /* processes (native 33) */
 int mynos_processes(mynos_process_t * buf, int max) {
-  return __mynos_syscall(33, (int)buf, max, 0, 0, 0);
+  return __mynos_syscall(33, (long)buf, max, 0, 0, 0);
 }
 
 /* kill (native 34) */
@@ -30,12 +30,12 @@ int mynos_kill(int pid) {
 
 /* the kernel's log (native 35) */
 int mynos_klog(unsigned int from, char * buf, unsigned int max) {
-  return __mynos_syscall(35, (int)from, (int)buf, (int)max, 0, 0);
+  return __mynos_syscall(35, (long)from, (long)buf, (long)max, 0, 0);
 }
 
 /* the page faults resolved (native 36) */
 int mynos_faults(int pid, unsigned int out[2]) {
-  return __mynos_syscall(36, pid, (int)out, 0, 0, 0);
+  return __mynos_syscall(36, pid, (long)out, 0, 0, 0);
 }
 
 /* the external pager (native 37) */
@@ -44,33 +44,33 @@ int mynos_pagerRegister(void) {
 }
 
 void * mynos_pagerRegion(int pid, unsigned int npages, unsigned int token, int writable) {
-  int page = __mynos_syscall(37, MYNOS_PAGER_REGION, pid, (int)npages, (int)token, writable);
-  return page <= 0 ? (void *)0 : (void *)((unsigned int)page << 12);
+  int page = __mynos_syscall(37, MYNOS_PAGER_REGION, pid, (long)npages, (long)token, writable);
+  return page <= 0 ? (void *)0 : (void *)((unsigned long)page << 12);
 }
 
 int mynos_pagerNext(mynos_pager_fault_t * f) {
-  return __mynos_syscall(37, MYNOS_PAGER_NEXT, (int)f, 0, 0, 0);
+  return __mynos_syscall(37, MYNOS_PAGER_NEXT, (long)f, 0, 0, 0);
 }
 
 int mynos_pagerSupply(int pid, void * addr, void * src) {
-  return __mynos_syscall(37, MYNOS_PAGER_SUPPLY, pid, (int)addr, (int)src, 0);
+  return __mynos_syscall(37, MYNOS_PAGER_SUPPLY, pid, (long)addr, (long)src, 0);
 }
 
 /* a process's statistics (native 38) */
 int mynos_procstat(int pid, unsigned int out[6]) {
-  return __mynos_syscall(38, pid, (int)out, 0, 0, 0);
+  return __mynos_syscall(38, pid, (long)out, 0, 0, 0);
 }
 
 int mynos_pagerQuery(int pid, void * addr) {
-  return __mynos_syscall(37, MYNOS_PAGER_QUERY, pid, (int)addr, 0, 0);
+  return __mynos_syscall(37, MYNOS_PAGER_QUERY, pid, (long)addr, 0, 0);
 }
 
 int mynos_pagerEvict(int pid, void * addr, void * dst, unsigned int token, int writable) {
-  return __mynos_syscall(37, MYNOS_PAGER_EVICT, pid, (int)addr, (int)dst,
+  return __mynos_syscall(37, MYNOS_PAGER_EVICT, pid, (long)addr, (long)dst,
                          (int)((token << 1) | (writable ? 1 : 0)));
 }
 
 int mynos_pagerCopy(int pid, void * addr, void * dst) {
-  return __mynos_syscall(37, MYNOS_PAGER_COPY, pid, (int)addr, (int)dst, 0);
+  return __mynos_syscall(37, MYNOS_PAGER_COPY, pid, (long)addr, (long)dst, 0);
 }
 

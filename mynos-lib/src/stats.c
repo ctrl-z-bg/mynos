@@ -22,6 +22,6 @@
 #include "syscall.h"
 
 void mynos_stats(mynos_stats_t * st) {
-  __mynos_syscall(400, (int)st, 0, 0, 0, 0);
+  __mynos_syscall(400, (long)st, 0, 0, 0, 0);
 }
 

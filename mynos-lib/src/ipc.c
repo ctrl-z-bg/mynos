@@ -27,7 +27,7 @@
 int mynos_send(int channel, void * buf, unsigned int size,
 	       unsigned int flags) {
   int ret;
-  ret = __mynos_syscall(3, (int)channel, (int)buf, (int)size, (int)flags, 0);
+  ret = __mynos_syscall(3, (long)channel, (long)buf, (long)size, (long)flags, 0);
   return ret;
 }
 
@@ -35,7 +35,7 @@ static int  __mynos_recv(int channel, mynos_msg_t * msg,
 			 void * shortmsg, unsigned int flags,
 			 unsigned int timeout) {
   int ret;
-  ret = __mynos_syscall(4, (int)channel, (int)msg, (int)shortmsg, (int)flags, (int)timeout);
+  ret = __mynos_syscall(4, (long)channel, (long)msg, (long)shortmsg, (long)flags, (long)timeout);
   if (ret < 0) {
     if (shortmsg != NULL) free(shortmsg);
     if (msg != NULL) free(msg);
@@ -66,7 +66,7 @@ void mynos_waitSync(int channel) {
 
 int mynos_freeChannel(int c) {
   int ret;
-  ret = __mynos_syscall(5, (int)c, 0, 0, 0, 0);
+  ret = __mynos_syscall(5, (long)c, 0, 0, 0, 0);
   return ret;    
 }
 
@@ -79,8 +79,8 @@ int mynos_freeMsg(mynos_msg_t ** pmsg) {
   if (msg->isShort)
     free(msg->start);
   else {
-    start = (void *)((unsigned int)(msg->start) & 0xFFFFF000);
-    len = ((unsigned int)(msg->start) & 0xFFF) + msg->size;
+    start = (void *)((unsigned long)(msg->start) & ~0xFFFUL);
+    len = ((unsigned long)(msg->start) & 0xFFF) + msg->size;
     munmap(start, len);
   }
   free(msg);

@@ -26,7 +26,7 @@
 
 int mynos_spawnImage(void * elf, unsigned int len, char ** argv, char ** envp)
 {
-  return __mynos_syscall(30, (int)elf, (int)len, (int)argv, (int)envp, 0);
+  return __mynos_syscall(30, (long)elf, (long)len, (long)argv, (long)envp, 0);
 }
 
 /* mapPhysical (28): the address, or an error (a small negative number) */
@@ -52,7 +52,7 @@ void * mynos_dmaArea(unsigned long * phys) {
    privilege). Freed when the process ends. */
 void * mynos_dmaAlloc(int npages, unsigned long * phys) {
   unsigned long p = 0;
-  unsigned long r = (unsigned long)__mynos_syscall(39, npages, (int)&p, 0, 0, 0);
+  unsigned long r = (unsigned long)__mynos_syscall(39, npages, (long)&p, 0, 0, 0);
   if (r >= (unsigned long)-4096) return NULL;
   if (phys) *phys = p;
   return (void *)r;
@@ -134,8 +134,8 @@ static int spawn_file(const char * path, char ** argv, char ** envp,
   }
   if (!envp) envp = environ;      /* by default, our own environment */
   env = child_env(envp, pwd_var);
-  pid = __mynos_syscall(30, (int)image, (int)done, (int)argv,
-                        (int)(env ? env : envp), privileges);
+  pid = __mynos_syscall(30, (long)image, (long)done, (long)argv,
+                        (long)(env ? env : envp), privileges);
   free(env);
   free(image);
   return pid;

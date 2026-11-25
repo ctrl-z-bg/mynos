@@ -39,4 +39,9 @@
 
 #define DIRECT_MAP       0xFFFF800000000000UL
 
+/* where threads' kernel stacks are made (threads.c): the kernel's
+   gigabyte, which every space shares (a context switch changes the space
+   while on the outgoing thread's stack: it must be mapped in both) */
+#define ARCH_KSTACK_FLAGS 0
+
 #endif

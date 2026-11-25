@@ -121,7 +121,7 @@ void __mem_allocateOnUse(vaddr_t addr);
    no wrap around; never the kernel's */
 int __mem_userArea(const void * start, uint32_t size);
 /* end the current process for an invalid access at addr */
-void __mem_userSegfault(uint32_t addr);
+void __mem_userSegfault(vaddr_t addr);
 /* pager.c: a user thread's fault on a page given to the external pager
    (entry: its page table entry); returns once the page is there */
 void __pager_fault(pte_t entry, vaddr_t addr, uint32_t errcode);

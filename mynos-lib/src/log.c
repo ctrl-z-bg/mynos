@@ -30,5 +30,5 @@ void mynos_log(const char * fmt, ...)
   if (n < 0) return;
   if (n > (int)sizeof(buf) - 2) n = sizeof(buf) - 2;
   if (n == 0 || buf[n - 1] != '\n') buf[n++] = '\n';
-  __mynos_syscall(31, (int)buf, n, 0, 0, 0);
+  __mynos_syscall(31, (long)buf, n, 0, 0, 0);
 }

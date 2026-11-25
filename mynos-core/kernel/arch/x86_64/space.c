@@ -310,7 +310,13 @@ void __OS_freeSpaceFrames(uint32_t pdFrame, uint32_t mirrorFrame)
 
 void freeAddressSpace(process_descriptor_t * d)
 {
+  tss_t * t;
   freeSpace(d->pgdirPhys);
+  /* the threads' kernel stacks, in the kernel's gigabyte */
+  for (t = d->tss; t; t = t->next)
+    if (t->kstack) __OS_releasePages((void *)t->kstack, KERNEL_STACK_NPAGES, 1, 0);
+  for (t = d->deadThreads; t; t = t->next)
+    if (t->kstack) __OS_releasePages((void *)t->kstack, KERNEL_STACK_NPAGES, 1, 0);
   if (d->ptsMirror) __OS_releasePages(d->ptsMirror, KERNEL_STACK_NPAGES, 1, 0);
   if (d->processData) __OS_releasePages(d->processData, PROCESS_INFO_NPAGES, 1, 0);
   d->ptsMirror = NULL;
