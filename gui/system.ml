@@ -70,7 +70,7 @@ let width = 1000 and height = 700
 type device = { d_name : string; d_what : string; drivers : string list; irqs : int list }
 
 let devices = [|
-  { d_name = "CPU"; d_what = "i386: runs the kernel and every process, \
+  { d_name = "CPU"; d_what = Mynos.machine () ^ ": runs the kernel and every process, \
                               switching between their threads"; drivers = []; irqs = [] };
   { d_name = "Memory"; d_what = "RAM: the kernel gives pages to processes; \
                                  a window's pixels are pages shared with displayd";
@@ -665,7 +665,7 @@ let () =
                 (if n.lang = "OCaml" then
                    "Written in OCaml: bytecode, run by ocamlrun (the OCaml 5.5 runtime, in C, \
                     with musl)."
-                 else "Written in C: native i386 code, with musl and libmynos.");
+                 else "Written in C: native " ^ Mynos.machine () ^ " code, with musl and libmynos.");
             if n.parent >= 0 then
               line 2 ~colour:Gui.muted (Printf.sprintf "started by %s; %d threads"
                                           (if n.parent = 0 then "the kernel (a boot module)"

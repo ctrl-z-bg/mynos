@@ -283,7 +283,10 @@ static int glyph_index(unsigned int u)
 CAMLprim value caml_gfx_text(value t, value vx, value vy, value s, value c,
 			     value bold, value vmax)
 {
-  int x = Long_val(vx), y = Long_val(vy), max = Long_val(vmax), cells = 0;
+  /* max may be max_int, wider than an int on 64 bits */
+  long lmax = Long_val(vmax);
+  int x = Long_val(vx), y = Long_val(vy), cells = 0;
+  int max = lmax > 0x7FFFFFFF ? 0x7FFFFFFF : (int)lmax;
   int bw = BW(t), b = Bool_val(bold), bx0, by0, bx1, by1;
   unsigned int col = Long_val(c), * p = PIX(t);
   const unsigned char * q = (const unsigned char *)String_val(s);

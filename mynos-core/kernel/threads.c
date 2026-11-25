@@ -47,7 +47,7 @@ tss_t * threadAlloc(void) {
   process_descriptor_t * self = processTable[currProcess];
   tss_t ** pt = &(self->deadThreads);
   tss_t * tss;
-  uint32_t kstack;
+  vaddr_t kstack;
 
   while (*pt && !(*pt)->kstack)   /* the first thread's stack is elsewhere */
     pt = (tss_t **)&((*pt)->next);
@@ -57,9 +57,10 @@ tss_t * threadAlloc(void) {
     kstack = tss->kstack;
   } else {
     if ((tss = (tss_t*)kmalloc(sizeof(tss_t))) == NULL) return NULL;
-    /* a kernel stack in user space but with superuser rights */
-    kstack = (uint32_t)__OS_askPages(KERNEL_STACK_NPAGES, 1,
-				     PF_SUPERVISOR_IN_USER_SPACE);
+    /* a kernel stack: where the architecture keeps them (the i386: in
+       the process's space, with superuser rights; x86-64: in the
+       kernel's gigabyte, which every space shares) */
+    kstack = (vaddr_t)__OS_askPages(KERNEL_STACK_NPAGES, 1, ARCH_KSTACK_FLAGS);
     if (!kstack) { kfree(tss); return NULL; }
   }
 
@@ -95,22 +96,16 @@ void threadStart(tss_t * tss) {
   readyQueueInsert(tss);
 }
 
-int32_t __OS_threadCreate(uint32_t entry_point, 
-			   uint32_t stack,
+int32_t __OS_threadCreate(vaddr_t entry_point, 
+			   vaddr_t stack,
 			   uint32_t flags) {
   tss_t * tss;
 
   /* TODO: check the parameters */
   if ((tss = threadAlloc()) == NULL) return MYNOS_ERR_FULL;
 
-  tss->eip = entry_point;
-  tss->esp = stack;
-  tss->eflags = INITIAL_EFLAGS |
-    ((processTable[currProcess]->privileges & MYNOS_PRIV_IO) ? IOPL3 : 0);
-  tss->esp0 = tss->kstack + KERNEL_STACK_NPAGES * PAGE_SIZE - 1;
-
-  /* initialize the kernel stack for the new thread */
-  initStack(tss->esp0, tss);
+  /* its registers and its first kernel stack: the architecture's */
+  arch_thread_init(tss, entry_point, stack);
 
   threadStart(tss);
   return tss->tid;
@@ -138,7 +133,7 @@ void __OS_threadExit(void * retval) {
   hasNext = (next != NULL);
 
   if (!hasPrev && !hasNext)           /* the last thread: the process ends */
-    _linux_syscall_exit((int)retval);
+    _linux_syscall_exit((int)(long)retval);
 
   processTable[currProcess]->numThreads--;
   numThreads--;
@@ -163,7 +158,7 @@ void __OS_threadExit(void * retval) {
     processTable[currProcess]->tss = next;
     sched();
   } else                              /* this is the last thread, we exit! */
-    _linux_syscall_exit((int)retval);
+    _linux_syscall_exit((int)(long)retval);
 }
 
 /* the thread's id: the same as gettid's, unique in the system (until

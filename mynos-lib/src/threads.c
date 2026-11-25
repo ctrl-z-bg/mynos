@@ -25,6 +25,30 @@
    (safe_alloc.c); musl locks by itself only after a pthread_create */
 int __mynos_native_threads;
 
+#ifdef __x86_64__
+/* x86-64: the thread starts here, with the routine and its argument on
+   its stack (the argument goes in rdi), and ends with the routine's
+   result */
+void __mynos_thread_start(void);
+__asm__ (".text\n"
+         "__mynos_thread_start:\n"
+         "  popq %rax\n"
+         "  popq %rdi\n"
+         "  andq $-16, %rsp\n"
+         "  call *%rax\n"
+         "  movq %rax, %rdi\n"
+         "  call mynos_threadExit\n"
+         "  hlt\n");
+
+int mynos_threadCreate(void * (*start_routine)(void *),
+		       void * arg, void * stack, unsigned int flags) {
+  void ** sp = (void **)((unsigned long)stack & ~15UL);
+  __mynos_native_threads = 1;
+  *--sp = arg;
+  *--sp = (void *)start_routine;
+  return __mynos_syscall(200, (long)__mynos_thread_start, (long)sp, (long)flags, 0, 0);
+}
+#else
 int mynos_threadCreate(void * (*start_routine)(void *), 
 		       void * arg, void * stack, unsigned int flags) {
   int ret;
@@ -35,12 +59,13 @@ int mynos_threadCreate(void * (*start_routine)(void *),
   /* set the return address */
   stack -= sizeof(void*);
   *(unsigned int *)(stack) = (unsigned int)mynos_threadExit;
-  ret = __mynos_syscall(200, (int)start_routine, (int)stack, (int)flags, 0, 0);
+  ret = __mynos_syscall(200, (long)start_routine, (long)stack, (long)flags, 0, 0);
   return ret;
 }
+#endif
 
 void mynos_threadExit(void * retval) {
-  __mynos_syscall(201, (int)retval, 0, 0, 0, 0);
+  __mynos_syscall(201, (long)retval, 0, 0, 0, 0);
 }
 
 int mynos_threadSelf() {

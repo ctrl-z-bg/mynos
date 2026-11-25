@@ -95,8 +95,8 @@ int32_t allocChannel(pid_t p1, pid_t p2) {
   cTable.free--;
 
   // insert this channel into the each process channel list
-  listInsert(proc(p1)->channelList, (void*)id);
-  listInsert(proc(p2)->channelList, (void*)(id + 1));
+  listInsert(proc(p1)->channelList, (void*)(long)id);
+  listInsert(proc(p2)->channelList, (void*)(long)(id + 1));
 
   return id;   /* p1's end; p2's is id + 1 */
 }
@@ -206,7 +206,7 @@ int32_t __OS_ipc_freeChannel(int32_t c) {
 
   // it is no longer mine (this was done only by the last side to free
   // it: the other one kept the id in its list, one leak per channel)
-  listExtractElem(processTable[currProcess]->channelList, (void*)c, NULL);
+  listExtractElem(processTable[currProcess]->channelList, (void*)(long)c, NULL);
 
   // check if the other partner freed the channel too
   if (!broken) {

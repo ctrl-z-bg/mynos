@@ -100,7 +100,7 @@ static uint32_t strlen16(const char * s) {
   return n;
 }
 
-int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2) {
+int _mynos_syscall_trace(uint32_t op, vaddr_t arg1, uint32_t arg2) {
   uint32_t i;
   switch (op) {
   case TRACE_START:
@@ -176,7 +176,7 @@ int _mynos_syscall_trace(uint32_t op, uint32_t arg1, uint32_t arg2) {
    the system's since boot (pid 0), as two words, allocated on use and
    copy-on-write */
 extern uint32_t mem_faultsAlloc, mem_faultsCow;
-int _mynos_syscall_faults(int32_t pid, uint32_t buf) {
+int _mynos_syscall_faults(int32_t pid, vaddr_t buf) {
   uint32_t e[2];
   if (pid == 0) {
     e[0] = mem_faultsAlloc;
@@ -197,7 +197,7 @@ int _mynos_syscall_faults(int32_t pid, uint32_t buf) {
    ticks are the idle time, and its pages are all those of the RAM. */
 extern uint32_t __OS_residentPages(process_descriptor_t * p);
 extern uint32_t __total_phy_pages;
-int _mynos_syscall_procstat(int32_t pid, uint32_t buf) {
+int _mynos_syscall_procstat(int32_t pid, vaddr_t buf) {
   uint32_t e[6];
   process_descriptor_t * p = pid >= 0 ? processTable[PSLOT(pid)] : NULL;
   if (p == NULL || !p->isAlive || p->pid != (pid_t)pid) return MYNOS_ERR_INVALID;
@@ -211,7 +211,7 @@ int _mynos_syscall_procstat(int32_t pid, uint32_t buf) {
   return 0;
 }
 
-int _mynos_syscall_processes(uint32_t buf, uint32_t max) {
+int _mynos_syscall_processes(vaddr_t buf, uint32_t max) {
   uint32_t i, n = 0;
   for (i = 0; i < numProcess && n < max; i++) {
     process_descriptor_t * p = processTable[i];

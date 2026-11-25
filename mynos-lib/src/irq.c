@@ -23,20 +23,20 @@
 
 int mynos_enableIrq(unsigned short n) {
   int ret;
-  ret = __mynos_syscall(100, (int)n, 0, 0, 0, 0);
+  ret = __mynos_syscall(100, (long)n, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_disableIrq(unsigned short n){
   int ret;
-  ret = __mynos_syscall(101, (int)n, 0, 0, 0, 0);
+  ret = __mynos_syscall(101, (long)n, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_driverRegister(char * name, unsigned int irq, 
 			 unsigned int * io, unsigned int * mem) {
   int ret;
-  ret = __mynos_syscall(10, (int)name, (int)irq, (int)io, (int)mem, 0);
+  ret = __mynos_syscall(10, (long)name, (long)irq, (long)io, (long)mem, 0);
   return ret;
 }
 

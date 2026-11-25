@@ -6,6 +6,8 @@ RELPATH    = kernel/arch/i386
 
 include ../../../CommonHeader
 
+CFLAGS += -I../../../../mynos-lib/include
+
 MODULE_NAME	= arch_module.o
 
 .PHONY: all clean

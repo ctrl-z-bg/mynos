@@ -18,9 +18,9 @@
   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "externalmem.h"
+#include "mem/externalmem.h"
 #include "process.h"
-#include "mem.h"
+#include "mem/mem.h"
 #include "video.h"
 #include "mynos.h"
 
@@ -254,12 +254,12 @@ int32_t __OS_mapPagesTo(pid_t pid, uint32_t lpage,
    mynos-vzp): read one, or write one (making its page table if needed).
    Through the kernel's one window: the pointer is good until the window
    is used again. */
-uint32_t * __mem_externalPTE(pid_t pid, uint32_t laddr) {
+pte_t * __mem_externalPTE(pid_t pid, uint32_t laddr) {
   if (__mapProcessPT(pid, __ADDRESS_PD_INDEX(laddr)) != 0) return NULL;
   return (uint32_t *)__EXTERNAL_VMSPACE_PAGE + __ADDRESS_PT_INDEX(laddr);
 }
 
-void __mem_setExternalPTE(pid_t pid, uint32_t laddr, uint32_t entry) {
+void __mem_setExternalPTE(pid_t pid, uint32_t laddr, pte_t entry) {
   __setExternalProcessPage(pid, __ADDRESS_PD_INDEX(laddr),
                            __ADDRESS_PT_INDEX(laddr), entry >> 12, entry & 0xFFF);
 }

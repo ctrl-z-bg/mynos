@@ -1,0 +1,16 @@
+# MyNOS test environment: the test suite (tools/run-tests.sh) inside a
+# container, so that each run has a network of its own (its 127.0.0.1 and
+# host ports): the suites of two architectures run at once
+# (tools/run-tests-all.sh). QEMU for every architecture MyNOS runs on, and
+# the tools the suite uses on the host side.
+#
+# Build:  tools/containers/build-image.sh test
+# Use:    tools/run-tests-all.sh
+
+FROM docker.io/library/debian:trixie-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      qemu-system-x86 python3 socat curl mtools dosfstools procps \
+ && rm -rf /var/lib/apt/lists/*
+# inside it, tools/in-container.sh runs its commands directly
+ENV MYNOS_TEST_CONTAINER=1

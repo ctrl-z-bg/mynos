@@ -202,9 +202,15 @@ static int available;   /* V'd when input (or an end of file) is queued */
 /* write to the screen through the kernel, without the C library */
 static void raw_write(const char * s, int n)
 {
+#ifdef __x86_64__
+  long ret;
+  __asm__ volatile ("syscall" : "=a"(ret) : "a"(1L), "D"(1L), "S"(s), "d"((long)n)
+		    : "rcx", "r11", "memory");
+#else
   int ret = 4;  /* Linux write */
   __asm__ volatile ("int $0x80"
 		    : "+a"(ret) : "b"(1), "c"(s), "d"(n) : "memory");
+#endif
 }
 
 static void queue_input(const char * s, int n, int eof)

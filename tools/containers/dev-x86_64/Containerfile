@@ -1,0 +1,89 @@
+# MyNOS dev build environment for x86-64 (version 2, mynos-btq.3): the same
+# toolchain as tools/containers/dev, for 64 bits.
+#
+# Debian 13 "trixie", amd64: gcc 14, binutils 2.44, nasm 2.16.
+# User-space programs are static Linux x86-64 binaries built with musl.
+# OCaml 5.5.2 (doc/decisions/ocaml-runtime.md):
+#   /opt/ocaml-5.5.2            the compiler (bytecode only), to compile programs
+#   /opt/ocaml-runtime-musl     the upstream bytecode runtime built with musl,
+#                               and the C sources of the unix, threads and
+#                               str libraries (mynos-runtime builds them)
+#                               (libcamlrun.a, prims.o) linked into MyNOS's
+#                               ocamlrun by mynos-runtime/Makefile, plus what
+#                               is needed to add primitives: the primitives
+#                               list, the generated prims.c, the headers as
+#                               configured for musl (caml/, build_config.h)
+#
+# Build:  tools/containers/build-image.sh dev-x86_64
+# Use:    tools/in-container.sh dev-x86_64 <command>
+
+ARG OCAML_VERSION=5.5.2
+
+# --- Stage 1: fetch sources with a modern TLS stack -------------------------
+FROM docker.io/library/debian:bookworm-slim AS fetch
+ARG OCAML_VERSION
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+RUN curl -fsSLO https://caml.inria.fr/pub/distrib/ocaml-5.5/ocaml-${OCAML_VERSION}.tar.gz \
+ && echo "0b2fa96469edb7dd770afba8bcab72808ebb308fe5d3b9379f42d7956523fa86  ocaml-${OCAML_VERSION}.tar.gz" \
+    | sha256sum -c -
+
+# --- Stage 2: OCaml compiler and musl runtime --------------------------------
+FROM docker.io/library/debian:trixie-slim AS ocaml
+ARG OCAML_VERSION
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gcc libc6-dev make musl-tools musl-dev \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=fetch /src/ocaml-${OCAML_VERSION}.tar.gz /tmp/
+# the compiler, for the build host (glibc), bytecode only
+RUN mkdir /tmp/host && cd /tmp/host \
+ && tar xzf /tmp/ocaml-${OCAML_VERSION}.tar.gz --strip-components=1 \
+ && ./configure --prefix=/opt/ocaml-${OCAML_VERSION} --disable-native-compiler \
+      --disable-ocamldoc --disable-ocamltest \
+ && make -j4 && make install
+# the bytecode runtime for MyNOS: static, musl
+RUN mkdir /tmp/musl && cd /tmp/musl \
+ && tar xzf /tmp/ocaml-${OCAML_VERSION}.tar.gz --strip-components=1 \
+ && ./configure --build=x86_64-pc-linux-gnu --host=x86_64-pc-linux-gnu \
+      CC=musl-gcc LDFLAGS=-static --disable-shared --disable-native-compiler \
+      --disable-ocamldoc --disable-ocamltest --disable-debug-runtime \
+      --disable-instrumented-runtime \
+ && make -j4 runtime/ocamlrun \
+ && mkdir -p /opt/ocaml-runtime-musl \
+ && cp runtime/libcamlrun.a runtime/prims.o runtime/prims.c runtime/primitives \
+       runtime/build_config.h /opt/ocaml-runtime-musl/ \
+ && cp -r runtime/caml /opt/ocaml-runtime-musl/caml \
+ && mkdir -p /opt/ocaml-runtime-musl/otherlibs \
+ && cp -r otherlibs/unix otherlibs/systhreads /opt/ocaml-runtime-musl/otherlibs/ \
+ && cp Makefile.config /opt/ocaml-runtime-musl/ \
+ && echo "${OCAML_VERSION}" > /opt/ocaml-runtime-musl/VERSION
+# the C sources of str too (mynos-rld): a layer of its own, so that the
+# runtime above is not built again
+RUN cp -r /tmp/musl/otherlibs/str /opt/ocaml-runtime-musl/otherlibs/
+
+# --- Stage 3: the toolchain --------------------------------------------------
+FROM docker.io/library/debian:trixie-slim
+ARG OCAML_VERSION
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      gcc libc6-dev make binutils nasm musl-tools musl-dev \
+      dosfstools mtools \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=ocaml /opt/ocaml-${OCAML_VERSION} /opt/ocaml-${OCAML_VERSION}
+COPY --from=ocaml /opt/ocaml-runtime-musl /opt/ocaml-runtime-musl
+ENV PATH=/opt/ocaml-${OCAML_VERSION}/bin:$PATH
+# Read by the user-space Makefiles (see mynos.mk) and tools/build-all.sh.
+# -Ttext-segment moves the whole image (musl's crti has an .init section
+# that -Ttext would leave at the default address); the kernel loads the
+# segments as one contiguous image and jumps to the ELF entry point.
+ENV MYNOS_CC=musl-gcc \
+    MYNOS_LDFLAGS="-static -Wl,-Ttext-segment=0x40000000 -Wl,-z,noseparate-code -Wl,--build-id=none" \
+    OCAML_RUNTIME_LIB=/opt/ocaml-runtime-musl
+# GRUB for PC BIOS, for the bootable ISO (tools/make-iso.sh, mynos-sc9);
+# last, so that adding it reuses every layer above
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends grub-pc-bin xorriso \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /mynos

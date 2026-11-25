@@ -37,8 +37,12 @@ fetch "https://registry.npmjs.org/v86/-/v86-$V86.tgz" "$cache/v86-$V86.tgz" "$V8
 fetch "https://raw.githubusercontent.com/copy/v86/$BIOS_COMMIT/bios/seabios.bin" "$cache/seabios.bin" "$SEABIOS_SHA"
 fetch "https://raw.githubusercontent.com/copy/v86/$BIOS_COMMIT/bios/vgabios.bin" "$cache/vgabios.bin" "$VGABIOS_SHA"
 
+# the images under a directory of their version: a browser that still
+# holds a chunk of the last release (GitHub Pages: 10 minutes) never mixes
+# it with this one's (it did: an old kernel with a new sh.byte)
+images=$(echo "$version" | tr -c 'A-Za-z0-9.\n-' '_')
 rm -rf "$out"
-mkdir -p "$out/images" "$out/v86-pkg"
+mkdir -p "$out/images/$images" "$out/v86-pkg"
 tar -xzf "$cache/v86-$V86.tgz" -C "$out/v86-pkg"
 cp "$out/v86-pkg/package/build/libv86.js" "$out/v86-pkg/package/build/v86.wasm" "$out/"
 cp "$out/v86-pkg/package/LICENSE" "$out/LICENSE-v86.txt"
@@ -53,7 +57,7 @@ split_image() {   # FILE NAME EXT
     while [ $((i * CHUNK)) -lt "$size" ]; do
         start=$((i * CHUNK))
         dd if="$1" bs=$CHUNK skip=$i count=1 status=none |
-            zstd -q -19 -o "$out/images/$2-$start-$((start + CHUNK)).$3.zst"
+            zstd -q -19 -o "$out/images/$images/$2-$start-$((start + CHUNK)).$3.zst"
         i=$((i + 1))
     done
     echo "$size"
@@ -63,5 +67,6 @@ disk_size=$(split_image "$rel/disk-clean.img" disk img)
 
 sed -e "s|@VERSION@|$version|g" -e "s|@V86@|$V86|g" -e "s|@BIOS_COMMIT@|$BIOS_COMMIT|g" \
     -e "s|@CHUNK@|$CHUNK|g" -e "s|@ISO_SIZE@|$iso_size|g" -e "s|@DISK_SIZE@|$disk_size|g" \
+    -e "s|@IMAGES@|$images|g" \
     tools/web/index.html > "$out/index.html"
-echo "make-web.sh: $out ($(du -sh "$out" | cut -f1), $(ls "$out/images" | wc -l) chunks), MyNOS $version"
+echo "make-web.sh: $out ($(du -sh "$out" | cut -f1), $(ls "$out/images/$images" | wc -l) chunks), MyNOS $version"

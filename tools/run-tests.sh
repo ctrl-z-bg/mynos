@@ -3,16 +3,20 @@
 # to COM2) and check the expected output. Build first with tools/build-all.sh.
 #
 # Usage: tools/run-tests.sh            exit status 0 if all checks pass
-# The boots run in five lanes at once (about 11 minutes in all, lane e):
+# The boots run in nine lanes at once (about 5 minutes in all):
 #   a  the first boots: bytecode, effects, the ATA disk, FAT, domains
 #   b  the library, files, the kernel stress test, spawning, the console
 #   c  without COM2, and restarting again and again
-#   d  the graphical session (its windows, Graphics, the Packages window)
-#   e  the network, then the whole system driven by the keyboard (the
-#      seventh boot: the shell, the toplevel, the agent, kill, packages...)
+#   d  the graphical session: its windows, the recorder, Files, the Tour
+#   e  the network, then the whole system driven by the keyboard, in four
+#      parts that boot at once: e the shell, the toplevel and the editors;
+#   f  the agent, services, httpd, stdio; g packages; h Ctrl-C, fatfs
+#      coming back, the disk's reads, the serial terminal
+#   i  the graphical session again: Graphics, keys, resizing, Packages,
+#      Text, Studio
 # Environment: WAIT seconds to let the system run (default 10); SHOTS a
 # directory where the graphical session's screens are kept; LANES the
-# lanes to run (default "a b c d e": the checks of the others then fail);
+# lanes to run (default "a b c d e f g h i": the checks of the others fail);
 # KEEP keeps the temporary files (logs, screens) and says where
 set -eu
 
@@ -323,12 +327,21 @@ if [ -f system/ramdisk.dsk ] && [ -f system/vblkd ] && [ -f tests/fat/fat16.img 
     qmp() { printf '{"execute":"qmp_capabilities"}\n%s\n' "$1" |
                 socat -t1 - "UNIX-CONNECT:$tmp/qmp-v" >/dev/null; sleep 0.3; }
     tools/type-keys.py "$tmp/mon-v" 'gui\n'; sleep 8
-    qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"abs","data":{"axis":"x","value":7454}},{"type":"abs","data":{"axis":"y","value":18271}}]}}'
-    qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":true,"button":"left"}}]}}'
-    qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":false,"button":"left"}}]}}'
-    sleep 6
-    printf 'screendump %s\n' "$tmp/gv.ppm" | socat - "UNIX-CONNECT:$tmp/mon-v" >/dev/null; sleep 1
-    python3 - "$tmp/gv.ppm" <<'PY' && virtio_gui=yes
+    # the welcome window's Clock button, clicked again while no Clock shows
+    # (a loaded machine draws the welcome window late), then the screen
+    # looked at until the Clock is drawn: at most 8 tries
+    click_clock=yes i=0
+    while [ $i -lt 8 ]; do
+        if [ -n "$click_clock" ]; then
+            qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"abs","data":{"axis":"x","value":7454}},{"type":"abs","data":{"axis":"y","value":18271}}]}}'
+            qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":true,"button":"left"}}]}}'
+            qmp '{"execute":"input-send-event","arguments":{"events":[{"type":"btn","data":{"down":false,"button":"left"}}]}}'
+        fi
+        sleep 3
+        printf 'screendump %s\n' "$tmp/gv.ppm" | socat - "UNIX-CONNECT:$tmp/mon-v" >/dev/null; sleep 1
+        # 0: the Clock, focused, a hand on its dial; 2: no Clock yet
+        rc=0
+        python3 - "$tmp/gv.ppm" <<'PY' || rc=$?
 import sys
 d = open(sys.argv[1], "rb").read()
 parts = d.split(b"\n", 3)
@@ -337,10 +350,13 @@ pix = parts[3]
 def px(x, y):
     i = (y * w + x) * 3
     return (pix[i] << 16) | (pix[i + 1] << 8) | pix[i + 2]
-assert (w, h) == (1024, 768), (w, h)
-assert px(150, 114) == 0x2D6CA2, hex(px(150, 114))   # the Clock's title bar, focused
-assert px(214, 236) != px(214, 300)                 # a hand, on the dial
+if (w, h) != (1024, 768): sys.exit(1)
+if px(150, 114) != 0x2D6CA2: sys.exit(2)          # the Clock's title bar, focused
+sys.exit(0 if px(214, 236) != px(214, 300) else 1)  # a hand, on the dial
 PY
+        case $rc in 0) virtio_gui=yes; break ;; 2) click_clock=yes ;; *) click_clock= ;; esac
+        i=$((i + 1))
+    done
     # (the session holds the keys: QEMU is stopped from its monitor, which
     # closes the disk's image with what was written)
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-v" >/dev/null || true
@@ -387,7 +403,7 @@ sec_gui() {
 # the graphical session (doc/decisions/gui.md): displayd, windows of
 # programs, the mouse, back to text mode. QEMU's monitor moves the mouse
 # relatively: vmmouse (absolute) is off, the PS/2 mouse is used
-gui_ok= powered_off= gui_hangup= files_ok= pkgwin_ok=
+gui_ok= powered_off= gui_hangup= files_ok=
 if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     : > "$tmp/logg"
     # the agent window's model: the fake provider, as in the seventh boot,
@@ -426,14 +442,41 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
         done
     }
     click() { to "$1" "$2"; mon "mouse_button 1"; mon "mouse_button 0"; }
+    # the screen looked at every half second until a condition on its
+    # pixels holds (px, count: as in the checks below), at most $1 seconds:
+    # not a fixed time
+    waitpx() {
+        n=$(($1 * 2)) cond=$2
+        while [ $n -gt 0 ]; do
+            mon "screendump $tmp/w.ppm"
+            python3 - "$tmp/w.ppm" "$cond" 2>/dev/null <<'PY' && return 0
+import sys
+d = open(sys.argv[1], "rb").read()
+parts = d.split(b"\n", 3)
+w, h = map(int, parts[1].split())
+pix = parts[3]
+def px(x, y):
+    i = (y * w + x) * 3
+    return (pix[i] << 16) | (pix[i + 1] << 8) | pix[i + 2]
+def count(c, x0, y0, x1, y1, step=4):
+    return sum(1 for x in range(x0, x1, step) for y in range(y0, y1, step) if px(x, y) == c)
+sys.exit(0 if (w, h) == (1024, 768) and eval(sys.argv[2]) else 1)
+PY
+            sleep 0.4; n=$((n - 1))
+        done
+        return 0
+    }
     tools/type-keys.py "$tmp/mon-g" 'gui check\n'; sleep 3
-    tools/type-keys.py "$tmp/mon-g" 'gui\n'; sleep 8
+    tools/type-keys.py "$tmp/mon-g" 'gui\n'
+    waitpx 20 'px(300, 86) == 0x2D6CA2'; sleep 1   # the welcome window, focused
     mon "screendump $tmp/gui1.ppm"
-    click 233 428; sleep 8               # the welcome window's Clock button
+    click 233 428                        # the welcome window's Clock button
+    waitpx 15 'px(150, 114) == 0x2D6CA2'; sleep 1
     mon "screendump $tmp/gui2.ppm"
     # a terminal window (the menu's first item): sh runs in it, its console
     # is the window (MYNOS_CONSOLE); what it writes is checked from text mode
-    click 20 10; sleep 1; click 40 39; sleep 10
+    click 20 10; sleep 1; click 40 39
+    waitpx 15 'px(500, 140) == 0x2D6CA2'; sleep 2
     tools/type-keys.py "$tmp/mon-g" 'X=ok; echo term-$X > /tmp/term.txt\n'; sleep 4
     mon "screendump $tmp/gui4.ppm"
     # its scrollback: a long listing, then the wheel up over the window
@@ -461,15 +504,19 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     sleep 1; mon "sendkey ctrl-d"; sleep 2
     # the agent window (the menu's fifth item, at 168,182): a task, the
     # confirmation it waits for, Allow (at the bottom of the window)
-    click 20 10; sleep 1; click 40 127; sleep 10
-    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo agentwin-$X > /tmp/aw.txt\n'; sleep 8
+    click 20 10; sleep 1; click 40 127
+    waitpx 15 'px(500, 172) == 0x2D6CA2'; sleep 2
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo agentwin-$X > /tmp/aw.txt\n'
+    waitpx 30 'sum(1 for x in range(176, 920, 4) for y in range(222, 672, 4) if px(x, y) == 0xFFF4E0) > 100'; sleep 1   # it asks
     mon "screendump $tmp/gui6.ppm"
-    click 230 695; sleep 8
+    click 230 695
+    waitpx 20 'sum(1 for x in range(176, 920, 4) for y in range(222, 672, 4) if px(x, y) == 0xFFF4E0) == 0'; sleep 2    # allowed
     mon "screendump $tmp/gui7.ppm"
     # the task's recording (the agent window's Recording button), in the
     # recordings window (at 80,124): its timeline, then its calls, one
     # selected
-    click 736 693; sleep 15
+    click 736 693
+    waitpx 25 'px(500, 114) == 0x2D6CA2 and sum(1 for x in range(220, 1004) if px(x, 230) == 0xF29B38) >= 2'; sleep 1
     mon "screendump $tmp/gui8.ppm"
     click 262 230; sleep 3                         # the first mark: its step
     mon "screendump $tmp/gui10.ppm"
@@ -478,7 +525,8 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     # the System window (the menu's seventh item, at 20,64): the system
     # live; the agent's recording replayed on it, three steps; then a new
     # process (a clock, from the menu) appears outlined
-    click 20 10; sleep 1; click 40 171; sleep 12
+    click 20 10; sleep 1; click 40 171
+    waitpx 20 'px(500, 54) == 0x2D6CA2 and count(0x24313C, 132, 412, 1010, 512) > 2000'; sleep 1
     mon "screendump $tmp/gui11.ppm"
     click 100 119; sleep 1
     tools/type-keys.py "$tmp/mon-g" '/tmp/agent.trc'; sleep 1
@@ -507,7 +555,8 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     # Files (the menu's eighth item, at 40,70): /tmp, aw.txt (the agent's),
     # Copy; /disk, Paste, Open (viewed); Back, New folder "newdir". The
     # copy and the folder are checked from text mode
-    click 20 10; sleep 1; click 40 193; sleep 8
+    click 20 10; sleep 1; click 40 193
+    waitpx 15 'px(500, 59) == 0x2D6CA2'; sleep 1
     mon "screendump $tmp/gui18.ppm"
     click 100 175; sleep 2; click 324 180; sleep 1; click 642 125; sleep 1
     click 100 199; sleep 2; click 762 125; sleep 2; click 310 125; sleep 2
@@ -516,51 +565,21 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     tools/type-keys.py "$tmp/mon-g" 'newdir\n'; sleep 2
     # the tour (the menu's ninth item, at 72,98): a lesson run and replayed
     # in a System window (at 20,64), at its first note
-    click 20 10; sleep 1; click 40 215; sleep 8
+    click 20 10; sleep 1; click 40 215
+    waitpx 15 'px(400, 108) == 0x1B3A57'; sleep 1
     mon "screendump $tmp/gui20.ppm"
     click 197 203; sleep 1                  # the third lesson: a program is born
-    click 402 469; sleep 30
+    click 402 469
+    # the lesson recorded, its System window opens, in front
+    waitpx 60 'px(500, 54) == 0x2D6CA2'; sleep 3
     click 732 117; sleep 1                   # its first note: sh looks at hello.byte;
     click 732 117; sleep 2                   # the second: the birth of hello
     mon "screendump $tmp/gui21.ppm"
-    # OCaml's Graphics (graphics/), from a new terminal window: its test
-    # draws, reads the pixels back, writes the result to the log and
-    # closes its window
-    click 20 10; sleep 1; click 40 39; sleep 10
-    tools/type-keys.py "$tmp/mon-g" '/disk/gtest.byte\n'; sleep 12
-    # key releases (mynos-ap3): a window (tests/keys) gets Right and X held
-    # at once, then their releases, then q, which ends it
-    tools/type-keys.py "$tmp/mon-g" '/disk/keys.byte\n'; sleep 6
-    # resizable windows (mynos-1e9): the same window (at 200,300, 240 x 60)
-    # by its grip to 340 x 110, then maximized by a double click on its title
-    to 437 357; mon "mouse_button 1"; to 537 407; mon "mouse_button 0"; sleep 2
-    to 300 289; mon "mouse_button 1"; mon "mouse_button 0"; mon "mouse_button 1"; mon "mouse_button 0"; sleep 2
-    mon "sendkey right-x 400"; sleep 1
-    mon "sendkey q"; sleep 2
-    # the Packages window (pkg/packages_window.ml), the menu's eleventh
-    # item: with no index on the disk it reads one, through pkg, from the
-    # repository /disk/pkg/url names (the host's copy)
-    click 20 10; sleep 1; click 40 259; sleep 15
-    mon "screendump $tmp/gui22.ppm"
-    # Text, the session's text editor (the menu's thirteenth item, mynos-y87):
-    # a line typed, Ctrl-S, the name it offers (/disk/untitled.txt) taken;
-    # the file is read back from text mode
-    click 20 10; sleep 1; click 40 303; sleep 6
-    tools/type-keys.py "$tmp/mon-g" 'typed-in-text'; sleep 1
-    mon "sendkey ctrl-s"; sleep 1
-    tools/type-keys.py "$tmp/mon-g" '\n'; sleep 3
-    # MyNOS Studio (the package studio, mynos-y87): installed from a
-    # Terminal, started; Run builds its first program (/disk/studio/hello.ml)
-    # with the ocamlc inside MyNOS and runs it (hello.byte, seen from text mode)
-    click 20 10; sleep 1; click 40 39; sleep 8
-    tools/type-keys.py "$tmp/mon-g" 'pkg install studio; studio &\n'; sleep 25
-    click 265 91; sleep 20
     click 20 10; sleep 1; click 30 369; sleep 4    # the MyNOS menu, Exit
-    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /tmp/sel.txt /tmp/hist.txt /disk/untitled.txt; ls /disk /disk/studio\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g" 'X=ok; echo text-$X; cat /tmp/term.txt /tmp/aw.txt /disk/aw.txt /tmp/ctrlc.txt /tmp/sel.txt /tmp/hist.txt; ls /disk\n'; sleep 3
     mon "screendump $tmp/gui3.ppm"; sleep 1
     # the terminal closed with its sh running: a hang-up, sh ended too
     tools/type-keys.py "$tmp/mon-g" 'ps\n'; sleep 3
-    tools/type-keys.py "$tmp/mon-g" 'cat /disk/pkg/index.json\n'; sleep 3
     # turning the machine off: init does it, QEMU ends by itself
     tools/type-keys.py "$tmp/mon-g" 'shutdown\n'
     i=0
@@ -589,7 +608,6 @@ assert "newdir" in s, "a folder made by Files"
 assert "ctrlc-137" in s, "Ctrl-C in the terminal window"
 assert re.search(r"hist-up\s+hist-up\s+Hist-up", s), "Up, Home, Delete in the terminal window's line mode"
 PY
-    grep -aq '"name": "windtree"' "$tmp/logg" && pkgwin_ok=yes
     cat "$tmp/logg" >> "$part"
     python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
               "$tmp"/gui6.ppm "$tmp"/gui7.ppm "$tmp"/gui8.ppm "$tmp"/gui9.ppm \
@@ -689,6 +707,95 @@ PY
 fi
 }
 
+sec_gui2() {
+# the graphical session's second part, a boot of its own (lane i): OCaml's
+# Graphics, key releases, a resizable window, the Packages window, Text,
+# MyNOS Studio. Its windows are made in the same order as when this part
+# followed the first in one session (the welcome window, the Clock, then
+# a terminal: displayd places a window by its number, modulo 8), so they
+# are where the clicks expect them
+pkgwin_ok=
+if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ] && [ -f tests/fat/fat16.img ]; then
+    : > "$tmp/logg2"
+    gdisk=tests/fat/run-gui2.img
+    cp tests/fat/fat16.img "$gdisk"
+    # the packages' repository: the host's copy (tools/pkg-build.sh)
+    printf 'http://10.0.2.2:47106/\n' > tests/fat/run-gui2.url
+    tools/in-container.sh dev sh -c "mcopy -i $gdisk graphics/gtest.byte ::/gtest.byte && mcopy -i $gdisk tests/keys/keys.byte ::/keys.byte && mmd -i $gdisk ::/pkg && mcopy -i $gdisk tests/fat/run-gui2.url ::/pkg/url"
+    rm -f tests/fat/run-gui2.url
+    tools/net-peer.py files 47106 tmp/packages & filesg_pid=$!
+    NET=1 DISK=$gdisk MEM=256 tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        system/ramdisk.dsk \
+        -- -machine vmport=off -display none -serial null -serial "file:$tmp/logg2" \
+           -monitor "unix:$tmp/mon-g2,server,nowait" &
+    qemu=$!
+    i=0
+    while [ $i -lt 30 ] && ! grep -aq 'mynos:/' "$tmp/logg2" 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    mon() { printf '%s\n' "$1" | socat - "UNIX-CONNECT:$tmp/mon-g2" >/dev/null; sleep 0.12; }
+    gx=512 gy=384                        # the pointer starts in the middle
+    to() {
+        dx=$(($1 - gx)) dy=$(($2 - gy)); gx=$1 gy=$2
+        while [ $dx -ne 0 ] || [ $dy -ne 0 ]; do
+            sx=$dx sy=$dy
+            [ $sx -gt 40 ] && sx=40; [ $sx -lt -40 ] && sx=-40
+            [ $sy -gt 40 ] && sy=40; [ $sy -lt -40 ] && sy=-40
+            mon "mouse_move $sx $sy"; dx=$((dx - sx)) dy=$((dy - sy))
+        done
+    }
+    click() { to "$1" "$2"; mon "mouse_button 1"; mon "mouse_button 0"; }
+    tools/type-keys.py "$tmp/mon-g2" 'gui check\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g2" 'gui\n'; sleep 8
+    click 233 428; sleep 4               # the welcome window's Clock button
+    # OCaml's Graphics (graphics/), from a new terminal window: its test
+    # draws, reads the pixels back, writes the result to the log and
+    # closes its window
+    click 20 10; sleep 1; click 40 39; sleep 10
+    tools/type-keys.py "$tmp/mon-g2" '/disk/gtest.byte\n'; sleep 12
+    # key releases (mynos-ap3): a window (tests/keys) gets Right and X held
+    # at once, then their releases, then q, which ends it
+    tools/type-keys.py "$tmp/mon-g2" '/disk/keys.byte\n'; sleep 6
+    # resizable windows (mynos-1e9): the same window (at 200,300, 240 x 60)
+    # by its grip to 340 x 110, then maximized by a double click on its title
+    to 437 357; mon "mouse_button 1"; to 537 407; mon "mouse_button 0"; sleep 2
+    to 300 289; mon "mouse_button 1"; mon "mouse_button 0"; mon "mouse_button 1"; mon "mouse_button 0"; sleep 2
+    mon "sendkey right-x 400"; sleep 1
+    mon "sendkey q"; sleep 2
+    # the Packages window (pkg/packages_window.ml), the menu's eleventh
+    # item: with no index on the disk it reads one, through pkg, from the
+    # repository /disk/pkg/url names (the host's copy)
+    click 20 10; sleep 1; click 40 259; sleep 15
+    mon "screendump $tmp/gui22.ppm"
+    # Text, the session's text editor (the menu's thirteenth item, mynos-y87):
+    # a line typed, Ctrl-S, the name it offers (/disk/untitled.txt) taken;
+    # the file is read back from text mode
+    click 20 10; sleep 1; click 40 303; sleep 6
+    tools/type-keys.py "$tmp/mon-g2" 'typed-in-text'; sleep 1
+    mon "sendkey ctrl-s"; sleep 1
+    tools/type-keys.py "$tmp/mon-g2" '\n'; sleep 3
+    # MyNOS Studio (the package studio, mynos-y87): installed from a
+    # Terminal, started; Run builds its first program (/disk/studio/hello.ml)
+    # with the ocamlc inside MyNOS and runs it (hello.byte, seen from text mode)
+    click 20 10; sleep 1; click 40 39; sleep 8
+    tools/type-keys.py "$tmp/mon-g2" 'pkg install studio; studio &\n'; sleep 25
+    click 265 91; sleep 20
+    click 20 10; sleep 1; click 30 369; sleep 4    # the MyNOS menu, Exit
+    tools/type-keys.py "$tmp/mon-g2" 'X=ok; echo text2-$X; cat /disk/untitled.txt; ls /disk/studio\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g2" 'cat /disk/pkg/index.json\n'; sleep 3
+    tools/type-keys.py "$tmp/mon-g2" 'shutdown\n'
+    i=0
+    while [ $i -lt 20 ] && kill -0 $qemu 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
+    kill -0 $qemu 2>/dev/null && { printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-g2" >/dev/null || true; }
+    wait $qemu || true
+    kill $filesg_pid 2>/dev/null; wait $filesg_pid 2>/dev/null || true
+    grep -aq '"name": "windtree"' "$tmp/logg2" && pkgwin_ok=yes
+    cat "$tmp/logg2" >> "$part"
+    rm -f "$gdisk"
+fi
+}
+
 sec_net() {
 # the network: netd (lwIP and the NE2000 driver) with QEMU's user network;
 # on the host, a TCP server (47001), a UDP one (47053), a client of MyNOS's port 80
@@ -721,47 +828,166 @@ if [ -f tests/net/ramdisk.dsk ]; then
 fi
 }
 
-sec_seventh() {
-# seventh boot: the system RAM disk, init starts the services and sh, driven
-# through the keyboard: the OCaml toplevel (ocaml), programs, sh again
+# the seventh boot: the system RAM disk, init starts the services and sh,
+# driven through the keyboard, in four parts that boot at once (lanes e, f,
+# g, h), each with its own disk, log, sockets and host ports:
+#   seventh_boot PART LLM_PORT HTTP_PORT FILES_PORT BODY
+seventh_boot() {
+p7=$1 llm_port=$2 http_port=$3 files_port=$4 body=$5
+log7=$tmp/log7$p7 mon7=$tmp/mon7$p7 com2=$tmp/com2-7$p7 com2in=$tmp/com2-7$p7.in
+img=tests/fat/run-shell$p7.img wav=$tmp/sound7$p7.wav
 history_saved= kilo_saved= edit_saved= edit_utf8= log_shown= sh_saved= trace_calls= trace_json= agent_marks= sound_ok=
 disk_reads=
 serial_same_sh=
 if [ -f system/ramdisk.dsk ]; then
     # a disk, for /disk and the shell's history: a copy of the FAT16 test image
-    [ -f tests/fat/fat16.img ] && cp tests/fat/fat16.img tests/fat/run-shell.img
+    [ -f tests/fat/fat16.img ] && cp tests/fat/fat16.img $img
     # the agent's model: the fake provider (tests/net/llm-test.env); a file
     # of characters the screen's font lacks (doc/decisions/console.md)
-    if [ -f tests/fat/run-shell.img ]; then
-        printf '\303\210 cos\303\254: \342\202\2545\n' > tests/fat/run-utf8.txt
+    if [ -f $img ]; then
+        printf '\303\210 cos\303\254: \342\202\2545\n' > tests/fat/run-utf8$p7.txt
+        # the fake provider on this part's port
+        sed "s/:47090/:$llm_port/" tests/net/llm-test.env > tests/fat/run-llm$p7.env
         # a WAV file for play (mynos-7jn): half a second of 440 Hz, 8-bit mono 11025 Hz
-        python3 -c 'import wave, math
-w = wave.open("tests/fat/run-a440.wav", "wb"); w.setnchannels(1); w.setsampwidth(1); w.setframerate(11025)
-w.writeframes(bytes(int(128 + 100 * math.sin(2 * math.pi * 440 * i / 11025)) for i in range(5512))); w.close()'
-        tools/in-container.sh dev sh -c "mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/llm.env && mcopy -i tests/fat/run-shell.img tests/fat/run-utf8.txt ::/utf8.txt && mcopy -i tests/fat/run-shell.img tests/greeter/greeter.byte ::/greeter.byte && mcopy -i tests/fat/run-shell.img tests/stdio/stdio ::/stdio-test && mcopy -i tests/fat/run-shell.img tests/zmachine/czech.z5 ::/czech.z5 && mcopy -i tests/fat/run-shell.img tests/fat/run-a440.wav ::/a440.wav && mmd -i tests/fat/run-shell.img ::/web && mcopy -i tests/fat/run-shell.img tests/greeter/greeter.byte ::/web/greeter.byte && mcopy -i tests/fat/run-shell.img tests/net/llm-test.env ::/web/llm.env"
-        rm -f tests/fat/run-utf8.txt tests/fat/run-a440.wav
+        python3 -c 'import sys, wave, math
+w = wave.open(sys.argv[1], "wb"); w.setnchannels(1); w.setsampwidth(1); w.setframerate(11025)
+w.writeframes(bytes(int(128 + 100 * math.sin(2 * math.pi * 440 * i / 11025)) for i in range(5512))); w.close()' \
+            "tests/fat/run-a440$p7.wav"
+        tools/in-container.sh dev sh -c "mcopy -i $img tests/fat/run-llm$p7.env ::/llm.env && mcopy -i $img tests/fat/run-utf8$p7.txt ::/utf8.txt && mcopy -i $img tests/greeter/greeter.byte ::/greeter.byte && mcopy -i $img tests/stdio/stdio ::/stdio-test && mcopy -i $img tests/zmachine/czech.z5 ::/czech.z5 && mcopy -i $img tests/fat/run-a440$p7.wav ::/a440.wav && mmd -i $img ::/web && mcopy -i $img tests/greeter/greeter.byte ::/web/greeter.byte && mcopy -i $img tests/fat/run-llm$p7.env ::/web/llm.env"
+        rm -f tests/fat/run-utf8$p7.txt tests/fat/run-a440$p7.wav tests/fat/run-llm$p7.env
     fi
-    tools/net-peer.py llm 47090 & llm7_pid=$!
+    tools/net-peer.py llm $llm_port & llm7_pid=$!
     # the packages' repository (tools/pkg-build.sh), served by the host
-    tools/net-peer.py files 47101 tmp/packages & files7_pid=$!
+    tools/net-peer.py files $files_port tmp/packages & files7_pid=$!
     # a Sound Blaster 16, recorded into a WAV file (mynos-7jn)
-    NET=1 HTTP=47180 DISK=$([ -f tests/fat/run-shell.img ] && echo tests/fat/run-shell.img) \
-    SOUND="wav:$tmp/sound7.wav" MEM=256 tools/run-qemu.sh "$ocamlrun" \
+    NET=1 HTTP=$http_port DISK=$([ -f $img ] && echo $img) \
+    SOUND="wav:$wav" MEM=256 tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
         -- -display none -serial null \
-           -chardev "socket,id=com2,path=$tmp/com2-7,server=on,wait=on" \
+           -chardev "socket,id=com2,path=$com2,server=on,wait=on" \
            -serial chardev:com2 \
-           -monitor "unix:$tmp/mon7,server,nowait" &
+           -monitor "unix:$mon7,server,nowait" &
     qemu=$!
     # COM2: the log, and a terminal (tools/serial-peer.py)
-    : > "$tmp/com2-7.in"
-    tools/serial-peer.py "$tmp/com2-7" "$log7" "$tmp/com2-7.in" & peer7=$!
+    : > "$com2in"
+    tools/serial-peer.py "$com2" "$log7" "$com2in" & peer7=$!
     i=0
     while [ $i -lt 60 ] && ! grep -aq 'mynos:/' "$log7" 2>/dev/null; do
         sleep 1; i=$((i + 1))
     done
-    for phrase in 'ec{tab}completed by tab\n' 'ocaml\n' '' '1 + 2;;\n' 'List.map (fun x -> x * x) [1; 2; 3];;\n' \
+    # the toplevel's prompts: each phrase waits for the next one (a new
+    # line with "# "; at most 20 seconds), not a fixed time, so a slow start
+    # does not let the keys run ahead of it
+    prompts() { grep -ac -- '# ' "$log7"; }
+    # the console (doc/decisions/console.md). The screen's characters, read
+    # from VGA's memory through QEMU's monitor
+    screen() {
+        printf 'xp /2000hx 0xb8000\n' | socat - "UNIX-CONNECT:$mon7" | python3 -c '
+import re, sys
+cells = []
+for line in sys.stdin:
+    m = re.match(r"^[0-9a-f]+:((?: 0x[0-9a-f]{4})+)", line.strip())
+    if m:
+        cells += [int(x, 16) & 0xFF for x in m.group(1).split()]
+sys.stdout.buffer.write(bytes(cells))' > "$1"
+    }
+    waitfor() {   # a text in the log, within $2 seconds
+        i=0
+        while [ $i -lt "$2" ] && ! grep -aqF -- "$1" "$log7"; do sleep 1; i=$((i + 1)); done
+    }
+    # a command of sh's, then a mark it echoes when the command is done,
+    # waited for (at most $2 seconds): not a fixed time. The mark typed is
+    # "mark-$M:", the one echoed "mark-<n>:", so the line's echo is not it
+    marks=0
+    shcmd() {
+        marks=$((marks + 1))
+        tools/type-keys.py "$mon7" "$1; M=$marks; echo mark-\$M:\\n"
+        i=0
+        while [ $i -lt "$(($2 * 4))" ] && ! grep -aqF -- "mark-$marks:" "$log7"; do
+            sleep 0.25; i=$((i + 1))
+        done
+    }
+    "$body"
+    step "7$p7-end"
+    printf 'quit\n' | socat - "UNIX-CONNECT:$mon7" >/dev/null || true
+    wait $qemu || true
+    kill $llm7_pid $files7_pid $peer7 2>/dev/null || true
+    cat "$log7" >> "$part"
+    # what the sound card played: half a second at 440 Hz, then 0.3 s at
+    # 1320 Hz (windows of 0.1 s, their zero crossings)
+    python3 - "$wav" <<'PY' && sound_ok=yes
+import sys, wave, struct
+w = wave.open(sys.argv[1]); n = w.getnframes(); rate = w.getframerate()
+s = struct.unpack('<%dh' % (n * w.getnchannels()), w.readframes(n))[::w.getnchannels()]
+step = rate // 10; hz = []
+for i in range(0, len(s) - step, step):
+    seg = s[i:i + step]
+    if max(abs(v) for v in seg) > 1000:
+        hz.append(sum(1 for a, b in zip(seg, seg[1:]) if (a < 0) != (b < 0)) / 2 / 0.1)
+low = sum(1 for f in hz if 430 <= f <= 450); high = sum(1 for f in hz if 1300 <= f <= 1340)
+sys.exit(0 if low >= 3 and high >= 2 else 1)
+PY
+    if [ -f $img ]; then
+        tools/in-container.sh dev mtype -i $img ::/.history \
+            2>/dev/null | grep -qx '6 \* 7;;' && history_saved=yes
+        [ "$(tools/in-container.sh dev mtype -i $img ::/k.txt 2>/dev/null)" = \
+          "typed in kilo" ] && kilo_saved=yes
+        [ "$(tools/in-container.sh dev mtype -i $img ::/e.txt 2>/dev/null)" = \
+          "$(printf 'first second\nfirst second\n')" ] && edit_saved=yes
+        [ "$(tools/in-container.sh dev mcopy -i $img ::/u.txt - 2>/dev/null)" = \
+          "$(printf 'perch\303\251 \303\250 cos\303\254\n')" ] && edit_utf8=yes
+        [ "$(tools/in-container.sh dev mtype -i $img ::/s.txt 2>/dev/null)" = \
+          "$(printf 'from sh\nv4\n')" ] && sh_saved=yes
+        tools/in-container.sh dev mtype -i $img ::/calls.txt \
+            2>/dev/null > "$tmp/7$p7-calls.txt" || true
+        grep -q 'sh(.*-> fatfs(.*fs/1 Open ("Makefile", 0)' "$tmp/7$p7-calls.txt" &&
+            grep -q '^ .*  fatfs(.*-> ata(.*block/1 Read' "$tmp/7$p7-calls.txt" && trace_calls=yes
+        for r in r1 r2; do
+            tools/in-container.sh dev mtype -i $img ::/$r.txt \
+                2>/dev/null > "$tmp/7$p7-$r.txt" || true
+        done
+        [ -s "$tmp/7$p7-r1.txt" ] && python3 - "$tmp/7$p7-r1.txt" "$tmp/7$p7-r2.txt" <<'PY' && disk_reads="$(cat "$tmp/7$p7-r-counts")"
+import re, sys
+def counts(path):
+    s = open(path, encoding="latin-1").read()
+    reads = len(re.findall(r"-> fatfs\(\d+\)\s+fs/1 Read", s))
+    disk = len(re.findall(r"fatfs\(\d+\) -> ata\(\d+\)\s+block/1 Read", s))
+    return reads, disk
+(r1, d1), (r2, d2) = counts(sys.argv[1]), counts(sys.argv[2])
+open(sys.argv[1].replace("r1.txt", "r-counts"), "w").write("%d %d %d %d" % (r1, d1, r2, d2))
+assert r1 >= 7 and r2 >= 7, (r1, r2)            # the file was read, in 16 KB requests
+assert 0 < d1 <= 2 * r1, (r1, d1)                # runs, not a request per cluster (49)
+assert d2 <= 2, (r2, d2)                         # read again: from the cache
+PY
+        tools/in-container.sh dev mtype -i $img ::/agent-calls.txt \
+            2>/dev/null > "$tmp/7$p7-agent-calls.txt" || true
+        grep -q '# agent([0-9]*): model call 1' "$tmp/7$p7-agent-calls.txt" &&
+            grep -q '# agent([0-9]*): run_ocaml: let () = print_endline 42' "$tmp/7$p7-agent-calls.txt" &&
+            grep -q 'agent(.*-> llmd(.*llm/1 Chat' "$tmp/7$p7-agent-calls.txt" && agent_marks=yes
+        tools/in-container.sh dev mtype -i $img ::/t.json \
+            2>/dev/null > "$tmp/7$p7-t.json" || true
+        python3 -c 'import json, sys
+d = json.load(open(sys.argv[1]))["traceEvents"]
+assert any(e["ph"] == "X" and e["name"].startswith("block/1 Read") for e in d)
+assert any(e["ph"] == "f" for e in d)' "$tmp/7$p7-t.json" 2>/dev/null && trace_json=yes
+        rm -f $img
+    fi
+fi
+}
+
+# the parts: the toplevel, the editors and sh; the agent, services, httpd
+# and stdio; the packages; Ctrl-C, fatfs coming back, the disk's reads and
+# the serial terminal
+s7_shell() {
+    step 7.1-toplevel-editors
+    tools/type-keys.py "$mon7" 'ec{tab}completed by tab\n'; sleep 2
+    tools/type-keys.py "$mon7" 'ocaml\n'
+    i=0
+    while [ $i -lt 60 ] && ! grep -aq 'Enter #help;; for help.' "$log7"; do
+        sleep 0.5; i=$((i + 1))
+    done
+    for phrase in '1 + 2;;\n' 'List.map (fun x -> x * x) [1; 2; 3];;\n' \
                   'cat "AUTOEXEC.BAT";;\n' 'ls ();;\n' \
                   'run "child.byte" ["4"];;\n' '1 + "one";;\n' \
                   '6 * 7;;\n' '{up}\n' '1 + 1;;\n' 'x{up}{up}{down}\n' \
@@ -776,15 +1002,20 @@ w.writeframes(bytes(int(128 + 100 * math.sin(2 * math.pi * 440 * i / 11025)) for
                   'write "w.ml" "let () = print_endline (Sys.getcwd ())";;\n' \
                   'ignore (compile "w.ml"); run "w.byte" [];;\n' \
                   'write "sz.ml" "let () = print_endline (Str.global_replace (Str.regexp (String.make 1 (Char.chr 97))) (String.make 1 (Char.chr 122)) (String.make 5 (Char.chr 97)))";;\n' \
-                  'ignore (compile "sz.ml"); run "sz.byte" [];;\n' \
-                  'run "kilo" ["/disk/k.txt"];;\n' 'typed in kilo' '{ctrl-s}' '{ctrl-q}' \
+                  'ignore (compile "sz.ml"); run "sz.byte" [];;\n'; do
+        n=$(prompts)
+        tools/type-keys.py "$mon7" "$phrase"
+        i=0
+        while [ $i -lt 80 ] && [ "$(prompts)" -le "$n" ]; do sleep 0.25; i=$((i + 1)); done
+    done
+    for phrase in 'run "kilo" ["/disk/k.txt"];;\n' 'typed in kilo' '{ctrl-s}' '{ctrl-q}' \
                   'edit "/disk/e.txt";;\n' '' 'second\n{up}first {ctrl-k}{ctrl-u}{ctrl-u}' '{ctrl-s}' '{ctrl-q}' \
                   'sh ();;\n' 'cd /disk; echo from sh > s.txt; X=4; echo "v$X" >> s.txt; cat s.txt | cat\n' \
                   'trace -o /disk/t.trc cat Makefile > /tmp/tout.txt\n' '' \
                   'trace calls /disk/t.trc > calls.txt; trace json /disk/t.trc t.json\n' '' \
                   'exit\n' \
                   '#quit;;\n' 'exit\n'; do
-        tools/type-keys.py "$tmp/mon7" "$phrase"
+        tools/type-keys.py "$mon7" "$phrase"
         sleep 2
     done
     # init starts a new sh (the third banner: the first sh, the one started
@@ -793,91 +1024,80 @@ w.writeframes(bytes(int(128 + 100 * math.sin(2 * math.pi * 440 * i / 11025)) for
     while [ $i -lt 30 ] && [ "$(grep -ac 'MyNOS sh. help' "$log7")" -lt 3 ]; do
         sleep 1; i=$((i + 1))
     done
-    tools/type-keys.py "$tmp/mon7" 'echo restarted\n'
+    tools/type-keys.py "$mon7" 'echo restarted\n'
     sleep 2
-    # the console (doc/decisions/console.md). The screen's characters, read
-    # from VGA's memory through QEMU's monitor
-    screen() {
-        printf 'xp /2000hx 0xb8000\n' | socat - "UNIX-CONNECT:$tmp/mon7" | python3 -c '
-import re, sys
-cells = []
-for line in sys.stdin:
-    m = re.match(r"^[0-9a-f]+:((?: 0x[0-9a-f]{4})+)", line.strip())
-    if m:
-        cells += [int(x, 16) & 0xFF for x in m.group(1).split()]
-sys.stdout.buffer.write(bytes(cells))' > "$1"
-    }
-    waitfor() {   # a text in the log, within $2 seconds
-        i=0
-        while [ $i -lt "$2" ] && ! grep -aqF -- "$1" "$log7"; do sleep 1; i=$((i + 1)); done
-    }
+    step 7.2-console-keys
     # the Italian layout (and AltGr), typed characters as UTF-8
-    tools/type-keys.py "$tmp/mon7" 'keymap it\n'; sleep 1
-    tools/type-keys.py "$tmp/mon7" 'echo caff{bracket_left} perch{shift-bracket_left} a{alt_r-semicolon}b{ctrl-alt-semicolon}\n'
+    tools/type-keys.py "$mon7" 'keymap it\n'; sleep 1
+    tools/type-keys.py "$mon7" 'echo caff{bracket_left} perch{shift-bracket_left} a{alt_r-semicolon}b{ctrl-alt-semicolon}\n'
     sleep 2
-    tools/type-keys.py "$tmp/mon7" 'keymap us\n'; sleep 1
-    tools/type-keys.py "$tmp/mon7" 'cat /disk/utf8.txt\n'; sleep 2
+    tools/type-keys.py "$mon7" 'keymap us\n'; sleep 1
+    shcmd 'cat /disk/utf8.txt' 10
     screen "$tmp/screen1"
     # the scrollback: Shift+PgUp shows older lines, marked top right
-    printf 'sendkey shift-pgup\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null; sleep 1
+    printf 'sendkey shift-pgup\n' | socat - "UNIX-CONNECT:$mon7" >/dev/null; sleep 1
     screen "$tmp/screen2"
-    printf 'sendkey shift-pgdn\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null; sleep 1
+    printf 'sendkey shift-pgdn\n' | socat - "UNIX-CONNECT:$mon7" >/dev/null; sleep 1
+}
+s7_agent() {
+    step 7.3-agent-services
     # the agent writes OCaml: run once it type-checks, refused when not
     # (the fake model calls the tool named in brackets)
-    tools/type-keys.py "$tmp/mon7" "agent -y '[run_ocaml] let () = print_endline (string_of_int (6 * 7) ^ {shift-apostrophe}-from-ocaml{shift-apostrophe})'\n"
+    tools/type-keys.py "$mon7" "agent -y '[run_ocaml] let () = print_endline (string_of_int (6 * 7) ^ {shift-apostrophe}-from-ocaml{shift-apostrophe})'\n"
     waitfor "42-from-ocaml" 90
-    tools/type-keys.py "$tmp/mon7" "agent -y '[run_ocaml] let () = print_endline 42'\n"
+    tools/type-keys.py "$mon7" "agent -y '[run_ocaml] let () = print_endline 42'\n"
     waitfor "It does not compile" 90
     sleep 2
     # its recording: the steps it marked, among the calls
-    tools/type-keys.py "$tmp/mon7" 'trace calls /tmp/agent.trc > /disk/agent-calls.txt\n'; sleep 4
+    shcmd 'trace calls /tmp/agent.trc > /disk/agent-calls.txt' 20
     # a program built into a file (build_ocaml: the fake model takes a JSON
     # object as the tool's input), then run from sh
-    tools/type-keys.py "$tmp/mon7" "agent -y '[build_ocaml] {\"output\": \"/tmp/b.byte\", \"code\": \"let () = print_int (6 * 7 * 1000 + 1); print_newline ()\"}'\n"
+    tools/type-keys.py "$mon7" "agent -y '[build_ocaml] {\"output\": \"/tmp/b.byte\", \"code\": \"let () = print_int (6 * 7 * 1000 + 1); print_newline ()\"}'\n"
     waitfor "Built /tmp/b.byte" 90; sleep 2
-    tools/type-keys.py "$tmp/mon7" '/tmp/b.byte\n'; sleep 3
+    shcmd '/tmp/b.byte' 15
     # a service started by the agent, left running (sh's &): ps shows it
     # with its name, and a client gets its answer
-    tools/type-keys.py "$tmp/mon7" "agent -y '[run_command] /disk/greeter.byte &'\n"
+    tools/type-keys.py "$mon7" "agent -y '[run_command] /disk/greeter.byte &'\n"
     sleep 20
-    tools/type-keys.py "$tmp/mon7" 'ps\n'; sleep 2
-    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte agent\n'; sleep 3
+    shcmd 'ps' 10
+    shcmd '/disk/greeter.byte agent' 15
     # kill: the agent's service, by its name; one of ours, by $!; not init
-    tools/type-keys.py "$tmp/mon7" 'kill greeter\n'; sleep 2
-    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte again\n'; sleep 3
-    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte & kill $!\n'; sleep 3
-    tools/type-keys.py "$tmp/mon7" 'kill 1\n'; sleep 2
+    tools/type-keys.py "$mon7" 'kill greeter\n'; sleep 2
+    shcmd '/disk/greeter.byte again' 15
+    tools/type-keys.py "$mon7" '/disk/greeter.byte & kill $!\n'; sleep 3
+    shcmd 'kill 1' 10
     # a window outside the graphical session: said, and ended; Ctrl-C ends
     # the program sh waits for
-    tools/type-keys.py "$tmp/mon7" '/clock.byte\n'; sleep 6
-    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte\n'; sleep 4
-    printf 'sendkey ctrl-c\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null; sleep 2
-    tools/type-keys.py "$tmp/mon7" 'echo st-$?\n'; sleep 2
+    shcmd '/clock.byte' 20
+    tools/type-keys.py "$mon7" '/disk/greeter.byte\n'; sleep 4
+    printf 'sendkey ctrl-c\n' | socat - "UNIX-CONNECT:$mon7" >/dev/null; sleep 2
+    shcmd 'echo st-$?' 10
     # services come back: fatfs killed, restarted by init, found again by
     # sh (libmynos); a client of greeter (OCaml, Ipc) that finds it again
     # after it was killed and started anew
     # a program with a thread, compiled inside MyNOS (unix.cma, threads.cma
     # on the RAM disk; -noautolink: the runtime has their primitives)
     # ... which also asks consoled (C) to describe console/1, as console.ml does
-    tools/type-keys.py "$tmp/mon7" "echo 'let () = let t = Thread.create (fun () -> print_endline (\"from-a-\" ^ \"thread\")) () in Thread.join t' > /disk/th.ml\n"; sleep 2
-    tools/type-keys.py "$tmp/mon7" "echo 'let () = let d = Ipc.describe \"console\" in if d.Ipc.summary = Console.Protocol.summary && d.requests = Console.Protocol.requests then print_endline (\"console-\" ^ \"described\")' >> /disk/th.ml\n"; sleep 2
-    tools/type-keys.py "$tmp/mon7" 'ocamlc -use-prims /primitives mynos.cma unix.cma threads.cma -noautolink -o /disk/th.byte /disk/th.ml && /disk/th.byte\n'; sleep 25
+    shcmd "echo 'let () = let t = Thread.create (fun () -> print_endline (\"from-a-\" ^ \"thread\")) () in Thread.join t' > /disk/th.ml" 10
+    tools/type-keys.py "$mon7" "echo 'let () = let d = Ipc.describe \"console\" in if d.Ipc.summary = Console.Protocol.summary && d.requests = Console.Protocol.requests then print_endline (\"console-\" ^ \"described\")' >> /disk/th.ml\n"; sleep 2
+    shcmd 'ocamlc -use-prims /primitives mynos.cma unix.cma threads.cma -noautolink -o /disk/th.byte /disk/th.ml && /disk/th.byte' 90
+    step 7.4-httpd-log-stdio
     # httpd serves /disk/web (made before this boot: kept as it is), not
     # the rest of /disk, and not its .env files (mynos-n16), neither by
     # name nor in the listing
     httpd_private=
-    if curl -s -m 5 http://127.0.0.1:47180/ | grep -q 'greeter.byte' &&
-       ! curl -s -m 5 http://127.0.0.1:47180/ | grep -qi 'llm.env' &&
-       [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:47180/llm.env)" = 404 ] &&
-       [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:47180/LLM.ENV)" = 404 ] &&
-       [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:47180/utf8.txt)" = 404 ]; then
+    if curl -s -m 5 http://127.0.0.1:$http_port/ | grep -q 'greeter.byte' &&
+       ! curl -s -m 5 http://127.0.0.1:$http_port/ | grep -qi 'llm.env' &&
+       [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:$http_port/llm.env)" = 404 ] &&
+       [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:$http_port/LLM.ENV)" = 404 ] &&
+       [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:$http_port/utf8.txt)" = 404 ]; then
         httpd_private=yes
     fi
     # httpd receives files from the host (QEMU's 10.0.2.2): PUT, into a
     # new directory too, and a form of two; not llm.env, not with another
     # site's Origin; MyNOS reads what came (cat, below)
     httpd_upload=
-    u=http://127.0.0.1:47180
+    u=http://127.0.0.1:$http_port
     printf 'put-by-the-host\n' > "$tmp/up1.txt"; head -c 200000 /dev/urandom > "$tmp/up2.bin"
     if curl -s -m 20 -f -T "$tmp/up1.txt" $u/up/a/up1.txt >/dev/null &&
        [ "$(curl -s -m 20 -o /dev/null -w '%{http_code}' -F file=@"$tmp/up1.txt" -F file=@"$tmp/up2.bin" \
@@ -888,188 +1108,150 @@ sys.stdout.buffer.write(bytes(cells))' > "$1"
        curl -s -m 10 $u/up/ | grep -q 'multipart/form-data'; then
         httpd_upload=yes
     fi
-    tools/type-keys.py "$tmp/mon7" 'cat /disk/web/up/a/up1.txt /disk/web/up/up1.txt\n'; sleep 2
+    shcmd 'cat /disk/web/up/a/up1.txt /disk/web/up/up1.txt' 10
     # the kernel's log, read inside MyNOS (mynos-lfv): its boot messages
     # come back on the console, so the log port sees them twice
-    tools/type-keys.py "$tmp/mon7" 'log\n'; sleep 4
+    shcmd 'log' 20
     # the version: the boot's banner, and sh's version (uname, mynos-nec)
-    tools/type-keys.py "$tmp/mon7" 'version\n'; sleep 2
+    shcmd 'version' 10
     [ "$(grep -ac 'Calibrating delay loop' "$log7")" -ge 2 ] && log_shown=yes
     # C's stdio (mynos-d6k): files through fopen, a typed line, a piped one
-    tools/type-keys.py "$tmp/mon7" '/disk/stdio-test\n'; sleep 4
-    tools/type-keys.py "$tmp/mon7" 'typed-line\n'; sleep 3
-    tools/type-keys.py "$tmp/mon7" 'echo piped-line | /disk/stdio-test\n'; sleep 5
-    tools/type-keys.py "$tmp/mon7" 'echo into-a-file | /disk/stdio-test > /tmp/so.txt; cat /tmp/so.txt\n'; sleep 5
+    tools/type-keys.py "$mon7" '/disk/stdio-test\n'; sleep 4
+    tools/type-keys.py "$mon7" 'typed-line\n'; sleep 3
+    shcmd 'echo piped-line | /disk/stdio-test' 20
+    shcmd 'echo into-a-file | /disk/stdio-test > /tmp/so.txt; cat /tmp/so.txt' 20
     # MyNOS reaches its own address (lwIP's loopback), and httpd refuses
     # the .env files from inside too
-    tools/type-keys.py "$tmp/mon7" 'fetch -i http://10.0.2.15/llm.env\n'; sleep 4
+    shcmd 'fetch -i http://10.0.2.15/llm.env' 20
+}
+s7_packages() {
+    step 7.5-packages
     # packages (mynos-vcd), from the host's copy of their repository: 2048
     # installed as its bytecode, windtree compiled from its sources (-s);
     # both found on PATH (windtree has no session to open its window in),
     # 2048 removed
-    tools/type-keys.py "$tmp/mon7" 'MYNOS_PKG_URL=http://10.0.2.2:47101; pkg list\n'
+    tools/type-keys.py "$mon7" "MYNOS_PKG_URL=http://10.0.2.2:$files_port; pkg list\\n"
     waitfor "A tree in the wind" 30
-    tools/type-keys.py "$tmp/mon7" 'pkg install 2048\n'
+    tools/type-keys.py "$mon7" 'pkg install 2048\n'
     waitfor "pkg: 2048 1.0 installed" 60
-    tools/type-keys.py "$tmp/mon7" 'pkg install -s windtree\n'
+    tools/type-keys.py "$mon7" 'pkg install -s windtree\n'
     waitfor "pkg: windtree 1.0 installed" 180
-    tools/type-keys.py "$tmp/mon7" 'which windtree; windtree; echo windtree-$?; pkg list -i\n'; sleep 8
-    tools/type-keys.py "$tmp/mon7" 'pkg remove 2048; ls /disk/bin\n'; sleep 4
+    shcmd 'which windtree; windtree; echo windtree-$?; pkg list -i' 30
+    shcmd 'pkg remove 2048; ls /disk/bin' 20
     # a package of several commands, scripts that run its program (utils:
     # "#!/disk/bin/utils.byte"), and one on Num (calc); a script of sh's
     # run by its name
-    tools/type-keys.py "$tmp/mon7" 'pkg install utils calc\n'
+    tools/type-keys.py "$mon7" 'pkg install utils calc\n'
     waitfor "pkg: calc 1.0 installed" 90
-    tools/type-keys.py "$tmp/mon7" "echo zeta > /tmp/s; echo alpha >> /tmp/s; sort /tmp/s | head -n 1 | grep -n alpha; calc '2^100' '1/3 + 1/6'\n"; sleep 8
-    tools/type-keys.py "$tmp/mon7" "echo '#!/sh.byte' > /disk/bin/hi; echo 'echo script-\$1' >> /disk/bin/hi; hi ran\n"; sleep 4
+    shcmd "echo zeta > /tmp/s; echo alpha >> /tmp/s; sort /tmp/s | head -n 1 | grep -n alpha; calc '2^100' '1/3 + 1/6'" 30
+    shcmd "echo '#!/sh.byte' > /disk/bin/hi; echo 'echo script-\$1' >> /disk/bin/hi; hi ran" 15
     # df: the file systems' space, each asked (fs/1 space); clip: the
     # clipboard service, set and read back
-    tools/type-keys.py "$tmp/mon7" 'df; X=ok; clip clip-$X; clip; ps -f\n'; sleep 5
+    shcmd 'df; X=ok; clip clip-$X; clip; ps -f' 20
     # the external pager (mynos-vzp): files mapped, each page read by pagerd
     # at its first touch, compared with the files read as usual
     # memory of the pager past its budget (16 pages: through /disk/swap), a
     # shared mapping written to its file, a private one that must not be
-    tools/type-keys.py "$tmp/mon7" 'mapcat -c /disk/czech.z5 /AUTOEXEC.BAT; mapcat -a 64 16; echo 12345 file to map > /disk/mw.txt; mapcat -w /disk/mw.txt HOWDY; mapcat -p /disk/mw.txt; cat /disk/mw.txt; mapcat -s; X=done; echo mapcat-$X\n'
+    tools/type-keys.py "$mon7" 'mapcat -c /disk/czech.z5 /AUTOEXEC.BAT; mapcat -a 64 16; echo 12345 file to map > /disk/mw.txt; mapcat -w /disk/mw.txt HOWDY; mapcat -p /disk/mw.txt; cat /disk/mw.txt; mapcat -s; X=done; echo mapcat-$X\n'
     waitfor "mapcat-done" 90
     # GAV (mynos-0ns): installed with its pictures, which it reads before
     # it asks for a window (none in text mode)
-    tools/type-keys.py "$tmp/mon7" 'pkg install gavml; gavml\n'
+    tools/type-keys.py "$mon7" 'pkg install gavml; gavml\n'
     waitfor "gavml.byte: no graphical session" 60
     # the browser (mynos-asr), as text: a page of the disk, its entities,
     # its link made absolute; the start page
-    tools/type-keys.py "$tmp/mon7" "pkg install browser; echo '<title>T</title><h1>T&eacute;st</h1><p>a <a href=x.html>link</a> &copy; 2026</p><form><input name=q value=hi size=6> <input type=submit value=Go></form><table><tr><td>a</td><td>bb</td></tr><tr><td>ccc</td><td>d</td></tr></table>' > /tmp/t.html; browser --dump /tmp/t.html; browser --dump about:start > /tmp/start.txt; grep -c ocaml.org /tmp/start.txt; X=done; echo browser-\$X\n"
+    tools/type-keys.py "$mon7" "pkg install browser; echo '<title>T</title><h1>T&eacute;st</h1><p>a <a href=x.html>link</a> &copy; 2026</p><form><input name=q value=hi size=6> <input type=submit value=Go></form><table><tr><td>a</td><td>bb</td></tr><tr><td>ccc</td><td>d</td></tr></table>' > /tmp/t.html; browser --dump /tmp/t.html; browser --dump about:start > /tmp/start.txt; grep -c ocaml.org /tmp/start.txt; X=done; echo browser-\$X\n"
     waitfor "browser-done" 90
     # the Z-machine interpreter, in the terminal (no session), against
     # Czech's tests (tests/zmachine)
-    tools/type-keys.py "$tmp/mon7" 'pkg install zmachine; echo | zmachine /disk/czech.z5 > /tmp/cz.txt; grep Failed /tmp/cz.txt\n'
+    tools/type-keys.py "$mon7" 'pkg install zmachine; echo | zmachine /disk/czech.z5 > /tmp/cz.txt; grep Failed /tmp/cz.txt\n'
     waitfor "Passed: 406, Failed: 0" 120
     # Scheme (OCS, third_party/ocs) runs a file; man prints chapter 13's
     # entry of a command, from the package manual
-    tools/type-keys.py "$tmp/mon7" 'pkg install scheme manual; echo "(display (expt 3 50))" > /tmp/a.scm; scheme /tmp/a.scm; echo; man pkg | head -n 3\n'
+    tools/type-keys.py "$mon7" 'pkg install scheme manual; echo "(display (expt 3 50))" > /tmp/a.scm; scheme /tmp/a.scm; echo; man pkg | head -n 3\n'
     waitfor "Installs packages: demos" 120
-    tools/type-keys.py "$tmp/mon7" 'pkg install minotaur; echo help | minotaur\n'
+    tools/type-keys.py "$mon7" 'pkg install minotaur; echo help | minotaur\n'
     # sound (mynos-7jn): soundd's protocol as module Sound has it, a WAV
     # file converted and played, a tone; the recording is checked below
     waitfor "Directions: north" 90; sleep 2
-    tools/type-keys.py "$tmp/mon7" 'play check; play /disk/a440.wav; play -t 1320 300\n'; sleep 5
+    shcmd 'play check; play /disk/a440.wav; play -t 1320 300' 30
     waitfor "Directions: north, south" 60
+}
+s7_misc() {
+    step 7.6-ctrlc-fatfs-serial
     # Ctrl-C on a program waiting for a line: the next line is sh's, not
     # swallowed by the program it ended (mynos-5dd)
-    tools/type-keys.py "$tmp/mon7" '/disk/stdio-test\n'; sleep 4
-    printf 'sendkey ctrl-c\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null; sleep 2
-    tools/type-keys.py "$tmp/mon7" 'X=ctrlc; echo after-$X\n'; sleep 2
+    tools/type-keys.py "$mon7" '/disk/stdio-test\n'; sleep 4
+    printf 'sendkey ctrl-c\n' | socat - "UNIX-CONNECT:$mon7" >/dev/null; sleep 2
+    shcmd 'X=ctrlc; echo after-$X' 10
     # Tab completes a name with a space, in quotes (mynos-f7k)
-    tools/type-keys.py "$tmp/mon7" 'X=content; echo spaced-$X > "/disk/my file.txt"\n'; sleep 2
-    tools/type-keys.py "$tmp/mon7" 'cat /disk/my{tab}\n'; sleep 3
+    shcmd 'X=content; echo spaced-$X > "/disk/my file.txt"' 10
+    tools/type-keys.py "$mon7" 'cat /disk/my{tab}\n'; sleep 3
     # a rename that changes only the case keeps the file (mynos-qaw)
-    tools/type-keys.py "$tmp/mon7" 'echo case-kept > /disk/case.txt; mv /disk/case.txt /disk/CASE.txt; cat /disk/CASE.txt\n'; sleep 3
-    tools/type-keys.py "$tmp/mon7" 'kill fatfs\n'; sleep 4
-    tools/type-keys.py "$tmp/mon7" 'X=back; echo fatfs-$X > /disk/back.txt; cat /disk/back.txt\n'; sleep 3
-    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte &\n'; sleep 3
-    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte reborn 9 &\n'; sleep 3
-    tools/type-keys.py "$tmp/mon7" 'kill greeter\n'; sleep 1
-    tools/type-keys.py "$tmp/mon7" '/disk/greeter.byte &\n'; sleep 10
+    shcmd 'echo case-kept > /disk/case.txt; mv /disk/case.txt /disk/CASE.txt; cat /disk/CASE.txt' 10
+    tools/type-keys.py "$mon7" 'kill fatfs\n'; sleep 4
+    shcmd 'X=back; echo fatfs-$X > /disk/back.txt; cat /disk/back.txt' 20
+    tools/type-keys.py "$mon7" '/disk/greeter.byte &\n'; sleep 3
+    tools/type-keys.py "$mon7" '/disk/greeter.byte reborn 9 &\n'; sleep 3
+    tools/type-keys.py "$mon7" 'kill greeter\n'; sleep 1
+    tools/type-keys.py "$mon7" '/disk/greeter.byte &\n'; sleep 10
     # fatfs reads: a file of 100 KB not read yet in this boot (docs/big.bin,
     # 2 KB clusters), read twice, recorded: the disk is asked for runs of
     # sectors (not a request per cluster), then not at all (the cache)
-    tools/type-keys.py "$tmp/mon7" 'trace -o /disk/r1.trc cat /disk/docs/big.bin > /tmp/r1\n'; sleep 10
-    tools/type-keys.py "$tmp/mon7" 'trace -o /disk/r2.trc cat /disk/docs/big.bin > /tmp/r2\n'; sleep 10
-    tools/type-keys.py "$tmp/mon7" 'trace calls /disk/r1.trc > /disk/r1.txt; trace calls /disk/r2.trc > /disk/r2.txt\n'; sleep 15
+    shcmd 'trace -o /disk/r1.trc cat /disk/docs/big.bin > /tmp/r1' 40
+    shcmd 'trace -o /disk/r2.trc cat /disk/docs/big.bin > /tmp/r2' 40
+    shcmd 'trace calls /disk/r1.trc > /disk/r1.txt; trace calls /disk/r2.trc > /disk/r2.txt' 60
     # the host's terminal on COM2: a line typed, then two pasted at once
     # (a burst: the shell must not read an end of file), then the keyboard
     banners=$(grep -ac 'MyNOS sh. help' "$log7")
-    printf 'X=seriale; echo dal-$X\r' >> "$tmp/com2-7.in"
+    printf 'X=seriale; echo dal-$X\r' >> "$com2in"
     waitfor "dal-seriale" 15
-    printf 'echo incollata-1\recho incollata-2\r' >> "$tmp/com2-7.in"
+    printf 'echo incollata-1\recho incollata-2\r' >> "$com2in"
     waitfor "incollata-2" 15
-    tools/type-keys.py "$tmp/mon7" 'echo still-$X\n'
+    tools/type-keys.py "$mon7" 'echo still-$X\n'
     waitfor "still-seriale" 15
     [ "$(grep -ac 'MyNOS sh. help' "$log7")" = "$banners" ] && serial_same_sh=yes
     # edit takes UTF-8 (mynos-wv4): accented letters typed on the serial
     # terminal, a backspace over one of them, then Ctrl-S and Ctrl-Q
-    printf 'edit /disk/u.txt\r' >> "$tmp/com2-7.in"; sleep 4
-    printf 'perch\303\251 \303\250 cos\303\254\303\254\177' >> "$tmp/com2-7.in"; sleep 2
-    printf '\023' >> "$tmp/com2-7.in"; sleep 2
-    printf '\021' >> "$tmp/com2-7.in"; sleep 2
-    printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon7" >/dev/null || true
-    wait $qemu || true
-    kill $llm7_pid $files7_pid $peer7 2>/dev/null || true
-    cat "$log7" >> "$part"
-    # what the sound card played: half a second at 440 Hz, then 0.3 s at
-    # 1320 Hz (windows of 0.1 s, their zero crossings)
-    python3 - "$tmp/sound7.wav" <<'PY' && sound_ok=yes
-import sys, wave, struct
-w = wave.open(sys.argv[1]); n = w.getnframes(); rate = w.getframerate()
-s = struct.unpack('<%dh' % (n * w.getnchannels()), w.readframes(n))[::w.getnchannels()]
-step = rate // 10; hz = []
-for i in range(0, len(s) - step, step):
-    seg = s[i:i + step]
-    if max(abs(v) for v in seg) > 1000:
-        hz.append(sum(1 for a, b in zip(seg, seg[1:]) if (a < 0) != (b < 0)) / 2 / 0.1)
-low = sum(1 for f in hz if 430 <= f <= 450); high = sum(1 for f in hz if 1300 <= f <= 1340)
-sys.exit(0 if low >= 3 and high >= 2 else 1)
-PY
-    if [ -f tests/fat/run-shell.img ]; then
-        tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/.history \
-            2>/dev/null | grep -qx '6 \* 7;;' && history_saved=yes
-        [ "$(tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/k.txt 2>/dev/null)" = \
-          "typed in kilo" ] && kilo_saved=yes
-        [ "$(tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/e.txt 2>/dev/null)" = \
-          "$(printf 'first second\nfirst second\n')" ] && edit_saved=yes
-        [ "$(tools/in-container.sh dev mcopy -i tests/fat/run-shell.img ::/u.txt - 2>/dev/null)" = \
-          "$(printf 'perch\303\251 \303\250 cos\303\254\n')" ] && edit_utf8=yes
-        [ "$(tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/s.txt 2>/dev/null)" = \
-          "$(printf 'from sh\nv4\n')" ] && sh_saved=yes
-        tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/calls.txt \
-            2>/dev/null > "$tmp/calls.txt" || true
-        grep -q 'sh(.*-> fatfs(.*fs/1 Open ("Makefile", 0)' "$tmp/calls.txt" &&
-            grep -q '^ .*  fatfs(.*-> ata(.*block/1 Read' "$tmp/calls.txt" && trace_calls=yes
-        for r in r1 r2; do
-            tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/$r.txt \
-                2>/dev/null > "$tmp/$r.txt" || true
-        done
-        python3 - "$tmp/r1.txt" "$tmp/r2.txt" <<'PY' && disk_reads="$(cat "$tmp/r-counts")"
-import re, sys
-def counts(path):
-    s = open(path, encoding="latin-1").read()
-    reads = len(re.findall(r"-> fatfs\(\d+\)\s+fs/1 Read", s))
-    disk = len(re.findall(r"fatfs\(\d+\) -> ata\(\d+\)\s+block/1 Read", s))
-    return reads, disk
-(r1, d1), (r2, d2) = counts(sys.argv[1]), counts(sys.argv[2])
-open(sys.argv[1].replace("r1.txt", "r-counts"), "w").write("%d %d %d %d" % (r1, d1, r2, d2))
-assert r1 >= 7 and r2 >= 7, (r1, r2)            # the file was read, in 16 KB requests
-assert 0 < d1 <= 2 * r1, (r1, d1)                # runs, not a request per cluster (49)
-assert d2 <= 2, (r2, d2)                         # read again: from the cache
-PY
-        tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/agent-calls.txt \
-            2>/dev/null > "$tmp/agent-calls.txt" || true
-        grep -q '# agent([0-9]*): model call 1' "$tmp/agent-calls.txt" &&
-            grep -q '# agent([0-9]*): run_ocaml: let () = print_endline 42' "$tmp/agent-calls.txt" &&
-            grep -q 'agent(.*-> llmd(.*llm/1 Chat' "$tmp/agent-calls.txt" && agent_marks=yes
-        tools/in-container.sh dev mtype -i tests/fat/run-shell.img ::/t.json \
-            2>/dev/null > "$tmp/t.json" || true
-        python3 -c 'import json, sys
-d = json.load(open(sys.argv[1]))["traceEvents"]
-assert any(e["ph"] == "X" and e["name"].startswith("block/1 Read") for e in d)
-assert any(e["ph"] == "f" for e in d)' "$tmp/t.json" 2>/dev/null && trace_json=yes
-        rm -f tests/fat/run-shell.img
-    fi
-fi
+    printf 'edit /disk/u.txt\r' >> "$com2in"; sleep 4
+    printf 'perch\303\251 \303\250 cos\303\254\303\254\177' >> "$com2in"; sleep 2
+    printf '\023' >> "$com2in"; sleep 2
+    printf '\021' >> "$com2in"; sleep 2
+}
+sec_seventh_a() { seventh_boot "" 47090 47180 47101 s7_shell; }
+sec_seventh_b() { seventh_boot b 47093 47183 47103 s7_agent; }
+sec_seventh_c() { seventh_boot c 47094 47184 47104 s7_packages; }
+sec_seventh_d() { seventh_boot d 47095 47185 47105 s7_misc; }
+
+# a section, timed: the seconds it took, by lane, in $tmp/times (printed
+# at the end, to see where the suite's time goes)
+# a part of a long section begins: its time, printed at the end with the
+# sections' (to see where a section's time goes)
+step() { echo "$lane $1 $(date +%s)" >> "$tmp/steps"; }
+
+timed() {
+    t0=$(date +%s)
+    "$1" || true
+    echo "$lane $1 $(($(date +%s) - t0))" >> "$tmp/times"
 }
 
 for v in $results; do eval "$v="; done   # a lane not run finds nothing
 pids=
-for lane in ${LANES:-a b c d e}; do
+for lane in ${LANES:-a b c d e f g h i}; do
     (
         trap - EXIT
         part=$tmp/part-$lane
         : > "$part"
         case $lane in
-            a) sec_first || true; sec_effects || true; sec_storage || true; sec_fat || true; sec_domains || true; sec_threads || true; sec_fpu || true ;;
-            b) sec_mlib || true; sec_files || true; sec_libs || true; sec_stress || true; sec_spawn || true; sec_console || true ;;
-            c) sec_nocom2 || true; sec_reboots || true; sec_virtio || true ;;
-            d) sec_gui || true ;;
-            e) sec_net || true; sec_seventh || true ;;
+            a) timed sec_first; timed sec_effects; timed sec_storage; timed sec_fat; timed sec_domains; timed sec_threads; timed sec_fpu ;;
+            b) timed sec_mlib; timed sec_files; timed sec_libs; timed sec_stress; timed sec_spawn; timed sec_console ;;
+            c) timed sec_nocom2; timed sec_reboots; timed sec_virtio ;;
+            d) timed sec_gui ;;
+            i) timed sec_gui2 ;;
+            e) timed sec_net; timed sec_seventh_a ;;
+            f) timed sec_seventh_b ;;
+            g) timed sec_seventh_c ;;
+            h) timed sec_seventh_d ;;
         esac
         save_results "$lane"
     ) &
@@ -1103,7 +1285,7 @@ expect "keyboardd: sem = "                          # the drivers got their IRQs
 expect "seriald: sem = "
 expect "Hello from memrofs!"
 expect "fpu: all checks passed"
-expect "Welcome to MyNOS - v$(cat VERSION 2>/dev/null)"      # the boot's banner
+expect "Welcome to MyNOS $(cat VERSION 2>/dev/null) (${ARCH:-i386})"  # the boot's banner
 expect "MyNOS $(cat VERSION 2>/dev/null)"                    # sh's version (uname)
 expect "threads: all checks passed"
 expect "abi: all checks passed"
@@ -1268,7 +1450,7 @@ if [ -f system/ramdisk.dsk ]; then
     else
         echo "FAIL  httpd: serves /disk/web, not its .env files"; fail=1
     fi
-    if [ -n "$httpd_upload" ] && [ "$(grep -ac 'put-by-the-host' "$log7")" -ge 2 ]; then
+    if [ -n "$httpd_upload" ] && [ "$(grep -ac 'put-by-the-host' "$tmp/log7b")" -ge 2 ]; then
         echo "ok    httpd: receives files from the host (PUT, a form)"
     else
         echo "FAIL  httpd: receives files from the host (PUT, a form)"; fail=1
@@ -1452,6 +1634,18 @@ reject "page fault (?)"
 reject "Problems releasing pages"
 reject "kernel heap:"
 reject "FAIL"
+
+# the parts of long sections (step), each until the next
+if [ -f "$tmp/steps" ]; then
+    sort -k1,1 -s "$tmp/steps" | awk '$1 == l { printf "time  %s   %-22s %4d s\n", l, n, $3 - t }
+                                     { l = $1; n = $2; t = $3 }'
+fi
+# the time of each section, and of each lane (the suite's is the longest)
+if [ -f "$tmp/times" ]; then
+    awk '{ printf "time  %s %-14s %4d s\n", $1, $2, $3; t[$1] += $3 }
+         END { for (l in t) printf "time  %s (lane)         %4d s\n", l, t[l] }' \
+        "$tmp/times" | sort
+fi
 
 if [ $fail -ne 0 ]; then
     echo "--- console log ---"

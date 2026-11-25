@@ -19,6 +19,9 @@
 #ifndef __ARCH_H__
 #define __ARCH_H__
 
+/* the machine, as uname says it */
+#define ARCH_MACHINE "i386"
+
 /* ---- interrupts ---- */
 
 static inline void arch_irq_disable(void) { __asm__ volatile ("cli" ::: "memory"); }
@@ -87,7 +90,7 @@ static inline void arch_clear(unsigned int * m) {
 /* ---- memory ---- */
 
 /* the translation of one page forgotten (after its entry changed) */
-static inline void arch_flush_page(unsigned int laddr) {
+static inline void arch_flush_page(unsigned long laddr) {
   __asm__ volatile ("invlpg %0" : : "m"(*(char *)laddr) : "memory");
 }
 
@@ -122,6 +125,7 @@ static inline void arch_load_task_register(unsigned short selector) {
     __asm__ volatile ("movw %%fs, %0" : "=m"((t)->fs));      \
     __asm__ volatile ("movw %%gs, %0" : "=m"((t)->gs));      \
     __asm__ volatile ("movw %%ss, %0" : "=m"((t)->ss));      \
+    (t)->esp0 = currThread->esp0;    /* its kernel stack's top */ \
   } while (0)
 
 /* the child resumes here, in the parent's frame: its eip is the label
@@ -143,6 +147,10 @@ static inline void arch_load_task_register(unsigned short selector) {
       __asm__ volatile ("movw %w0, %%gs" : : "r"(GDT_USER_DATA_SEL + 3)); \
     __asm__ volatile ("movl %0, %%ebp" : : "m"((t)->ebp));              \
   } while (0)
+
+/* an entry's saved registers, as the page fault handler gets them: where
+   the interrupted instruction's address is, in words */
+#define ARCH_FRAME_IP 9
 
 /* ---- the FPU ---- */
 

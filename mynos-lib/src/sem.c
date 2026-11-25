@@ -23,32 +23,32 @@
 
 int mynos_P(int sem) {
   int ret;
-  ret = __mynos_syscall(6, (int)sem, 0, 0, 0, 0);
+  ret = __mynos_syscall(6, (long)sem, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_tryP(int sem) {
   int ret;
-  ret = __mynos_syscall(7, (int)sem, 0, 0, 0, 0);
+  ret = __mynos_syscall(7, (long)sem, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_V(int sem) {
   int ret;
-  ret = __mynos_syscall(8, (int)sem, 0, 0, 0, 0);
+  ret = __mynos_syscall(8, (long)sem, 0, 0, 0, 0);
   return ret;    
 }
 
 
 int mynos_initSem(unsigned int n) {
   int ret;
-  ret = __mynos_syscall(9, (int)n, 0, 0, 0, 0);
+  ret = __mynos_syscall(9, (long)n, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_freeSem(int sem) {
   int ret;
-  ret = __mynos_syscall(13, (int)sem, 0, 0, 0, 0);
+  ret = __mynos_syscall(13, (long)sem, 0, 0, 0, 0);
   return ret;    
 }
 

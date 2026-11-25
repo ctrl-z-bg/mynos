@@ -30,7 +30,7 @@ int mynos_allocPort() {
 /* a well-known port (below MYNOS_FIRST_FREE_PORT), privileged processes
    only */
 int mynos_allocPortP(int port) {
-  return __mynos_syscall(21, (int)port, 0, 0, 0, 0);
+  return __mynos_syscall(21, (long)port, 0, 0, 0, 0);
 }
 
 /* the pid at the other end of one of our channels */
@@ -40,25 +40,25 @@ int mynos_channelPeer(int channel) {
 
 int mynos_connectToPort(int port) {
   int ret;
-  ret = __mynos_syscall(22, (int)port, 0, 0, 0, 0);
+  ret = __mynos_syscall(22, (long)port, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_listenPort(int port) {
   int ret;
-  ret = __mynos_syscall(23, (int)port, 0, 0, 0, 0);
+  ret = __mynos_syscall(23, (long)port, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_freePort(int port) {
   int ret;
-  ret = __mynos_syscall(24, (int)port, 0, 0, 0, 0);
+  ret = __mynos_syscall(24, (long)port, 0, 0, 0, 0);
   return ret;    
 }
 
 int mynos_changePortOwner(int port, int newpid) {
   int ret;
-  ret = __mynos_syscall(25, (int)port, (int)newpid, 0, 0, 0);
+  ret = __mynos_syscall(25, (long)port, (long)newpid, 0, 0, 0);
   return ret;
 }
 

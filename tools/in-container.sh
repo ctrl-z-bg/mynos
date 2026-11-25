@@ -17,6 +17,15 @@ tty=
 
 [ $# -eq 0 ] && set -- bash
 
-exec podman run --rm $tty --platform linux/386 \
+# already inside the test container (tools/containers/test), which has
+# the tools the suite asks the dev container for (mtools): run them here
+if [ -n "${MYNOS_TEST_CONTAINER:-}" ]; then
+    cd "$root" && exec "$@"
+fi
+
+# the image's architecture: dev-x86_64 is amd64, the others i386
+case $name in *x86_64*|test) platform=linux/amd64 ;; *) platform=linux/386 ;; esac
+
+exec podman run --rm $tty --platform $platform \
     -v "$root:/mynos:Z" -w /mynos \
     "mynos-$name" "$@"

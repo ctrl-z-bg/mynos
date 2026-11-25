@@ -49,18 +49,6 @@
 #define ETIMEDOUT 110
 #define ENOMEM    12
 
-/* the kernel stack of a new clone thread, popped by startClonedThread:
-   segment registers, the general ones (popal order), then the iret frame */
-typedef struct {
-  ushort16_t gs, fs, es, ds;
-  uint32_t edi, esi, ebp, esp_unused, ebx, edx, ecx, eax;
-  uint32_t eip, cs, eflags, esp, ss;
-} clone_stack_t;
-
-void startClonedThread();
-/* startClonedThread: arch/i386/entry.c */
-
-
 /* ---- futex ---- */
 
 #define FUTEX_WAIT         0
@@ -137,7 +125,7 @@ static int32_t futexRequeue(int32_t * addr, int n, int nmove,
   return woken + moved;
 }
 
-static int32_t futex(int32_t * addr, int op, int32_t val, uint32_t arg4,
+static int32_t futex(int32_t * addr, int op, int32_t val, vaddr_t arg4,
 		     int32_t * addr2, int32_t val3, int ts64) {
   int32_t ms = -1;
   int cmd = op & FUTEX_CMD_MASK;
@@ -183,71 +171,17 @@ static int32_t futex(int32_t * addr, int op, int32_t val, uint32_t arg4,
 }
 
 int32_t _linux_syscall_futex(int32_t * addr, int op, int32_t val,
-			     uint32_t arg4, int32_t * addr2, int32_t val3) {
+			     vaddr_t arg4, int32_t * addr2, int32_t val3) {
   return futex(addr, op, val, arg4, addr2, val3, 0);
 }
 
 int32_t _linux_syscall_futex_time64(int32_t * addr, int op, int32_t val,
-				    uint32_t arg4, int32_t * addr2,
+				    vaddr_t arg4, int32_t * addr2,
 				    int32_t val3) {
   return futex(addr, op, val, arg4, addr2, val3, 1);
 }
 
 /* ---- clone, exit, thread ids ---- */
-
-int32_t _linux_syscall_clone(uint32_t flags, uint32_t stack, int32_t * ptid,
-			     struct user_desc * tls, int32_t * ctid,
-			     uint32_t ebp) {
-  /* the caller's iret frame is above the six registers the system call
-     entry pushed (our arguments): eip, cs, eflags, esp, ss */
-  uint32_t * frame = (uint32_t *)&flags + 6;
-  clone_stack_t * cs;
-  tss_t * tss;
-
-  /* only threads: fork is its own call */
-  if ((flags & (CLONE_VM | CLONE_THREAD)) != (CLONE_VM | CLONE_THREAD))
-    return -ENOSYS;
-  if (((flags & CLONE_SETTLS) && !__mem_userArea(tls, sizeof *tls)) ||
-      ((flags & CLONE_PARENT_SETTID) && !__mem_userArea(ptid, sizeof *ptid)) ||
-      ((flags & (CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID)) &&
-       !__mem_userArea(ctid, sizeof *ctid)))
-    return -EFAULT;
-  if ((tss = threadAlloc()) == NULL) return -ENOMEM;
-
-  if (flags & CLONE_SETTLS) {
-    tss->tls_base = tls->base_addr;
-    tss->tls_limit = tls->limit & 0xFFFFF;
-    tss->tls_pages = (tls->flags >> 4) & 1;
-  }
-  if (flags & CLONE_CHILD_CLEARTID) tss->clearTid = ctid;
-  if (flags & CLONE_PARENT_SETTID) *ptid = tss->tid;
-  if (flags & CLONE_CHILD_SETTID) *ctid = tss->tid;
-
-  /* its kernel stack: it starts by returning from this system call */
-  tss->esp0 = tss->kstack + KERNEL_STACK_NPAGES * PAGE_SIZE;
-  cs = (clone_stack_t *)(tss->esp0 - sizeof(clone_stack_t));
-  cs->gs = (tss->tls_base || tss->tls_limit) ? ((GDT_TLS_INDEX << 3) | 3)
-					      : GDT_USER_DATA_SEL + 3;
-  cs->fs = cs->es = cs->ds = GDT_USER_DATA_SEL + 3;
-  cs->eax = 0;                       /* clone returns 0 in the child */
-  cs->ebx = flags;
-  cs->ecx = stack;
-  cs->edx = (uint32_t)ptid;
-  cs->esi = (uint32_t)tls;
-  cs->edi = (uint32_t)ctid;
-  cs->ebp = ebp;
-  cs->esp_unused = 0;
-  cs->eip = frame[0];
-  cs->cs = GDT_USER_CODE_SEL + 3;
-  cs->eflags = frame[2];
-  cs->esp = stack;
-  cs->ss = GDT_USER_DATA_SEL + 3;
-  tss->esp = (uint32_t)cs;
-  tss->eip = (uint32_t)startClonedThread;
-
-  threadStart(tss);
-  return tss->tid;
-}
 
 extern void _linux_syscall_exit(int status);
 
@@ -262,7 +196,7 @@ void _linux_syscall_exit_thread(int status) {
     *currThread->clearTid = 0;
     futexWake(currThread->clearTid, 0x7FFFFFFF);
   }
-  __OS_threadExit((void *)status);
+  __OS_threadExit((void *)(long)status);
 }
 
 int32_t _linux_syscall_gettid(void) {

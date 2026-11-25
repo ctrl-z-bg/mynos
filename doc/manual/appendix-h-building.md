@@ -300,20 +300,32 @@ which is what the tests do.
 ## H.7 The test suite
 
 ```
+  tools/run-tests-all.sh                  every architecture's suite at once
   tools/run-tests.sh                      everything; exit status 0 if all passed
+  ARCH=x86_64 tools/run-tests.sh          the same, in build/x86_64/tree
   LANES="d" tools/run-tests.sh            only lane d
   KEEP=1 tools/run-tests.sh               keep the logs and screens, say where
   SHOTS=DIR tools/run-tests.sh            copy the graphical session's screens to DIR
 ```
 
-The tests start QEMU, headless, nineteen times (one of these runs
+The tests start QEMU, headless, twenty-three times (one of these runs
 restarts MyNOS three times), with different sets of modules and RAM
 disks, and check what each boot did.
-The boots run in five **lanes** at once, each lane a subshell running its
+The boots run in nine **lanes** at once, each lane a subshell running its
 boots one after the other; lanes share nothing (each has its own files,
 monitor sockets and host ports). The whole run lasts as long as its
-longest lane: lane e, about 11 minutes without KVM (measured on
-2026-11-23: a 127 s, b 65 s, c 33 s, d 470 s, e 665 s).
+longest lane: lane d, under 4 minutes without KVM (measured on
+2026-11-25: a 125 s, b 67 s, c 55 s, d 229 s, e 151 s, f 136 s, g 118
+s, h 85 s, i 176 s). At the end the script prints each section's time,
+and each lane's.
+
+Where it can, a lane waits for what it is about to check rather than for
+a fixed time: the toplevel's next prompt, a mark that `sh` echoes after a
+command (`echo mark-$M:`, so that the typed line does not match), the
+pixels of a window that has opened. `tools/run-tests-all.sh` runs the
+suite of every architecture at once, each in a container
+(`tools/containers/test`) with a network of its own, so that their host
+ports do not meet: the i386's and the x86-64's in about 4 minutes.
 
 | Lane | Boots |
 |---|---|
@@ -321,7 +333,11 @@ longest lane: lane e, about 11 minutes without KVM (measured on
 | b | the `Mynos` library; files read through the standard library; Str and Num; the kernel stress test; `init` spawning about twenty-five programs; the console, typed on the keyboard and on COM2 |
 | c | the system without COM2 (as QEMU's window starts it), then `shutdown -r`; four boots in a row through `shutdown -r` |
 | d | the graphical session: windows, the mouse, the terminal, the agent window, Recordings, System, Files, the tour, `shutdown` |
-| e | the network, against servers on the host; then the "seventh boot": the system RAM disk driven through the keyboard (the toplevel, `sh`, the editors, `trace`, the agent, `kill`, a killed service restarted, threads compiled inside MyNOS, packages installed from the host, `fatfs`'s cache) |
+| e | the network, against servers on the host; then the "seventh boot", the system RAM disk driven through the keyboard, in four parts that boot at once: here the toplevel, `sh`, the editors, `trace` |
+| f | the seventh boot's second part: the agent, `kill`, threads compiled inside MyNOS, `httpd`, C's stdio |
+| g | its third: packages installed from the host, the tools they bring |
+| h | its fourth: Ctrl-C, a killed service restarted, `fatfs`'s cache, the serial terminal |
+| i | the graphical session again, its own boot: OCaml's Graphics, key releases, a resized window, Packages, Text, Studio (its windows opened in the same order as in lane d's session, so that they are where the clicks expect them) |
 
 **How a boot is observed.** MyNOS has no test harness inside it; the
 script watches it from outside, in several ways:
@@ -374,7 +390,7 @@ recording of appendix G.10.
 
 | Variable | Effect |
 |---|---|
-| `LANES` | the lanes to run (default `a b c d e`); the checks of the others then fail, so read only those of the lanes run |
+| `LANES` | the lanes to run (default `a b c d e f g h i`); the checks of the others then fail, so read only those of the lanes run |
 | `KEEP` | keep the temporary directory (logs, screens, monitor sockets) and print its name |
 | `SHOTS` | a directory where lane d's screens are copied (PPM) |
 | `WAIT` | how long, in seconds, the boots that run unattended are left running before QEMU is stopped; the default is 10, 15 or 20 depending on the boot |

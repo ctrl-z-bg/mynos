@@ -80,7 +80,7 @@ static int32_t newPort(uint32_t slot) {
   initPort(p, CURRPID);
   p->id = slot + MAXPORTS * portGeneration[slot];
   pTable.table[slot] = p;
-  listInsert(processTable[currProcess]->portList, (void*)p->id);
+  listInsert(processTable[currProcess]->portList, (void*)(long)p->id);
   return p->id;
 }
 
@@ -126,7 +126,7 @@ int32_t __OS_port_freePort(int32_t p) {
   if (port->locked) return MYNOS_ERR_BUSY;
   pTable.free++;
 
-  listExtractElem(processTable[currProcess]->portList, (void*)p, NULL);
+  listExtractElem(processTable[currProcess]->portList, (void*)(long)p, NULL);
 
   /* as when its owner ends: the processes queued to connect are told
      (MYNOS_ERR_BROKEN) instead of waiting for ever */
@@ -165,8 +165,8 @@ int32_t __OS_port_changeOwner(int32_t port, pid_t newpid) {
     return MYNOS_ERR_INVALID;
   if (p->owner != processTable[currProcess]->pid) return MYNOS_ERR_DENY;
 
-  listExtractElem(processTable[currProcess]->portList, (void*)port, NULL);
-  listInsert(proc(newpid)->portList, (void*)port);
+  listExtractElem(processTable[currProcess]->portList, (void*)(long)port, NULL);
+  listInsert(proc(newpid)->portList, (void*)(long)port);
 
   p->owner = newpid;
   return 0;

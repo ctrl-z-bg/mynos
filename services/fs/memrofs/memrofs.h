@@ -33,10 +33,11 @@
 
 /* RAM disk image (tool/createDisk.c): ".RAMDISK", then MAXFILES entries,
    then the file contents; start is the offset of a file from the image
-   beginning */
+   beginning (32 bits on every architecture: once a char *, as wide as
+   that on the i386) */
 typedef struct {
   char filename[FILENAMEMAXLEN];
-  char * start;
+  uint32_t start;
   uint32_t size;
 } fileentry_t;
 

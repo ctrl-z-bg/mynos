@@ -229,7 +229,7 @@ int _linux_syscall_nosignals() {
 struct new_utsname { char f[6][65]; };
 int _linux_syscall_uname(struct new_utsname * u) {
   static const char * fields[6] =
-    { "MyNOS", "mynos", MYNOS_VERSION, "#1", "i386", "" };
+    { "MyNOS", "mynos", MYNOS_VERSION, "#1", ARCH_MACHINE, "" };
   int i, j;
   USER(u, sizeof *u);
   for (i = 0; i < 6; i++) {
@@ -251,33 +251,6 @@ int _linux_syscall_mprotect(void * addr, size_t len, int prot) {
   return 0;
 }
 
-
-/* Thread-local storage: a single GDT slot (GDT_TLS_INDEX) shared by all
-   threads, rewritten from the incoming thread's tss on every switch. */
-void tls_load(void * t) {
-  tss_t * thread = (tss_t *)t;
-  if (thread->tls_limit == 0 && thread->tls_base == 0)
-    gdt_set_entry(GDT_TLS_INDEX, 0, 0xFFFFF,
-		  D_DATA + D_WRITE + D_BIG + D_BIG_LIM + D_DPL3);
-  else
-    gdt_set_entry(GDT_TLS_INDEX, thread->tls_base, thread->tls_limit,
-		  D_DATA + D_WRITE + D_BIG + D_DPL3 +
-		  (thread->tls_pages ? D_BIG_LIM : 0));
-}
-
-int _linux_syscall_set_thread_area(struct user_desc * u_info) {
-  USER(u_info, sizeof *u_info);
-  if (u_info->entry_number != (uint32_t)-1 &&
-      u_info->entry_number != GDT_TLS_INDEX)
-    return -22; /* EINVAL */
-
-  currThread->tls_base = u_info->base_addr;
-  currThread->tls_limit = u_info->limit & 0xFFFFF;
-  currThread->tls_pages = (u_info->flags >> 4) & 1;
-  u_info->entry_number = GDT_TLS_INDEX;
-  tls_load(currThread);
-  return 0;
-}
 
 /* unknown Linux system call: fail with -ENOSYS, as Linux does, so that
    libcs and runtimes can fall back. Report each number once. */
@@ -531,13 +504,13 @@ int _linux_syscall_munmap(void *start, size_t length) {
   print_long((long32_t)length);
   print_char('\n');
 #endif
-  if (length == 0 || (uint32_t)start < USER_AREA_START ||
-      (uint32_t)start + length < (uint32_t)start ||
-      (uint32_t)start + length > USER_AREA_END)
+  if (length == 0 || (vaddr_t)start < USER_AREA_START ||
+      (vaddr_t)start + length < (vaddr_t)start ||
+      (vaddr_t)start + length > USER_AREA_END)
     return -22;
   npages = (length - 1) / PAGE_SIZE + 1;
   /* the RAM disk is every process's: not to be unmapped (mynos-q5b) */
-  if (__OS_touchesRamdisk((uint32_t)start, npages * PAGE_SIZE))
+  if (__OS_touchesRamdisk((vaddr_t)start, npages * PAGE_SIZE))
     return -22;
   if (__OS_releasePages(start, npages, 1, 1) == NULL)
     return -1;
@@ -585,136 +558,21 @@ void * _linux_syscall_mmap(struct mmap_args * args) {
   return ret;
 }
 
-/* it returns:
-   1: on success
-   0: error
-   something else: address for the PD image
-*/
-static uint32_t copy_page_table(uint32_t ptp, uint32_t * ptc) {
-  uint32_t i;
-  uint32_t * pte, flags;
-  uint32_t * pf;
-
-  /* copy the page table entries */
-  for (i = 0; i <= LAST_PDPT_INDEX; i++) {
-    if ((ptp == (LAST_PDPT_INDEX - 1)) && (i == LAST_PDPT_INDEX)) return 1; // this is the pd image
-    pte = (uint32_t*)__GET_PAGE_TABLE_ENTRY(ptp, i);
-    if (*pte & (PF_PRESENT | PF_LOGICAL_PRESENT)) {   // this PF is allocated
-      flags = *pte & 0xFFF;
-      if (*pte & PF_PRESENT) {  // the page is really allocated
-
-	/* if the page is a superuser page then copy it (in 386 arch
-	   ro check is not done in superuser mode, so cow cannot work) */
-	if (!(*pte & PF_USER)) {
-	  if ((pf = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -1;
-	  ptc[i] = LINEAR_TO_PHYSICAL_ADDRESS(pf) | flags;
-	  
-	  /* copy the page frame */
-	  kmemcpy((void*)pf, (void*)__MEM_LINEAR_ADDRESS(ptp, i, 0), 
-		  PAGE_SIZE);
-	  /* drop the kernel alias: the frame is the child's alone */
-	  __OS_releasePages(pf, 1, 0, 0);
-	} else {   // ok, it's a user page
-	  /* the page is set as cow only if: it's not shared, it's not RO,
-	     it's not already cow */
-	  if (!(*pte & PF_SHARED) && (*pte & PF_READWRITE) && !(*pte & PF_COW)) {
-	    *pte |= PF_COW;
-	    *pte = *pte & ~PF_READWRITE;  // to have the fault on write!
-	    INVALIDATE_THE_CACHE(__MEM_LINEAR_ADDRESS(ptp, i, 0));
-	  }
-	  /* anyway copy the pte...*/
-	  ptc[i] = *pte;
-	  /* ... and increment the page references counter */
-	  pmem_set((*pte)>>12);
-	}
-      } else  // logical allocated
-	ptc[i] = flags;
-    } else if (IS_PAGER_ENTRY(*pte))
-      ptc[i] = *pte;   /* the external pager's: the child asks it too */
-    else
-      ptc[i] = 0;
-  }
-  return 1;
-}
-
 /* the child's only thread: a copy of the calling one */
 static tss_t * copyThread(process_descriptor_t * ddest,
-			  uint32_t * pdc, pid_t pid);
-
-/* a fork that ran out of memory: the child's address space built so far
-   is freed (its page tables, the pages they took or referenced, the
-   directory and its mirror); the parent's pages left copy-on-write become
-   writable again at their next write, as their only user's */
-static int forkFailed(uint32_t * pdc, uint32_t * lastPT, uint32_t * ptc) {
-  uint32_t pdFrame = LINEAR_TO_PHYSICAL_ADDRESS(pdc) >> 12;
-  uint32_t mirrorFrame = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) >> 12;
-  if (ptc) __OS_releasePages(ptc, 1, 0, 0);
-  __OS_releasePages(lastPT, 1, 0, 0);
-  __OS_releasePages(pdc, 1, 0, 0);
-  __OS_freeSpaceFrames(pdFrame, mirrorFrame);
-  return -12;                                   /* -ENOMEM */
-}
+			  paddr_t pdPhys, pid_t pid);
 
 int _linux_syscall_fork() {
-  uint32_t i;
-  uint32_t * pde, flags;
-  uint32_t * pdc, *ptc, *prevPtc = NULL;
-  uint32_t *lastPT;
+  paddr_t pdPhys, mirrorPhys;
   pid_t new_pid;
   int ret = 0;
   tss_t * mirror;  // this is the new process thread corrisponding to current
 
   /* the pid first: nothing to undo if there is none */
   if ((new_pid = allocPid()) < 0) return -11;   /* -EAGAIN */
-  if ((pdc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) return -12;
-  if ((lastPT = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) {
-    __OS_releasePages(pdc, 1, 1, 0);
-    return -12;                                 /* -ENOMEM */
-  }
-  kbzero(pdc, PAGE_SIZE);   /* a failure frees what the entries name */
-
-  pdc[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(lastPT) | 
-    PF_USER | PF_READWRITE | PF_PRESENT;
-
-  /* copy the shared kernel space */
-  for (i = 0; i <= _asm_last_kernel_page_dir_entry_used; i++)
-    pdc[i] = *((uint32_t*)__GET_PAGE_DIR_ENTRY(i));
-
-  /* copy the page dir entries, but not the last one (image for PTs...) */
-  for (i = _asm_last_kernel_page_dir_entry_used + 1; i < LAST_PDPT_INDEX; i++) {
-    pde = (uint32_t*)__GET_PAGE_DIR_ENTRY(i);
-    /* this if should never be PF_LOGICAL_PRESENT because we don't allocate
-       a page table logically */
-    if (*pde & (PF_PRESENT | PF_LOGICAL_PRESENT)) {   // this PT is allocated
-      flags = *pde & 0xFFF;
-      if (*pde & PF_PRESENT) {
-	if ((ptc = (uint32_t*)__OS_askPages(1, 1, 0)) == NULL) {
-	  if (prevPtc) __OS_releasePages(prevPtc, 1, 0, 0);
-	  return forkFailed(pdc, lastPT, NULL);
-	}
-	kbzero(ptc, PAGE_SIZE);
-	pdc[i] = LINEAR_TO_PHYSICAL_ADDRESS(ptc) | flags;
-	
-	/* copy the page table */
-	if (copy_page_table(i, ptc) == -1) {
-	  if (prevPtc) __OS_releasePages(prevPtc, 1, 0, 0);
-	  return forkFailed(pdc, lastPT, ptc);
-	}
-
-	/* the kernel aliases of the child's structures are dropped once
-	   they are built: the last page table still has to be written */
-	if (prevPtc) __OS_releasePages(prevPtc, 1, 0, 0);
-	prevPtc = ptc;
-      } else
-	pdc[i] = flags;
-    } else
-      pdc[i] = 0;
-  }
-
-  /* set the PD pointer: now ptc is the last but one PT */
-  ptc[LAST_PDPT_INDEX] = LINEAR_TO_PHYSICAL_ADDRESS(pdc) | PF_READWRITE | PF_PRESENT;
-  kmemcpy((void*)lastPT, (void*)pdc, PAGE_SIZE);
-  __OS_releasePages(ptc, 1, 0, 0);
+  /* the child's address space: the parent's, copy-on-write (the
+     architecture's: arch/ARCH/space.c) */
+  if ((ret = arch_space_fork(&pdPhys, &mirrorPhys)) < 0) return ret;
 
   numProcesses++;
   numThreads++;
@@ -737,7 +595,7 @@ int _linux_syscall_fork() {
 
   /* the child has one thread, a copy of the caller (POSIX: the other
      threads are not in the child) */
-  mirror = copyThread(processTable[PSLOT(new_pid)], pdc, new_pid);
+  mirror = copyThread(processTable[PSLOT(new_pid)], pdPhys, new_pid);
   processTable[PSLOT(new_pid)]->numThreads = 1;
   readyQueueInsert(mirror);
 
@@ -758,9 +616,7 @@ int _linux_syscall_fork() {
   processTable[PSLOT(new_pid)]->memFreed = 0;
   processTable[PSLOT(new_pid)]->nextZombie = NULL;
 
-  processTable[PSLOT(new_pid)]->ptsMirror = (void*)LINEAR_TO_PHYSICAL_ADDRESS(lastPT);
-  __OS_releasePages(lastPT, 1, 0, 0);
-  __OS_releasePages(pdc, 1, 0, 0);
+  processTable[PSLOT(new_pid)]->ptsMirror = (void*)mirrorPhys;
   
   /* copy the registers, except eip and esp */
   ARCH_FORK_SAVE_REGISTERS(mirror);
@@ -769,7 +625,6 @@ int _linux_syscall_fork() {
   mirror->justForked = 1;
   
   /* copy eip and esp and call the scheduler */
-  mirror->esp0 = currThread->esp0;
   ARCH_FORK_SWITCH(mirror);
 
   /* this process was just forked, restore some register */
@@ -786,7 +641,7 @@ int _linux_syscall_fork() {
 }
 
 static tss_t * copyThread(process_descriptor_t * ddest,
-			  uint32_t * pdc, pid_t pid) {
+			  paddr_t pdPhys, pid_t pid) {
   tss_t * dest;
 
   /* the child goes on with the parent's floating-point state */
@@ -794,7 +649,7 @@ static tss_t * copyThread(process_descriptor_t * ddest,
 
   dest = ddest->tss = (tss_t*)kmalloc(sizeof(tss_t));
   kmemcpy((void*)dest, (void*)currThread, sizeof(tss_t));
-  dest->pgdir = (uint32_t**)LINEAR_TO_PHYSICAL_ADDRESS(pdc);
+  THREAD_SET_SPACE(dest, pdPhys);
   dest->privSem = __OS_sem_allocateSemaphore(0);
   dest->semHeld = 0;
   dest->tid = pid;          /* the child's first thread: its pid */

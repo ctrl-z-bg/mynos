@@ -15,10 +15,8 @@ name=mynos-$version
 out=tmp/release
 dir=$out/$name
 commit=$(git rev-parse HEAD)
-case "$version" in
-    *-"$(git rev-parse --short HEAD)") ;;
-    *) echo "make-release.sh: VERSION ($version) is not this commit's: build again" >&2; exit 1 ;;
-esac
+[ "$version" = "$(tools/version.sh)" ] ||
+    { echo "make-release.sh: VERSION ($version) is not this tree's ($(tools/version.sh)): build again" >&2; exit 1; }
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     echo "make-release.sh: warning: uncommitted changes; the release says commit $commit" >&2
 fi
@@ -39,8 +37,9 @@ cp third_party/mbedtls/LICENSE "$dir/licenses/MbedTLS.txt"
 cp third_party/notty/LICENSE.md "$dir/licenses/Notty.txt"
 cp third_party/uutf/LICENSE.md "$dir/licenses/uutf.txt"
 cp third_party/kilo/LICENSE "$dir/licenses/kilo.txt"
-cp third_party/fonts/README "$dir/licenses/Terminus-font.txt"
-cp third_party/ca-certificates/README.md "$dir/licenses/ca-certificates.txt"
+cat third_party/fonts/README third_party/fonts/OFL.TXT > "$dir/licenses/Terminus-font.txt"
+cat third_party/ca-certificates/README.md third_party/ca-certificates/MPL-2.0.txt \
+    > "$dir/licenses/ca-certificates.txt"
 tools/in-container.sh dev sh -c "cp /usr/share/common-licenses/GPL-2 $dir/licenses/MyNOS-GPL-2.txt &&
     cp /opt/ocaml-*/share/doc/ocaml/LICENSE $dir/licenses/OCaml.txt"
 chmod +x "$dir/run-mynos.sh"

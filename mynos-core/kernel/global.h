@@ -32,11 +32,8 @@
 
 #define __MEMORY_BITMAP_PHY_ADDRESS (0x32000)    /* 200KB */
 
-#define PDPT_ENTRIES (1024)
-#define LAST_PDPT_INDEX (1023)
-
-#define USERMINPAGE (0x40000)
-#define USERMAXPAGE (0xFFFFF)
+/* the address space's shape: the architecture's (arch/ARCH/layout.h) */
+#include "layout.h"
 
 /* kernel messages go to the screen too (see video.c); a panic always does */
 extern int kernel_on_screen;
@@ -49,14 +46,23 @@ extern int kernel_on_screen;
 typedef char           byte_t;
 typedef unsigned char  ubyte_t;
 typedef unsigned int   uint32_t;
+typedef unsigned long long uint64_t;
+typedef unsigned short uint16_t;
+typedef unsigned char  uint8_t;
+typedef long long      int64_t;
 typedef int            int32_t;
 typedef unsigned long  ulong32_t;
 typedef long           long32_t;
 typedef unsigned short ushort16_t;
 typedef short          short16_t;
 
+/* addresses (doc/decisions/x86-64.md): as wide as a pointer, 32 bits on
+   the i386, 64 on x86-64 */
+typedef unsigned long vaddr_t;         /* linear (virtual) */
+typedef unsigned long paddr_t;         /* physical */
+
 typedef int pid_t;
-typedef unsigned int   __kernel_size_t;
+typedef unsigned long  __kernel_size_t;
 typedef __kernel_size_t size_t;
 typedef size_t ssize_t;
 typedef long int off_t;               /* Type of file sizes and offsets.  */

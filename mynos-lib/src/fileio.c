@@ -69,6 +69,34 @@ const struct mynos_sock_ops * __mynos_sock_ops;
 
 /* ---- raw Linux system calls, independent of the C library ---- */
 
+#ifdef __x86_64__
+/* x86-64: syscall, its own numbers (doc/decisions/x86-64.md) */
+#define NR_read 0
+#define NR_write 1
+#define NR_open 2
+#define NR_close 3
+#define NR_fstat 5
+#define NR_lseek 8
+#define NR_ioctl 16
+#define NR_fcntl 72
+#define NR_clock_gettime 228
+static long sys3(long n, long a, long b, long c)
+{
+  long ret;
+  __asm__ volatile ("syscall" : "=a"(ret) : "a"(n), "D"(a), "S"(b), "d"(c)
+		    : "rcx", "r11", "memory");
+  return ret;
+}
+#else
+#define NR_read 3
+#define NR_write 4
+#define NR_open 5
+#define NR_close 6
+#define NR_fstat 197                    /* fstat64 */
+#define NR_lseek 19
+#define NR_ioctl 54
+#define NR_fcntl 221                    /* fcntl64 */
+#define NR_clock_gettime 265
 static long sys3(long n, long a, long b, long c)
 {
   long ret = n;
@@ -76,6 +104,7 @@ static long sys3(long n, long a, long b, long c)
 		    : "+a"(ret) : "b"(a), "c"(b), "d"(c) : "memory");
   return ret;
 }
+#endif
 
 static long result(long r)
 {
@@ -89,7 +118,7 @@ static long result(long r)
 static long now_ms(void)
 {
   struct { long sec, nsec; } ts;
-  sys3(265 /* clock_gettime */, 1 /* CLOCK_MONOTONIC */, (long)&ts, 0);
+  sys3(NR_clock_gettime, 1 /* CLOCK_MONOTONIC */, (long)&ts, 0);
   return ts.sec * 1000 + ts.nsec / 1000000;
 }
 
@@ -385,7 +414,7 @@ int ioctl(int fd, IOCTL_REQ req, ...)
     }
     }
   }
-  return result(sys3(54 /* ioctl */, fd, req, (long)arg));
+  return result(sys3(NR_ioctl, fd, req, (long)arg));
 }
 
 /* ---- file services ---- */
@@ -846,7 +875,7 @@ int fcntl(int fd, int cmd, ...)
   va_end(ap);
   if (SOCKET(fd)) return __mynos_sock_ops->fcntl(fd, cmd, arg);
   if (cmd == F_SETFL) arg |= O_LARGEFILE;
-  return result(sys3(221 /* fcntl64 */, fd, cmd, arg));
+  return result(sys3(NR_fcntl, fd, cmd, arg));
 }
 
 /* ---- the replaced functions ---- */
@@ -868,7 +897,7 @@ int open(const char * path, int flags, ...)
   if ((s = resolve(path, name)) < 0) return -1;
   if (service(s) < 0) {
     if (s == MEMROFS)    /* no filesystem: the kernel's own file */
-      return result(sys3(5 /* open */, (long)path, flags, mode));
+      return result(sys3(NR_open, (long)path, flags, mode));
     errno = ENOENT;
     return -1;
   }
@@ -884,7 +913,7 @@ int open(const char * path, int flags, ...)
   wire_put_int(&w, f);
   if ((fd = fs_simple(s, &w, 1)) < 0) {
     if (s == MEMROFS && errno == ENOENT && !strcmp(name, KERNEL_BYTECODE))
-      return result(sys3(5, (long)path, flags, 0));
+      return result(sys3(NR_open, (long)path, flags, 0));
     return -1;
   }
   for (slot = 0; slot < FD_MAX && files[slot].used; slot++)
@@ -922,7 +951,7 @@ int close(int fd)
   slot = file_slot(fd);
 
   if (CLOSED(fd, slot)) { errno = EBADF; return -1; }
-  if (slot < 0) return result(sys3(6 /* close */, fd, 0, 0));
+  if (slot < 0) return result(sys3(NR_close, fd, 0, 0));
   files[slot].used = 0;
   free(files[slot].path);
   files[slot].path = NULL;
@@ -966,7 +995,7 @@ ssize_t read(int fd, void * buf, size_t count)
     return console_read(console_cache.port, buf, count);
   slot = file_slot(fd);
   if (CLOSED(fd, slot)) { errno = EBADF; return -1; }
-  if (slot < 0) return result(sys3(3 /* read */, fd, (long)buf, count));
+  if (slot < 0) return result(sys3(NR_read, fd, (long)buf, count));
 
   /* like a Linux regular file: all that was asked, unless the file ends */
   while (done < count) {
@@ -1001,7 +1030,7 @@ ssize_t write(int fd, const void * buf, size_t count)
       service_port(console_name(), &console_cache) >= 0)
     return console_write(console_cache.port, buf, count);
   if (CLOSED(fd, slot)) { errno = EBADF; return -1; }
-  if (slot < 0) return result(sys3(4 /* write */, fd, (long)buf, count));
+  if (slot < 0) return result(sys3(NR_write, fd, (long)buf, count));
   while (done < count) {
     ssize_t n = fs_write(slot, (const char *)buf + done, count - done);
     if (n < 0) return done ? (ssize_t)done : -1;
@@ -1021,7 +1050,7 @@ off_t lseek(int fd, off_t offset, int whence)
   slot = file_slot(fd);
 
   if (CLOSED(fd, slot)) { errno = EBADF; return -1; }
-  if (slot < 0) return result(sys3(19 /* lseek */, fd, (long)offset, whence));
+  if (slot < 0) return result(sys3(NR_lseek, fd, (long)offset, whence));
   fs_start(&w, FS_SEEK);
   wire_put_int(&w, files[slot].fd);
   wire_put_int(&w, offset);
@@ -1100,8 +1129,12 @@ int fstat(int fd, struct stat * st)
     return 0;
   }
   if (slot < 0) {
+#ifdef __x86_64__
+    struct stat k;                       /* the kernel's is the libc's */
+#else
     struct kstat64 k;
-    long ret = sys3(197 /* fstat64 */, fd, (long)&k, 0);
+#endif
+    long ret = sys3(NR_fstat, fd, (long)&k, 0);
     if (ret < 0) return result(ret);
     st->st_mode = k.st_mode;
     st->st_nlink = k.st_nlink;

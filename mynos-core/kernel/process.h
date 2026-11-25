@@ -84,7 +84,7 @@ typedef struct {
      the list of ended processes whose memory is still to be freed (it can
      be freed only from another process: see reapZombies) */
   tss_t * deadThreads;
-  uint32_t pgdirPhys;
+  paddr_t pgdirPhys;
   uint32_t memFreed;
   void * nextZombie;
 
@@ -113,7 +113,7 @@ extern tss_t * currThread;
 /* the current process's pid */
 #define CURRPID (processTable[currProcess]->pid)
 
-int __OS_touchesRamdisk(uint32_t start, uint32_t len);
+int __OS_touchesRamdisk(vaddr_t start, uint32_t len);
 
 /* the process of a pid (alive, or ended and not collected yet), or NULL:
    no such pid, or its slot holds a later process */
@@ -145,6 +145,10 @@ int allocPid(void);
 /* frees the frames of an address space given its page directory's and
    its mirror's frames (an ended process's, or a fork's that failed) */
 void __OS_freeSpaceFrames(uint32_t pdFrame, uint32_t mirrorFrame);
+/* the frames of an ended process's address space freed (arch/ARCH/space.c) */
+void freeAddressSpace(process_descriptor_t * d);
+/* fork's copy of the current address space (arch/ARCH/space.c) */
+int arch_space_fork(paddr_t * pd, paddr_t * mirror);
 void reapZombies(void);
 void freeProcessDescriptor(pid_t pid);
 

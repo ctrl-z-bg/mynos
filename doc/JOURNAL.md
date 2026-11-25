@@ -3723,3 +3723,100 @@ every key was posted as kind 1: a mouse event.
 **Lesson.** A macro defined late silently overrides a name declared
 early, with no warning; constants taken from another vocabulary (Linux's
 input events) get a prefix of their own.
+
+## 2026-11-25 — x86-64: the graphical session without text
+
+**Symptom.** On x86-64 the graphical session came up with windows,
+buttons and the logo, but not a letter: every label empty. The font
+file read fine from the toplevel, and `Gfx.text t 0 0 "hi" 0` answered
+0 cells.
+
+**Diagnosis.** `Gfx.text` has an optional limit of cells, `?max`, whose
+default is `max_int / 2`. The stub `caml_gfx_text` read it with
+`int max = Long_val(vmax)`.
+
+**Cause.** On the i386 `max_int / 2` is 2^29, which fits an `int`. At 64
+bits it is 2^61: truncated to 32 bits it is −1, and the loop
+`cells < max` never ran.
+
+**Fix.** The stub reads the limit as a `long` and clamps it to
+`0x7FFFFFFF`.
+
+**Lesson.** OCaml's `int` follows the word; C's `int` does not. A stub
+that narrows `Long_val` to `int` is safe only for values bounded by
+something real (a pixel, a length), not for "no limit" defaults built on
+`max_int`.
+
+## 2026-11-25 — Two test binaries in git
+
+**Symptom.** At 64 bits the FPU test did not start ("module is not a
+valid MyNOS program") and the stdio test was killed by a general
+protection fault, though both had been rebuilt.
+
+**Diagnosis.** In `build/x86_64/tree`, `tests/fpu/fpu.o` was a 64-bit
+object and `tests/fpu/fpu` a 32-bit program. `git ls-files` listed
+`tests/fpu/fpu` and `tests/stdio/stdio`.
+
+**Cause.** Both binaries had been committed with the sources
+(ee0aa74). The copy of the tracked files made them newer than their
+objects, so make did not link them again: the i386 programs ran on the
+x86-64 kernel.
+
+**Fix.** Out of git, into `.gitignore` next to their sources.
+
+**Lesson.** A build product in git is invisible on one architecture and
+wrong on the next. Look for ELF files among the tracked ones when a
+second toolchain arrives.
+## 2026-11-25 — The browser version, half old and half new
+
+**Symptom.** Right after MyNOS 1.0 was published, the browser version
+booted a kernel that said `v2026.11-89918d5`, the previous release, and
+its `sh.byte` failed: "has not the right magic number".
+
+**Diagnosis.** GitHub Pages served 1.0 (`index.html` said so), with
+`cache-control: max-age=600`. The page and the images' chunks have the
+same names in every release (`images/mynos-0-1048576.iso.zst`...).
+
+**Cause.** The browser still held, for up to ten minutes, the previous
+release's page and some of its chunks, and fetched the others new: one
+disk image made of two releases.
+
+**Fix.** `tools/make-web.sh` puts the chunks under a directory named by
+the version (`images/1.0/`), and the page asks for them there. A page
+held from before asks for its own directory (gone: it fails to load,
+for ten minutes at most), never for a mix. For the owner: a forced
+reload.
+
+**Lesson.** Files that belong together and change together must change
+their names together; a cache only knows names.
+
+## 2026-11-25 — x86-64: every network request four seconds late
+
+**Symptom.** On x86-64 `ask` took 14 s where the i386 took 2 to 8, the
+network test needed 124 s against 22, and in the suite the keyboard-
+driven boot fell behind the keys typed into it. Alone, the system was as
+fast as the i386 at everything tried: files, the console, `spawn`, the
+toplevel.
+
+**Diagnosis.** Timing one command at a time on both architectures, with
+the network on: `fetch` from the host 3.3 s on the i386, 7.5 s on
+x86-64; `llm` 2.6 s against 7.2. A constant of about four seconds per
+connection. `netd`'s main loop sleeps in `pthread_cond_timedwait` (at
+most 100 ms) and is woken by the card's interrupt thread.
+
+**Cause.** `_linux_syscall_futex_time64` took its fourth argument, the
+pointer to the timeout, as `uint32_t`. On x86-64 a program's stack is
+above 4 GB: the pointer was cut, the kernel found it outside the
+program's memory and answered `-EFAULT` at once. Every timed wait
+returned immediately, and `netd`'s loop spun, taking the processor from
+the other threads until each tick. Without a network card `netd` ends at
+boot, which is why the system looked as fast when tried alone.
+
+**Fix.** `vaddr_t arg4` in both futex entries. The other Linux and
+native calls x86-64 uses were checked for 32-bit parameters: all are
+values, not addresses. After it, `fetch` and `llm` take the i386's time.
+
+**Lesson.** A parameter typed `uint32_t` that holds an address is a
+64-bit bug waiting; and a fast system "alone" may only mean that the
+spinning service did not start. Measure with the same devices the slow
+case had.

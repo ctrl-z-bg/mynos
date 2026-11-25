@@ -296,6 +296,15 @@ CAMLprim value caml_mynos_version(value unit)
   return caml_copy_string(u.release);
 }
 
+/* the processor it runs on, as uname tells it: "i386", "x86_64"
+   (Mynos.machine) */
+CAMLprim value caml_mynos_machine(value unit)
+{
+  struct utsname u;
+  if (uname(&u) != 0) return caml_copy_string("unknown");
+  return caml_copy_string(u.machine);
+}
+
 /* the kernel's log: the position now (Mynos.log_position) */
 CAMLprim value caml_mynos_klog_position(value unit)
 {

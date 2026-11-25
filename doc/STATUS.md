@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-24
+Last updated: 2026-11-25
 
 ---
 
@@ -1905,3 +1905,65 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   through QMP) are all virtio's. A bug found on the way: dmaAlloc chose
   its physical pages before the page tables of its mapping were made,
   and one of those could be inside the piece (JOURNAL).
+- **2026-11-25** — x86-64 (mynos-btq.3, branch `x86-64`;
+  doc/decisions/x86-64.md): MyNOS boots on x86-64 to the shell. The
+  kernel in `arch/x86_64` (long mode, four-level page tables through a
+  direct map, the kernel's gigabyte shared, ELF64 processes, fork, the
+  native calls by `int 0x90` and Linux's x86-64 calls by `syscall`), the
+  whole user space rebuilt by the `dev-x86_64` container
+  (`tools/build-x86_64.sh`, in `build/x86_64/tree`): `init`, every
+  service, `sh`, the OCaml toplevel with 63-bit integers. Generic code
+  made 64-bit clean where it was 32-bit without saying so (multiboot,
+  `size_t`, the RAM disk's directory, `libmynos`'s casts and raw calls).
+  The i386 build and its suite unchanged (181 checks).
+- **2026-11-25** — x86-64: the disk (FAT on IDE), the network (NE2000:
+  ping, HTTPS, `httpd`) and the graphical session tried by hand; the
+  text of the session was missing (`Gfx.text`'s `max_int` default
+  narrowed to an `int`: JOURNAL).
+- **2026-11-25** — x86-64: the suite runs at 64 bits (`ARCH=x86_64
+  tools/run-tests.sh` in `build/x86_64/tree`; `run-qemu.sh` picks QEMU,
+  processor and kernel by `ARCH`). 94 of its checks pass; the rest wait
+  on the keyboard-driven session's timing and on a slow `ask` in the
+  network test (beads). `tests/fpu/fpu` and `tests/stdio/stdio`, i386
+  binaries committed by mistake, left git (JOURNAL). `abi` and `stress`
+  make their raw Linux calls in either ABI; x86-64's `times` and
+  `getrusage` give the CPU time; `brk` and `readlink` answered quietly.
+- **2026-11-25** — The book's sources join the repository in `doc/book`
+  (they were kept outside it, in `tmp/`): `build.sh` typesets
+  `doc/manual` with them; the PDF stays out of git. `doc/README.md` says
+  what `doc/` holds (mynos-1cf). The licences' texts next to what uses
+  them: `third_party/fonts/OFL.TXT` (Terminus), `third_party/
+  ca-certificates/MPL-2.0.txt` (Mozilla's authorities).
+- **2026-11-25** — Version 1.0 (the version the printed book describes).
+  `tools/version.sh` takes the version from git: `1.0` at the commit
+  tagged `v1.0`; after it the commits since, the branch when it is not
+  `main`, and the commit (`1.0+14-x86-64-591c1f4`); `-dirty` for a
+  build with changes not committed. The boot's banner adds the
+  processor (`Welcome to MyNOS 1.0 (i386)`). `make-release.sh` checks
+  `VERSION` against `version.sh` and ships the OFL and MPL texts.
+  `tests/fpu/fpu` and `tests/stdio/stdio`, binaries committed by
+  mistake, leave git (found on the x86-64 branch).
+- **2026-11-25** — The suite in about 8 minutes, not 11 (mynos-f18):
+  each section timed, and printed at the end by lane; the keyboard-driven
+  boot waits for the toplevel's prompt and for marks that sh echoes, not
+  fixed times, and is four boots at once (lanes e, f, g, h: the shell and
+  the editors; the agent, services, httpd and stdio; packages; Ctrl-C,
+  fatfs, the disk's reads and the serial terminal), each with its own
+  disk, log, sockets and host ports. Lane d (the graphical session, 480 s)
+  now sets the time.
+- **2026-11-25** — x86-64: the whole suite passes at 64 bits (181
+  checks, in the same 8 minutes as the i386). The cause of most of its
+  failures: futex's timeout pointer typed `uint32_t`, cut on x86-64, so
+  every timed wait returned at once and `netd` spun (JOURNAL). The
+  virtio graphical check clicks again until the Clock shows (it missed
+  the welcome window on a loaded machine).
+- **2026-11-25** — Both architectures' suites at once, each in a test
+  container with a network of its own (`tools/run-tests-all.sh`,
+  `tools/containers/test`); the graphical session in two boots (lanes d
+  and i: its windows are made in the same order, so displayd places
+  them where the clicks expect). i386 and x86_64, 181 checks each, in
+  335 s together (mynos-f18; they took 11 minutes for the i386 alone).
+- **2026-11-25** — `Mynos.machine ()` (uname's machine: `i386`,
+  `x86_64`): `ask`, the agent and the System window say the processor
+  they run on, not always "i386". x86-64 done (mynos-btq.3): branch
+  `x86-64` merged into `next`, both architectures' suites green.

@@ -14,11 +14,23 @@
 static int failures = 0;
 
 /* raw Linux system call with no arguments */
+#ifdef __x86_64__
+static long linux_syscall0(long n) {
+  long ret;
+  __asm__ volatile ("syscall" : "=a"(ret) : "a"(n) : "rcx", "r11", "memory");
+  return ret;
+}
+#define NR_gettid 186
+#define NR_uname 63
+#else
 static long linux_syscall0(long n) {
   long ret = n;
   __asm__ volatile ("int $0x80" : "+a"(ret) : : "memory");
   return ret;
 }
+#define NR_gettid 224
+#define NR_uname 122
+#endif
 
 static void check(const char * what, int ok) {
   printf("abi: %-40s %s\n", what, ok ? "ok" : "FAIL");
@@ -32,7 +44,8 @@ static char cow_buf[8192] __attribute__((aligned(4096)));
 static int cow_port, cow_sem, cow_ok = -1;
 
 /* a message larger than the receiver's free linear space is refused, not
-   mapped into the kernel's memory (mynos-py9) */
+   mapped into the kernel's memory (mynos-py9); the i386 only, below */
+#ifndef __x86_64__
 static int big_port, big_sem;
 
 static void * big_listener(void * unused) {
@@ -41,6 +54,7 @@ static void * big_listener(void * unused) {
   if (ch >= 0) mynos_freeChannel(ch);
   return NULL;
 }
+#endif
 
 /* a thread waiting in recv is woken when the other end is freed
    (mynos-3bb) */
@@ -326,7 +340,11 @@ static void direction_flag_checks(void) {
   uname(&u1);
   memset(&u2, 0, sizeof u2);
   /* the system call itself with DF set: the kernel copies the names */
-  __asm__ volatile("std\n\tint $0x80\n\tcld" : "=a"(r) : "a"(122 /* uname */), "b"(&u2) : "memory");
+#ifdef __x86_64__
+  __asm__ volatile("std\n\tsyscall\n\tcld" : "=a"(r) : "a"(NR_uname), "D"(&u2) : "rcx", "r11", "memory");
+#else
+  __asm__ volatile("std\n\tint $0x80\n\tcld" : "=a"(r) : "a"(NR_uname), "b"(&u2) : "memory");
+#endif
   check("DF set: a system call's copies go forward",
         r == 0 && strcmp(u1.sysname, u2.sysname) == 0 && strcmp(u1.release, u2.release) == 0);
   /* two threads switched by the timer with DF set, for 300 ms */
@@ -360,7 +378,7 @@ static volatile int tid_seen, tid_gettid;
 static void * tid_thread(void * a) {
   (void)a;
   tid_seen = mynos_threadSelf();
-  tid_gettid = (int)linux_syscall0(224 /* gettid */);
+  tid_gettid = (int)linux_syscall0(NR_gettid);
   mynos_P(tid_sem);                       /* alive while the parent forks */
   return NULL;
 }
@@ -372,7 +390,7 @@ static void thread_id_checks(void) {
   pid_t c;
   check("threadSelf: the first thread's is the pid",
         mynos_threadSelf() == getpid() &&
-        mynos_threadSelf() == (int)linux_syscall0(224));
+        mynos_threadSelf() == (int)linux_syscall0(NR_gettid));
   tid_sem = mynos_initSem(0);
   pthread_create(&t, NULL, tid_thread, NULL);
   while (!tid_seen) mynos_sleep(10000);
@@ -439,6 +457,15 @@ int main(int argc, char ** argv) {
   {
     void * kernel = (void *)0x200000;
     long r;
+#ifdef __x86_64__
+    asm volatile("syscall" : "=a"(r)
+                 : "a"(35 /* nanosleep */), "D"(kernel), "S"(0) : "rcx", "r11", "memory");
+    check("nanosleep refuses a request in the kernel", r == -14);
+    asm volatile("syscall" : "=a"(r)
+                 : "a"(230 /* clock_nanosleep */), "D"(CLOCK_MONOTONIC), "S"(0), "d"(kernel)
+                 : "rcx", "r11", "memory");
+    check("clock_nanosleep refuses a request in the kernel", r == -14);
+#else
     asm volatile("int $0x80" : "=a"(r)
                  : "a"(140), "b"(0), "c"(0), "d"(0), "S"(kernel), "D"(0) : "memory");
     check("_llseek refuses a result pointer into the kernel", r == -14);
@@ -448,6 +475,7 @@ int main(int argc, char ** argv) {
     asm volatile("int $0x80" : "=a"(r)
                  : "a"(407), "b"(CLOCK_MONOTONIC), "c"(0), "d"(kernel), "S"(0) : "memory");
     check("clock_nanosleep (time64) refuses a request in the kernel", r == -14);
+#endif
   }
 
   {
@@ -467,6 +495,10 @@ int main(int argc, char ** argv) {
     mynos_freeChannel(ch);
   }
 
+#ifndef __x86_64__
+  /* (the i386 only: its 3 GB of user space are filled with 64 MB
+     reservations; x86-64's 512 GB are not, and the page tables of a
+     try would fill a small machine's memory) */
   {
     enum { CHUNK = 64 << 20, MAXCHUNKS = 64 };
     void * chunk[MAXCHUNKS];
@@ -493,6 +525,7 @@ int main(int argc, char ** argv) {
     mynos_freeChannel(ch);
     check("and the system goes on", getpid() > 0);
   }
+#endif
 
   /* the RAM disk's pages (0x40400000 up, when there is one) are every
      process's: munmap refuses them (mynos-q5b) */

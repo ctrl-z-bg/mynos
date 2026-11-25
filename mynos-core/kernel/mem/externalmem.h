@@ -22,6 +22,7 @@
 #define __EXTERNALMEM_H__
 
 #include "global.h"
+#include "mem/mem.h"
 
 /* map npages of the current process to process pid 
    it returns the first linear page allocated for pid
@@ -36,8 +37,8 @@ int32_t __OS_mapPagesTo(pid_t pid, uint32_t lpage,
 uint32_t * __mem_mapFrame(uint32_t phyPage, uint32_t * saved);
 /* another process's page table entry: read (NULL: no page table) or
    written (the page table made if needed); one window, as above */
-uint32_t * __mem_externalPTE(pid_t pid, uint32_t laddr);
-void __mem_setExternalPTE(pid_t pid, uint32_t laddr, uint32_t entry);
+pte_t * __mem_externalPTE(pid_t pid, uint32_t laddr);
+void __mem_setExternalPTE(pid_t pid, uint32_t laddr, pte_t entry);
 void __mem_unmapFrame(uint32_t saved);
 
 #endif

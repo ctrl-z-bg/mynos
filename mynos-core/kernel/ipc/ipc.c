@@ -40,9 +40,9 @@ int32_t __OS_ipc_send(int32_t c, void * start, uint32_t size,
 		      uint32_t flags) {
   uint32_t spage, tpage;  // start and terminal pages
   int32_t destpage;
-  int32_t destpageaddr;
+  vaddr_t destpageaddr;
   msg_t * msg;
-  uint32_t uintstart = (uint32_t)start;
+  vaddr_t uintstart = (vaddr_t)start;
   unichannel_t * channel;
   int32_t tmp;
   int32_t justSync = (start == NULL);

@@ -111,3 +111,12 @@ uint32_t gdt_get_free_index() {
 
   return 0;
 }
+
+/* (moved from mem/mem.c) */
+void SEG_createStandardDescriptor(uint32_t * address,
+				  uint32_t base, uint32_t limit,
+				  ushort16_t control) {
+  union DT_entry newdesc = stnd_desc(base, limit, control);
+
+  kmemcpy((void *)address, (const void *)&newdesc, sizeof(union DT_entry));
+}

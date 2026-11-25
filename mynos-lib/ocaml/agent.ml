@@ -344,7 +344,7 @@ let execute ~emit ~confirm ?package_tools ?extra service_tools name input =
 let system_prompt services =
   String.concat "\n" [
     "You are an agent inside MyNOS, a small microkernel operating system \
-     written in C and OCaml, running on i386. You carry out the user's \
+     written in C and OCaml, running on " ^ Mynos.machine () ^ ". You carry out the user's \
      task with your tools, step by step: look before you change things, \
      check what your commands did. When the task is done (or cannot be \
      done), answer with a short final report and no tool call. Answer in \

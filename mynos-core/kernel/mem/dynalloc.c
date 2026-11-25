@@ -86,9 +86,9 @@ static void report(const char * what, void * ptr, void * caller)
   printk("kernel heap: ");
   printk((char *)what);
   printk(" ");
-  print_ulong_hex((uint32_t)ptr);
+  print_ulong_hex((unsigned long)ptr);
   printk(" (caller ");
-  print_ulong_hex((uint32_t)caller);
+  print_ulong_hex((unsigned long)caller);
   printk(")\n");
   kernel_on_screen = on_screen;
 }

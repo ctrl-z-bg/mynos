@@ -60,73 +60,11 @@ void __print_free_phy_pages() {
 }
 
 extern void softReset();
+/* the idle thread, the task register (arch/ARCH/thread.c) */
+void tsksw(void);
 
 extern process_descriptor_t * processTable[];
 extern uint32_t numProcess;
-ushort16_t * idle_tssd_selector;
-
-tss_t THEtss;
-
-void tsksw() {
-  ushort16_t gdt_index, tssd_gdt_selector;
-
-  /* allocate a new tss */
-  processTable[0] = 
-    (process_descriptor_t*)kmalloc(sizeof(process_descriptor_t));
-  processTable[0]->tss = (tss_t*)kmalloc(sizeof(tss_t));
-  kmemcpy(processTable[0]->name, "kernel", 7);
-  processTable[0]->faultsAlloc = processTable[0]->faultsCow = 0;
-  kbzero(processTable[0]->childWaiting, sizeof processTable[0]->childWaiting);
-  processTable[0]->tss->tls_base = 0;
-  processTable[0]->tss->tls_limit = 0;
-  processTable[0]->tss->tls_pages = 0;
-
-  /* set a tss for the outcoming process */
-  processTable[0]->tss->pgdir = (uint32_t**)0x100000;
-  processTable[0]->tss->io_bitmap_offset = sizeof(tss_t)<<16;
-  processTable[0]->tss->ldt = 0;
-  processTable[0]->isAlive = 1;
-  processTable[0]->tss->justForked = 0;
-
-  processTable[0]->numThreads = 1;
-  (processTable[0]->tss)->next = (processTable[0]->tss)->prev = NULL;
-  processTable[0]->pid = 0;
-  processTable[0]->tss->pid = 0;
-  processTable[0]->tss->tid = 0;
-  processTable[0]->tss->clearTid = NULL;
-  processTable[0]->tss->kstack = 0;
-
-  processTable[0]->tss->timeToWake = 0;
-
-  processTable[0]->tss->cs = GDT_OS_CODE_SEL;
-  processTable[0]->tss->ss0 = GDT_OS_DATA_SEL;
-
-  currThread = processTable[0]->tss;
-
-  // insert the thread into readyQueue
-  readyQueueInsert(currThread);
-
-  //SEM
-  processTable[0]->tss->privSem = __OS_sem_allocateSemaphore(0);
-  processTable[0]->tss->semHeld = 0;
-
-  gdt_index = gdt_get_free_index();
-  tssd_gdt_selector = (uint32_t)gdt_index << 3;
-
-  kmemcpy(&THEtss, processTable[0]->tss, sizeof(tss_t));
-
-  /* set the tssd in the gdt, for the incoming and the outcoming processes */
-  gdt_set_entry(gdt_index,
-		(uint32_t)(&THEtss),
-		sizeof(tss_t), D_TSS);
-
-  /* load the task register with the relative address in the gdt of the
-     current process's tssd */
-  idle_tssd_selector = (ushort16_t*)((uint32_t)tssd_gdt_selector);
-  arch_load_task_register(tssd_gdt_selector);
-
-}
-
 #ifdef RAMDISK
 void * ramdisk;
 uint32_t ramdisk_len;
@@ -193,25 +131,25 @@ void mynos_main(multiboot_info_t *boot_info) {
      reset the grub information
   */
   if (boot_info->flags & 0x4) {         /* a command line */
-    char * s = (char *)boot_info->cmdline;
+    char * s = (char *)(vaddr_t)boot_info->cmdline;
     for (i = 0; s[i] && i < (int)sizeof(kernel_cmdline) - 1; i++)
       kernel_cmdline[i] = s[i];
     kernel_cmdline[i] = 0;
   }
-  module = (module_t *)boot_info->mods_addr;
+  module = (module_t *)(vaddr_t)boot_info->mods_addr;
   nmodules = boot_info->mods_count;
   /* the bootloader's structures, read after init_memory: no DMA area
      (mem.c) on them */
-  mem_reserveAtBoot((uint32_t)boot_info, sizeof(multiboot_info_t));
-  mem_reserveAtBoot((uint32_t)module, nmodules * sizeof(module_t));
+  mem_reserveAtBoot((paddr_t)boot_info, sizeof(multiboot_info_t));
+  mem_reserveAtBoot((paddr_t)module, nmodules * sizeof(module_t));
   for (i = 0; i < boot_info->mods_count; i++) {
-    modinfo[i].start = (uint32_t*)module[i].mod_start;
+    modinfo[i].start = (uint32_t*)(vaddr_t)module[i].mod_start;
     modinfo[i].len = module[i].mod_end - module[i].mod_start;
     mem_reserveAtBoot(module[i].mod_start, modinfo[i].len);
     if (module[i].string)
       mem_reserveAtBoot(module[i].string, MODULE_CMDLINE);
     if (i < MAXMODULES && module[i].string) {
-      char * s = (char *)module[i].string;
+      char * s = (char *)(vaddr_t)module[i].string;
       int j;
       for (j = 0; s[j] && j < MODULE_CMDLINE - 1; j++)
 	module_cmdline[i][j] = s[j];
@@ -225,7 +163,7 @@ void mynos_main(multiboot_info_t *boot_info) {
 
   clear_screen();
   video_font_init();
-  printk("Welcome to MyNOS - v" MYNOS_VERSION "\n\n");
+  printk("Welcome to MyNOS " MYNOS_VERSION " (" ARCH_MACHINE ")\n\n");
 
   init_memory();
 
@@ -358,7 +296,7 @@ void mynos_main(multiboot_info_t *boot_info) {
     //for (i = 0; i < boot_info->mods_count; i++) {
     for (i = 0; i < nmodules; i++) {
       //module = (module_t*)((uint32_t*)(boot_info->mods_addr) + i);
-      modinfo[i].start = (uint32_t*)module[i].mod_start;
+      modinfo[i].start = (uint32_t*)(vaddr_t)module[i].mod_start;
       modinfo[i].len = module[i].mod_end - module[i].mod_start;
       if (i < MAXMODULES && module_cut[i]) {
 	printk("module command line cut at ");
