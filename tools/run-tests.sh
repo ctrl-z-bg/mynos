@@ -1176,8 +1176,9 @@ s7_packages() {
     # installed as its bytecode, windtree compiled from its sources (-s);
     # both found on PATH (windtree has no session to open its window in),
     # 2048 removed
-    tools/type-keys.py "$mon7" "MYNOS_PKG_URL=http://10.0.2.2:$files_port; pkg list\\n"
-    waitfor "A tree in the wind" 30
+    # (the list's end waited for, not one of its lines: typed while it was
+    # still printing, pkg install lost its first letter)
+    shcmd "MYNOS_PKG_URL=http://10.0.2.2:$files_port; pkg list" 30
     tools/type-keys.py "$mon7" 'pkg install 2048\n'
     waitfor "pkg: 2048 1.0 installed" 60
     tools/type-keys.py "$mon7" 'pkg install -s windtree\n'

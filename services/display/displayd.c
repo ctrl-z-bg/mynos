@@ -411,6 +411,11 @@ struct window {
   int x, y, w, h;                      /* the content, on screen */
   char title[64];
   unsigned int * pix;                  /* the program's buffer, shared */
+  /* displayd's copy of it, what the screen shows: taken at attach,
+     resize and damage, the frames the program said were done. The
+     program draws in [pix] while displayd composes (another processor):
+     composed from [pix], a frame half drawn showed (GavML flickered) */
+  unsigned int * copy;
   mynos_msg_t * msg;
   struct event q[MAXEV];
   int qh, qn;
@@ -647,6 +652,27 @@ static int sound_volume(int level)
   return res;
 }
 
+/* displayd's copy of a window's pixels (struct window's [copy]): the
+   whole, at attach and resize; a rectangle, at damage */
+static void take_copy(struct window * w)
+{
+  free(w->copy);
+  w->copy = malloc((size_t)w->w * w->h * 4);
+  if (w->copy) memcpy(w->copy, w->pix, (size_t)w->w * w->h * 4);
+}
+
+static void copy_rect(struct window * w, int x, int y, int cw, int ch)
+{
+  int r;
+  if (!w->copy || !w->pix) return;
+  if (x < 0) { cw += x; x = 0; }
+  if (y < 0) { ch += y; y = 0; }
+  if (x + cw > w->w) cw = w->w - x;
+  if (y + ch > w->h) ch = w->h - y;
+  for (r = y; r < y + ch && cw > 0; r++)
+    memcpy(w->copy + r * w->w + x, w->pix + r * w->w + x, (size_t)cw * 4);
+}
+
 static void draw_window(struct window * w, int focused)
 {
   int fx0 = w->x - 1, fy0 = w->y - TITLE - 1, fx1 = w->x + w->w + 1, fy1 = w->y + w->h + 1;
@@ -672,8 +698,9 @@ static void draw_window(struct window * w, int focused)
   ix1 = w->x + w->w < cx1 ? w->x + w->w : cx1;
   if (ix1 <= ix0) return;
   for (y = (w->y > cy0 ? w->y : cy0); y < w->y + w->h && y < cy1; y++) {
-    if (w->pix)
-      memcpy(back + y * W + ix0, w->pix + (y - w->y) * w->w + (ix0 - w->x),
+    if (w->copy || w->pix)
+      memcpy(back + y * W + ix0,
+	     (w->copy ? w->copy : w->pix) + (y - w->y) * w->w + (ix0 - w->x),
 	     (ix1 - ix0) * 4);
     else {
       int x;
@@ -895,6 +922,8 @@ static void remove_window(int slot)
   if (w->msg) mynos_freeMsg(&w->msg);
   w->msg = NULL;
   w->pix = NULL;
+  free(w->copy);
+  w->copy = NULL;
   for (i = j = 0; i < norder; i++) if (order[i] != slot) order[j++] = order[i];
   norder = j;
   if (focus == slot) {
@@ -1706,6 +1735,7 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     if (w->msg) mynos_freeMsg(&w->msg);
     w->msg = m;
     w->pix = (unsigned int *)m->start;
+    take_copy(w);
     w->shown = 1;
     BAR_CHANGED();
     reply_unit(ch);
@@ -1718,12 +1748,11 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     int dw = wire_get_int(&r), dh = wire_get_int(&r);
     END();
     if (!(w = owned(ch, wid, caller))) return;
-    /* the screen first, then the reply: the window's pixels are the
-       program's too, and a program answered first drew its next frame
-       in them while they were being copied, on another processor (GavML
-       flickered on x86-64 and AArch64, not on the i386) */
-    compose(w->x + x, w->y + y, w->x + x + dw, w->y + y + dh);
+    /* the frame into displayd's copy, then the reply: the program may
+       draw its next one at once (another processor) */
+    copy_rect(w, x, y, dw, dh);
     reply_unit(ch);
+    compose(w->x + x, w->y + y, w->x + x + dw, w->y + y + dh);
     break;
   }
   case 4: {                                        /* next_event */
@@ -1831,6 +1860,7 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     w->msg = m;
     w->pix = (unsigned int *)m->start;
     w->w = ww; w->h = hh;
+    take_copy(w);
     /* on the screen whole: moved up and left if it grew past its edge */
     if (w->x + ww > W - 1) w->x = W - 1 - ww;
     if (w->y + hh > H - 1) w->y = H - 1 - hh;

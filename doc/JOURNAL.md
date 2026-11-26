@@ -4236,8 +4236,12 @@ on another processor displayd was still copying, and sometimes the
 screen got the background without the sprites. On one processor the
 program does not run until displayd has done.
 
-**Fix.** displayd copies to the screen, then answers: `damage` returns
-once the frame is on the screen.
+**Fix.** First, displayd answered `damage` after copying: not enough,
+since displayd also composes for other reasons (the pointer, the clock,
+other windows) while the program draws. Then the real one: displayd
+keeps a copy of each window's pixels, taken at attach, resize and
+damage (the frames the program said were done), and composes from it,
+never from the program's live pixels.
 
-**Lesson.** "Done" sent before the work is done is only safe while
-nobody else can run meanwhile.
+**Lesson.** Two processors drawing in and reading from one buffer need
+a hand-over: here the copy taken at the program's word.
