@@ -55,6 +55,28 @@ void init_pics()
   C(GICC_CTLR) = 1;
 }
 
+/* a processor's own part of the GIC (the distributor's registers of
+   interrupts 0-31 are banked: each processor has its own): the software
+   interrupts (0-15, the IPIs) and its timer on, their priority, its
+   interface on. Processor 0 and the others (smp.c) */
+#define GICD_SGIR 0xF00
+void gic_cpu_init(void)
+{
+  int i;
+  for (i = 0; i < 32; i += 4) D(GICD_IPRIORITYR + i) = 0xA0A0A0A0;
+  D(GICD_ISENABLER) = 0xFFFFu | (1u << GIC_TIMER);
+  C(GICC_PMR) = 0xF0;
+  C(GICC_CTLR) = 1;
+}
+
+/* a software interrupt to one processor (its GIC interface's number:
+   QEMU virt's processors are numbered as their interfaces) */
+void gic_sgi(uint32_t cpu, uint32_t sgi)
+{
+  __asm__ volatile ("dsb ishst" : : : "memory");
+  D(GICD_SGIR) = (1u << (16 + cpu)) | (sgi & 15);
+}
+
 void enable_irq(ushort16_t irq_no)  { gic_enable(GIC_SPI_BASE + irq_no); }
 void disable_irq(ushort16_t irq_no) { gic_disable(GIC_SPI_BASE + irq_no); }
 

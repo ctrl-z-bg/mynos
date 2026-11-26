@@ -83,6 +83,18 @@ the thread's TLS in `TPIDR_EL0` (saved per thread, as FS's base).
 on the PL011 (the PC's COM2: the suite reads it). One processor first;
 SMP (PSCI's `CPU_ON`, SGIs as IPIs) after the system runs.
 
+  SMP (2026-11-26), as x86-64's (doc/decisions/smp.md): four processors
+  by default (`SMP=N`), started by PSCI's `CPU_ON` before the first
+  process (`_start_secondary` in start.S, `ap_main` in smp.c). Each has
+  its GIC interface (the distributor's registers of interrupts 0-31 are
+  banked), its virtual timer (a slice every 10 ms; processor 0's keeps
+  the time at 1000 Hz), its idle thread. Software interrupt 0 is the
+  IPI (a thread ready, a process ended). No TLB shootdown: `TLBI ...IS`
+  reaches every processor. Device interrupts stay on processor 0. A
+  processor started switches to the kernel's tables before it touches
+  its stack: the stack is a page of those tables, elsewhere in the
+  boot's.
+
 **8. Devices** (btq.2's drivers, in user space): virtio over PCI
 Express. Without firmware nobody assigns the PCI devices' memory
 windows: the PCI code does, from the window the device tree gives. The

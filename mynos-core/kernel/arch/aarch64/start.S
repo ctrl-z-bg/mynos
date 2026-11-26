@@ -144,6 +144,74 @@ park:
 	wfe
 	b	park
 
+/*
+ * The other processors (doc/decisions/smp.md): PSCI's CPU_ON starts one
+ * here, MMU off, at EL1 (or EL2: dropped as above), x0 its number. The
+ * boot's tables again (still there), the MMU on, up to the kernel's
+ * addresses, then the kernel's own tables (ap_ttbr0: processor 0's
+ * kernel_pml4, its real address) before the stack is touched: the stack
+ * processor 0 left in ap_stack_top is a page of the kernel's tables, at
+ * another place in the boot's (what was written there before the change
+ * was not there after it: ap_main's number read back as 0), then
+ * ap_main (smp.c).
+ */
+	.global _start_secondary
+_start_secondary:
+	mov	x19, x0
+	mrs	x0, CurrentEL
+	lsr	x0, x0, #2
+	cmp	x0, #2
+	b.ne	1f
+	mov	x0, #(1 << 31)
+	msr	hcr_el2, x0
+	mov	x0, #3
+	msr	cnthctl_el2, x0
+	msr	cntvoff_el2, xzr
+	mov	x0, #0x3c5
+	msr	spsr_el2, x0
+	adr	x0, 1f
+	msr	elr_el2, x0
+	eret
+1:	ldr	x0, =MAIR_VALUE
+	msr	mair_el1, x0
+	mrs	x1, id_aa64mmfr0_el1
+	and	x1, x1, #7
+	ldr	x0, =TCR_VALUE
+	orr	x0, x0, x1, lsl #32
+	msr	tcr_el1, x0
+	adrp	x0, pt_l0_lo
+	add	x0, x0, :lo12:pt_l0_lo
+	msr	ttbr0_el1, x0
+	adrp	x0, pt_l0_hi
+	add	x0, x0, :lo12:pt_l0_hi
+	msr	ttbr1_el1, x0
+	mov	x0, #(3 << 20)
+	msr	cpacr_el1, x0
+	isb
+	tlbi	vmalle1
+	dsb	nsh
+	isb
+	ldr	x0, =SCTLR_VALUE
+	msr	sctlr_el1, x0
+	isb
+	ldr	x0, =secondary_high
+	br	x0
+secondary_high:
+	ldr	x0, =ap_ttbr0
+	ldr	x0, [x0]
+	dsb	ish
+	msr	ttbr0_el1, x0
+	isb
+	tlbi	vmalle1
+	dsb	nsh
+	isb
+	ldr	x0, =ap_stack_top
+	ldr	x0, [x0]
+	mov	sp, x0
+	mov	x0, x19
+	bl	ap_main
+	b	park
+
 	.section .bss
 	.balign 4096
 	.global pt_l0_lo, pt_l1_lo, pt_l2_kern, pt_l0_hi, pt_l1_dm, pt_l1_dev

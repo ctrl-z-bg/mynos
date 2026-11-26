@@ -75,5 +75,6 @@
 void init_pit(int freq, unsigned char channel);
 void pit_ISR();
 void pit_handler();
+void ap_timer_handler(void);  /* the other processors' timers (smp.c) */
 
 #endif

@@ -63,7 +63,7 @@ fi
 case ${ARCH:-i386} in
     x86_64) qemu=qemu-system-x86_64 cpu=qemu64,+rdrand,+rdseed smp=${SMP:-4}   # four processors (mynos-btq.5)
             kernel=${KERNEL:-$root/build/x86_64/kernel.elf} ;;
-    aarch64) qemu=qemu-system-aarch64 cpu=cortex-a72 smp=     # one processor, so far
+    aarch64) qemu=qemu-system-aarch64 cpu=cortex-a72 smp=${SMP:-4}  # four processors, as x86-64
             kernel=${KERNEL:-$root/build/aarch64/kernel.elf} ;;
     *)      qemu=qemu-system-i386 cpu=qemu32,+rdrand,+rdseed smp=      # one processor
             kernel=${KERNEL:-$root/mynos-core/kernel/kernel.elf} ;;

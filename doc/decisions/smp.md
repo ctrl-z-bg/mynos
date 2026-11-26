@@ -30,7 +30,8 @@ is not: it is written for one processor, whose critical section is
   process (until 2026-11-25 after, in processor 0's idle thread: the
   first programs saw one processor); programs learn how many there are
   from `sched_getaffinity` (`nproc`, `sysconf`, OCaml's
-  `Domain.recommended_domain_count`).
+  `Domain.recommended_domain_count`). AArch64 has the same design since
+  2026-11-26 (doc/decisions/aarch64.md, choice 7).
 - **Devices' interrupts stay on the 8259, delivered to processor 0
   only.** The IOAPIC would spread them, which no device needs today.
   Processors talk with inter-processor interrupts (IPIs): to wake a

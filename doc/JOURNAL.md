@@ -4078,6 +4078,33 @@ command line, killed its own shell.
 **Lesson.** A port I/O table in the kernel, which was there for the log,
 was the shortest way to a serial console: the driver did not change.
 
+## 2026-11-26 — AArch64 SMP: a stack seen through two page tables
+
+**Symptom.** The other processors started ("Processor 0 started", three
+times), `tests/smp` failed with two of them: `pthread_join` returned
+ETIMEDOUT without a timeout, and the counters were short.
+
+**Diagnosis.** A futex wait woke with its waiter still listed: the
+thread's private semaphore had gone below zero, never V'd. A P had
+returned from `sched()` without being woken: `sched` found nothing else
+ready and, with no idle thread on that processor (`arch_cpu()->idle` was
+0), went back to the thread that was blocking. `ap_main` did set it: it
+printed `c->idle` right, and `arch_cpu()->idle` 0 just after. `c` was
+`&cpus[0]`, and its number 0.
+
+**Cause.** A processor started by PSCI turns its MMU on with the boot's
+tables (`pt_l0_lo`). Its stack, a page the kernel allocated, is mapped by
+the kernel's tables (`kernel_pml4`) and is elsewhere in the boot's.
+`ap_main` saved its argument on the stack, switched to the kernel's
+tables, and read it back from another physical page: 0. So every
+processor wrote its idle thread into processor 0's `struct cpu`.
+
+**Fix.** start.S switches to the kernel's tables (their real address,
+`ap_ttbr0`) before it touches the stack.
+
+**Lesson.** Changing the page tables under one's own stack is changing
+the stack.
+
 ## 2026-11-26 — x86-64 with KVM: no graphics (PCI's two ports)
 
 **Symptom.** `ARCH=x86_64 tools/run-demo.sh`: `gui` answered "no display

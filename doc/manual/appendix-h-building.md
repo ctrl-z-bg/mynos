@@ -206,7 +206,8 @@ again with an empty disk, delete it and build. It is not in git (`*.img`).
 
 **Other architectures.** `ARCH=x86_64 tools/run-demo.sh` runs the
 x86-64 build, with four processors (`SMP=N` for another number);
-`ARCH=aarch64 tools/run-demo.sh` the AArch64 one on QEMU's `virt`
+`ARCH=aarch64 tools/run-demo.sh` the AArch64 one, four processors too,
+on QEMU's `virt`
 machine, with virtio's disk, network card, keyboard, tablet and GPU.
 AArch64 has no text screen: its console is the terminal, on the
 machine's one UART (which plays COM2: the log and a terminal's keys);

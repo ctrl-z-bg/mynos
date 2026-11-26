@@ -47,6 +47,30 @@ void pit_ISR() { }
 
 uint32_t timerTicks = 0;
 
+/* the other processors' timers (smp.c): a time slice, 10 ms, as
+   x86-64's LAPIC timers: the CPU time of the process found running, a
+   new round. Processor 0's timer keeps the time (pit_handler) */
+static void ap_timer_arm(void)
+{
+  __asm__ volatile ("msr cntv_tval_el0, %0; msr cntv_ctl_el0, %1"
+                    : : "r"(tick_counts * SCHED_TICKS), "r"(1UL));
+}
+
+void ap_timer_start(void)
+{
+  /* programs may read the virtual counter here too (init_pit's) */
+  __asm__ volatile ("msr cntkctl_el1, %0" : : "r"(1UL << 1));
+  ap_timer_arm();
+}
+
+void ap_timer_handler(void)
+{
+  ap_timer_arm();
+  if (processTable[currProcess])
+    processTable[currProcess]->cpuTicks += SCHED_TICKS;
+  sched();
+}
+
 void pit_handler() {
   timer_arm();
   timerTicks++;

@@ -2033,3 +2033,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
 - **2026-11-26** — x86-64 under KVM had no graphics since SMP: drivers
   read PCI's configuration space at once through the same two ports.
   The kernel does it now (native call 103). JOURNAL.
+- **2026-11-26** — SMP on AArch64 (mynos-btq.6): four processors on QEMU
+  `virt` by default, started by PSCI before the first process, software
+  interrupts as IPIs, no TLB shootdown needed; `tests/smp` passes on 2
+  and 4. A secondary processor's stack read through the boot's tables
+  (JOURNAL). Open: with four processors displayd crashes in musl's free,
+  from mynos_freeMsg in its main loop, when the graphical session runs
+  (the suite's lanes d and i fail; one processor never): on branch
+  `aarch64` only, `next` stays at the last green state (mynos-btq.6).

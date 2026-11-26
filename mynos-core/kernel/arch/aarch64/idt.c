@@ -68,7 +68,12 @@ static void irq(void)
      back. The kernel runs with interrupts masked meanwhile */
   gic_eoi(iar);
   if (id == GIC_TIMER) {
-    pit_handler();
+    if (arch_cpu()->id == 0) pit_handler();
+    else ap_timer_handler();
+    return;
+  }
+  if (id < 16) {                                  /* an IPI (smp.c): a thread */
+    sched();                                      /* may be ready, a process ended */
     return;
   }
   if (id >= GIC_SPI_BASE && id < GIC_SPI_BASE + 16 &&
@@ -118,7 +123,20 @@ static void process_fault(struct frame * f, const char * what)
   sched();
 }
 
+static void arm_trap_body(struct frame * f);
+
+/* a process ended by another processor while this one ran its thread
+   (or waited for the big lock to enter for it): the thread goes no
+   further, into the kernel or back (as x86-64's entry and trap_return) */
 void arm_trap(struct frame * f)
+{
+  int user = f->vector == V_EL0_SYNC || f->vector == V_EL0_IRQ;
+  if (user) smp_leave_if_dead();
+  arm_trap_body(f);
+  if (user) smp_leave_if_dead();
+}
+
+static void arm_trap_body(struct frame * f)
 {
   uint32_t ec = f->esr >> 26;
   switch (f->vector) {
