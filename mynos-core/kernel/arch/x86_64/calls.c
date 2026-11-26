@@ -76,7 +76,7 @@ extern long _mynos_syscall_mapPhysical(), _mynos_syscall_dmaArea(), _mynos_sysca
 extern int _mynos_syscall_spawn(), _mynos_syscall_log(), _mynos_syscall_trace();
 extern int _mynos_syscall_processes(), _mynos_syscall_kill(), _mynos_syscall_klog();
 extern int _mynos_syscall_faults(), _mynos_syscall_pager(), _mynos_syscall_procstat();
-extern int _mynos_syscall_enableIrq(), _mynos_syscall_disableIrq();
+extern int _mynos_syscall_enableIrq(), _mynos_syscall_disableIrq(), _mynos_syscall_pciConfig();
 extern int _mynos_syscall_setTimer();
 extern int __OS_threadCreate();
 extern void __OS_threadExit(void *), __OS_fillStats(void *);
@@ -101,6 +101,7 @@ static const struct { int n; call_t f; int wide; } natives[] = {
   { 36, C(_mynos_syscall_faults) }, { 37, C(_mynos_syscall_pager) },
   { 38, C(_mynos_syscall_procstat) }, { 39, C(_mynos_syscall_dmaAlloc), 1 },
   { 100, C(_mynos_syscall_enableIrq) }, { 101, C(_mynos_syscall_disableIrq) },
+  { 103, C(_mynos_syscall_pciConfig) },
   { 200, C(__OS_threadCreate) }, { 201, C(native_threadExit), 1 },
   { 202, C(__OS_threadSelf) }, { 300, C(_mynos_syscall_setTimer) },
   { 400, C(native_fillStats), 1 },

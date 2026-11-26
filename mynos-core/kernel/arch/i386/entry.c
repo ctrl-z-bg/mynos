@@ -94,6 +94,8 @@ __asm__ (".pushsection .text\n" \
 	 "   je .mynos_enableIrq\n"\
 	 "   cmpl $101, %eax\n"\
 	 "   je .mynos_disableIrq\n"\
+	 "   cmpl $103, %eax\n"\
+	 "   je .mynos_pciConfig\n"\
 	 "   cmpl $200, %eax\n"\
 	 "   je .mynos_createThread\n"\
 	 "   cmpl $201, %eax\n"\
@@ -272,6 +274,13 @@ __asm__ (".pushsection .text\n" \
 	 "   pushl %ebx\n"\
 	 "   call _mynos_syscall_pager\n"\
 	 "   addl $20, %esp\n"\
+	 "   jmp .exit_mynos_syscall\n"\
+	 ".mynos_pciConfig:\n"\
+	 "   pushl %edx\n"\
+	 "   pushl %ecx\n"\
+	 "   pushl %ebx\n"\
+	 "   call _mynos_syscall_pciConfig\n"\
+	 "   addl $12, %esp\n"\
 	 "   jmp .exit_mynos_syscall\n"\
 	 ".mynos_dmaAlloc:\n"\
 	 "   pushl %ecx\n"\

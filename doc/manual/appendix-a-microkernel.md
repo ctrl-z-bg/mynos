@@ -321,6 +321,7 @@ The native calls:
 | 39 | `dmaAlloc`: RAM in one physical piece, mapped, and its physical address (`io` only) | B |
 | 100, 101 | `enableIrq`, `disableIrq` | A.7 |
 | 102 | `portio`: on AArch64, which has no I/O ports, a driver's `inportb` and `outportb`; the kernel answers the ports its machine has (COM2 on the UART), the rest read 0xFF (`io` only) | — |
+| 103 | `pciConfig`: on the PC, a register of PCI's configuration space read or written, the address (port 0xCF8) and the data (0xCFC) together: another driver's address cannot come in between (`io` only; libmynos's `pci_read32`, `pci_write32`) | — |
 | 200, 201, 202 | `createThread`, `exitThread`, `selfThread` | A.4 |
 | 300 | `setTimer` | A.5 |
 | 400 | `stats`: counters for `free` and the System window | — |

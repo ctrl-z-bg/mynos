@@ -88,10 +88,11 @@ static inline unsigned int inl(unsigned short port) { (void)port; return 0xFFFFF
 
 /* ---- the card ---- */
 
+/* libmynos's (the kernel does the two port accesses together: another
+   driver's address cannot come in between) */
 static unsigned int pci_read(int bus, int dev, int fn, int reg)
 {
-  outl(0xCF8, 0x80000000u | (bus << 16) | (dev << 11) | (fn << 8) | (reg & 0xFC));
-  return inl(0xCFC);
+  return pci_read32(bus, dev, fn, reg);
 }
 
 /* QEMU's standard VGA (1234:1111): its frame buffer, the first BAR */

@@ -4078,6 +4078,28 @@ command line, killed its own shell.
 **Lesson.** A port I/O table in the kernel, which was there for the log,
 was the shortest way to a serial console: the driver did not change.
 
+## 2026-11-26 — x86-64 with KVM: no graphics (PCI's two ports)
+
+**Symptom.** `ARCH=x86_64 tools/run-demo.sh`: `gui` answered "no display
+service"; displayd had found "no Bochs VGA". The suite (no KVM) passed,
+and so did the demo with `KVM=`. It had worked before x86-64 had four
+processors.
+
+**Cause.** PCI's configuration space is read in two port accesses: the
+address to 0xCF8, then the data from 0xCFC. displayd and libmynos (netd,
+vblkd, consoled's virtio keyboard) each did both. At boot they all look
+for their devices at once; with KVM four processors really run them
+together, and another driver's address came in between: displayd read
+someone else's register. Under emulation the window was too small to
+be hit; on the i386 a timer switch between the two could do the same.
+
+**Fix.** A native call (103) does both accesses in the kernel (interrupts
+off, the big lock); libmynos's `pci_read32` and `pci_write32`, and
+displayd, use it.
+
+**Lesson.** A pair of ports holding a state between two accesses is a
+lock nobody takes. On one processor it was safe by luck.
+
 ## 2026-11-26 — The kernel's heap corrupted at boot, under load
 
 **Symptom.** The suite on AArch64 (emulated, nine lanes at once): in the

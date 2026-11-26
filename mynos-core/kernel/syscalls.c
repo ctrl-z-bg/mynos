@@ -159,4 +159,27 @@ int _mynos_syscall_disableIrq(ushort16_t n) {
   return 0;
 }
 
+#if defined(__i386__) || defined(__x86_64__)
+/* pciConfig (103): a register of PCI's configuration space read (op 0,
+   the value) or written (op 1), at a configuration address (bit 31 set,
+   bus, device, function, register: the 0xCF8 port's). Two port accesses,
+   the address then the data: done by drivers themselves, another driver
+   could put its own address in between. At boot displayd, netd, vblkd
+   and consoled all look for their devices: with four processors under
+   KVM, displayd found no VGA. Here, in a call (interrupts off, the big
+   lock), nobody comes in between. The io privilege only. */
+int32_t _mynos_syscall_pciConfig(uint32_t op, uint32_t address, uint32_t value) {
+  if (!(processTable[currProcess]->privileges & MYNOS_PRIV_IO))
+    return MYNOS_ERR_DENY;
+  address = 0x80000000u | (address & 0x00FFFFFCu);
+  __asm__ volatile ("outl %0, %w1" : : "a"(address), "Nd"((uint16_t)0xCF8));
+  if (op == 1) {
+    __asm__ volatile ("outl %0, %w1" : : "a"(value), "Nd"((uint16_t)0xCFC));
+    return 0;
+  }
+  __asm__ volatile ("inl %w1, %0" : "=a"(value) : "Nd"((uint16_t)0xCFC));
+  return (int32_t)value;
+}
+#endif
+
 

@@ -2030,3 +2030,6 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   architecture: the boot made its processes with interrupts on, and the
   timer could switch to one of them in the middle of a `kmalloc` (the
   kernel's heap corrupted, JOURNAL).
+- **2026-11-26** — x86-64 under KVM had no graphics since SMP: drivers
+  read PCI's configuration space at once through the same two ports.
+  The kernel does it now (native call 103). JOURNAL.

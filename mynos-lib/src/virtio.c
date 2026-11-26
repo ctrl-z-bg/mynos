@@ -49,12 +49,12 @@ void pci_write32(int bus, int dev, int fn, int reg, unsigned int v)
   if (r) *r = v;
 }
 #else
-/* ---- PCI's configuration space: ports 0xCF8 (address), 0xCFC (data) ---- */
+/* ---- PCI's configuration space: ports 0xCF8 (address), 0xCFC (data) ----
+   Two accesses, the address then the data: the kernel does them (native
+   call 103), so that another driver's address cannot come in between
+   (at boot every driver looks for its devices, on four processors) */
 
-static inline void outl(unsigned short port, unsigned int v)
-{ __asm__ volatile ("outl %0, %1" : : "a"(v), "Nd"(port)); }
-static inline unsigned int inl(unsigned short port)
-{ unsigned int v; __asm__ volatile ("inl %1, %0" : "=a"(v) : "Nd"(port)); return v; }
+#include "syscall.h"
 
 static unsigned int pci_address(int bus, int dev, int fn, int reg)
 {
@@ -63,14 +63,12 @@ static unsigned int pci_address(int bus, int dev, int fn, int reg)
 
 unsigned int pci_read32(int bus, int dev, int fn, int reg)
 {
-  outl(0xCF8, pci_address(bus, dev, fn, reg));
-  return inl(0xCFC);
+  return (unsigned int)__mynos_syscall(103, 0, pci_address(bus, dev, fn, reg), 0, 0, 0);
 }
 
 void pci_write32(int bus, int dev, int fn, int reg, unsigned int v)
 {
-  outl(0xCF8, pci_address(bus, dev, fn, reg));
-  outl(0xCFC, v);
+  __mynos_syscall(103, 1, pci_address(bus, dev, fn, reg), v, 0, 0);
 }
 
 #endif
