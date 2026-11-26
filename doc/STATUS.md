@@ -1893,3 +1893,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   processors together, and their number, from the version 2 line, where
   x86-64 has four (`Domain.recommended_domain_count`; on MyNOS 1.0, one).
   Published.
+- **2026-11-26** — The kernel: a receiver waiting with a timeout could be
+  woken twice (its timer, then a sender or the channel's close), and its
+  next wait returned at once. Found on the version 2 line with several
+  processors (JOURNAL). On `main`, not released yet.

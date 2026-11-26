@@ -37,6 +37,10 @@ typedef struct {
   pid_t receiver;
   int32_t locked; // if someone is already reading
   int32_t sem;  // receiver's semaphore
+  /* the receiver waiting (sem != -1) with a timeout: a sender wakes it
+     only if it takes it off the timer queue first (ipc.c) */
+  void * waiter;
+  int32_t timed;
   int32_t free;
   uint32_t wrP; // pointer to write into the list
   uint32_t rdP;  // pointer to read from the list

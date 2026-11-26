@@ -24,6 +24,7 @@
 #include "mem/dynalloc.h"
 #include "kutils.h"
 #include "sem.h"
+#include "sched.h"
 #include "process.h"
 #include "mynos.h"
 #include "video.h"
@@ -74,6 +75,8 @@ unichannel_t * allocUnichannel(pid_t p) {
   c->receiver = p;
   c->free = MAXMSGS;
   c->sem = -1;
+  c->waiter = NULL;
+  c->timed = 0;
   c->locked = 0;
   c->wrP = 0;
   c->rdP = 0;
@@ -187,7 +190,9 @@ int32_t __OS_ipc_freeChannel(int32_t c) {
   {
     uint32_t i;
     if (w && w->sem != -1) {
-      __OS_sem_V(w->sem);
+      /* once (ipc.c's send): not if its timer woke it already */
+      if (!w->timed || timerQueueExtractThread(w->waiter) != NULL)
+	__OS_sem_V(w->sem);
       w->sem = -1;
     }
     for (i = 0; i < MAXMSGS; i++)

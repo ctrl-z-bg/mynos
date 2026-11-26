@@ -115,7 +115,14 @@ int32_t __OS_ipc_send(int32_t c, void * start, uint32_t size,
       privP();
     }
   } else { // the receiver is waiting
-    __OS_sem_V(channel->sem);
+    /* woken once: a receiver waiting with a timeout that the timer woke
+       already (ready, not yet run) is not woken again. Two V's left its
+       private semaphore at 1, and its next wait (a recv, a futex, a
+       connect) returned at once, with nothing (found on several
+       processors, on the version 2 line; possible on one, rarely).
+       Whoever wakes it says so: sem back to -1 means a message came */
+    if (!channel->timed || timerQueueExtractThread(channel->waiter) != NULL)
+      __OS_sem_V(channel->sem);
     channel->sem = -1;   // he's no longer waiting
   }
 
@@ -151,6 +158,8 @@ int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg,
   if (msg == NULL) {
     if (isChannelBroken(c)) { UNLOCK_CHANNEL(rc); return MYNOS_ERR_BROKEN; }
     rc->sem = currThread->privSem;
+    rc->waiter = currThread;
+    rc->timed = timeron;
     
     // timer on?
     if (timeron)
@@ -158,8 +167,11 @@ int32_t __OS_ipc_recv(int32_t c, mynos_msg_t * mmsg,
 
     privP();
 
-    // if timer expired (so no one sent a message), I'm no longer waiting
-    if (timeron && (timerQueueExtractThread(currThread) == NULL)) {
+    /* the timer woke it (no sender did: a sender sets sem to -1), so
+       nothing came: no longer waiting. Else a sender took it off the
+       timer queue already */
+    if (timeron && rc->sem != -1) {
+      timerQueueExtractThread(currThread);
       rc->sem = -1;
       UNLOCK_CHANNEL(rc);
       return MYNOS_ERR_EXPIRED;

@@ -3724,3 +3724,26 @@ vector. Released as MyNOS 1.0.1.
 
 **Lesson.** The libc's startup contract is part of the ABI; an empty
 one fails silently, and "it works" can be the layout's luck.
+
+## 2026-11-26 — A receiver with a timeout woken twice
+
+**Symptom** (on the version 2 line, with several processors: here a
+backport). A thread waiting in `recv` with a timeout, whose next wait
+returned at once with nothing.
+
+**Cause.** When the timeout expires, the scheduler wakes the receiver (a
+V on its private semaphore) and leaves it ready; until it runs, it still
+looks as waiting on its channel. A sender in that window found it so and
+woke it again. `recv` returned "expired" (the message stays for the next
+one), and the private semaphore was left at 1: the thread's next wait
+(a `recv`, a futex, a `connect`) did not wait. The same when a channel
+was closed in that window. On one processor the window is short (the
+timer's tick to the receiver's turn); on several it is easily met.
+
+**Fix.** The channel remembers its waiting receiver and whether it has a
+timeout; a sender (or the channel's close) wakes it only if it can take
+it off the timer queue first, and says so by setting the channel's
+semaphore back to -1; the receiver tells from that who woke it.
+
+**Lesson.** A thread woken by two paths needs one of them to step back:
+the same as the futex's timed waiter (2026-11-16).
