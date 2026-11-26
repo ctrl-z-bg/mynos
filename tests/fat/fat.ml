@@ -19,6 +19,9 @@ let fails f = match f () with _ -> false | exception Sys_error _ -> true
 let () =
   let ok = ref true in
   let ( &&& ) r b = r := !r && b in
+  (* the disk's driver: ata, or vblkd on AArch64's virt (no IDE there);
+     the other finds nothing and ends *)
+  ignore (Mynos.spawn ~io:true "vblkd" [| "vblkd" |]);
   List.iter (fun p -> ignore (Mynos.spawn ~io:(p = "ata.byte") "ocamlrun" [| "ocamlrun"; p |]))
     [ "ata.byte"; "fatfs.byte" ];
   wait_for "/disk" 100;

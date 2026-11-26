@@ -307,8 +307,14 @@ void mynos_main(multiboot_info_t *boot_info) {
      threads have them from the start. Started at the end, they came up
      only when processor 0 had nothing else to run (this is its idle
      thread). From here on they may run the scheduler: the boot's work on
-     the kernel's tables under the big lock */
+     the kernel's tables under the big lock. And with this processor's
+     interrupts masked: the timer is on, and it switched this thread out
+     in the middle of a kmalloc or of createProcess, to a process just
+     made whose calls changed the same tables (the kernel's heap found
+     corrupted, on AArch64 under emulation: the big lock is the
+     processor's, it does not keep this processor's own threads out) */
   arch_smp_start();
+  arch_irq_disable();
   arch_boot_lock();
 
   /* the ports and channels before the processes: the timer is on, and a
@@ -349,6 +355,7 @@ void mynos_main(multiboot_info_t *boot_info) {
   if (!cmdline_has("verbose"))
     kernel_on_screen = 0;
   arch_boot_unlock();
+  arch_irq_enable();
 
 
 #if 0

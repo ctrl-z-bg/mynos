@@ -58,7 +58,8 @@ extern void __OS_threadExit(void *), __OS_fillStats(void *);
 
 /* port I/O (102): no ports on ARM; a driver's inportb and outportb come
    here, and the machine's devices answer the few ports io.c knows (COM2
-   on the UART: the console's serial input). op 0 reads, 1 writes. The io
+   on the UART: the console's serial input). op 0 reads a byte, 1 writes
+   one, 2 writes a word, 3 reads one. The io
    privilege only: as `in` and `out` on the PC, without it the process
    ends (the PC's protection fault, signal 11) */
 static long native_portio(long op, long port, long value)
@@ -71,9 +72,13 @@ static long native_portio(long op, long port, long value)
     sched();
     return MYNOS_ERR_DENY;                       /* not reached */
   }
-  if (op == 0) return inportb((unsigned short)port);
-  outportb((unsigned short)port, (unsigned char)value);
-  return 0;
+  switch (op) {
+  case 0: return inportb((unsigned short)port);
+  case 1: outportb((unsigned short)port, (unsigned char)value); return 0;
+  case 2: outportw((unsigned short)port, (unsigned short)value); return 0;
+  case 3: return inportw((unsigned short)port);
+  }
+  return MYNOS_ERR_INVALID;
 }
 
 static long native_threadExit(long r) { __OS_threadExit((void *)r); return 0; }

@@ -207,11 +207,13 @@ again with an empty disk, delete it and build. It is not in git (`*.img`).
 **Other architectures.** `ARCH=x86_64 tools/run-demo.sh` runs the
 x86-64 build, with four processors (`SMP=N` for another number);
 `ARCH=aarch64 tools/run-demo.sh` the AArch64 one on QEMU's `virt`
-machine, with virtio's disk, network card and keyboard. AArch64 has no
-display yet: its console is the terminal, on the machine's one UART
-(which plays COM2: the log and a terminal's keys); `Ctrl-A X` stops it.
-QEMU's AArch64 emulator is the host's if it has one (Debian and Ubuntu:
-the package `qemu-system-arm`), else the `dev-aarch64` container's.
+machine, with virtio's disk, network card, keyboard, tablet and GPU.
+AArch64 has no text screen: its console is the terminal, on the
+machine's one UART (which plays COM2: the log and a terminal's keys);
+`Ctrl-A X` stops it. QEMU's window shows the graphical session, which
+`gui` starts. QEMU's AArch64 emulator is the host's if it has one
+(Debian and Ubuntu: the package `qemu-system-arm`), else the
+`dev-aarch64` container's (without a window).
 
 **A release.** `tools/make-release.sh` makes
 `tmp/release/mynos-VERSION.tar.gz` and its `.sha256`, for people who
@@ -325,6 +327,7 @@ which is what the tests do.
   tools/run-tests.sh                      everything; exit status 0 if all passed
   ARCH=x86_64 tools/run-tests.sh          the same, in build/x86_64/tree
                                           (four processors; SMP=1 for one)
+  tools/run-tests-all.sh aarch64          AArch64's, in build/aarch64/tree
   LANES="d" tools/run-tests.sh            only lane d
   KEEP=1 tools/run-tests.sh               keep the logs and screens, say where
   SHOTS=DIR tools/run-tests.sh            copy the graphical session's screens to DIR

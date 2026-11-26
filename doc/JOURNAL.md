@@ -4078,6 +4078,30 @@ command line, killed its own shell.
 **Lesson.** A port I/O table in the kernel, which was there for the log,
 was the shortest way to a serial console: the driver did not change.
 
+## 2026-11-26 — The kernel's heap corrupted at boot, under load
+
+**Symptom.** The suite on AArch64 (emulated, nine lanes at once): in the
+stress test's boot, "memrofs service port: -2" (BUSY: a port whose queue
+of connections is full, at boot), then "kernel heap: free list corrupted"
+in `newPort`, then a kernel page fault. Alone, the same boot passed every
+time.
+
+**Cause.** `mynos_main` makes the boot's processes after `tsksw()`, with
+interrupts on (`init_idt` turns them on early) and the timer running. The
+timer switched it out in the middle of a `kmalloc` or of `createProcess`,
+to a process just made whose system calls changed the same tables. The
+big lock did not help: it is the processor's, and a thread of the same
+processor took it again. On the PC, fast, the window was never hit; the
+`initIPC` race of 2026-11-25 was the same one, seen from another side.
+
+**Fix.** The boot's processes are made with this processor's interrupts
+masked (and, for the others, under the big lock): `arch_irq_disable`
+around the work after `arch_smp_start`.
+
+**Lesson.** Code that runs with interrupts on and no lock of its own is
+preemptible kernel code: MyNOS's kernel is not written for that, and
+the boot was the one place doing it.
+
 ## 2026-11-25 — AArch64: the pager's dirty bit, kept by faults
 
 **Symptom.** `tests/abi`, ported to AArch64, failed one check: "pager:

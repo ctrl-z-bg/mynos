@@ -14,8 +14,12 @@ init.byte: storage.ml $(MYNOS)
 ocamlrun: ../../mynos-runtime/ocamlrun
 	$(STRIP) -o $@ $<
 
-ramdisk.dsk: init.byte ocamlrun ../../services/ata/ata.byte
-	../../services/fs/memrofs/tool/createDisk init.byte ocamlrun ../../services/ata/ata.byte >/dev/null
+ramdisk.dsk: init.byte ocamlrun ../../services/ata/ata.byte vblkd
+	../../services/fs/memrofs/tool/createDisk init.byte ocamlrun ../../services/ata/ata.byte vblkd >/dev/null
+
+# the virtio disk's driver (AArch64's virt has no IDE)
+vblkd: ../../services/virtio/vblkd
+	$(STRIP) -o $@ $<
 
 clean:
-	rm -f *.cm[io] *.byte ocamlrun ramdisk.dsk
+	rm -f *.cm[io] *.byte ocamlrun vblkd ramdisk.dsk

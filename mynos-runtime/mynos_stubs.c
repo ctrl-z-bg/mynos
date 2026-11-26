@@ -374,7 +374,8 @@ CAMLprim value caml_mynos_uptime(value unit)
 /* no I/O ports on ARM (doc/decisions/aarch64.md): libmynos's inportb and
    outportb ask the kernel, which answers the few its machine has (COM2 on
    the UART) and reads 0xFF for the rest, as an empty bus on the PC: the
-   PC's drivers in OCaml (ata) find no device and end. No 16-bit ports */
+   PC's drivers in OCaml (ata) find no device and end; 16-bit ports the
+   same way (init's ACPI power off) */
 CAMLprim value caml_mynos_inb(value port)
 {
   return Val_int(inportb((unsigned short)Int_val(port)));
@@ -384,8 +385,16 @@ CAMLprim value caml_mynos_outb(value port, value v)
   outportb((unsigned short)Int_val(port), (unsigned char)Int_val(v));
   return Val_unit;
 }
-CAMLprim value caml_mynos_inw(value port) { return Val_int(0xFFFF); }
-CAMLprim value caml_mynos_outw(value port, value v) { return Val_unit; }
+#include "../mynos-lib/src/syscall.h"
+CAMLprim value caml_mynos_inw(value port)
+{
+  return Val_int(__mynos_syscall(102, 3, Int_val(port), 0, 0, 0) & 0xFFFF);
+}
+CAMLprim value caml_mynos_outw(value port, value v)
+{
+  __mynos_syscall(102, 2, Int_val(port), Int_val(v), 0, 0);
+  return Val_unit;
+}
 CAMLprim value caml_mynos_insw(value port, value n)
 {
   CAMLparam2(port, n);

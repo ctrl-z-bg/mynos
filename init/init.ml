@@ -77,10 +77,13 @@ let reboot () =
   log "restarting";
   power_off ();
   print_endline "\nMyNOS: restarting.";
-  (* the keyboard controller's reset line *)
+  (* the keyboard controller's reset line; else the reset control
+     register (PCI's 0xCF9: a hard reset), which AArch64's kernel answers
+     with PSCI's SYSTEM_RESET *)
   for _ = 1 to 100 do
     if Mynos.inb 0x64 land 2 = 0 then Mynos.outb 0x64 0xFE
   done;
+  Mynos.outb 0xCF9 0x06;
   Mynos.sleep 1.0;
   log "the machine did not restart"
 

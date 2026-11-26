@@ -20,7 +20,12 @@
  *     the scratch register, the interrupt enable's "a byte came" (the
  *     PL011's receive and receive-timeout interrupts, SPI 1: line 1);
  *   - the CMOS clock (0x70, 0x71): the PL031 real-time clock's seconds,
- *     as the CMOS's registers in binary, 24-hour mode;
+ *     as a PC's CMOS has them: BCD, 24-hour mode, status register A as
+ *     the BIOS leaves it (programs read it: tests/mynos-ocaml);
+ *   - the PC's ways to turn the machine off and restart it, which init
+ *     uses: ACPI's sleep state 5 (0x604 or 0xB004, SLP_EN) and the reset
+ *     control register (0xCF9): PSCI's SYSTEM_OFF and SYSTEM_RESET, through
+ *     the hypervisor call QEMU virt answers;
  *   - the rest (the VGA's registers, the 8259's EOI): nothing.
  * QEMU virt's addresses; a Raspberry Pi has its own (btq.7).
  */
@@ -36,6 +41,15 @@
 #define RTC       0x09010000UL          /* PL031: RTCDR, seconds since 1970 */
 
 #define REG32(BASE, OFF) (*(volatile uint32_t *)DEVICE((BASE) + (OFF)))
+
+/* PSCI (QEMU virt without EL2: its conduit is hvc) */
+static void psci(unsigned long fn)
+{
+  register unsigned long x0 __asm__("x0") = fn;
+  __asm__ volatile ("hvc #0" : "+r"(x0) : : "x1", "x2", "x3", "memory");
+}
+#define PSCI_SYSTEM_OFF   0x84000008UL
+#define PSCI_SYSTEM_RESET 0x84000009UL
 
 static void uart_putc(unsigned char c)
 {
@@ -61,15 +75,16 @@ static unsigned char cmos_value(unsigned char reg)
     if (days < n) break;
     days -= n;
   }
+#define BCD(V) ((unsigned char)(((V) / 10) << 4 | (V) % 10))
   switch (reg) {
-  case 0x00: return s % 60;
-  case 0x02: return (s / 60) % 60;
-  case 0x04: return s / 3600;
-  case 0x07: return days + 1;
-  case 0x08: return m + 1;
-  case 0x09: return y % 100;
-  case 0x0A: return 0;                  /* no update in progress */
-  case 0x0B: return 0x06;               /* binary, 24 hours */
+  case 0x00: return BCD(s % 60);
+  case 0x02: return BCD((s / 60) % 60);
+  case 0x04: return BCD(s / 3600);
+  case 0x07: return BCD(days + 1);
+  case 0x08: return BCD(m + 1);
+  case 0x09: return BCD(y % 100);
+  case 0x0A: return 0x26;               /* no update in progress; 32 kHz, 1024 Hz */
+  case 0x0B: return 0x02;               /* BCD, 24 hours */
   default:   return 0;
   }
 }
@@ -89,6 +104,7 @@ unsigned char inportb(unsigned short port)
 void outportb(unsigned short port, unsigned char value)
 {
   if (port == 0x2F8) uart_putc(value);
+  else if (port == 0xCF9 && (value & 4)) psci(PSCI_SYSTEM_RESET);
   else if (port == 0x2F8 + 1)                    /* interrupt enable */
     REG32(UART, UART_IMSC) = (value & 1) ? (1 << 4) | (1 << 6) : 0;
   else if (port == 0x2F8 + 7) com2_scratch = value;
@@ -97,5 +113,12 @@ void outportb(unsigned short port, unsigned char value)
 
 void outportw(unsigned short port, unsigned short value)
 {
-  (void)port; (void)value;
+  if ((port == 0x604 || port == 0xB004) && (value & 0x2000))
+    psci(PSCI_SYSTEM_OFF);
+}
+
+unsigned short inportw(unsigned short port)
+{
+  (void)port;
+  return 0xFFFF;
 }

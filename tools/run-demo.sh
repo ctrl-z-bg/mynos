@@ -22,9 +22,10 @@
 # this machine, and MyNOS upgrades the installed ones at boot: packages
 # tried before they are published.
 # ARCH=x86_64 runs the x86-64 build (tools/build-x86_64.sh), ARCH=aarch64
-# the AArch64 one (tools/build-aarch64.sh) on QEMU's virt machine: no
-# display there yet, so this terminal is its console (SERIAL=1), no sound,
-# no KVM; QEMU from the host, or from the dev-aarch64 container.
+# the AArch64 one (tools/build-aarch64.sh) on QEMU's virt machine: no text
+# screen there (a virtio GPU, for the graphical session: type gui), so
+# this terminal is its console (SERIAL=1); no sound, no KVM; QEMU from the
+# host (with a window), or from the dev-aarch64 container (without).
 # (The system as it was in 2004-2008: git checkout legacy-last, see
 # doc/STATUS.md.)
 #
@@ -44,7 +45,7 @@ if [ "${ARCH:-i386}" = aarch64 ]; then
         exit 1
     fi
     [ -d "$root/build/aarch64/tree/tools" ] && cd "$root/build/aarch64/tree" && exec tools/run-demo.sh "$@"
-    # AArch64 (doc/decisions/aarch64.md): no display yet: the console on
+    # AArch64 (doc/decisions/aarch64.md): no text screen: the console on
     # this terminal; no Sound Blaster; the host's processor is not ARM
     export SERIAL=${SERIAL-1} SOUND= KVM=
 fi
@@ -139,7 +140,12 @@ case " $* " in
     *" -display "*|*" -nographic "*) ;;
     *)
         ui=${QEMU_DISPLAY:-}
-        [ "${ARCH:-i386}" = aarch64 ] && ui=${ui:-none}     # no display device yet
+        # AArch64: a window if QEMU is the host's (the container's has
+        # none); it shows the graphical session (gui), the text console
+        # being this terminal's
+        if [ "${ARCH:-i386}" = aarch64 ] && ! command -v qemu-system-aarch64 >/dev/null; then
+            ui=${ui:-none}
+        fi
         if [ -z "$ui" ] && [ -n "${SOUND:-}" ] &&
            qemu-system-i386 -display help 2>/dev/null | grep -qx sdl; then ui=sdl; fi
         [ -n "$ui" ] && set -- -display "$ui" "$@" ;;

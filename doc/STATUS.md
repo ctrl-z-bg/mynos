@@ -2020,3 +2020,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   reads kept by faults on AArch64 (ARMv8.0 has none for software); the
   PC's drivers (ata, keyboardd, seriald) end cleanly when their hardware
   is absent. `build-aarch64.sh` builds everything by default. JOURNAL.
+- **2026-11-26** — The test suite on AArch64 (`tools/run-tests-all.sh
+  aarch64`; the test container has QEMU's AArch64 emulator): the PC's
+  options and checks of PC hardware replaced or left out, `storage` and
+  `fat` through `vblkd` where there is no IDE; a virtio GPU and tablet
+  on `virt` (the graphical session runs, `run-demo.sh` shows it in a
+  window with the host's QEMU); init's ACPI power off and PCI reset are
+  PSCI on AArch64, the CMOS clock a PC's (BCD). Fixed for every
+  architecture: the boot made its processes with interrupts on, and the
+  timer could switch to one of them in the middle of a `kmalloc` (the
+  kernel's heap corrupted, JOURNAL).

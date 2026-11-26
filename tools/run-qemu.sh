@@ -16,7 +16,8 @@
 #            x86_64 runs in build/x86_64/tree, its build
 #            (tools/build-x86_64.sh), aarch64 in build/aarch64/tree
 #            (tools/build-aarch64.sh) on QEMU's virt machine: the modules
-#            in one archive (tools/mkmodules.py), virtio devices only, one
+#            in one archive (tools/mkmodules.py), virtio devices only
+#            (disk, network card, keyboard, tablet, GPU), one
 #            UART (a caller's two -serial: the second, COM2's, is kept),
 #            RAM 128 MB to 1 GB; the host's qemu-system-aarch64, or the
 #            dev-aarch64 container's (no window from there)
@@ -41,6 +42,9 @@
 #            record it; run-demo.sh picks one
 #   VERBOSE  if set, kernel messages stay on screen after boot (they always
 #            go to the second serial port)
+#   POINTER  aarch64: tablet (the default: absolute, no grab in a window)
+#            or mouse (relative, as the PC's PS/2 mouse: QEMU's monitor's
+#            mouse_move, which the graphical tests use)
 #   SHOT     if set, run headless, save a PNG of the screen to $SHOT after
 #            $WAIT seconds (default 3), then stop QEMU
 set -eu
@@ -88,16 +92,26 @@ esac
 
 # AArch64 (QEMU virt, doc/decisions/aarch64.md): virtio devices only, no
 # sound card, no KVM (the host is a PC); one UART, COM2's part: of a
-# caller's two -serial (COM1's, COM2's) the second is kept
+# caller's two -serial (COM1's, COM2's) the second is kept. A caller's
+# PC options go (-machine, -vga: the machine is virt), and the devices
+# virt always has here (keyboard, tablet, GPU) are not added twice
 if [ "${ARCH:-i386}" = aarch64 ]; then
     VIRTIO=1 audio= KVM= rom=,romfile=     # (no network boot ROM: no firmware)
     n=0
     for a; do [ "$a" = -serial ] && n=$((n + 1)); done
-    drop=$((n >= 2)) skip=
+    drop=$((n >= 2)) skip= prev=
     for a; do
         shift
-        if [ -n "$skip" ]; then skip=; continue; fi
-        if [ "$a" = -serial ] && [ "$drop" = 1 ]; then drop=0 skip=1; continue; fi
+        if [ -n "$skip" ]; then skip= prev=; continue; fi
+        case $prev$a in
+            -serial) if [ "$drop" = 1 ]; then drop=0 skip=1; continue; fi ;;
+            -machine|-vga) skip=1; continue ;;
+            -device) prev=-device; continue ;;
+            -devicevirtio-keyboard-pci|-devicevirtio-gpu-pci|-devicevirtio-${POINTER:-tablet}-pci)
+                prev=; continue ;;
+            -device*) set -- "$@" -device ;;
+        esac
+        prev=
         set -- "$@" "$a"
     done
 fi
@@ -137,7 +151,8 @@ if [ "${ARCH:-i386}" = aarch64 ]; then
     # shellcheck disable=SC2086
     set -- -M virt -kernel "$kernel" -m "$mem" $nonic \
         -device "loader,file=$archive,addr=0x44000000,force-raw=on" \
-        -device virtio-keyboard-pci "$@"
+        -device virtio-keyboard-pci -device "virtio-${POINTER:-tablet}-pci" \
+        -device virtio-gpu-pci "$@"
 else
     set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "$mem" \
         ${VERBOSE:+-append verbose} "$@"

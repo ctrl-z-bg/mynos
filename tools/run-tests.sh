@@ -24,6 +24,13 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 
 ocamlrun=$(tools/ocamlrun-path.sh)
+# the machine: the PC's devices (PS/2 keyboard, COM1, IDE and ata, the
+# Sound Blaster, VGA's text screen), or AArch64's virt (virtio only, one
+# UART, vblkd): the checks of what the other has not are left out
+case ${ARCH:-i386} in
+    aarch64) pc= disk_drv=vblkd slow=2 ;;    # (emulated: some waits doubled)
+    *)       pc=yes disk_drv=ata slow=1 ;;
+esac
 tmp=$(mktemp -d)
 if [ -n "${KEEP:-}" ]; then echo "run-tests.sh: files kept in $tmp" >&2
 else trap 'rm -rf "$tmp"' EXIT; fi
@@ -430,7 +437,9 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ]; then
     fi
     tools/net-peer.py llm 47091 & llmg_pid=$!
     tools/net-peer.py files 47102 tmp/packages & filesg_pid=$!
-    NET=1 DISK=$gdisk MEM=256 tools/run-qemu.sh "$ocamlrun" \
+    # (POINTER: on AArch64 a relative mouse, as the PC's PS/2 one: the
+    # monitor's mouse_move moves it)
+    NET=1 DISK=$gdisk MEM=256 POINTER=mouse tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
         -- -machine vmport=off -display none -serial null -serial "file:$tmp/logg" \
@@ -510,7 +519,11 @@ PY
     tools/type-keys.py "$tmp/mon-g" 'cat > /tmp/hist.txt\n'; sleep 2
     tools/type-keys.py "$tmp/mon-g" 'hist-up\n'; sleep 1
     mon "sendkey up"; mon "sendkey ret"; sleep 1
-    for k in up home delete shift-h left end ret; do mon "sendkey $k"; done
+    # (keys apart: a slow machine must not see one held, repeated; a
+    # double click is two clicks close together, so not every pause grows)
+    for k in up home delete shift-h left end ret; do
+        mon "sendkey $k"; if [ "$slow" -gt 1 ]; then sleep 0.3; fi
+    done
     sleep 1; mon "sendkey ctrl-d"; sleep 2
     # the agent window (the menu's fifth item, at 168,182): a task, the
     # confirmation it waits for, Allow (at the bottom of the window)
@@ -542,7 +555,25 @@ PY
     tools/type-keys.py "$tmp/mon-g" '/tmp/agent.trc'; sleep 1
     click 364 117; sleep 8
     for k in 1 2 3; do click 580 117; sleep 1; done; sleep 1
-    mon "screendump $tmp/gui12.ppm"
+    # (the recording's first steps may be interrupts, not calls: on AArch64
+    # the virtio card's. Next again until a call's arrow shows, at most 12)
+    k=0
+    while :; do
+        mon "screendump $tmp/gui12.ppm"
+        [ $k -ge 12 ] && break
+        python3 - "$tmp/gui12.ppm" <<'PY' && break
+import sys
+d = open(sys.argv[1], "rb").read()
+parts = d.split(b"\n", 3)
+w, h = map(int, parts[1].split())
+pix = parts[3]
+red = bytes((0xD9, 0x53, 0x4F))
+n = sum(1 for y in range(140, 520) for x in range(132, 1010)
+        if pix[(y * w + x) * 3:(y * w + x) * 3 + 3] == red)
+sys.exit(0 if n > 60 else 1)
+PY
+        click 580 117; sleep 1; k=$((k + 1))
+    done
     click 20 10; sleep 1; click 40 83; sleep 4
     mon "screendump $tmp/gui13.ppm"
     # the clock's close box (at 474,255): pressed, slipped off, released:
@@ -568,11 +599,11 @@ PY
     click 20 10; sleep 1; click 40 193
     waitpx 15 'px(500, 59) == 0x2D6CA2'; sleep 1
     mon "screendump $tmp/gui18.ppm"
-    click 100 175; sleep 2; click 324 180; sleep 1; click 642 125; sleep 1
-    click 100 199; sleep 2; click 762 125; sleep 2; click 310 125; sleep 2
+    click 100 175; sleep $((2 * slow)); click 324 180; sleep $slow; click 642 125; sleep $slow
+    click 100 199; sleep $((2 * slow)); click 762 125; sleep $((2 * slow)); click 310 125; sleep $((2 * slow))
     mon "screendump $tmp/gui19.ppm"
-    click 848 161; sleep 1; click 400 125; sleep 1
-    tools/type-keys.py "$tmp/mon-g" 'newdir\n'; sleep 2
+    click 848 161; sleep $slow; click 400 125; sleep $slow
+    tools/type-keys.py "$tmp/mon-g" 'newdir\n'; sleep $((2 * slow))
     # the tour (the menu's ninth item, at 72,98): a lesson run and replayed
     # in a System window (at 20,64), at its first note
     click 20 10; sleep 1; click 40 215
@@ -619,7 +650,7 @@ assert "ctrlc-137" in s, "Ctrl-C in the terminal window"
 assert re.search(r"hist-up\s+hist-up\s+Hist-up", s), "Up, Home, Delete in the terminal window's line mode"
 PY
     cat "$tmp/logg" >> "$part"
-    python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
+    pc=$pc python3 - "$tmp"/gui1.ppm "$tmp"/gui2.ppm "$tmp"/gui3.ppm "$tmp"/gui4.ppm "$tmp"/gui5.ppm \
               "$tmp"/gui6.ppm "$tmp"/gui7.ppm "$tmp"/gui8.ppm "$tmp"/gui9.ppm \
               "$tmp"/gui10.ppm "$tmp"/gui11.ppm "$tmp"/gui12.ppm "$tmp"/gui13.ppm \
               "$tmp"/gui14.ppm "$tmp"/gui15.ppm "$tmp"/gui16.ppm "$tmp"/gui17.ppm \
@@ -649,7 +680,10 @@ assert sum(1 for x in range(702, 1000, 2) for y in range(508, 732, 2)
            if light(px(g1, x, y)) > light(px(g1, 690, y)) + 6) > 300, "the desktop's watermark"
 assert px(g2, 150, 114) == 0x2D6CA2, "the clock's window, focused"
 assert px(g2, 400, 86) == 0x4A5560, "the welcome window, behind"
-assert g3[:2] == (720, 400), "text mode again"
+# (VGA's text mode: the PC's; AArch64's virt has none, its screen stays
+# the GPU's)
+import os
+assert g3[:2] == (720, 400) or not os.environ.get("pc"), "text mode again"
 assert px(g4, 500, 140) == 0x2D6CA2, "the terminal's window, focused"
 assert px(g4, 600, 520) == 0x0F1419, "the terminal's background"
 # the scrollbar (x 784-796): its thumb has left the bottom after the wheel
@@ -734,7 +768,9 @@ if [ -f system/ramdisk.dsk ] && [ -f gui/gui.byte ] && [ -f tests/fat/fat16.img 
     tools/in-container.sh dev sh -c "mcopy -i $gdisk graphics/gtest.byte ::/gtest.byte && mcopy -i $gdisk tests/keys/keys.byte ::/keys.byte && mmd -i $gdisk ::/pkg && mcopy -i $gdisk tests/fat/run-gui2.url ::/pkg/url"
     rm -f tests/fat/run-gui2.url
     tools/net-peer.py files 47106 tmp/packages & filesg_pid=$!
-    NET=1 DISK=$gdisk MEM=256 tools/run-qemu.sh "$ocamlrun" \
+    # (POINTER: on AArch64 a relative mouse, as the PC's PS/2 one: the
+    # monitor's mouse_move moves it)
+    NET=1 DISK=$gdisk MEM=256 POINTER=mouse tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         system/ramdisk.dsk \
         -- -machine vmport=off -display none -serial null -serial "file:$tmp/logg2" \
@@ -952,17 +988,17 @@ PY
         tools/in-container.sh dev mtype -i $img ::/calls.txt \
             2>/dev/null > "$tmp/7$p7-calls.txt" || true
         grep -q 'sh(.*-> fatfs(.*fs/1 Open ("Makefile", 0)' "$tmp/7$p7-calls.txt" &&
-            grep -q '^ .*  fatfs(.*-> ata(.*block/1 Read' "$tmp/7$p7-calls.txt" && trace_calls=yes
+            grep -q "^ .*  fatfs(.*-> $disk_drv(.*block/1 Read" "$tmp/7$p7-calls.txt" && trace_calls=yes
         for r in r1 r2; do
             tools/in-container.sh dev mtype -i $img ::/$r.txt \
                 2>/dev/null > "$tmp/7$p7-$r.txt" || true
         done
-        [ -s "$tmp/7$p7-r1.txt" ] && python3 - "$tmp/7$p7-r1.txt" "$tmp/7$p7-r2.txt" <<'PY' && disk_reads="$(cat "$tmp/7$p7-r-counts")"
-import re, sys
+        [ -s "$tmp/7$p7-r1.txt" ] && disk_drv=$disk_drv python3 - "$tmp/7$p7-r1.txt" "$tmp/7$p7-r2.txt" <<'PY' && disk_reads="$(cat "$tmp/7$p7-r-counts")"
+import os, re, sys
 def counts(path):
     s = open(path, encoding="latin-1").read()
     reads = len(re.findall(r"-> fatfs\(\d+\)\s+fs/1 Read", s))
-    disk = len(re.findall(r"fatfs\(\d+\) -> ata\(\d+\)\s+block/1 Read", s))
+    disk = len(re.findall(r"fatfs\(\d+\) -> " + os.environ["disk_drv"] + r"\(\d+\)\s+block/1 Read", s))
     return reads, disk
 (r1, d1), (r2, d2) = counts(sys.argv[1]), counts(sys.argv[2])
 open(sys.argv[1].replace("r1.txt", "r-counts"), "w").write("%d %d %d %d" % (r1, d1, r2, d2))
@@ -1291,8 +1327,13 @@ reject() {
 
 expect "Hello from OCaml on MyNOS!"
 expect "5 * 5 = 25"
-expect "keyboardd: sem = "                          # the drivers got their IRQs
-expect "seriald: sem = "
+if [ -n "$pc" ]; then
+    expect "keyboardd: sem = "                      # the drivers got their IRQs
+    expect "seriald: sem = "
+else                                                # no PS/2, no COM1: they end
+    expect "keyboardd: no PC keyboard controller"
+    expect "seriald: no serial port at COM1"
+fi
 expect "Hello from memrofs!"
 expect "fpu: all checks passed"
 expect "Welcome to MyNOS $(cat VERSION 2>/dev/null) (${ARCH:-i386})"  # the boot's banner
@@ -1337,7 +1378,8 @@ if [ -f tests/fat/ramdisk.dsk ]; then
     done
 fi
 if [ -f tests/storage/ramdisk.dsk ]; then
-    expect "ata: disk of 2048 sectors"
+    if [ -n "$pc" ]; then expect "ata: disk of 2048 sectors"
+    else expect "vblkd: virtio disk, 2048 sectors"; fi
     expect "storage: all checks passed"
     if [ "$disk_written" = "WRITTEN BY MYNOS" ]; then
         echo "ok    the disk image holds what MyNOS wrote"
@@ -1453,6 +1495,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "1. file:/tmp/x.html"                      # links made absolute
     expect "[hi____] [ Go ]"                          # a form's fields
     expect "ccc  d"                                   # a table as a grid
+    if [ -n "$pc" ]; then                            # no sound card on virt
     expect "soundd: Sound Blaster 16 (DSP 4.05)"
     expect "play: soundd describes sound/1 as sound.ml does"
     if [ -n "$sound_ok" ]; then
@@ -1460,6 +1503,7 @@ if [ -f system/ramdisk.dsk ]; then
     else
         echo "FAIL  sound: a WAV file and a tone, as the card played them"; fail=1
     fi
+    else expect "soundd: no Sound Blaster at 0x220: no sound"; fi
     if [ -n "$httpd_private" ]; then
         echo "ok    httpd: serves /disk/web, not its .env files"
     else
@@ -1472,9 +1516,9 @@ if [ -f system/ramdisk.dsk ]; then
     fi
     expect "Hello, reborn again, from MyNOS!"          # by an OCaml client too
     if [ -n "$trace_calls" ]; then
-        echo "ok    trace: sh -> fatfs -> ata0, nested calls"
+        echo "ok    trace: sh -> fatfs -> $disk_drv, nested calls"
     else
-        echo "FAIL  trace: sh -> fatfs -> ata0, nested calls"; fail=1
+        echo "FAIL  trace: sh -> fatfs -> $disk_drv, nested calls"; fail=1
     fi
     if [ -n "$trace_json" ]; then
         echo "ok    trace: a Perfetto file"
@@ -1532,6 +1576,8 @@ if [ -f system/ramdisk.dsk ]; then
         echo "FAIL  the shell history is saved on /disk"; fail=1
     fi
     expect "caffè perché a@b@"
+    # VGA's text screen (the PC's): code page 437, the scrollback
+    if [ -n "$pc" ]; then
     python3 - "$tmp/screen1" "$tmp/screen2" <<'PY' && echo "ok    console: UTF-8 shown in code page 437 (È, €: redrawn glyphs)" || { echo "FAIL  console: UTF-8 shown in code page 437 (È, €: redrawn glyphs)"; fail=1; }
 import sys
 s = open(sys.argv[1], "rb").read()
@@ -1547,6 +1593,7 @@ PY
         echo "ok    without COM2 (QEMU's window), the shell answers within seconds"
     else
         echo "FAIL  without COM2 (QEMU's window), the shell answers within seconds"; fail=1
+    fi
     fi
     if [ -n "$gui_ok" ]; then
         echo "ok    gui: a session, windows of programs, a click, back to text"

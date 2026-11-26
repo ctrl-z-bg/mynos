@@ -10,7 +10,7 @@
 FROM docker.io/library/debian:trixie-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      qemu-system-x86 python3 socat curl mtools dosfstools procps \
+      qemu-system-x86 qemu-system-arm python3 socat curl mtools dosfstools procps \
  && rm -rf /var/lib/apt/lists/*
 # inside it, tools/in-container.sh runs its commands directly
 ENV MYNOS_TEST_CONTAINER=1

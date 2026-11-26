@@ -16,8 +16,12 @@ init.byte: fat.ml $(MYNOS)
 ocamlrun: ../../mynos-runtime/ocamlrun
 	$(STRIP) -o $@ $<
 
-ramdisk.dsk: init.byte ocamlrun $(DRIVERS)
-	../../services/fs/memrofs/tool/createDisk init.byte ocamlrun $(DRIVERS) >/dev/null
+ramdisk.dsk: init.byte ocamlrun $(DRIVERS) vblkd
+	../../services/fs/memrofs/tool/createDisk init.byte ocamlrun $(DRIVERS) vblkd >/dev/null
+
+# the virtio disk's driver (AArch64's virt has no IDE)
+vblkd: ../../services/virtio/vblkd
+	$(STRIP) -o $@ $<
 
 # the files every image starts with
 content: Makefile
@@ -40,4 +44,4 @@ fat32.img: content
 	mcopy -s -i $@ content/* ::/
 
 clean:
-	rm -rf *.cm[io] *.byte ocamlrun ramdisk.dsk *.img content run-*.img
+	rm -rf *.cm[io] *.byte ocamlrun vblkd ramdisk.dsk *.img content run-*.img

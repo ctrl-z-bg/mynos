@@ -1,5 +1,7 @@
 (* Storage test (mynos-rf4): init.byte starts the ATA driver (ata.byte, in
-   OCaml) and reads and writes the QEMU disk through it, with module Block.
+   OCaml) and the virtio disk's (vblkd: on AArch64's virt, which has no
+   IDE), the one that finds a disk serves it (ata0, vblk0), and reads and
+   writes the QEMU disk through it, with module Block.
    tools/run-tests.sh prepares the disk: 2048 sectors, each starting with
    "MYNOS SECTOR n", and checks afterwards what was written. *)
 
@@ -16,14 +18,18 @@ let sector_text n =
 
 let rec device tries =
   match Block.connect () with
-  | d -> d
-  | exception Mynos.Error _ when tries > 0 -> Mynos.sleep 0.1; device (tries - 1)
+  | d -> d, "ata0"
+  | exception Mynos.Error _ ->
+    match Block.connect ~service:"vblk0" () with
+    | d -> d, "vblk0"
+    | exception Mynos.Error _ when tries > 0 -> Mynos.sleep 0.1; device (tries - 1)
 
 let () =
   let ok = ref true in
   let ( &&& ) r b = r := !r && b in
   ignore (Mynos.spawn ~io:true "ocamlrun" [| "ocamlrun"; "ata.byte" |]);
-  let d = device 50 in
+  ignore (Mynos.spawn ~io:true "vblkd" [| "vblkd" |]);
+  let d, service = device 50 in
   ok &&& check "disk size" (Block.sectors d = 2048);
   ok &&& check "read sector 0" (Block.read d 0 1 = sector_text 0);
   let many = Block.read d 100 40 in
@@ -46,10 +52,10 @@ let () =
   ok &&& check "a refused request is a Remote_error"
     (match Block.call d (Block.Read (2047, 2)) with
      | _ -> false
-     | exception Ipc.Remote_error ("ata0", m) -> print_endline m; true);
+     | exception Ipc.Remote_error (s, m) when s = service -> print_endline m; true);
   (* raw messages: malformed, another protocol, garbage *)
   let raw msg =
-    let port = Mynos.lookup "ata0" in
+    let port = Mynos.lookup service in
     let ch = Mynos.connect port in
     Mynos.send ch msg;
     let r = Mynos.recv ch in

@@ -29,5 +29,6 @@ void outportb(unsigned short port, unsigned char value);
 
 /* Output a word to a port */
 void outportw(unsigned short port, unsigned short value);
+unsigned short inportw(unsigned short port);
 
 #endif

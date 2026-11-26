@@ -108,11 +108,24 @@ Console and log on the UART; disk, network, keyboard and mouse, display
 `tools/run-demo.sh`: the modules made into one archive
 (`tools/mkmodules.py`), `-M virt -cpu cortex-a72`, virtio devices only,
 RAM from 128 MB (the archive at 64 MB) to 1 GB (choice 3); of a caller's
-two `-serial` the second (COM2's) is the UART. No display yet:
-`run-demo.sh` makes the terminal the console. QEMU's AArch64 emulator
+two `-serial` the second (COM2's) is the UART; a virtio GPU (displayd's)
+and a tablet (`POINTER=mouse`: a relative mouse, as the PC's PS/2 one,
+for QEMU's monitor's `mouse_move`). No text screen: `run-demo.sh` makes
+the terminal the console, QEMU's window shows the graphical session. QEMU's AArch64 emulator
 is the host's, or the `dev-aarch64` container's (the tree, `/tmp` and the
 disk's folder mounted at their own paths, the host's network for
 `HTTP`'s forwarding).
+
+**10. The test suite** runs on AArch64 (`tools/run-tests-all.sh
+aarch64`, or `ARCH=aarch64 tools/run-tests.sh` in `build/aarch64/tree`),
+the same boots as on the PC: `run-qemu.sh` drops a caller's PC options
+(`-machine`, `-vga`), the checks of what `virt` has not (the PS/2
+keyboard, COM1, IDE, the Sound Blaster, VGA's text screen) are replaced
+by what it has (`vblkd` where the PC has `ata`) or left out, and some
+waits are doubled (emulated). The PC's ways to turn the machine off and
+restart it, which `init` uses (ACPI's sleep state 5 at 0x604, the reset
+control register 0xCF9), are PSCI's `SYSTEM_OFF` and `SYSTEM_RESET` in the
+kernel's port table; its CMOS clock is a PC's (BCD).
 
 ## Risks
 
