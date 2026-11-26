@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-25
+Last updated: 2026-11-26
 
 ---
 
@@ -1889,3 +1889,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   auxiliary vector (it was empty: a new thread's `__thread` variables
   lay on its stack's top). Found on the version 2 line (JOURNAL);
   `tests/abi` checks it.
+- **2026-11-26** — sysmonitor 1.1 (package): the load of all the
+  processors together, and their number, from the version 2 line, where
+  x86-64 has four (`Domain.recommended_domain_count`; on MyNOS 1.0, one).
+  Published.
