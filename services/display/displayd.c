@@ -1718,8 +1718,12 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     int dw = wire_get_int(&r), dh = wire_get_int(&r);
     END();
     if (!(w = owned(ch, wid, caller))) return;
-    reply_unit(ch);
+    /* the screen first, then the reply: the window's pixels are the
+       program's too, and a program answered first drew its next frame
+       in them while they were being copied, on another processor (GavML
+       flickered on x86-64 and AArch64, not on the i386) */
     compose(w->x + x, w->y + y, w->x + x + dw, w->y + y + dh);
+    reply_unit(ch);
     break;
   }
   case 4: {                                        /* next_event */

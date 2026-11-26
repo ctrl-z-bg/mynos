@@ -2042,3 +2042,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   fixed with a timed receiver's double wake-up (every architecture), PCI
   windows assigned once by the kernel at boot, `clrex` on the way out
   (JOURNAL).
+- **2026-11-26** — displayd answers `damage` after copying the frame to
+  the screen, not before (GavML flickered on several processors). On
+  AArch64, programs start slower only because the processor is emulated
+  (GavML: 2.7 s; x86-64 emulated 3.0 s, under KVM 0.7 s).

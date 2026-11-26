@@ -4222,3 +4222,22 @@ the pager has looked at pay the extra fault.
 
 **Lesson.** A test ported to a new architecture finds the shortcuts
 taken there: this one was written down, and still wrong.
+
+## 2026-11-26 — GavML flickered on several processors
+
+**Symptom.** GavML's sprites flickered on x86-64 and AArch64, not on the
+i386.
+
+**Cause.** A window's pixels are shared by its program and displayd. To
+`damage` (show this frame) displayd answered first and then copied the
+frame to the screen. The program, answered, drew its next frame at once
+in the same pixels (GavML copies its background, then the sprites):
+on another processor displayd was still copying, and sometimes the
+screen got the background without the sprites. On one processor the
+program does not run until displayd has done.
+
+**Fix.** displayd copies to the screen, then answers: `damage` returns
+once the frame is on the screen.
+
+**Lesson.** "Done" sent before the work is done is only safe while
+nobody else can run meanwhile.
