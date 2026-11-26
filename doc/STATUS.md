@@ -2037,7 +2037,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `virt` by default, started by PSCI before the first process, software
   interrupts as IPIs, no TLB shootdown needed; `tests/smp` passes on 2
   and 4. A secondary processor's stack read through the boot's tables
-  (JOURNAL). Open: with four processors displayd crashes in musl's free,
-  from mynos_freeMsg in its main loop, when the graphical session runs
-  (the suite's lanes d and i fail; one processor never): on branch
-  `aarch64` only, `next` stays at the last green state (mynos-btq.6).
+  (JOURNAL). The graphical session's crash on several processors was
+  `copy_user` resuming a fault at its loop's start (a byte skipped);
+  fixed with a timed receiver's double wake-up (every architecture), PCI
+  windows assigned once by the kernel at boot, `clrex` on the way out
+  (JOURNAL).

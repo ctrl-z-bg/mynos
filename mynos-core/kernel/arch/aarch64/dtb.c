@@ -95,6 +95,8 @@ static void read_fdt(const uint8_t * fdt, uint64_t * mem, uint64_t * rd_start,
   }
 }
 
+void arch_pci_assign(void);
+
 void arch_boot(void)
 {
   const uint8_t * fdt = PHYS_TO_VIRT(0);
@@ -127,5 +129,6 @@ void arch_boot(void)
       mbi.flags |= 8;
     }
   }
+  arch_pci_assign();
   mynos_main(&mbi);
 }

@@ -100,11 +100,14 @@ el1:
 	add	x1, x1, :lo12:pt_l1_dm
 	orr	x1, x1, #TABLE
 	str	x1, [x0, #(256 * 8)]
-	/* the devices */
+	/* the devices: the first GB; and the GB of PCI's configuration
+	   space (ECAM, at 0x4010000000 on virt: arch/aarch64/pci.c) */
 	adrp	x0, pt_l1_dev
 	add	x0, x0, :lo12:pt_l1_dev
 	ldr	x1, =BLOCK_DEVICE
 	str	x1, [x0]
+	ldr	x1, =(0x4000000000 | BLOCK_DEVICE)
+	str	x1, [x0, #(256 * 8)]
 	adrp	x0, pt_l0_hi
 	add	x0, x0, :lo12:pt_l0_hi
 	adrp	x1, pt_l1_dev

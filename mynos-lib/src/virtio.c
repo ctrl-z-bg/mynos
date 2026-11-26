@@ -110,39 +110,9 @@ static volatile unsigned char * map_bar(virtio_dev_t * d, int bar,
   return p ? (volatile unsigned char *)(p + (base - start)) : NULL;
 }
 
-#ifdef __aarch64__
-/* No firmware on QEMU virt assigns the devices' memory: each device's
-   BARs get addresses of their own, from its slot (1 MB per slot in the
-   PCI window at 0x10000000; the same each time, so no two drivers need
-   to agree), and its interrupt line virt's swizzle: INTA-D of slot s on
-   lines 3 + (s + pin) % 4, the GIC's 35-38 (doc/decisions/aarch64.md,
-   choice 8) */
-static void pci_assign(int bus, int dev)
-{
-  unsigned long next = 0x10000000UL + ((unsigned long)dev << 20);
-  int bar, pin;
-  pci_write32(bus, dev, 0, 0x04, pci_read32(bus, dev, 0, 0x04) & ~0x7u);
-  for (bar = 0; bar < 6; bar++) {
-    unsigned int reg = 0x10 + 4 * bar, old = pci_read32(bus, dev, 0, reg), size;
-    int wide = (old & 7) == 4;                    /* memory, 64 bits */
-    pci_write32(bus, dev, 0, reg, 0xFFFFFFFF);
-    size = pci_read32(bus, dev, 0, reg);
-    if ((old & 1) || (size & ~0xFu) == 0) {       /* I/O space, or none */
-      pci_write32(bus, dev, 0, reg, 0);
-      continue;
-    }
-    size = ~(size & ~0xFu) + 1;
-    next = (next + size - 1) & ~((unsigned long)size - 1);
-    pci_write32(bus, dev, 0, reg, (unsigned int)next | (old & 0xF));
-    if (wide) pci_write32(bus, dev, 0, reg + 4, 0), bar++;
-    next += size;
-  }
-  pin = pci_read8(bus, dev, 0, 0x3D);
-  if (pin)
-    pci_write32(bus, dev, 0, 0x3C, (pci_read32(bus, dev, 0, 0x3C) & ~0xFFu) |
-                (3 + ((dev + pin - 1) & 3)));
-}
-#endif
+/* (On AArch64's virt the kernel gives the devices their memory windows,
+   at boot: arch/aarch64/pci.c. A driver here took them for every device
+   it looked at, under the others' feet) */
 
 int virtio_find(int type, int index, virtio_dev_t * d)
 {
@@ -152,9 +122,6 @@ int virtio_find(int type, int index, virtio_dev_t * d)
       unsigned int id = pci_read32(bus, dev, 0, 0), cap;
       if ((id & 0xFFFF) != 0x1AF4 || device_type(id >> 16) != type) continue;
       if (found++ != index) continue;
-#ifdef __aarch64__
-      pci_assign(bus, dev);
-#endif
       d->bus = bus; d->dev = dev; d->fn = 0; d->type = type;
       d->common = d->isr = d->device = d->notify = NULL;
       d->irq = pci_read8(bus, dev, 0, 0x3C);

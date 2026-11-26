@@ -97,8 +97,10 @@ SMP (PSCI's `CPU_ON`, SGIs as IPIs) after the system runs.
 
 **8. Devices** (btq.2's drivers, in user space): virtio over PCI
 Express. Without firmware nobody assigns the PCI devices' memory
-windows: the PCI code does, from the window the device tree gives. The
-configuration space is memory (ECAM), not the ports 0xCF8/0xCFC.
+windows: the kernel does, once at boot before any driver
+(`arch/aarch64/pci.c`; until 2026-11-26 each driver did it for every
+device it looked at, under the owner's feet). The configuration space
+is memory (ECAM), not the ports 0xCF8/0xCFC.
 Console and log on the UART; disk, network, keyboard and mouse, display
 (virtio-gpu or ramfb) as on x86 with virtio.
 

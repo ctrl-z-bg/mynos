@@ -4078,6 +4078,53 @@ command line, killed its own shell.
 **Lesson.** A port I/O table in the kernel, which was there for the log,
 was the shortest way to a serial console: the driver did not change.
 
+## 2026-11-26 — AArch64 SMP: a byte skipped by copy_user, and three more
+
+**Symptom.** With two or more processors, displayd died in musl's `free`
+(called from `mynos_freeMsg` in its main loop) as soon as the graphical
+session had events (keys or the mouse); a client of it (ocamlrun) too.
+Never with one processor, never on x86-64 with the same virtio devices
+and four processors.
+
+**Diagnosis**, by elimination (each a few boots of a script that types or
+moves the mouse in the session): not the futex handoff, not the TLS, not
+`malloc` and `mmap` in parallel, not IPC with shared pages, not musl's
+locks, not the TLB (a full broadcast flush changed nothing). The
+registers at the crash: the pointer given to `free` was not aligned (its
+low bits 4): a `mynos_msg_t` with wrong contents. Sending long messages
+by copy instead of copy-on-write made it go away, and so did copying only
+displayd's.
+
+**Cause.** `copy_user` on AArch64 is a loop, `LDRB` then `STRB`, each
+moving its pointer on. A fault in it was resumed at the loop's start
+(for mem.c's fixup, which looks for one address, the i386's single
+instruction). After a faulting `STRB` the `LDRB` had moved the source
+on: starting over skipped a byte, and the rest of the copy came out
+shifted. `recv` writes the message's description into the receiver's
+memory; in displayd that was a page of its heap another of its threads
+had just sent a reply from, copy-on-write: the kernel's write faulted,
+the copy was made, and the description came out shifted by a byte.
+
+**Fix.** The fault is handled with the loop's start as the address
+mem.c knows; if it was resolved, the copy resumes at the instruction
+that faulted.
+
+**On the way**, found and fixed (each real, none the cause):
+- a receiver waiting with a timeout could be woken twice, by its timer
+  and by a sender that still found it waiting: its private semaphore
+  left at 1, its next wait returned at once (every architecture; ipc.c,
+  channel.c);
+- the drivers assigned PCI's memory windows on AArch64, each for every
+  device it looked at, under the owner's feet: the kernel does it once at
+  boot now (arch/aarch64/pci.c), as the PC's BIOS;
+- `clrex` before every return from the kernel (a reservation of another
+  thread must not survive a switch).
+
+**Lesson.** A fault in the middle of a multi-instruction copy must resume
+where it stopped. And a bug seen only with many processors is not always
+a race on shared data: here the processors only made two rare events
+meet often.
+
 ## 2026-11-26 — AArch64 SMP: a stack seen through two page tables
 
 **Symptom.** The other processors started ("Processor 0 started", three

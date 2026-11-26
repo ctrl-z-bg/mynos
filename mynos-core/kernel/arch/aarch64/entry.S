@@ -93,6 +93,12 @@ trap_return:
 	ldr	x30, [sp, #240]
 	ldp	x0, x1, [sp, #0]
 	add	sp, sp, #FRAME
+	/* the local exclusive monitor cleared: a thread interrupted between
+	   its LDXR and STXR, coming back after another thread of this
+	   processor did an LDXR of the same word (and no STXR: a lock found
+	   taken), must not find that one's reservation and succeed (two
+	   threads inside musl's malloc lock: the heap corrupted) */
+	clrex
 	eret
 
 /* switch_stacks(&old->rsp, new rsp): the callee-saved registers and the

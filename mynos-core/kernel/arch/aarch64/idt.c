@@ -101,11 +101,22 @@ static void page_fault(struct frame * f, int user)
     print_ulong_hex(f->x[30]);
     print_char('\n');
   }
-  /* copy_user's loop (entry.S): its faults resume as the i386's single
-     instruction's (mem.c's copy_user_fixup) */
-  if (!user && f->pc >= (uint64_t)copy_user_insn && f->pc < (uint64_t)copy_user_end)
-    f->pc = (uint64_t)copy_user_insn;
-  _page_fault_handler(f->far, err, (unsigned long *)f);
+  /* copy_user's loop (entry.S): for mem.c, a fault in it is at
+     copy_user_insn, as the i386's single instruction (copy_user_fixup
+     sends a failed copy to copy_user_fault). A fault resolved (a page
+     allocated on use, copied on write) resumes at the instruction that
+     faulted, not at the loop's start: its LDRB had moved the source on
+     already, and starting over after a faulting STRB skipped a byte
+     (2026-11-26: recv's description of a message, written into a page of
+     displayd's heap that another of its threads had just sent from,
+     copy-on-write, came out shifted by a byte; four processors) */
+  {
+    uint64_t pc = f->pc;
+    int in_copy = !user && pc >= (uint64_t)copy_user_insn && pc < (uint64_t)copy_user_end;
+    if (in_copy) f->pc = (uint64_t)copy_user_insn;
+    _page_fault_handler(f->far, err, (unsigned long *)f);
+    if (in_copy && f->pc == (uint64_t)copy_user_insn) f->pc = pc;
+  }
 }
 
 static void process_fault(struct frame * f, const char * what)
