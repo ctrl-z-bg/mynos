@@ -123,10 +123,13 @@ end
 module F1 = Emu_frontend.Make (Machine (struct let msx2 = false end))
 module F2 = Emu_frontend.Make (Machine (struct let msx2 = true end))
 
-(* msx2 is a script of one line that runs this program (pkg's COMMANDS):
-   its path comes first *)
+(* msx and msx2 are scripts of one line that run this program (pkg's
+   COMMANDS): their path comes first *)
 let () =
   match List.tl (Array.to_list Sys.argv) with
-  | script :: rest when Filename.basename script = "msx2" -> F2.main ~args:rest ()
+  | script :: rest when String.contains script '/' && Filename.basename script = "msx2" ->
+    F2.main ~args:rest ()
+  | script :: rest when String.contains script '/' && Filename.basename script = "msx" ->
+    (match rest with "--msx2" :: r -> F2.main ~args:r () | _ -> F1.main ~args:rest ())
   | "--msx2" :: rest -> F2.main ~args:rest ()
   | args -> F1.main ~args ()

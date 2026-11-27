@@ -15,5 +15,5 @@ EXTRA='third_party/cbios/cbios_main_msx1.rom third_party/cbios/cbios_logo_msx1.r
   third_party/cbios/LICENSE:CBIOS-LICENSE packages/msx/LICENSE packages/msx/MYNOS.md
   third_party/westen/westen.rom:games/westen.rom third_party/westen/LICENSE:games/westen-LICENSE
   third_party/westen/README.md:games/westen-README.md'
-COMMANDS=msx2
+COMMANDS='msx msx2'
 DOC=packages/msx/README.md
