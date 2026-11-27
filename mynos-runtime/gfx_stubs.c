@@ -227,12 +227,15 @@ CAMLprim value caml_gfx_draw_mask_byte(value * argv, int argn)
 /* ---- pictures: 4 bytes a pixel, blue, green, red, alpha (Gfx.draw_image) ---- */
 
 /* the picture (w x h, in a string) with its top left at (x, y), each pixel
-   blended by its alpha times opacity/255 */
+   blended by its alpha times opacity/255; with a tint (>= 0, 0xRRGGBB) its
+   alpha only, in that colour (a mask) */
 CAMLprim value caml_gfx_draw_image(value t, value vx, value vy, value px, value vw,
-				   value vh, value vopacity)
+				   value vh, value vopacity, value vtint)
 {
   int x = Long_val(vx), y = Long_val(vy), w = Long_val(vw), h = Long_val(vh);
   int opacity = Long_val(vopacity), bw = BW(t), bx0, by0, bx1, by1, i, j, i0, i1;
+  long tint = Long_val(vtint);
+  unsigned char tb = tint & 255, tg = (tint >> 8) & 255, tr = (tint >> 16) & 255;
   unsigned int * p = PIX(t);
   const unsigned char * s = (const unsigned char *)String_val(px);
   if (w < 0 || h < 0 || caml_string_length(px) < (mlsize_t)w * h * 4)
@@ -249,9 +252,11 @@ CAMLprim value caml_gfx_draw_image(value t, value vx, value vy, value px, value 
     q = s + ((size_t)j * w) * 4;
     for (i = i0; i < i1; i++) {
       const unsigned char * c = q + i * 4;
+      unsigned char tinted[4];
       int a = opacity == 255 ? c[3] : c[3] * opacity / 255;
       unsigned int d;
       if (a == 0) continue;
+      if (tint >= 0) { tinted[0] = tb; tinted[1] = tg; tinted[2] = tr; c = tinted; }
       if (a == 255) { row[i] = (c[2] << 16) | (c[1] << 8) | c[0]; continue; }
       d = row[i];
       row[i] =
@@ -266,7 +271,7 @@ CAMLprim value caml_gfx_draw_image(value t, value vx, value vy, value px, value 
 CAMLprim value caml_gfx_draw_image_byte(value * argv, int argn)
 {
   (void)argn;
-  return caml_gfx_draw_image(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);
+  return caml_gfx_draw_image(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]);
 }
 
 /* ---- text ---- */

@@ -51,6 +51,10 @@ type item =
   | Image of { x : int; y : int; w : int; h : int; src : string; clip : (int * int * int * int) option }
       (** a picture (its src attribute as written) drawn w x h; [clip]: x0,
           y0, x1, y1, outside which it is not drawn *)
+  | Bg of { x : int; y : int; w : int; h : int; layer : Style.layer; tint : int option;
+            clip : (int * int * int * int) option }
+      (** a box's background picture (or mask: its alpha in [tint]),
+          painted in the box x, y, w, h: its tiles from {!tiles} *)
 
 type link = { lx : int; ly : int; lw : int; lh : int; href : string }
 
@@ -113,6 +117,9 @@ let emit o it =
        | Image i ->
          if i.x < x1 && i.x + i.w > x0 && i.y < y1 && i.y + i.h > y0 then
            Dynarray.add_last o.items_ (Image { i with clip = Some (x0, y0, x1, y1) })
+       | Bg b ->
+         if b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0 then
+           Dynarray.add_last o.items_ (Bg { b with clip = Some (x0, y0, x1, y1) })
        | Text t ->
          let w = Fonts.width t.font t.s in
          if t.y + t.font.descent > y0 && t.y - t.font.ascent < y1 && t.x < x1 && t.x + w > x0 then
@@ -137,7 +144,9 @@ let translate o m dx dy =
           | Fill f -> Fill { f with x = f.x + dx; y = f.y + dy }
           | Text t -> Text { t with x = t.x + dx; y = t.y + dy }
           | Image i -> Image { i with x = i.x + dx; y = i.y + dy;
-                                      clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) i.clip })
+                                      clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) i.clip }
+          | Bg b -> Bg { b with x = b.x + dx; y = b.y + dy;
+                                clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) b.clip })
     done;
     for i = m.ml to Dynarray.length o.links_ - 1 do
       let l = Dynarray.get o.links_ i in
@@ -698,6 +707,15 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
   let has_bg = visible_color st.background && st.visible && not st.masked && not st.transparent && o.dry = 0 in
   let bg_slot = Dynarray.length o.items_ in
   if has_bg then Dynarray.add_last o.items_ (Fill { x = 0; y = 0; w = 0; h = 0; color = 0 });
+  (* its background picture, or its mask (the background's colour through
+     the picture's alpha): after the colour, before the content *)
+  let picture = match st.masked, st.mask.image, st.bg.image with
+    | true, Some _, _ when visible_color st.background -> Some (Style.copy_layer st.mask, Some (rgb st.background))
+    | false, _, Some _ -> Some (Style.copy_layer st.bg, None)
+    | _ -> None in
+  let picture = if st.visible && not st.transparent && o.dry = 0 then picture else None in
+  let pic_slot = Dynarray.length o.items_ in
+  if picture <> None then Dynarray.add_last o.items_ (Fill { x = 0; y = 0; w = 0; h = 0; color = 0 });
   let first_item = Dynarray.length o.items_ in
   let own_bfc = establishes_bfc st in
   let bfc' = if own_bfc then { floats = [] } else bfc in
@@ -746,6 +764,13 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
    | _ -> ());
   o.clip <- saved_clip;
   if has_bg then Dynarray.set o.items_ bg_slot (Fill { x = bx; y; w = bw; h; color = rgb st.background });
+  (match picture with
+   | Some (layer, tint) ->
+     (* the padding box *)
+     Dynarray.set o.items_ pic_slot
+       (Bg { x = bx + b 3; y = y + b 0; w = max 0 (bw - b 1 - b 3); h = max 0 (h - b 0 - b 2); layer; tint;
+             clip = o.clip })
+   | None -> ());
   if st.visible && not st.transparent && o.dry = 0 then begin
     (* a border's colour: currentcolor (-1), or 0xAARRGGBB; transparent ones are not drawn *)
     let c i = if st.border_color.(i) < 0 then st.color else rgb st.border_color.(i) in
@@ -1541,7 +1566,7 @@ let layout ?(image = fun _ -> None) ~width ~height (styles : Style.styles) (doc 
   (* positioned boxes may reach below the flow *)
   let bottom = Dynarray.fold_left (fun m it -> match it with
       | Fill f -> max m (f.y + f.h) | Text t -> max m (t.y + t.font.descent)
-      | Image i -> max m (i.y + i.h)) total o.items_ in
+      | Image i -> max m (i.y + i.h) | Bg _ -> m) total o.items_ in
   { items = Dynarray.to_array o.items_; links = Dynarray.to_array o.links_; height = max total bottom; background;
     anchors = o.anchors_; unsized = o.unsized_ }
 
@@ -1553,7 +1578,45 @@ let dump p =
       | Fill { x; y; w; h; color } -> Printf.bprintf b "fill %d,%d %dx%d #%06x\n" x y w h color
       | Text { x; y; s; color; font } ->
         Printf.bprintf b "text %d,%d %s #%06x %s\n" x y font.key color s
-      | Image { x; y; w; h; src; _ } -> Printf.bprintf b "image %d,%d %dx%d %s\n" x y w h src) p.items;
+      | Image { x; y; w; h; src; _ } -> Printf.bprintf b "image %d,%d %dx%d %s\n" x y w h src
+      | Bg { x; y; w; h; layer; tint; _ } ->
+        Printf.bprintf b "%s %d,%d %dx%d %s\n" (if tint = None then "bg" else "mask") x y w h
+          (Option.value layer.image ~default:"")) p.items;
   Array.iter (fun l -> Printf.bprintf b "link %d,%d %dx%d %s\n" l.lx l.ly l.lw l.lh l.href) p.links;
   Printf.bprintf b "height %d\n" p.height;
   Buffer.contents b
+
+(* ---- background pictures' tiles ---- *)
+
+(* where a background (or mask) picture of its own size [natural] goes in
+   the box x, y, w, h: its tiles, x, y, w, h each (the box clips them) *)
+let tiles ~x ~y ~w ~h (l : Style.layer) ~natural:(nw, nh) =
+  if w <= 0 || h <= 0 || nw <= 0 || nh <= 0 then []
+  else begin
+    let fw = float w and fh = float h and fnw = float nw and fnh = float nh in
+    let tw, th = match l.size with
+      | Style.Size_auto -> (fnw, fnh)
+      | Cover -> let k = Float.max (fw /. fnw) (fh /. fnh) in (fnw *. k, fnh *. k)
+      | Contain -> let k = Float.min (fw /. fnw) (fh /. fnh) in (fnw *. k, fnh *. k)
+      | Size (Auto, Auto) -> (fnw, fnh)
+      | Size (a, Auto) -> let tw = float (px a ~of_:w) in (tw, tw *. fnh /. fnw)
+      | Size (Auto, b) -> let th = float (px b ~of_:h) in (th *. fnw /. fnh, th)
+      | Size (a, b) -> (float (px a ~of_:w), float (px b ~of_:h)) in
+    let tw = max 1 (int_of_float (Float.round tw)) and th = max 1 (int_of_float (Float.round th)) in
+    (* a percentage: of the box less the picture (50%: centred) *)
+    let off (l : length) avail = match l with
+      | Len (p, pct) -> int_of_float (Float.round (p +. pct *. float avail /. 100.)) | Auto -> 0 in
+    let ox = x + off l.pos_x (w - tw) and oy = y + off l.pos_y (h - th) in
+    (* the tiles' starts: from before the box's start, if repeated *)
+    let starts o t lo hi rep =
+      if not rep then [ o ]
+      else begin
+        let d = o - lo in
+        let first = if d > 0 then o - ((d + t - 1) / t) * t else o + (- d / t) * t in
+        let rec go v acc = if v >= hi then List.rev acc else go (v + t) (v :: acc) in
+        go first []
+      end in
+    let xs = starts ox tw x (x + w) l.rep_x and ys = starts oy th y (y + h) l.rep_y in
+    if List.length xs * List.length ys > 4000 then []
+    else List.concat_map (fun ty -> List.map (fun tx -> (tx, ty, tw, th)) xs) ys
+  end

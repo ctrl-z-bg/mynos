@@ -25,6 +25,22 @@ type white_space = Normal | Pre | Nowrap | Pre_wrap | Pre_line
 type transform = No_transform | Upper | Lower | Capitalize
 type line_height = Lh_normal | Lh_px of float | Lh_factor of float
 
+(* a picture painted in a box: background-image's, or mask-image's (its
+   alpha, in the background's colour) *)
+type layer_size = Size_auto | Cover | Contain | Size of length * length   (* Auto: from the ratio *)
+type layer = {
+  mutable image : string option;    (* its URL (resolved against its sheet's, if it had one) *)
+  mutable rep_x : bool;
+  mutable rep_y : bool;
+  mutable pos_x : length;           (* a percentage: of the box less the picture *)
+  mutable pos_y : length;
+  mutable size : layer_size;
+}
+
+let new_layer () = { image = None; rep_x = true; rep_y = true; pos_x = Len (0., 0.); pos_y = Len (0., 0.);
+                     size = Size_auto }
+let copy_layer l = { l with image = l.image }
+
 type t = {
   mutable display : display;
   mutable position : position;
@@ -87,7 +103,9 @@ type t = {
   (* tables *)
   mutable border_spacing : float;
   mutable border_collapse : bool;
-  mutable masked : bool;              (* a mask-image: its background is not painted (no masks yet) *)
+  mutable masked : bool;              (* a mask-image: the background is painted through it (mask) *)
+  mutable bg : layer;                 (* background-image and the rest *)
+  mutable mask : layer;               (* mask-image and the rest *)
   mutable transparent : bool;         (* opacity: 0 here or on an ancestor: nothing painted *)
   mutable content : cv list option;   (* a ::before's or ::after's content *)
   mutable caption_bottom : bool;      (* caption-side: bottom *)
@@ -110,7 +128,7 @@ let initial () = {
   row_gap = Len (0., 0.); column_gap = Len (0., 0.);
   grid_columns = []; grid_rows = []; grid_areas = []; grid_area = []; grid_column = []; grid_row = [];
   border_spacing = 0.; border_collapse = false; masked = false; transparent = false;
-  content = None; caption_bottom = false }
+  content = None; caption_bottom = false; bg = new_layer (); mask = new_layer () }
 
 (* a child's start: the inherited properties from its parent, the others initial *)
 let inherit_from p =
@@ -367,8 +385,11 @@ let length ctx (v : cv list) : length option =
 
 (* var(--name, fallback) replaced by the custom property's value; [None]
    when a reference has no value and no fallback (the declaration is then
-   invalid at computed-value time: as if unset) *)
-let rec substitute custom depth (v : cv list) : cv list option =
+   invalid at computed-value time: as if unset). A custom property that
+   refers to itself, directly or not (Wikipedia's [--x: var(--x, 1rem)]),
+   or whose value cannot be substituted, has no value: the fallback holds
+   (CSS Variables, 2.3: dependency cycles) *)
+let rec substitute ?(seen = []) custom depth (v : cv list) : cv list option =
   if depth > 16 then None
   else
     let failed = ref false in
@@ -380,11 +401,14 @@ let rec substitute custom depth (v : cv list) : cv list option =
               | Tok Comma :: r -> Some r | Tok Whitespace :: r -> after_comma r | _ -> None in
             (n, after_comma rest)
           | _ -> ("", None) in
-        (match List.assoc_opt name custom with
-         | Some value -> (match substitute custom (depth + 1) value with
-             | Some v -> v | None -> failed := true; [])
+        let value =
+          if List.mem name seen then None
+          else Option.bind (List.assoc_opt name custom)
+              (substitute ~seen:(name :: seen) custom (depth + 1)) in
+        (match value with
+         | Some v -> v
          | None -> (match fallback with
-             | Some f -> (match substitute custom (depth + 1) f with Some v -> v | None -> failed := true; [])
+             | Some f -> (match substitute ~seen custom (depth + 1) f with Some v -> v | None -> failed := true; [])
              | None -> failed := true; []))
       | Func (f, args) -> [ Func (f, List.concat_map go args) ]
       | Css.Block (c, inner) -> [ Css.Block (c, List.concat_map go inner) ]
@@ -507,6 +531,90 @@ let border_shorthand ctx s sides v =
 
 let side_index = function "top" -> 0 | "right" -> 1 | "bottom" -> 2 | "left" -> 3 | _ -> -1
 
+(* ---- backgrounds and masks ---- *)
+
+(* the first layer of a value (layers are separated by commas) *)
+let first_layer (v : cv list) =
+  let rec go acc = function
+    | Tok Comma :: _ | [] -> List.rev acc
+    | c :: r -> go (c :: acc) r in
+  go [] v
+
+let url_of (c : cv) = match c with
+  | Tok (Url u) | Func ("url", [ Tok (String u) ]) -> Some u
+  | Func ("url", args) -> (match Css.trim args with [ Tok (String u) ] -> Some u | _ -> None)
+  | _ -> None
+
+let layer_image (l : layer) v =
+  match List.filter (fun c -> c <> Tok Whitespace) (first_layer v) with
+  | [ c ] -> (match url_of c with Some u -> l.image <- Some u | None -> l.image <- None)
+  | _ -> l.image <- None
+
+let layer_repeat (l : layer) words =
+  match words with
+  | [ "repeat-x" ] -> l.rep_x <- true; l.rep_y <- false
+  | [ "repeat-y" ] -> l.rep_x <- false; l.rep_y <- true
+  | [ w ] -> let r = w <> "no-repeat" in l.rep_x <- r; l.rep_y <- r
+  | [ a; b ] -> l.rep_x <- a <> "no-repeat"; l.rep_y <- b <> "no-repeat"
+  | _ -> ()
+
+let is_repeat w = List.mem w [ "repeat"; "no-repeat"; "repeat-x"; "repeat-y"; "space"; "round" ]
+
+(* a position's parts (one or two: keywords, lengths, percentages) *)
+let layer_position ctx (l : layer) (ps : cv list list) =
+  let kw = function
+    | [ Tok (Ident i) ] -> Some (String.lowercase_ascii i) | _ -> None in
+  let pct p = Len (0., p) in
+  let horiz = function "left" -> Some (pct 0.) | "center" -> Some (pct 50.) | "right" -> Some (pct 100.) | _ -> None in
+  let vert = function "top" -> Some (pct 0.) | "center" -> Some (pct 50.) | "bottom" -> Some (pct 100.) | _ -> None in
+  let len p = match length ctx p with Some (Len _ as l) -> Some l | _ -> None in
+  match ps with
+  | [ a ] ->
+    (match kw a with
+     | Some ("top" | "bottom" as k) -> l.pos_x <- pct 50.; Option.iter (fun y -> l.pos_y <- y) (vert k)
+     | Some k -> Option.iter (fun x -> l.pos_x <- x) (horiz k); l.pos_y <- pct 50.
+     | None -> Option.iter (fun x -> l.pos_x <- x; l.pos_y <- pct 50.) (len a))
+  | a :: b :: _ ->
+    let a, b = match kw a, kw b with
+      | Some ("top" | "bottom"), _ | _, Some ("left" | "right") -> (b, a)
+      | _ -> (a, b) in
+    (match kw a with Some k -> Option.iter (fun x -> l.pos_x <- x) (horiz k)
+                   | None -> Option.iter (fun x -> l.pos_x <- x) (len a));
+    (match kw b with Some k -> Option.iter (fun y -> l.pos_y <- y) (vert k)
+                   | None -> Option.iter (fun y -> l.pos_y <- y) (len b))
+  | [] -> ()
+
+let layer_size ctx (l : layer) (ps : cv list list) =
+  match ps with
+  | [ [ Tok (Ident i) ] ] when String.lowercase_ascii i = "cover" -> l.size <- Cover
+  | [ [ Tok (Ident i) ] ] when String.lowercase_ascii i = "contain" -> l.size <- Contain
+  | [ a ] -> (match length ctx a with Some Auto -> l.size <- Size_auto | Some w -> l.size <- Size (w, Auto) | None -> ())
+  | [ a; b ] -> (match length ctx a, length ctx b with
+      | Some Auto, Some Auto -> l.size <- Size_auto
+      | Some w, Some h -> l.size <- Size (w, h) | _ -> ())
+  | _ -> ()
+
+(* background's or mask's shorthand: picture, repeat, position [/ size] *)
+let layer_shorthand ctx (l : layer) v =
+  let v = first_layer v in
+  let rec split acc = function
+    | Tok (Delim "/") :: r -> (List.rev acc, r)
+    | c :: r -> split (c :: acc) r
+    | [] -> (List.rev acc, []) in
+  let before, after = split [] v in
+  let ps = parts before in
+  l.image <- List.find_map (function [ c ] -> url_of c | _ -> None) ps;
+  let words = List.filter_map (function [ Tok (Ident i) ] -> Some (String.lowercase_ascii i) | _ -> None) ps in
+  layer_repeat l (List.filter is_repeat words);
+  let position = List.filter (fun p ->
+      match p with
+      | [ Tok (Ident i) ] -> List.mem (String.lowercase_ascii i) [ "left"; "right"; "top"; "bottom"; "center" ]
+      | [ Tok (Percentage _) ] | [ Tok (Dimension _) ] | [ Tok (Number _) ] -> true
+      | [ Func ("calc", _) ] -> true
+      | _ -> false) ps in
+  layer_position ctx l position;
+  if after <> [] then layer_size ctx l (parts after)
+
 let rec apply ctx (s : t) (parent : t) name (v : cv list) =
   let len f = match length ctx v with Some l -> f l | None -> () in
   match name with
@@ -530,9 +638,17 @@ let rec apply ctx (s : t) (parent : t) name (v : cv list) =
   | "color" -> Option.iter (fun c -> if c lsr 24 <> 0 then s.color <- c land 0xFFFFFF) (color ~current:parent.color v)
   | "background-color" -> Option.iter (fun c -> s.background <- c) (color ~current:s.color v)
   | "background" ->
-    (* its colour only (images: M4) *)
     s.background <- 0;
-    List.iter (fun p -> match color ~current:s.color p with Some c -> s.background <- c | None -> ()) (parts v)
+    List.iter (fun p -> match color ~current:s.color p with Some c -> s.background <- c | None -> ()) (parts v);
+    s.bg <- new_layer ();
+    layer_shorthand ctx s.bg v
+  | "background-image" -> layer_image s.bg v
+  | "background-repeat" -> layer_repeat s.bg (idents (first_layer v))
+  | "background-position" -> layer_position ctx s.bg (parts (first_layer v))
+  | "background-size" -> layer_size ctx s.bg (parts (first_layer v))
+  | "mask-repeat" | "-webkit-mask-repeat" -> layer_repeat s.mask (idents (first_layer v))
+  | "mask-position" | "-webkit-mask-position" -> layer_position ctx s.mask (parts (first_layer v))
+  | "mask-size" | "-webkit-mask-size" -> layer_size ctx s.mask (parts (first_layer v))
   | "font-size" -> Option.iter (fun fs -> s.font_size <- fs) (font_size_of ctx v)
   | "font-weight" ->
     (match v with
@@ -739,8 +855,13 @@ let rec apply ctx (s : t) (parent : t) name (v : cv list) =
      | [ Tok (Number (a, _)) ] -> if a <= 0.01 then s.transparent <- true
      | [ Tok (Percentage a) ] -> if a <= 1. then s.transparent <- true
      | _ -> ())
-  | "mask" | "mask-image" | "-webkit-mask" | "-webkit-mask-image" ->
-    s.masked <- ident v <> Some "none"
+  | "mask-image" | "-webkit-mask-image" ->
+    s.masked <- ident v <> Some "none";
+    layer_image s.mask v
+  | "mask" | "-webkit-mask" ->
+    s.masked <- ident v <> Some "none";
+    s.mask <- new_layer ();
+    layer_shorthand ctx s.mask v
   | "border-collapse" -> Option.iter (fun c -> s.border_collapse <- c = "collapse") (ident v)
   | "border-spacing" ->
     (match List.map (length ctx) (parts v) with
@@ -760,7 +881,8 @@ let known = [
   "font-weight"; "font-style"; "font-family"; "line-height"; "text-align"; "text-indent";
   "white-space"; "text-decoration"; "text-transform"; "margin"; "padding"; "border"; "width";
   "height"; "min-width"; "max-width"; "min-height"; "max-height"; "box-sizing"; "visibility";
-  "list-style"; "list-style-type" ]
+  "list-style"; "list-style-type"; "background-image"; "background-repeat"; "background-position";
+  "background-size"; "mask"; "mask-image"; "mask-size"; "mask-position"; "mask-repeat" ]
 
 (* ---- media queries ---- *)
 
@@ -898,11 +1020,31 @@ type sheet = { rules : rule list; imports : (string * cv list) list }
 
 let counter = ref 0
 
-let flatten ~origin ?(media = []) rules_in =
+(* url()s made absolute: against the sheet's own URL (a data: URL, or a
+   fragment, as they are) *)
+let rec resolve_urls base (decls : decl list) =
+  let res u = if u = "" || u.[0] = '#' || (String.length u > 5 && String.lowercase_ascii (String.sub u 0 5) = "data:")
+    then u else Url.resolve base u in
+  let rec go (c : cv) = match c with
+    | Tok (Url u) -> Tok (Url (res u))
+    | Func ("url", args) -> Func ("url", List.map (function Tok (String u) -> Tok (String (res u)) | a -> a) args)
+    | Func (f, args) -> Func (f, List.map go args)
+    | Css.Block (ch, inner) -> Css.Block (ch, List.map go inner)
+    | t -> t in
+  List.map (fun (d : decl) -> if has_url d.value then { d with value = List.map go d.value } else d) decls
+
+and has_url = function
+  | [] -> false
+  | (Tok (Url _) | Func ("url", _)) :: _ -> true
+  | (Func (_, a) | Css.Block (_, a)) :: r -> has_url a || has_url r
+  | _ :: r -> has_url r
+
+let flatten ~origin ?base ?(media = []) rules_in =
   let out = ref [] and imports = ref [] in
   let rec go media = function
     | [] -> ()
     | Css.Style { prelude; decls } :: rest ->
+      let decls = match base with Some b -> resolve_urls b decls | None -> decls in
       (match Selector.parse_list prelude with
        | Some sels ->
          List.iter (fun sel ->
@@ -931,11 +1073,11 @@ let flatten ~origin ?(media = []) rules_in =
   go media rules_in;
   { rules = List.rev !out; imports = List.rev !imports }
 
-let parse_sheet ?(origin = Author) ?media text =
+let parse_sheet ?(origin = Author) ?base ?media text =
   let media = match media with
     | Some m when String.trim m <> "" -> [ Css.parse_values m ]
     | _ -> [] in
-  flatten ~origin ~media (Css.parse_stylesheet text)
+  flatten ~origin ?base ~media (Css.parse_stylesheet text)
 
 (* the browser's own style sheet (the HTML Standard's rendering section,
    15.3), for a screen *)
@@ -1200,7 +1342,12 @@ let compute ~width ~height sheets (doc : Dom.node) =
         match d.name with
         | "display" -> s.display <- src.display
         | "color" -> s.color <- src.color
-        | "background" | "background-color" -> s.background <- src.background
+        | "background" -> s.background <- src.background; s.bg <- copy_layer src.bg
+        | "background-color" -> s.background <- src.background
+        | "background-image" | "background-repeat" | "background-position" | "background-size" ->
+          s.bg <- copy_layer src.bg
+        | "mask" | "mask-image" | "-webkit-mask" | "-webkit-mask-image" ->
+          s.masked <- src.masked; s.mask <- copy_layer src.mask
         | "font-size" -> s.font_size <- src.font_size
         | "font-weight" -> s.font_weight <- src.font_weight
         | "font-style" -> s.italic <- src.italic

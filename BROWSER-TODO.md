@@ -124,7 +124,11 @@ Decoding is in C, at the owner's choice (2026-11-27): `imaged` (services/image) 
 - [x] Pictures as blocks (flex and grid items, `display: block`): replaced boxes
 - [x] The host's renderer (tests/render.ml) draws pictures, with `services/image/picture` (imaged's code as a host command)
 - [ ] `srcset` and `<picture>`: the best source for the size (today: `src`)
-- [ ] `background-image` (url, repeat, position, size), and `mask-image` as an alpha mask in the text's colour (Wikipedia's icons)
+- [x] `background-image`, `-repeat`, `-position`, `-size` (and the shorthand): the first layer, in the padding box of block-level boxes; `url()` resolved against its style sheet's URL
+- [x] `mask-image` (and `-webkit-`, `mask-size`, `-position`, `-repeat`, the shorthand) over a background colour: the picture's alpha in that colour (`Gfx.draw_image ~tint`): Wikipedia's icons
+- [x] A custom property that refers to itself (`--x: var(--x, 1rem)`, everywhere in Wikipedia's skin) has no value and the fallback holds (it made every declaration using it invalid: the icons' size among them)
+- [ ] Backgrounds of inline boxes; several layers; gradients; `background-clip`, `-origin`, `-attachment`
+- [ ] Wikipedia's header: the icons' places (the menu 9 px left of Chrome's, search lower), the appearance and bookmark icons, the contents icon by the title
 - [ ] gzip in `Http` (`Accept-Encoding`)
 - [x] Pictures on screen fetched before the others (then the rest in the page's order); pixels for the screen before any fetch
 - [ ] A cache of pictures across pages

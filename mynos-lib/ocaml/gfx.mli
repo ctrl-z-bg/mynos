@@ -96,6 +96,8 @@ type image = { image_width : int; image_height : int; bgra : string }
 (** [bgra]: 4 bytes a pixel, row by row: blue, green, red, alpha (255:
     opaque; not premultiplied). *)
 
-val draw_image : ?opacity:int -> t -> int -> int -> image -> unit
+val draw_image : ?opacity:int -> ?tint:int -> t -> int -> int -> image -> unit
 (** [draw_image g x y i]: the picture's top left at [(x, y)], blended by
-    its alpha (times [opacity]/255, 255 by default); clipped. *)
+    its alpha (times [opacity]/255, 255 by default); clipped. With [tint]
+    (a colour), only its alpha counts, in that colour: a mask (CSS's
+    [mask-image] over a background colour). *)

@@ -18,7 +18,7 @@ external get : t -> int -> int -> int = "caml_gfx_get"
 external send_shared : int -> t -> unit = "caml_gfx_send_shared"
 external draw_mask_raw : t -> int -> int -> string -> int -> int -> int -> int -> unit
   = "caml_gfx_draw_mask_byte" "caml_gfx_draw_mask"
-external draw_image_raw : t -> int -> int -> string -> int -> int -> int -> unit
+external draw_image_raw : t -> int -> int -> string -> int -> int -> int -> int -> unit
   = "caml_gfx_draw_image_byte" "caml_gfx_draw_image"
 external set_clip : int -> int -> int -> int -> unit = "caml_gfx_set_clip"
 external no_clip : unit -> unit = "caml_gfx_no_clip"
@@ -123,5 +123,6 @@ let draw_mask ?(opacity = 255) g x y m colour =
 (* pictures: 4 bytes a pixel, blue, green, red, alpha *)
 type image = { image_width : int; image_height : int; bgra : string }
 
-let draw_image ?(opacity = 255) g x y i =
+let draw_image ?(opacity = 255) ?tint g x y i =
   draw_image_raw g x y i.bgra i.image_width i.image_height (max 0 (min 255 opacity))
+    (match tint with Some c -> c land 0xFFFFFF | None -> -1)

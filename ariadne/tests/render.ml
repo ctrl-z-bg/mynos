@@ -7,7 +7,10 @@
    given; the image is WIDTH x HEIGHT, the page's top. Pictures: with
    ARIADNE_PICTURES=LIST, a file of lines "src<TAB>local file", decoded by
    imaged's code as the host's command services/image/picture (make -C
-   services/image picture; ARIADNE_PICTURE_TOOL says where it is). *)
+   services/image picture; ARIADNE_PICTURE_TOOL says where it is). With
+   ARIADNE_PICTURE_CACHE=DIR, a picture that is not in the list and has an
+   http(s) URL is read from DIR/(the MD5 of its URL, in hex), or else its
+   URL noted in DIR/missing, to be downloaded there for the next run. *)
 
 let tool = Option.value (Sys.getenv_opt "ARIADNE_PICTURE_TOOL") ~default:"../services/image/picture"
 
@@ -21,13 +24,28 @@ let pictures =
 
 (* a picture at w x h (0 x 0: its own size): its own size, and its pixels
    (blue, green, red, alpha) *)
+(* a picture's local file: from the list, or downloaded *)
+let local src =
+  match List.assoc_opt src pictures, Sys.getenv_opt "ARIADNE_PICTURE_CACHE" with
+  | Some f, _ -> Some f
+  | None, Some dir when String.length src > 4 && String.sub src 0 4 = "http" ->
+    let f = Filename.concat dir (Digest.to_hex (Digest.string src)) in
+    if Sys.file_exists f then Some f
+    else begin
+      (* noted in DIR/missing, for a download on the host (no network here) *)
+      Out_channel.with_open_gen [ Open_append; Open_creat ] 0o644 (Filename.concat dir "missing")
+        (fun oc -> output_string oc (src ^ "\n"));
+      None
+    end
+  | _ -> None
+
 let picture =
   let cache = Hashtbl.create 16 in
   fun src w h ->
     match Hashtbl.find_opt cache (src, w, h) with
     | Some r -> r
     | None ->
-      let r = match List.assoc_opt src pictures with
+      let r = match local src with
         | None -> None
         | Some file ->
           let out = Filename.temp_file "picture" ".bgra" in
@@ -89,6 +107,32 @@ let () =
                  end
                done
              done
+           | None -> ())
+        | Layout.Bg { x; y; w = bw; h = bh; layer; tint; clip } ->
+          (match layer.image with
+           | Some src ->
+             (match picture src 0 0 with
+              | Some (natural, _) ->
+                let x0, y0, x1, y1 = match clip with
+                  | Some (a, b, c, d) -> (max a x, max b y, min c (x + bw), min d (y + bh))
+                  | None -> (x, y, x + bw, y + bh) in
+                List.iter (fun (tx, ty, tw, th) ->
+                    match picture src tw th with
+                    | Some (_, (pw, ph, px)) ->
+                      for j = 0 to ph - 1 do
+                        for i = 0 to pw - 1 do
+                          let px_x = tx + i and px_y = ty + j in
+                          if px_x >= x0 && px_x < x1 && px_y >= y0 && px_y < y1 then begin
+                            let o = (j * pw + i) * 4 in
+                            let c k = Char.code px.[o + k] in
+                            let colour = match tint with
+                              | Some t -> t | None -> (c 2 lsl 16) lor (c 1 lsl 8) lor c 0 in
+                            put px_x px_y colour (c 3)
+                          end
+                        done
+                      done
+                    | None -> ()) (Layout.tiles ~x ~y ~w:bw ~h:bh layer ~natural)
+              | None -> ())
            | None -> ())) page.items;
     Out_channel.with_open_bin out (fun oc ->
         Printf.fprintf oc "P6\n%d %d\n255\n" w h;

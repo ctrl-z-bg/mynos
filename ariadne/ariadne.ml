@@ -62,7 +62,7 @@ let fetch_css url =
 
 (* a sheet, after the sheets it imports (three levels at most) *)
 let rec with_imports ~base ~depth ?media text =
-  let sh = Style.parse_sheet ?media text in
+  let sh = Style.parse_sheet ~base ?media text in
   let imported =
     if depth >= 3 then []
     else List.concat_map (fun (u, mq) ->
@@ -197,6 +197,23 @@ let fetch_pictures l =
            if fresh then (incr n; enqueue (Fetch (l, u)))
          | _ -> ());
       true)
+
+(* a background picture's own size, if it has arrived; met for the first
+   time (on screen), fetched before the others *)
+let pic_natural l src =
+  let u = Url.resolve l.base src in
+  let fetch = ref false in
+  let r = Mutex.protect pics_lock (fun () ->
+      match Hashtbl.find_opt l.pics u with
+      | Some (Some p) -> Some (p.nw, p.nh)
+      | Some None -> None
+      | None ->
+        if Hashtbl.length l.pics < max_pics then begin
+          Hashtbl.replace l.pics u None; Hashtbl.replace l.hurried u (); fetch := true
+        end;
+        None) in
+  if !fetch then enqueue ~first:true (Fetch (l, u));
+  r
 
 (* a picture's pixels at w x h: drawn now if there, asked for if not *)
 let pic_image l src w h =
@@ -399,14 +416,34 @@ let window first =
               | Image { x; y; w; h; src; clip } ->
                 let yy = top + y in
                 if yy + h > box_y && yy < box_y + box_h then
-                  match pic_image st.shown src w h with
+                  (match pic_image st.shown src w h with
                   | Some img ->
                     (match clip with
                      | Some (x0, y0, x1, y1) ->
                        Gfx.with_clip (box_x + x0) (top + y0) (x1 - x0) (y1 - y0)
                          (fun () -> Gfx.draw_image g (box_x + x) yy img)
                      | None -> Gfx.draw_image g (box_x + x) yy img)
-                  | None -> ()) page.items;
+                  | None -> ())
+              | Bg { x; y; w; h; layer; tint; clip } ->
+                let yy = top + y in
+                (match layer.image with
+                 | Some src when yy + h > box_y && yy < box_y + box_h && w > 0 && h > 0 ->
+                   (match pic_natural st.shown src with
+                    | Some natural ->
+                      (* the box, within its clip *)
+                      let x0, y0, x1, y1 = match clip with
+                        | Some (a, b, c, d) -> (max a x, max b y, min c (x + w), min d (y + h))
+                        | None -> (x, y, x + w, y + h) in
+                      if x1 > x0 && y1 > y0 then
+                        Gfx.with_clip (box_x + x0) (top + y0) (x1 - x0) (y1 - y0) (fun () ->
+                            List.iter (fun (tx, ty, tw, th) ->
+                                if top + ty + th > box_y && top + ty < box_y + box_h then
+                                  match pic_image st.shown src tw th with
+                                  | Some img -> Gfx.draw_image ?tint g (box_x + tx) (top + ty) img
+                                  | None -> ())
+                              (Layout.tiles ~x ~y ~w ~h layer ~natural))
+                    | None -> ())
+                 | _ -> ())) page.items;
           page.height);
       (* a link under the pointer: shown below; a click follows it *)
       let link_at mx my =
