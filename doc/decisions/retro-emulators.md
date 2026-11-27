@@ -2,9 +2,10 @@
 
 - **Issue:** mynos-0bj
 - **Date:** 2026-11-27
-- **Status:** proposed (2026-11-27: the ZX Spectrum 48K first, with
-  GLAZX; the emulators serve "emu/1"; Shift and Ctrl alone left for
-  later).
+- **Status:** accepted (2026-11-27). Done: the ZX Spectrum 48K
+  (`zxspectrum` 1.0, with GLAZX), camlboy on emu/1 (1.2), the manual's
+  chapter 25; section 11 has the results. Next: a one-player Spectrum
+  game, then the MSX (mynos-0bj.3).
 
 ## What it is for
 
@@ -233,7 +234,12 @@ the price of the protocol:
 
 ### 9. Speed
 
-CAMLBOY, in bytecode: 360 frames a second on the host, 357 inside MyNOS
+Measured (`packages/zxspectrum/MYNOS.md`): the Spectrum makes about 300
+frames a second in bytecode on the host, about 330 in MyNOS under QEMU
+with KVM, 10 without it (a fifth of the 50 it needs, not the third
+expected); an idle service costs nothing measurable.
+
+Expected beforehand: CAMLBOY, in bytecode: 360 frames a second on the host, 357 inside MyNOS
 under QEMU with KVM, 18 without KVM; the Game Boy needs 60, at 4.19 MHz.
 The Spectrum's and the MSX's Z80 run at about 3.5 MHz, with simpler
 video: the same margin is expected, full speed under KVM, about a third
@@ -248,11 +254,35 @@ The emulators are packages: user space only, on `Ipc`, `Gui`, `Sound`,
 `Tracer` and threads, which `main` (version 1, the book's) and `next`
 (version 2) both have. Packages land on `main` and reach `next` when
 `main` is merged into it (as `sysmonitor` 1.1 and `utils` 1.2 did).
-So: a branch `retro` from `main`, merged into `main` when the Spectrum
-and its tests are done, then `main` into `next` as usual. On `next`
+The Spectrum went so: a branch `retro` from `main`, merged into `main`
+when it and its tests were done, then `main` into `next`. Since then
+(2026-11-27) the applications have a branch of their own, `apps` (its
+worktree `../mynos-apps`): the emulators' work is on `retro`, merged
+into `apps`; `apps` goes into `main`, and `main` into `next`, as
+someone decides. On `next`
 they must also build and run on x86-64 and AArch64 (section 2: masks,
 not overflow); without KVM, as on a Raspberry Pi, expect a third of the
 speed or less.
+
+### 11. Results (2026-11-27)
+
+- **The Z80** (`packages/retro/z80.ml`, about 900 lines): FUSE's 1356
+  tests, zexdoc and zexall (67 of 67 each, 24 minutes each in bytecode)
+  all passed; the one bug they found was a table entry (`overflow_sub`).
+  FUSE's Q (SCF and CCF's undocumented bits) and its handling of a
+  prefix that touches no index register are followed.
+- **The Spectrum**: GLAZX loads at once and plays at 50 frames a second
+  under KVM; the suite drives it through emu/1 (lane c): the ROM's
+  message read, PRINT 2+2 typed and its 4 read back, breakpoints,
+  watchpoints, waits, a state saved and loaded, on the i386, x86-64 and
+  AArch64.
+- **emu/1** served by camlboy too (1.2): what a Game Boy cannot give
+  answers an error; the suite drives it after the Spectrum.
+- **Changes to this decision while doing it**: `keys`'s frames are
+  written `:n` (a number after a group would have been a digit key);
+  Page Up and Page Down pause and sound the Spectrum (P and M are its
+  keys); the sound goes off below 45 frames a second, not 50; zexall
+  ran as bytecode (no native compiler in the containers).
 
 ## Not now
 
