@@ -10,7 +10,10 @@ built and changes rarely. **Current state** describes what works, what
 doesn't, and the known shortcuts. It changes as work progresses.
 Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
-found along the way, bug by bug, is in `doc/JOURNAL.md`.
+found along the way, bug by bug, is in `doc/JOURNAL.md` (shared with
+`main`), `doc/JOURNAL-next.md` (the work of this branch, `next`: the
+ports, SMP, the Raspberry Pis) and `doc/JOURNAL-apps.md` (the
+applications, from `main`).
 
 Last updated: 2026-11-27
 
@@ -2102,3 +2105,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   previous threads were still returning. Fixed; lane j starts later and
   three checks wait for what they look for: the three suites at once
   are green twice in a row.
+- **2026-11-27** — The journal split: `doc/JOURNAL.md` is again as it was
+  where `next` left `main` (merges from `main` add to it without
+  conflicts); the 25 entries of `next`'s own work moved, as they were, to
+  `doc/JOURNAL-next.md`.
