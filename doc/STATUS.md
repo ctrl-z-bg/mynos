@@ -2138,3 +2138,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
 - **2026-11-27** — camlboy 1.2 serves emu/1 (`camlboy<pid>`): registers,
   memory, screenshots, breakpoints on the PC, frames, buttons; the
   suite's lane c drives it after the Spectrum (`tests/emu`).
+- **2026-11-27** — The manual's chapter 25, "Emulators as services:
+  emu/1" (`doc/manual/25-emulators.md`, its example
+  `examples/25/hello_zx.ml`, built by `tools/build-examples.sh` and run
+  in MyNOS), and appendix E.18. After the printed edition: the book is
+  frozen.

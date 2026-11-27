@@ -707,7 +707,23 @@ user.
 > happens to be `init`. The service explorer or a language model's tool
 > can send it the same way, and it describes itself like any other.
 
-## E.18 2002 and 2026
+## E.18 emu/1: the emulators
+
+**emu/1** (`packages/retro/emu_proto.mli`) is served by each emulator a
+package brings, under `<machine><pid>`: `zxspectrum` as `zx<pid>`,
+`camlboy` as `camlboy<pid>`. They are programs a user starts, not
+services `init` keeps, and their names change with their pids:
+`Emu_proto.find "zx"` lists those running. Twenty requests: `info`,
+`regs`, `peek`, `disasm`, `screen_text`, `screenshot` (safe), `pause`,
+`resume`, `step`, `frames`, `break`, `unbreak`, `breaks`, `wait`,
+`keys`, `poke`, `load`, `save_state`, `load_state`, `reset`. A request
+a machine cannot serve answers an error that says why (a Game Boy has
+no text screen). The requests are done by the emulation loop between
+frames, answered at once or later (`wait`, `keys`), from a queue a
+thread fills (`packages/retro/emu_service.ml`). Chapter 25 shows them
+at work.
+
+## E.19 2002 and 2026
 
 The last commit of the original project (tag `legacy-2008`) had four
 services, all in C, each with its own struct protocol: the
@@ -739,7 +755,7 @@ displayd and soundd are C, living with C libraries (lwIP, mbedTLS) and
 interrupt threads; ata and pagerd show that a driver can be an ordinary
 OCaml bytecode program with the `io` privilege.
 
-## E.19 Known limits
+## E.20 Known limits
 
 - fatfs and ata answer one request at a time: two programs reading
   `/disk` wait for each other (mynos-cui). So does consoled, whose main
