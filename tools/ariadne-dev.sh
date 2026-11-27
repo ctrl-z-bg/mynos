@@ -15,5 +15,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 "$root/tools/build-x86_64.sh" 'make -C ariadne &&
     { mmd -i system/disk.img ::/bin 2>/dev/null || true; } &&
     mcopy -o -i system/disk.img ariadne/ariadne.byte ::/bin/ariadne.byte &&
-    echo "ariadne-dev.sh: /disk/bin/ariadne.byte updated"'
+    echo "ariadne-dev.sh: /disk/bin/ariadne.byte updated" &&
+    echo "ariadne-dev.sh: it stays there, before the RAM disk'"'"'s, after full builds too:" &&
+    echo "ariadne-dev.sh: rm /disk/bin/ariadne.byte in MyNOS to use the RAM disk'"'"'s again"'
 ARCH=x86_64 exec "$root/tools/run-demo.sh" "$@"

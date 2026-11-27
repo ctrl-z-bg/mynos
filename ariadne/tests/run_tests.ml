@@ -9,6 +9,14 @@
 
 let dump_of html = Text.to_text (Text.of_dom (Html.parse html))
 
+(* a page laid out 800 pixels wide, with its <style> sheets (no network) *)
+let layout_of html =
+  let doc = Html.parse html in
+  let sheets = List.concat_map (function
+      | Style.Inline_sheet (t, media) -> [ Style.parse_sheet ?media t ]
+      | Style.Linked _ -> []) (Style.sources doc) in
+  Layout.dump (Layout.layout ~width:800 ~height:600 (Style.compute ~width:800 ~height:600 sheets doc) doc)
+
 let failures = ref 0
 
 let check what ok =
@@ -32,6 +40,18 @@ let pages () =
       | Some want ->
         let got = dump_of html in
         check ("page " ^ name) (got = want);
+        match first_difference got want with
+        | Some (i, g, w) when got <> want ->
+          Printf.printf "ariadne:   line %d: got      %S\nariadne:   line %d: expected %S\n" i g i w
+        | _ -> ()) Pages.pages
+
+let layouts () =
+  List.iter (fun (name, html) ->
+      match List.assoc_opt name Expected_layout.expected_layout with
+      | None -> check ("layout " ^ name ^ ": has an expected display list") false
+      | Some want ->
+        let got = layout_of html in
+        check ("layout " ^ name) (got = want);
         match first_difference got want with
         | Some (i, g, w) when got <> want ->
           Printf.printf "ariadne:   line %d: got      %S\nariadne:   line %d: expected %S\n" i g i w
@@ -86,6 +106,10 @@ let dom () =
 
 let () =
   match List.tl (Array.to_list Sys.argv) with
+  | [ "--print-layout"; name ] ->
+    (match List.assoc_opt name Pages.pages with
+     | Some html -> print_string (layout_of html)
+     | None -> prerr_endline ("no test page " ^ name); exit 2)
   | [ "--print"; name ] ->
     (match List.assoc_opt name Pages.pages with
      | Some html -> print_string (dump_of html)
@@ -96,5 +120,6 @@ let () =
     encodings ();
     deep ();
     pages ();
+    layouts ();
     if !failures = 0 then print_endline "ariadne: all checks passed"
     else (Printf.printf "ariadne: FAIL (%d)\n%!" !failures; exit 1)

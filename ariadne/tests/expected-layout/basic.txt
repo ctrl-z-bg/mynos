@@ -1,0 +1,90 @@
+fill 0,0 800x395 #ffffff
+text 8,40 bold #ff0000 Ariadne's
+text 88,40 bold #ff0000 thread
+text 8,89 #ff0000 Minos
+text 56,89 #ff0000 had
+text 88,89 #ff0000 a
+text 104,89 #ff0000 labyrinth
+text 184,89 #ff0000 built,
+text 240,89 #ff0000 and
+text 272,89 bold #ff0000 Ariadne
+text 336,89 #ff0000 gave
+text 376,89 italic #ff0000 Theseus
+text 440,89 #ff0000 a
+text 456,89 #ff0000 thread.
+text 8,124 #ff0000 Entities:
+text 88,124 #ff0000 &
+text 104,124 #ff0000 <tag>
+text 152,124 #ff0000 "quoted"
+text 224,124 #ff0000 café
+text 264,124 #ff0000 é
+text 280,124 #ff0000 é
+text 296,124 #ff0000 €
+text 312,124 #ff0000 ©
+text 328,124 #ff0000 a b
+text 360,124 #ff0000 &unknown;
+text 440,124 #ff0000 AT&T
+text 8,168 bold #ff0000 Lines
+text 8,212 #ff0000 One
+text 40,212 #ff0000 line
+text 8,231 #ff0000 another
+text 72,231 #ff0000 line
+text 8,250 #ff0000 and
+text 40,250 #ff0000 a
+text 56,250 #ff0000 third.
+text 8,285 #ff0000 Links:
+text 64,285 #0000ee the
+fill 64,299 24x1 #0000ee
+fill 88,299 8x1 #0000ee
+text 96,285 #0000ee lists
+fill 96,299 40x1 #0000ee
+text 136,285 #ff0000 ,
+text 152,285 #0000ee the
+fill 152,299 24x1 #0000ee
+fill 176,299 8x1 #0000ee
+text 184,285 #0000ee top
+fill 184,299 24x1 #0000ee
+text 208,285 #ff0000 ,
+text 224,285 #0000ee an
+fill 224,299 16x1 #0000ee
+fill 240,299 8x1 #0000ee
+text 248,285 #0000ee absolute
+fill 248,299 64x1 #0000ee
+fill 312,299 8x1 #0000ee
+text 320,285 #0000ee one
+fill 320,299 24x1 #0000ee
+text 344,285 #ff0000 ,
+text 360,285 #ff0000 and
+text 392,285 #0000ee the
+fill 392,299 24x1 #0000ee
+fill 416,299 8x1 #0000ee
+text 424,285 #0000ee lists
+fill 424,299 40x1 #0000ee
+fill 464,299 8x1 #0000ee
+text 472,285 #0000ee again
+fill 472,299 40x1 #0000ee
+text 512,285 #ff0000 .
+fill 8,319 784x1 #808080
+fill 8,320 784x1 #808080
+fill 8,319 1x2 #808080
+fill 791,319 1x2 #808080
+text 8,346 bold #ff0000 A
+text 24,346 bold #ff0000 small
+text 72,346 bold #ff0000 heading
+link 64,284 24x19 lists.html
+link 88,284 8x19 lists.html
+link 96,284 40x19 lists.html
+link 152,284 24x19 #top
+link 176,284 8x19 #top
+link 184,284 24x19 #top
+link 224,284 16x19 https://example.com/a/b
+link 240,284 8x19 https://example.com/a/b
+link 248,284 64x19 https://example.com/a/b
+link 312,284 8x19 https://example.com/a/b
+link 320,284 24x19 https://example.com/a/b
+link 392,284 24x19 lists.html
+link 416,284 8x19 lists.html
+link 424,284 40x19 lists.html
+link 464,284 8x19 lists.html
+link 472,284 40x19 lists.html
+height 395

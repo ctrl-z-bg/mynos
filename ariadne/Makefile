@@ -13,15 +13,16 @@ MYNOS = ../mynos-lib/ocaml/mynos.cmi ../mynos-lib/ocaml/mynos.cma ../mynos-runti
 
 PAGES = $(sort $(wildcard pages/*.html))
 EXPECTED = $(sort $(wildcard tests/expected/*.txt))
+EXPECTED_LAYOUT = $(sort $(wildcard tests/expected-layout/*.txt))
 
 # the engine's core: no input or output (the plan's rule 5), so it is
 # built and checked on the host too
 CORE = url.cmo encoding.cmo entities_data.cmo tokenizer.cmo dom.cmo treebuilder.cmo \
-	html.cmo text.cmo pages.cmo
+	html.cmo text.cmo css.cmo selector.cmo style.cmo layout.cmo pages.cmo
 
 all: ariadne.byte
 
-core: $(CORE) expected.cmo
+core: $(CORE) expected.cmo expected_layout.cmo
 
 ariadne.byte: $(CORE) loader.ml ariadne.ml $(MYNOS)
 	$(OCAMLC) mynos.cma unix.cma threads.cma -o $@ $(CORE) loader.ml ariadne.ml
@@ -35,6 +36,9 @@ pages.ml: FORCE
 	cmp -s $@.new $@ && rm $@.new || mv $@.new $@
 expected.ml: FORCE
 	sh gen-strings.sh expected $(EXPECTED) > $@.new
+	cmp -s $@.new $@ && rm $@.new || mv $@.new $@
+expected_layout.ml: FORCE
+	sh gen-strings.sh expected_layout $(EXPECTED_LAYOUT) > $@.new
 	cmp -s $@.new $@ && rm $@.new || mv $@.new $@
 entities_data.ml: FORCE
 	sh gen-entities.sh ../third_party/whatwg-entities/entities.json > $@.new
@@ -54,11 +58,15 @@ html.cmi: dom.cmi encoding.cmo
 html.cmo: html.cmi treebuilder.cmo encoding.cmo
 text.cmi: dom.cmi
 text.cmo: text.cmi
+css.cmo: encoding.cmo
+selector.cmo: css.cmo dom.cmi
+style.cmo: css.cmo selector.cmo dom.cmi
+layout.cmo: style.cmo dom.cmi
 
 # the checks, on the host's ocamlrun: the core's (tests/run_tests.ml), and
 # html5lib-tests (tests/html5lib.ml, with a copy of MyNOS's Json)
-tests/run_tests.byte: $(CORE) expected.cmo tests/run_tests.ml
-	ocamlc -I . -o $@ $(CORE) expected.cmo tests/run_tests.ml
+tests/run_tests.byte: $(CORE) expected.cmo expected_layout.cmo tests/run_tests.ml
+	ocamlc -I . -o $@ $(CORE) expected.cmo expected_layout.cmo tests/run_tests.ml
 
 tests/json.ml: ../mynos-lib/ocaml/json.ml
 	cp $< $@
@@ -83,11 +91,12 @@ test-html5lib-verbose: tests/html5lib.byte
 
 expected: tests/run_tests.byte
 	for f in $(PAGES); do n=$$(basename $$f .html); \
-	  ocamlrun tests/run_tests.byte --print $$n > tests/expected/$$n.txt; done
+	  ocamlrun tests/run_tests.byte --print $$n > tests/expected/$$n.txt; \
+	  ocamlrun tests/run_tests.byte --print-layout $$n > tests/expected-layout/$$n.txt; done
 
 clean:
 	rm -f *.cm[io] tests/*.cm[io] *.byte tests/*.byte *.new
-	rm -f pages.ml expected.ml entities_data.ml tests/json.ml tests/json.mli
+	rm -f pages.ml expected.ml expected_layout.ml entities_data.ml tests/json.ml tests/json.mli
 
 FORCE:
 .PHONY: all core test test-html5lib-verbose expected clean FORCE

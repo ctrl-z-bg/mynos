@@ -75,17 +75,28 @@ Found in M1:
 
 ## M3: CSS and the first layout
 
-- [ ] CSS syntax (Syntax Level 3): tokenizer and parser; `<style>`, `<link rel=stylesheet>`, the `style` attribute
-- [ ] Selectors: type, class, id, attributes, combinators, `:not`, `:is`, `:where`, structural pseudo-classes; specificity
-- [ ] The cascade: the browser's own style sheet, the author's, `!important`, order; inheritance
-- [ ] Computed values: `px`, `em`, `rem`, `%`, `vw`/`vh`; colours; `@media` by width
-- [ ] The box tree: `display` block, inline, none, inline-block; anonymous boxes
-- [ ] Block layout: widths, margins (with collapsing), padding, borders
-- [ ] Inline layout: line breaking, `white-space`, `text-align`, `line-height`, `vertical-align` (baseline)
-- [ ] The display list; painting: backgrounds, borders, text, underlines
-- [ ] Scrolling, hit testing, links, history (back, forward)
-- [ ] URLs (the WHATWG parser), https through `Http`
-- [ ] A Wikipedia article reads well; its timings recorded below
+- [x] CSS syntax (Syntax Level 3): tokenizer and parser; `<style>`, `<link rel=stylesheet>` (fetched, with its `media`), `@import` (three levels), the `style` attribute (`css.ml`)
+- [x] Selectors (Level 4): type, class, id, attributes (all operators, `i`), the four combinators, `:not`, `:is`, `:where`, `:has`, `:nth-child(An+B of S)` and the structural ones, `:root`, `:empty`, `:link`, `:checked`, `:disabled`; dynamic ones valid but never matching; specificity (`selector.ml`)
+- [x] The cascade: the browser's own style sheet (the rendering section, with quirks mode's table rule), presentational hints (`bgcolor`, `align`, `width`, `<font>`...), the author's, the style attribute, `!important`, specificity, order; inheritance; `inherit`, `initial`, `unset` (`style.ml`)
+- [x] Computed values: `px`, `em`, `rem`, `%`, `vw`/`vh` and the others; `calc()`, `min()`, `max()`, `clamp()`; custom properties and `var()` with fallbacks; colours (148 names, system colours, `#hex`, `rgb()`, `hsl()`, `light-dark()`); `@media` (types, ranges, the usual features), `@supports`, `@layer`; the shorthands (`margin`, `padding`, `border*`, `font`, `background`'s colour, `list-style`)
+- [x] The box tree: `display` block, inline, none, contents, list-item; anonymous blocks; blocks inside inlines (`layout.ml`)
+- [ ] `inline-block` as a box of its own (today: its content flows inline)
+- [x] Block layout: widths (`auto`, lengths, `%`, `min-`/`max-width`, `box-sizing`), `auto` margins centring, padding, borders, heights; sibling margins collapsing
+- [ ] Margins collapsing between a parent and its first or last child (`<body>`'s and an `<h1>`'s add up today)
+- [x] Inline layout: lines broken at spaces, words too long cut, `white-space` (all five), `text-align`, `text-indent`, `line-height`, `text-transform`; inline backgrounds, margins and padding; underlines, line-through
+- [ ] `vertical-align` (`sub`, `super`, `middle`); justified text (shown left-aligned)
+- [x] The display list; painting: the canvas, backgrounds, borders, text (bold), underlines, list markers (bullets, numbers, letters, Roman); form controls and images as frames (M4: images)
+- [x] Scrolling, hit testing, links (in-page `#anchors` too), history (back, forward), `<base href>`
+- [ ] URLs (the WHATWG parser): still M0's resolver
+- [x] https through `Http`
+- [x] A Wikipedia article reads well; its timings recorded below
+- [x] `ariadne --layout URL [WIDTH]`: the display list; the test pages' display lists checked (`tests/expected-layout/`), on the host and in MyNOS
+
+Found in M3:
+
+- The cascade took 5.7 s on Wikipedia (8,253 elements, 2,132 rules) in MyNOS. Two fixes, from `ocamlprof`: an element's classes are split once and kept (`Dom.classes`), and an ancestor filter (as browsers have) skips the rules whose descendant selectors need an ancestor tag, class or id that no ancestor has. Now 402 ms.
+- Most of a page's time is now the network: about 1.8 s per request to Wikipedia (the page, then each style sheet, one after the other). Keeping connections open and fetching the sheets in parallel would help; `netd` and `Http` are where.
+- Positioned elements are left out until M5, flex and grid are blocks: Wikipedia's header and tabs stack vertically; Hacker News's table rows break where a cell holds a block (`<center>`).
 
 ## M4: images
 
@@ -130,13 +141,15 @@ Found in M1:
 ## Measurements
 
 Timings in MyNOS under KVM, x86-64 (`ariadne --time`); the network's
-time apart. Until M3 the Layout column is the text's reading (`Text`).
+time apart. Until M3 the Layout column is the text's reading (`Text`); from M3 it is layout, and Paint is the window's drawing.
 
 | Date | Milestone | Page | Size | Parse | Cascade | Layout | Paint | Network |
 |---|---|---|---|---|---|---|---|---|
 | 2026-11-27 | M0 | en.wikipedia.org/wiki/Ariadne | 375 KB, 8,256 nodes | 110 ms | — | 80 ms | — | 5.4 s |
 | 2026-11-27 | M1 | en.wikipedia.org/wiki/Ariadne | 375 KB, 8,253 nodes | 281 ms, then about 235 ms (host) after the fast paths; decoding 50 ms, then 9 ms | — | 100 ms | — | 5.3 s |
 | 2026-11-27 | M1 | www.repubblica.it | 478 KB, 10,241 nodes | 355 ms | — | 67 ms | — | 7.5 s |
+| 2026-11-27 | M3 | en.wikipedia.org/wiki/Ariadne | 375 KB, 8,253 nodes, 2,132 rules | 251 ms | 5,672 ms, then 402 ms | 47 ms | — | 3.8 s, and 3.6 s for its style sheets |
+| 2026-11-27 | M3 | news.ycombinator.com | 32 KB, 1,213 nodes, 125 rules | 29 ms | 63 ms | 9 ms | — | 3.5 s, and 2.0 s for its style sheet |
 
 html5lib-tests pass rate:
 

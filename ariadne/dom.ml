@@ -23,6 +23,7 @@ type node = {
   mutable prev : node option;
   mutable next : node option;
   mutable content : node option;
+  mutable cls : string list option;   (* the class attribute, split: a cache *)
 }
 
 let next_id = ref 0
@@ -30,7 +31,7 @@ let next_id = ref 0
 let make kind =
   incr next_id;
   { id = !next_id; kind; parent = None; first_child = None; last_child = None;
-    prev = None; next = None; content = None }
+    prev = None; next = None; content = None; cls = None }
 
 let document () = make (Document { quirks = No_quirks })
 let fragment () = make Fragment
@@ -68,7 +69,7 @@ let insert_before parent child reference =
 
 let append parent child = insert_before parent child None
 
-let set_attrs n a = match n.kind with Element e -> e.attrs <- a | _ -> ()
+let set_attrs n a = match n.kind with Element e -> e.attrs <- a; n.cls <- None | _ -> ()
 let set_quirks n q = match n.kind with Document d -> d.quirks <- q | _ -> ()
 
 let name n = match n.kind with Element e -> e.name | _ -> ""
@@ -82,6 +83,20 @@ let attr n a =
   | Element e -> (match List.find_opt (fun (x : attr) -> x.name = a) e.attrs with
       | Some x -> Some x.value | None -> None)
   | _ -> None
+
+(* the class attribute's names, split once and kept *)
+let classes n =
+  match n.cls with
+  | Some c -> c
+  | None ->
+    let c = match attr n "class" with
+      | Some v ->
+        List.filter (fun x -> x <> "")
+          (String.split_on_char ' ' (String.map (fun ch ->
+               if ch = '\t' || ch = '\n' || ch = '\r' || ch = '\012' then ' ' else ch) v))
+      | None -> [] in
+    n.cls <- Some c;
+    c
 
 let children n =
   let rec go acc = function None -> List.rev acc | Some c -> go (c :: acc) c.next in

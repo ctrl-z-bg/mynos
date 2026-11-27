@@ -151,31 +151,40 @@ it. **See also** PACKAGES, PKG; chapter 10, 10.14.
 ```
 ariadne [URL]
 ariadne --dump URL
+ariadne --layout URL [WIDTH]
 ariadne --time URL
 ```
 
-**Type** Program (`/ariadne.byte`); graphical, except with `--dump` and
-`--time`.
+**Type** Program (`/ariadne.byte`); graphical, except with `--dump`,
+`--layout` and `--time`.
 
 **Description** Ariadne is MyNOS's new browser, being written in OCaml
 (`doc/decisions/browser.md`, `BROWSER-TODO.md`); the older `browser`
-package stays. It is at its first milestone: it shows a page's text,
-without styles, pictures or JavaScript. Without `--dump` or `--time` it
-opens a window: an address field (Enter or Go loads), Reload, and the
-page, which scrolls (the wheel, Page Up, Page Down, Home, End). `--dump`
-prints the page as text (`#` before headings, `-` before list items),
-then its links, resolved; `--time` prints how long each stage took
-(loading, parsing, reading the text). Addresses: `http:`, `https:`,
-`file:` (a file, or a folder as a list), `about:start`, `about:tests`
-(the test pages built into Ariadne, as `about:test/NAME`). A typed
-`example.com` is `https://example.com`; `/disk/page.html` is a file.
+package stays. It parses pages with the HTML Standard's parser, applies
+their CSS (style sheets, selectors, the cascade, `@media`, custom
+properties) and lays them out in blocks and lines, in the window's font;
+pictures show as their words or a frame, there is no JavaScript, and
+floats, positioning, tables and flexbox are still simple (milestone M5).
+Without an option it opens a window: Back and Forward, Reload, an
+address field (Enter or Go loads), and the page, which scrolls (the
+wheel, Page Up, Page Down, the arrows, Home, End); a click follows a
+link, whose address the status line shows. `--dump` prints the page as
+text (`#` before headings, `-` before list items), then its links;
+`--layout` prints its display list (rectangles, words and links, laid out
+WIDTH pixels wide, 800 by default); `--time` prints how long each stage
+took (loading, decoding, parsing, style sheets, cascade, layout).
+Addresses: `http:`, `https:`, `file:` (a file, or a folder as a list),
+`about:start`, `about:tests` (the test pages built into Ariadne, as
+`about:test/NAME`). A typed `example.com` is `https://example.com`;
+`/disk/page.html` is a file.
 
 **Examples**
 
 ```
 ariadne &
+ariadne en.wikipedia.org/wiki/Ariadne &
 ariadne --dump about:test/basic
-ariadne --time https://en.m.wikipedia.org/wiki/Ariadne
+ariadne --time https://en.wikipedia.org/wiki/Ariadne
 ```
 
 **See also** FETCH.

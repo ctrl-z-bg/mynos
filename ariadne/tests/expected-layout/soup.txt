@@ -1,0 +1,43 @@
+fill 0,0 800x341 #ffffff
+text 8,40 bold #000000 Tag
+text 40,40 bold #000000 soup
+text 8,89 #000000 A
+text 24,89 #000000 paragraph
+text 104,89 #000000 never
+text 152,89 #000000 closed
+text 8,124 #000000 Another,
+text 80,124 #000000 with
+text 120,124 #000000 a
+text 136,124 bold #000000 bold
+text 176,124 bold italic #000000 and
+text 208,124 bold italic #000000 italic
+text 264,124 italic #000000 mix
+text 288,124 #000000 .
+text 8,159 #000000 Stray
+text 56,159 #000000 end
+text 88,159 #000000 tags
+text 128,159 #000000 above
+text 176,159 #000000 are
+text 208,159 #000000 ignored.
+text 8,194 #000000 A
+text 24,194 #000000 div
+text 8,229 #000000 with
+text 48,229 #000000 a
+text 64,229 #000000 paragraph
+text 8,264 #000000 after
+text 56,264 #000000 it.
+text 8,299 #000000 Unquoted
+text 80,299 #000000 attributes:
+text 176,299 #0000ee here
+fill 176,313 32x1 #0000ee
+text 208,299 #000000 ;
+text 224,299 #000000 a
+text 240,299 #000000 lone
+text 280,299 #000000 &
+text 296,299 #000000 and
+text 328,299 #000000 <
+text 344,299 #000000 a
+text 360,299 #000000 less-than
+text 440,299 #000000 sign.
+link 176,298 32x19 soup.html
+height 341

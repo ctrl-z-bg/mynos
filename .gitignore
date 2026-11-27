@@ -81,6 +81,7 @@ llm.env
 # character references) and the test runner's copy of Json
 ariadne/pages.ml
 ariadne/expected.ml
+ariadne/expected_layout.ml
 ariadne/entities_data.ml
 ariadne/tests/json.ml
 ariadne/tests/json.mli

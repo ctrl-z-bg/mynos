@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<title>CSS</title>
+<style>
+body { margin: 0; color: #222 }
+.hidden, .gone { display: none }
+#main { width: 400px; margin: 0 auto; padding: 10px; border: 2px solid #ccc; background: #f8f8f8 }
+p { margin: 8px 0 }
+p.note { color: rgb(200, 0, 0) }
+#main p.note { color: hsl(120, 100%, 25%) }
+.important { color: blue !important }
+ul > li:first-child { font-weight: bold }
+li:nth-child(2n) { color: gray }
+@media (max-width: 500px) { #main { width: auto } }
+@media (min-width: 5000px) { body { display: none } }
+:root { --accent: #c00 }
+h1 { color: var(--accent); margin: 0 0 10px }
+.centered { text-align: center }
+.box { width: calc(50% - 20px); margin-left: 20px; border-left: 4px solid var(--missing, #08f); padding-left: 4px }
+@supports (display: grid) { .box { display: none } }
+@supports (color: red) { .supported { font-weight: bold } }
+</style>
+<div id="main">
+<h1>Styled</h1>
+<p class="note">Note in green (the id rule wins).</p>
+<p class="note important" style="color: red">Blue: important beats the style attribute.</p>
+<p class="hidden">Not shown</p>
+<p hidden>Not shown either</p>
+<ul><li>First, bold</li><li>Second, gray</li><li>Third</li></ul>
+<p class="centered supported">Centered, bold</p>
+<div class="box">A box half as wide, minus 20px, with a blue left border.</div>
+<p>A long paragraph that wraps over several lines because the column is only four hundred pixels wide, so the words go on the next line, <a href="#main">with a link</a> at the end.</p>
+</div>

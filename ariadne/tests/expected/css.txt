@@ -1,0 +1,11 @@
+title: CSS
+# Styled
+Note in green (the id rule wins).
+Blue: important beats the style attribute.
+Not shown
+- First, bold
+- Second, gray
+- Third
+Centered, bold
+A box half as wide, minus 20px, with a blue left border.
+A long paragraph that wraps over several lines because the column is only four hundred pixels wide, so the words go on the next line, with a link at the end.

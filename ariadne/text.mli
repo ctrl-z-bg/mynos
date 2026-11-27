@@ -23,3 +23,6 @@ val of_dom : Dom.node -> page
 val to_text : page -> string
 (** The dump: the title, then a line per block ([#] for headings, [-] for
     items, four spaces before preformatted lines, [----] for rules). *)
+
+val collapse : string -> string
+(** Runs of white space as one space, none at either end. *)

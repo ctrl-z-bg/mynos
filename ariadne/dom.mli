@@ -40,6 +40,7 @@ type node = private {
   mutable prev : node option;
   mutable next : node option;
   mutable content : node option;   (** a template's contents (a [Fragment]) *)
+  mutable cls : string list option;   (** the class attribute, split: see {!classes} *)
 }
 
 (** {1 Making nodes} *)
@@ -85,6 +86,9 @@ val is_html : node -> string -> bool
 
 val attr : node -> string -> string option
 val attrs : node -> attr list
+val classes : node -> string list
+(** The names of the class attribute, split at white space (kept). *)
+
 val children : node -> node list
 
 val walk : enter:(node -> bool) -> leave:(node -> unit) -> node -> unit
