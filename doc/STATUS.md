@@ -2165,3 +2165,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   interrupt endpoint is now reset and read again (the mouse stopped at
   its first failed transfer). Next: the network, GENET (btq.8.4), then
   the Wi-Fi (btq.9).
+- **2026-11-27** — GENET, the Pi 4's and 400's Ethernet (mynos-btq.8.4),
+  written, not yet tried on the board: `services/net/genet.c`, netd's
+  third card. The kernel lets a driver map it only if the device tree
+  has it (QEMU's `raspi4b` has none); a new native call, 105
+  (`mynos_piFirmware`), hands a driver's property request to the
+  firmware's mailbox (the board's MAC address; the Wi-Fi's power next).

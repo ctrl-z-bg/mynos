@@ -476,8 +476,10 @@ one may be waiting in a read for these very keys.
 in one process, so that a frame is a function call rather than a
 message. The card is a virtio one if there is one (`vnet.c`, over
 `libmynos`'s virtio transport: a receive queue with 32 buffers always
-offered, a transmit queue of 16, a shared PCI line), else an NE2000
-(`ne2k.c`, port `0x300`, IRQ 9). Protocol **net/1**
+offered, a transmit queue of 16, a shared PCI line), else a Raspberry
+Pi 4's or 400's GENET (`genet.c`: the UniMAC, its PHY by MDIO, a
+receive and a transmit ring of 256 frames, the board's MAC address from
+the firmware), else an NE2000 (`ne2k.c`, port `0x300`, IRQ 9). Protocol **net/1**
 (`mynos-lib/ocaml/net.ml`), whose case numbers netd follows:
 
 | Case | Request | Arguments | Reply | Safe |
@@ -507,7 +509,8 @@ offered, a transmit queue of 16, a shared PCI line), else an NE2000
   ends the wait, or fail with `timeout` after `set_timeout`; `connect`
   and `connect_tls` (its handshake included) after 20 s.
 - *An address first.* DHCP; after 5 s without an answer, QEMU's user
-  network (10.0.2.15/24, gateway 10.0.2.2, DNS 10.0.2.3). Requests wait
+  network (10.0.2.15/24, gateway 10.0.2.2, DNS 10.0.2.3), but on a
+  Pi's GENET, a real network, DHCP goes on trying. Requests wait
   in the queue until there is an address.
 - *Sockets have owners*: at most 64 (32 TCP or TLS connections);
   another process's gets `not your
@@ -518,7 +521,7 @@ offered, a transmit queue of 16, a shared PCI line), else an NE2000
   (`/disk/ca.pem`), read at the first `connect_tls` and again when it
   changes; `send` and `recv`
   then carry the clear bytes.
-- Without an NE2000 card netd logs it and ends with code 0.
+- Without a card netd logs it and ends with code 0.
 
 **httpd** (`httpd/httpd.ml`, OCaml, no privilege) registers no name: it
 is a client of net/1 and of the file services. `httpd [-w] [DIR [PORT]]`

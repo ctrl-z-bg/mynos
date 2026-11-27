@@ -11,7 +11,8 @@
 
 /*
  * netd: the network service. The TCP/IP stack is lwIP (third_party/lwip),
- * the card an NE2000 (ne2k.c), both in this process: a frame is a function
+ * the card a virtio one (vnet.c), a Raspberry Pi 4's GENET (genet.c) or
+ * an NE2000 (ne2k.c), all in this process: a frame is a function
  * call, not an IPC exchange. Programs talk to it over typed IPC, protocol
  * "net/1" (mynos-lib/ocaml/net.mli, which is its definition: the case
  * numbers below follow it).
@@ -61,6 +62,7 @@
 #include "netif/ethernet.h"
 #include "ne2k.h"
 #include "vnet.h"
+#include "genet.h"
 
 #include "mbedtls/ssl.h"
 #include "mbedtls/x509_crt.h"
@@ -167,13 +169,17 @@ static const char * err_text(err_t e) {
 static struct netif netif;
 static unsigned char mac[6];
 
-/* the card: a virtio one if there is one, else the NE2000 */
-static int virtio_card = 0;
+/* the card: a virtio one if there is one, else a Pi 4's GENET, else the
+   NE2000 */
+enum { NE2K, VIRTIO, GENET };
+static int card = NE2K;
 static int card_send(const void * frame, unsigned int len) {
-  return virtio_card ? vnet_send(frame, len) : ne2k_send(frame, len);
+  return card == VIRTIO ? vnet_send(frame, len) :
+         card == GENET ? genet_send(frame, len) : ne2k_send(frame, len);
 }
 static int card_recv(void * buf) {
-  return virtio_card ? vnet_recv(buf) : ne2k_recv(buf);
+  return card == VIRTIO ? vnet_recv(buf) :
+         card == GENET ? genet_recv(buf) : ne2k_recv(buf);
 }
 
 static err_t linkoutput(struct netif * n, struct pbuf * p) {
@@ -224,6 +230,7 @@ static void status_changed(struct netif * n) {
 static void check_address(void) {
   ip4_addr_t a, m, g, d;
   if (ready || sys_now() - started < DHCP_WAIT) return;
+  if (card == GENET) return;          /* a real network: DHCP goes on trying */
   mynos_log("netd: no DHCP answer, using 10.0.2.15\n");
   dhcp_release_and_stop(&netif);
   IP4_ADDR(&a, 10, 0, 2, 15);
@@ -1222,7 +1229,8 @@ static void * irq_thread(void * arg) {
   int sem = IDX(arg);
   for (;;) {
     if (mynos_P(sem) < 0) return NULL;
-    if (virtio_card) vnet_ack();      /* its PCI line, unmasked again */
+    if (card == VIRTIO) vnet_ack();   /* its PCI line, unmasked again */
+    else if (card == GENET) genet_ack();   /* (level-triggered too) */
     pthread_mutex_lock(&lock);
     interrupted = 1;
     pthread_cond_signal(&wake);
@@ -1270,9 +1278,13 @@ int main(void) {
 
   int irq = NE2K_IRQ;
   if (vnet_init(mac, &irq) == 0) {
-    virtio_card = 1;
+    card = VIRTIO;
     mynos_log("netd: virtio card, IRQ %d, %02x:%02x:%02x:%02x:%02x:%02x\n",
               irq, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  } else if (genet_init(mac, &irq) == 0) {
+    card = GENET;
+    mynos_log("netd: GENET, %02x:%02x:%02x:%02x:%02x:%02x\n",
+              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   } else if (ne2k_init(NE2K_IOBASE, mac) < 0) {
     mynos_log("netd: no network card (virtio, NE2000 at 0x%x)\n", NE2K_IOBASE);
     return 0;                     /* nothing to serve: not a failure (init) */
@@ -1296,8 +1308,8 @@ int main(void) {
   dhcp_start(&netif);
 
   {
-    int sem = mynos_driverRegister(virtio_card ? "virtio-net" : "ne2k",
-                                   virtio_card ? (irq | MYNOS_IRQ_PCI) : irq, NULL, NULL);
+    int sem = mynos_driverRegister(card == VIRTIO ? "virtio-net" : card == GENET ? "genet" : "ne2k",
+                                   card != NE2K ? (irq | MYNOS_IRQ_PCI) : irq, NULL, NULL);
     if (sem < 0)
       mynos_log("netd: no IRQ %d (%d): polling every %d ms\n", irq, sem, WAKE_MS);
     else {

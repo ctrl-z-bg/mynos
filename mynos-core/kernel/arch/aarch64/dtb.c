@@ -28,7 +28,7 @@
 #include "mem/mem.h"
 #include "kutils.h"
 #ifdef MYNOS_RASPI
-extern int raspi_pcie_present;
+extern int raspi_pcie_present, raspi_genet_present;
 #endif
 
 int _asm_global_mem_size;
@@ -93,6 +93,9 @@ static void read_fdt(const uint8_t * fdt, uint64_t * mem, uint64_t * rd_start,
       if (streq(pname, "compatible") && len >= 17 &&
           !kmemcmp((char *)v, "brcm,bcm2711-pcie", 17))
         raspi_pcie_present = 1;                    /* a Pi 4's PCIe (pcie4.c) */
+      if (streq(pname, "compatible") && len >= 21 &&
+          !kmemcmp((char *)v, "brcm,bcm2711-genet-v5", 21))
+        raspi_genet_present = 1;                   /* a Pi 4's Ethernet (raspi.c) */
 #endif
       if (in_chosen && streq(pname, "linux,initrd-start"))
         *rd_start = be_cells(v, len);

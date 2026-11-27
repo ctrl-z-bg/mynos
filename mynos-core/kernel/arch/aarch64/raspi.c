@@ -45,6 +45,8 @@
 #include "kutils.h"
 #include "mem/mem.h"
 #include "video.h"
+#include "process.h"
+#include "mynos.h"
 
 #define R(A)        (*(volatile uint32_t *)DEVICE(A))
 
@@ -84,10 +86,14 @@ void raspi_detect(void)
 /* mapPhysical's devices (arch.h): the VideoCore's memory past the ARM's
    (its framebuffer), and the peripherals (a Pi 3's local ones too) */
 extern int raspi_pcie_up;
+int raspi_genet_present;                  /* the device tree says so (dtb.c) */
 int raspi_device_ok(unsigned long p, unsigned long n)
 {
   unsigned long end = p + (n << 12);
   if (end < p || p < ((unsigned long)__total_phy_pages << 12)) return 0;
+  /* a Pi 4's Ethernet, GENET, only if the device tree has it (QEMU's
+     raspi4b has none: its driver finds out here) */
+  if (p < 0xFD590000UL && end > 0xFD580000UL) return raspi_genet_present && end <= 0xFD590000UL;
   /* a Pi 4's PCIe, only once up (pcie4.c): its bridge's registers (with
      nothing behind them, QEMU's raspi4b, an access never ends), its
      window */
@@ -134,6 +140,27 @@ int raspi_mbox(volatile uint32_t * buf)
 }
 
 static volatile uint32_t mbox_buf[36] __attribute__((aligned(16)));
+
+/* firmware (105): a property request of a driver (the io privilege), up
+   to 64 words, as the mailbox takes it (its size first, then tags and
+   the end tag), sent as it is and its answer copied back: the board's
+   MAC address for GENET, the GPIO expander's lines for the Wi-Fi.
+   0 if the firmware answered */
+static volatile uint32_t user_mbox[64] __attribute__((aligned(16)));
+
+long raspi_firmware_call(uint32_t * buf, long len)
+{
+  long i;
+  if (!(processTable[currProcess]->privileges & MYNOS_PRIV_IO)) return MYNOS_ERR_DENY;
+  if (len < 12 || len > (long)sizeof user_mbox || (len & 3) || !__mem_userArea(buf, len))
+    return MYNOS_ERR_INVALID;
+  for (i = 0; i < len / 4; i++) user_mbox[i] = buf[i];
+  user_mbox[0] = (uint32_t)len;
+  user_mbox[1] = 0;
+  if (raspi_mbox(user_mbox) != 0) return MYNOS_ERR_INVALID;
+  for (i = 0; i < len / 4; i++) buf[i] = user_mbox[i];
+  return 0;
+}
 
 /* the ARM's RAM, from the firmware: its size (the rest, up to the
    peripherals, is the VideoCore's) */

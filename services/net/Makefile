@@ -29,11 +29,11 @@ mbedtls/%.o: $(MBEDTLS)/library/%.c mbedtls_mynos.h
 	@mkdir -p $(dir $@)
 	$(CC) -O2 -w $(MBEDTLS_CFLAGS) -c $< -o $@
 
-%.o: %.c ne2k.h vnet.h lwipopts.h mbedtls_mynos.h
+%.o: %.c ne2k.h vnet.h genet.h lwipopts.h mbedtls_mynos.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-netd: netd.o ne2k.o vnet.o $(LWIP_OBJ) $(MBEDTLS_OBJ) ../../mynos-lib/lib/libmynos.a
-	$(CC) netd.o ne2k.o vnet.o $(LWIP_OBJ) $(MBEDTLS_OBJ) -o $@ -lpthread $(LDFLAGS)
+netd: netd.o ne2k.o vnet.o genet.o $(LWIP_OBJ) $(MBEDTLS_OBJ) ../../mynos-lib/lib/libmynos.a
+	$(CC) netd.o ne2k.o vnet.o genet.o $(LWIP_OBJ) $(MBEDTLS_OBJ) -o $@ -lpthread $(LDFLAGS)
 
 clean:
 	rm -rf *~ *.o lwip mbedtls netd

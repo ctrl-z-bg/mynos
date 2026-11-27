@@ -241,6 +241,11 @@ void * mynos_mapPhysical(unsigned long phys, int npages);
    text console no more drawn; op 1, the screen back to the console;
    op 2, whether there is a screen. 0, or an error (elsewhere: always) */
 int mynos_piScreen(int op, int w, int h, unsigned long * out);
+/* a Raspberry Pi's firmware (native call 105; drivers only): a property
+   request of len bytes (up to 256: its size, a request code, the tags,
+   the end tag; the mailbox's channel 8) sent, its answer in buf. 0 if
+   the firmware answered, or an error (elsewhere: always) */
+int mynos_piFirmware(unsigned int * buf, int len);
 /* the DMA area: MYNOS_DMA_AREA_SIZE bytes of RAM below 16 MB, on a 64 KB
    boundary, chosen by the kernel at boot, for ISA DMA (a sound card's),
    mapped here: its address, its physical address in *phys (the DMA
