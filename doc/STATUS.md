@@ -1904,4 +1904,5 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   ULA, keyboard, beeper, `.tap` loaded at once, `.sna`, `.z80`; a window
   at 50 frames a second under KVM, `--headless`, `--bench`) and `glazx`
   (a game, MIT). The suite drives the Spectrum through emu/1 (lane c,
-  `tests/emu`). Not published yet.
+  `tests/emu`). Published (mynos-packages 20d0caf: zxspectrum 1.0,
+  glazx 1.0).
