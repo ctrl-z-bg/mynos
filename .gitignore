@@ -52,6 +52,8 @@ services/sound/soundd
 system/imaged
 services/image/imaged
 services/image/picture
+system/jsd
+services/js/jsd
 system/vblkd
 services/virtio/vblkd
 services/net/netd

@@ -179,9 +179,12 @@ Found in M5:
 
 ## M6: JavaScript
 
-- [ ] QuickJS (quickjs-ng) copied into the repository, built with musl for i386, x86-64, AArch64
-- [ ] `jsd`: the service, its typed IPC protocol, DOM nodes as handles
-- [ ] `console`, timers (`setTimeout`, `setInterval`, `requestAnimationFrame`)
+- [x] QuickJS-ng v0.18.0 copied into the repository (third_party/quickjs-ng, the library only), built with musl (x86-64 so far)
+- [ ] Built and checked on i386 and AArch64
+- [x] `jsd` (services/js): protocol `js/1` (create a context, eval, destroy), module `Js`; a runtime per context (64 MB, a stack limit, a run stopped after 5 s); the contexts of a program that ended freed; `ariadne --check-js` in tools/run-tests.sh
+- [ ] DOM nodes as handles: jsd calling back the browser (a port of Ariadne's) for the DOM's operations during a run
+- [x] `console` (log, info, debug, warn, error): its text returned with each run
+- [ ] Timers (`setTimeout`, `setInterval`, `requestAnimationFrame`)
 - [ ] The core DOM: `document`, `querySelector`, attributes, `textContent`, creating and moving nodes
 - [ ] Events: `click`, `input`, `submit`, `DOMContentLoaded`, `load`
 - [ ] `fetch` and `XMLHttpRequest`

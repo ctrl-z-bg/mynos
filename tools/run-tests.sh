@@ -1234,7 +1234,7 @@ s7_packages() {
     # sound (mynos-7jn): soundd's protocol as module Sound has it, a WAV
     # file converted and played, a tone; the recording is checked below
     waitfor "Directions: north" 90; sleep 2
-    shcmd 'ariadne --check-images; play check; play /disk/a440.wav; play -t 1320 300' 30
+    shcmd 'ariadne --check-images; ariadne --check-js; play check; play /disk/a440.wav; play -t 1320 300' 40
     waitfor "Directions: north, south" 60
 }
 s7_misc() {
@@ -1513,6 +1513,7 @@ if [ -f system/ramdisk.dsk ]; then
     expect "[hi____] [ Go ]"                          # a form's fields
     expect "ccc  d"                                   # a table as a grid
     expect "ariadne: imaged: all checks passed"        # pictures: imaged, from Ariadne
+    expect "ariadne: jsd: all checks passed"           # JavaScript: jsd, from Ariadne
     if [ -n "$pc" ]; then                            # no sound card on virt
     expect "soundd: Sound Blaster 16 (DSP 4.05)"
     expect "play: soundd describes sound/1 as sound.ml does"

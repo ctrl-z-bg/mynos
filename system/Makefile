@@ -28,6 +28,8 @@ soundd: ../services/sound/soundd
 	$(STRIP) -o $@ $<
 imaged: ../services/image/imaged
 	$(STRIP) -o $@ $<
+jsd: ../services/js/jsd
+	$(STRIP) -o $@ $<
 vblkd: ../services/virtio/vblkd
 	$(STRIP) -o $@ $<
 
@@ -39,7 +41,7 @@ ocamlc.byte: $(shell command -v ocamlc.byte 2>/dev/null || echo /opt/ocaml-5.5.2
 NUM_CMI = $(addprefix ../third_party/num/, num.cmi big_int.cmi nat.cmi ratio.cmi \
 	arith_status.cmi arith_flags.cmi int_misc.cmi)
 
-FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo netd displayd soundd imaged vblkd ../httpd/httpd.byte \
+FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo netd displayd soundd imaged jsd vblkd ../httpd/httpd.byte \
 	../gui/gui.byte ../gui/welcome.byte ../gui/clock.byte ../gui/services.byte ../gui/terminal.byte \
 	../gui/agent_window.byte ../gui/ask.byte ../gui/text.byte ../gui/recordings.byte ../gui/system.byte ../gui/files.byte \
 	../gui/tour.byte ../gui/tour.txt \
@@ -68,7 +70,7 @@ FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo n
 	../mynos-lib/ocaml/tracer.cmi ../mynos-lib/ocaml/json.cmi ../mynos-lib/ocaml/http.cmi \
 	../mynos-lib/ocaml/llm.cmi ../mynos-lib/ocaml/tools.cmi \
 	../mynos-lib/ocaml/gfx.cmi ../mynos-lib/ocaml/display.cmi ../mynos-lib/ocaml/gui.cmi \
-	../mynos-lib/ocaml/sound.cmi ../mynos-lib/ocaml/images.cmi ../mynos-lib/ocaml/textarea.cmi ../mynos-lib/ocaml/clipboard.cmi ../mynos-lib/ocaml/pager.cmi \
+	../mynos-lib/ocaml/sound.cmi ../mynos-lib/ocaml/images.cmi ../mynos-lib/ocaml/js.cmi ../mynos-lib/ocaml/textarea.cmi ../mynos-lib/ocaml/clipboard.cmi ../mynos-lib/ocaml/pager.cmi \
 	../mynos-lib/ocaml/power.cmi ../mynos-lib/ocaml/agent.cmi ../mynos-lib/ocaml/voice.cmi \
 	../tests/hello/hello.byte ../tests/spawn/child.byte \
 	../tests/ramdisk/AUTOEXEC.BAT
@@ -85,4 +87,4 @@ $(DISK):
 	rm -f $@.readme
 
 clean:
-	rm -f ocamlrun consoled kilo netd displayd soundd imaged vblkd ocamlc.byte ramdisk.dsk
+	rm -f ocamlrun consoled kilo netd displayd soundd imaged jsd vblkd ocamlc.byte ramdisk.dsk

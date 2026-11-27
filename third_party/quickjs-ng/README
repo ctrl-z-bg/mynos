@@ -1,0 +1,6 @@
+QuickJS-ng v0.18.0 (https://github.com/quickjs-ng/quickjs, the release of
+2026-11-01): the library's sources, unchanged (quickjs.c, libregexp.c,
+libunicode.c, dtoa.c and their headers; not quickjs-libc, the REPL or the
+tests). Fabrice Bellard's, Charlie Gordon's and the QuickJS-ng team's
+JavaScript engine, under the MIT licence (LICENSE). MyNOS's JavaScript
+service, jsd (services/js), runs it (doc/decisions/browser.md, M6).

@@ -5,6 +5,7 @@
      ariadne --layout URL [WIDTH]   the page's display list, laid out WIDTH wide
      ariadne --time URL             the time of each stage
      ariadne --check-images         imaged checked (tools/run-tests.sh)
+     ariadne --check-js             jsd checked (tools/run-tests.sh)
 
    A page is loaded (Loader), decoded (Encoding), parsed by the HTML
    Standard's parser (Html, into Dom); its style sheets are fetched and
@@ -728,6 +729,7 @@ let () =
   | [ "--layout"; url; w ] -> layout_dump url (Option.value (int_of_string_opt w) ~default:800)
   | [ "--time"; url ] -> time url
   | [ "--check-images" ] -> Check_images.run ()
+  | [ "--check-js" ] -> Check_js.run ()
   | [ url ] when url <> "" && url.[0] <> '-' -> window (Url.of_typed url)
   | [] -> window "about:start"
   | _ -> usage ()
