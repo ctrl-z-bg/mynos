@@ -55,6 +55,52 @@ let service = lazy (
   Thread.delay 0.05;
   name)
 
+(* ---- a script's requests (fetch, XMLHttpRequest) ---- *)
+
+(* scheme, host and port: an origin ("null" for those without) *)
+let origin u =
+  match Url.scheme_of u with
+  | Some ("http" | "https") ->
+    (match Http.parse_url u with
+     | tls, host, port, _ ->
+       (if tls then "https" else "http") ^ "://" ^ String.lowercase_ascii host
+       ^ (if (tls && port = 443) || ((not tls) && port = 80) then "" else ":" ^ string_of_int port)
+     | exception Http.Error _ -> "null")
+  | Some s -> s ^ ":"
+  | None -> "null"
+
+(* a page's request, as __dom("fetch", method, url, headers, has body,
+   body): [status; reason; url; body; name; value...]. Another origin's:
+   no cookies, its answer readable if it allows it (Access-Control-Allow-
+   Origin), and only GET, HEAD, POST (there is no preflight) *)
+let fetch_for ~page ~log = function
+  | [ meth; url; headers; has_body; body ] ->
+    let meth = String.uppercase_ascii meth in
+    let url = Url.resolve page url in
+    let headers = List.filter_map (fun l ->
+        match String.index_opt l ':' with
+        | Some i -> Some (String.trim (String.sub l 0 i), String.trim (String.sub l (i + 1) (String.length l - i - 1)))
+        | None -> None) (String.split_on_char '\n' headers) in
+    let mine = origin page and theirs = origin url in
+    (* a data: URL is anyone's (without cookies) *)
+    let data = Url.scheme_of url = Some "data" in
+    let same = mine = theirs || data in
+    if not same && not (List.mem meth [ "GET"; "HEAD"; "POST" ]) then
+      failwith ("NetworkError: " ^ meth ^ " to another origin (" ^ theirs ^ ") is not allowed here");
+    let headers = if same then headers else ("Origin", mine) :: headers in
+    let a = Loader.fetch ~credentials:same ~meth ~headers ?body:(if has_body = "1" then Some body else None) url in
+    log (Printf.sprintf "request %s %s: %d %s, %d bytes" meth url a.Loader.a_status a.a_reason (String.length a.a_body));
+    if a.Loader.a_status = 0 then failwith ("NetworkError: " ^ a.a_reason);
+    if not same then begin
+      match List.assoc_opt "access-control-allow-origin" a.a_headers with
+      | Some o when String.trim o = "*" || String.trim o = mine -> ()
+      | _ -> failwith ("NetworkError: " ^ theirs ^ " does not let " ^ mine ^ " read its answer (CORS)")
+    end;
+    let ct = Option.value (List.assoc_opt "content-type" a.a_headers) ~default:"" in
+    let text = snd (Encoding.to_utf8 ?transport:(Encoding.charset_of_content_type ct) a.a_body) in
+    [ string_of_int a.a_status; a.a_reason; a.a_url; text ] @ List.concat_map (fun (k, v) -> [ k; v ]) a.a_headers
+  | _ -> failwith "fetch: its arguments"
+
 (* JavaScript's types for <script> (and none: JavaScript) *)
 let is_js s =
   match String.lowercase_ascii (String.trim (Option.value (Dom.attr s "type") ~default:"")) with
@@ -120,7 +166,7 @@ let run ~(log : string -> unit) ~url ~base ~width ~height ~(fetch : string -> st
     | exception _ -> trace "scripts: no jsd"; None
     | js ->
       let name = Lazy.force service in
-      let t = Dom_api.create ~cookies:((fun () -> cookies_get url), cookies_set url) doc in
+      let t = Dom_api.create ~cookies:((fun () -> cookies_get url), cookies_set url) ~fetch:(fetch_for ~page:url ~log) doc in
       let sid = Mutex.protect lock (fun () -> incr next_sid; Hashtbl.replace sessions !next_sid t; !next_sid) in
       let cx = Js.create ~js ~dom:name () in
       let s = { cx; dom = t; sid; pending = 0; log; out = Buffer.create 256 } in

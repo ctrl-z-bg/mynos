@@ -57,7 +57,8 @@ let listing dir =
 let html ?(status = "") url body = { url; status; content_type = "text/html"; body }
 
 (* an answer with content: HTTP's 2xx, a file, a data: URL *)
-let ok r = String.length r.status > 0 && (r.status.[0] = '2' || r.status = "a file" || r.status = "a data URL")
+let ok r = String.length r.status > 0
+           && (r.status.[0] = '2' || List.mem r.status [ "a file"; "a data URL"; "a test page" ])
 
 (* data:[type][;base64],data (RFC 2397) *)
 let base64 s =
@@ -223,3 +224,39 @@ let document r =
   else (message "Not a page"
           (Printf.sprintf "This is %s, %d bytes: Ariadne shows only pages for now." r.content_type
              (String.length r.body)), "UTF-8")
+
+(* ---- a script's request (fetch, XMLHttpRequest) ---- *)
+
+type answer = {
+  a_url : string;                        (* after redirections *)
+  a_status : int;                        (* 0: no answer (a network error) *)
+  a_reason : string;
+  a_headers : (string * string) list;    (* names in lower case *)
+  a_body : string;
+}
+
+(* any method, headers and body; redirects followed (a 303, or a 301/302
+   after POST: then GET); cookies sent and kept when [credentials]. data:,
+   about: and file: URLs answer as load does *)
+let fetch ?(credentials = true) ~meth ~headers ?body url =
+  let rec go meth body url redirects =
+    match Url.scheme_of url with
+    | Some ("http" | "https") ->
+      let headers = headers @ [ "User-Agent", user_agent ]
+                    @ (if credentials then match cookie_header url with Some c -> [ "Cookie", c ] | None -> [] else []) in
+      (match Http.request ~meth ~headers ?body ~timeout:20000 url with
+       | r ->
+         if credentials then List.iter (fun (k, v) -> if k = "set-cookie" then store_cookie url v) r.Http.headers;
+         (match r.status, Http.header "location" r with
+          | (301 | 302 | 303 | 307 | 308), Some loc when redirects < 8 ->
+            let to_get = r.status = 303 || ((r.status = 301 || r.status = 302) && meth = "POST") in
+            go (if to_get then "GET" else meth) (if to_get then None else body) (Url.resolve url loc) (redirects + 1)
+          | _ ->
+            { a_url = url; a_status = r.status; a_reason = r.reason; a_headers = r.headers; a_body = r.body })
+       | exception (Http.Error m) -> { a_url = url; a_status = 0; a_reason = m; a_headers = []; a_body = "" }
+       | exception e -> { a_url = url; a_status = 0; a_reason = Printexc.to_string e; a_headers = []; a_body = "" })
+    | _ ->
+      let r = load url in
+      { a_url = r.url; a_status = (if ok r then 200 else 404); a_reason = r.status;
+        a_headers = [ "content-type", r.content_type ]; a_body = r.body } in
+  go meth body url 0

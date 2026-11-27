@@ -9,12 +9,13 @@
 type t = {
   doc : Dom.node;
   cookies : (unit -> string) * (string -> unit);   (* document.cookie: read, set (the Loader's jar) *)
+  fetch : string list -> string list;              (* a request: the browser's (fetch, XMLHttpRequest) *)
   nodes : (int, Dom.node) Hashtbl.t;        (* the handles given out *)
   mutable changed : bool;                    (* the tree, an attribute or a text changed *)
 }
 
-let create ?(cookies = ((fun () -> ""), ignore)) doc =
-  let t = { doc; cookies; nodes = Hashtbl.create 256; changed = false } in
+let create ?(cookies = ((fun () -> ""), ignore)) ?(fetch = fun _ -> failwith "NetworkError: no network here") doc =
+  let t = { doc; cookies; fetch; nodes = Hashtbl.create 256; changed = false } in
   Hashtbl.replace t.nodes doc.Dom.id doc;
   t
 
@@ -264,6 +265,7 @@ let call t op (args : string list) : string list =
      | Some n -> replace_children t n [ Dom.text s ]
      | None -> Option.iter (fun hd -> let ti = Dom.element "title" in Dom.append ti (Dom.text s); Dom.append hd ti) (head t));
     []
+  | "fetch", args -> t.fetch args
   | "cookie", [] -> [ (fst t.cookies) () ]
   | "setCookie", [ c ] -> (snd t.cookies) c; []
   | op, args -> fail "no DOM operation %s/%d" op (List.length args)

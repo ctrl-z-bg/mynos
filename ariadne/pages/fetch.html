@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<title>Fetch</title>
+<h1>Fetch and XMLHttpRequest</h1>
+<p id="a">fetch: (not yet)</p>
+<div id="b">XMLHttpRequest: (not yet)</div>
+<p id="c">data: URL: (not yet)</p>
+<p id="d">async/await: (not yet)</p>
+<p id="e">another origin: (not yet)</p>
+<script>
+fetch("about:test/lists").then(r => r.text()).then(t => {
+  const doc = new DOMParser().parseFromString(t, "text/html");
+  document.getElementById("a").textContent = "fetch: about:test/lists has " + doc.querySelectorAll("li").length + " list items";
+}).catch(e => { document.getElementById("a").textContent = "fetch failed: " + e.message; });
+
+const x = new XMLHttpRequest();
+x.open("GET", "about:test/basic");
+x.onload = () => {
+  const b = document.getElementById("b");
+  b.innerHTML = x.responseText;
+  b.insertAdjacentHTML("afterbegin", "<p><b>XMLHttpRequest:</b> status " + x.status + ", the page below</p>");
+};
+x.send();
+
+fetch("data:text/plain,hello%20from%20a%20data%20URL").then(r => r.text())
+  .then(t => { document.getElementById("c").textContent = "data: URL: " + t; });
+
+(async () => {
+  const r = await fetch("data:application/json,%7B%22n%22%3A42%7D");
+  const j = await r.json();
+  document.getElementById("d").textContent = "async/await: n = " + j.n;
+})();
+
+fetch("https://example.com/").then(() => { document.getElementById("e").textContent = "another origin: read (wrong)"; })
+  .catch(e => { document.getElementById("e").textContent = "another origin: refused, as it should be (" + e.message.slice(0, 60) + "...)"; });
+</script>

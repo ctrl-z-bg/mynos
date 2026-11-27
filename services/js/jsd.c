@@ -134,7 +134,7 @@ static int interrupt(JSContext * cx, void * opaque)
    answer as an array of strings, an error thrown. The arguments are made
    strings; the DOM's API over it is JavaScript (Ariadne's prelude) */
 #define DOM_PROTOCOL "dom/1"
-#define DOM_WAIT_MS 10000
+#define DOM_WAIT_MS 30000                /* a fetch through the DOM's service may take a while */
 
 static JSValue dom_call(JSContext * cx, JSValueConst this, int argc, JSValueConst * argv)
 {
@@ -158,6 +158,8 @@ static JSValue dom_call(JSContext * cx, JSValueConst this, int argc, JSValueCons
     JS_FreeCString(cx, s);
   }
   if (argc == 1) wire_put_int(&w, 0);
+  /* the time waited for the browser does not count against the run's */
+  long t0 = now_ms();
   port = mynos_registryLookUp(c->dom);
   if (w.error || port < 0 || (ch = mynos_connectToPort(port)) < 0) {
     wire_writer_free(&w);
@@ -170,6 +172,7 @@ static JSValue dom_call(JSContext * cx, JSValueConst this, int argc, JSValueCons
     return JS_ThrowInternalError(cx, "the DOM's service did not answer");
   }
   mynos_freeChannel(ch);
+  if (c->deadline > 0) c->deadline += now_ms() - t0;
   wire_reader_init(&r, msg->start, msg->size);
   if (wire_get_int(&r) != 0) {
     unsigned int n;
@@ -384,6 +387,22 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     c->out_len = 0;
     c->deadline = now_ms() + RUN_MS;
     v = JS_Eval(c->cx, src, clen, nlen ? fname : "<eval>", JS_EVAL_TYPE_GLOBAL);
+    /* then the jobs it queued: promises' callbacks, async functions (their
+       exceptions go to the console) */
+    {
+      JSContext * jc;
+      int k;
+      while ((k = JS_ExecutePendingJob(c->rt, &jc)) != 0) {
+        if (k < 0) {
+          JSValue e = JS_GetException(jc);
+          const char * m = JS_ToCString(jc, e);
+          out_add(c, "error: (in a promise) ", 22);
+          if (m) { out_add(c, m, strlen(m)); JS_FreeCString(jc, m); }
+          out_add(c, "\n", 1);
+          JS_FreeValue(jc, e);
+        }
+      }
+    }
     c->deadline = 0;
     free(src);
     wire_writer_init(&w);

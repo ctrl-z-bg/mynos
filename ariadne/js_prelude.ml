@@ -312,6 +312,186 @@ let source = {js|
     return timers.length;
   };
 
+  // ---- the network: fetch, XMLHttpRequest (the browser's, through __dom) ----
+  class Headers {
+    constructor(init) {
+      this.__h = new Map();
+      if (init instanceof Headers) init.forEach((v, k) => this.append(k, v));
+      else if (Array.isArray(init)) for (const [k, v] of init) this.append(k, v);
+      else if (init) for (const k of Object.keys(init)) this.append(k, init[k]);
+    }
+    append(k, v) { k = String(k).toLowerCase(); const o = this.__h.get(k); this.__h.set(k, o === undefined ? String(v) : o + ", " + v); }
+    set(k, v) { this.__h.set(String(k).toLowerCase(), String(v)); }
+    get(k) { const v = this.__h.get(String(k).toLowerCase()); return v === undefined ? null : v; }
+    has(k) { return this.__h.has(String(k).toLowerCase()); }
+    delete(k) { this.__h.delete(String(k).toLowerCase()); }
+    forEach(f) { this.__h.forEach((v, k) => f(v, k, this)); }
+    entries() { return this.__h.entries(); } keys() { return this.__h.keys(); } values() { return this.__h.values(); }
+    [Symbol.iterator]() { return this.__h.entries(); }
+  }
+  class URLSearchParams {
+    constructor(init) {
+      this.__p = [];
+      if (typeof init === "string") {
+        for (const part of init.replace(/^\?/, "").split("&")) if (part) {
+          const i = part.indexOf("="), dec = x => decodeURIComponent(x.replace(/\+/g, " "));
+          this.__p.push(i < 0 ? [dec(part), ""] : [dec(part.slice(0, i)), dec(part.slice(i + 1))]);
+        }
+      } else if (init) for (const k of Object.keys(init)) this.__p.push([k, String(init[k])]);
+    }
+    append(k, v) { this.__p.push([String(k), String(v)]); }
+    set(k, v) { this.delete(k); this.append(k, v); }
+    get(k) { const p = this.__p.find(p => p[0] === k); return p ? p[1] : null; }
+    getAll(k) { return this.__p.filter(p => p[0] === k).map(p => p[1]); }
+    has(k) { return this.__p.some(p => p[0] === k); }
+    delete(k) { this.__p = this.__p.filter(p => p[0] !== k); }
+    forEach(f) { this.__p.forEach(p => f(p[1], p[0], this)); }
+    toString() {
+      const enc = x => encodeURIComponent(x).replace(/%20/g, "+");
+      return this.__p.map(p => enc(p[0]) + "=" + enc(p[1])).join("&");
+    }
+  }
+  class FormData extends URLSearchParams {
+    constructor(form) {
+      super();
+      if (form && form.__h) for (const el of form.querySelectorAll("input[name], select[name], textarea[name]")) {
+        const t = el.type;
+        if ((t === "checkbox" || t === "radio") && !el.checked) continue;
+        if (t === "submit" || t === "button" || t === "file") continue;
+        this.append(el.name, el.value);
+      }
+    }
+  }
+  class AbortController { constructor() { this.signal = { aborted: false, addEventListener() {} }; } abort() { this.signal.aborted = true; } }
+
+  // one request: [status, reason, url, body, headers...]; a NetworkError thrown
+  function request(method, url, headers, body) {
+    const h = [];
+    if (headers) new Headers(headers).forEach((v, k) => h.push(k + ": " + v));
+    const hasBody = body !== undefined && body !== null && method !== "GET" && method !== "HEAD";
+    const r = D("fetch", method, String(url), h.join("\n"), hasBody ? "1" : "0", hasBody ? String(body) : "");
+    const hs = new Headers();
+    for (let i = 4; i + 1 < r.length; i += 2) hs.append(r[i], r[i + 1]);
+    return { status: +r[0], statusText: r[1], url: r[2], body: r[3], headers: hs };
+  }
+
+  class Response {
+    constructor(body, init) {
+      init = init || {};
+      this.__body = body === undefined || body === null ? "" : String(body);
+      this.status = init.status === undefined ? 200 : init.status;
+      this.statusText = init.statusText || "";
+      this.headers = init.headers instanceof Headers ? init.headers : new Headers(init.headers);
+      this.url = init.url || ""; this.ok = this.status >= 200 && this.status < 300;
+      this.redirected = false; this.type = "basic"; this.bodyUsed = false;
+    }
+    text() { this.bodyUsed = true; return Promise.resolve(this.__body); }
+    json() { this.bodyUsed = true; try { return Promise.resolve(JSON.parse(this.__body)); } catch (e) { return Promise.reject(e); } }
+    blob() { return this.text(); }
+    arrayBuffer() { return Promise.reject(new TypeError("arrayBuffer: not in Ariadne yet")); }
+    clone() { return new Response(this.__body, this); }
+  }
+
+  g.fetch = function (input, init) {
+    init = init || {};
+    return new Promise((resolve, reject) => {
+      try {
+        const url = new URL(typeof input === "string" ? input : (input.url || String(input)), g.location.href).href;
+        const method = String(init.method || (input && input.method) || "GET").toUpperCase();
+        let body = init.body;
+        if (body instanceof URLSearchParams) body = body.toString();
+        const r = request(method, url, init.headers, body);
+        resolve(new Response(r.body, { status: r.status, statusText: r.statusText, headers: r.headers, url: r.url }));
+      } catch (e) { reject(new TypeError("Failed to fetch: " + (e && e.message))); }
+    });
+  };
+
+  class XMLHttpRequest extends EventTarget {
+    constructor() {
+      super();
+      this.readyState = 0; this.status = 0; this.statusText = ""; this.responseText = ""; this.responseType = "";
+      this.response = null; this.responseURL = ""; this.timeout = 0; this.withCredentials = false;
+      this.__headers = {}; this.__answer = null; this.upload = new EventTarget();
+    }
+    open(method, url, async) {
+      this.__method = String(method).toUpperCase();
+      this.__url = new URL(String(url), g.location.href).href;
+      this.__async = async !== false;
+      this.readyState = 1;
+    }
+    setRequestHeader(k, v) { this.__headers[k] = v; }
+    getResponseHeader(k) { return this.__answer ? this.__answer.headers.get(k) : null; }
+    getAllResponseHeaders() {
+      if (!this.__answer) return "";
+      let s = ""; this.__answer.headers.forEach((v, k) => { s += k + ": " + v + "\r\n"; }); return s;
+    }
+    overrideMimeType() {}
+    abort() { this.__aborted = true; }
+    __fire(type) { const ev = new Event(type); this.dispatchEvent(ev); }
+    send(body) {
+      if (body instanceof URLSearchParams) body = body.toString();
+      const done = () => {
+        if (this.__aborted) return;
+        let ok = true;
+        try {
+          const r = request(this.__method, this.__url, this.__headers, body);
+          this.__answer = r;
+          this.status = r.status; this.statusText = r.statusText; this.responseURL = r.url;
+          this.responseText = r.body;
+          if (this.responseType === "json") { try { this.response = JSON.parse(r.body); } catch (e) { this.response = null; } }
+          else this.response = r.body;
+        } catch (e) { ok = false; this.status = 0; console.warn("XMLHttpRequest: " + (e && e.message)); }
+        this.readyState = 4;
+        this.__fire("readystatechange");
+        this.__fire(ok ? "load" : "error");
+        this.__fire("loadend");
+      };
+      if (this.__async) g.setTimeout(done, 0); else done();
+    }
+  }
+  XMLHttpRequest.UNSENT = 0; XMLHttpRequest.OPENED = 1; XMLHttpRequest.HEADERS_RECEIVED = 2;
+  XMLHttpRequest.LOADING = 3; XMLHttpRequest.DONE = 4;
+
+  // DOMParser: the text parsed into a detached element (not a document of
+  // its own): its queries, body, documentElement
+  class DOMParser {
+    parseFromString(text) {
+      const root = g.document.createElement("div");
+      root.innerHTML = String(text);
+      return { documentElement: root, body: root, head: null,
+               querySelector: s => root.querySelector(s), querySelectorAll: s => root.querySelectorAll(s),
+               getElementById: id => root.querySelector("#" + id),
+               getElementsByTagName: t => root.getElementsByTagName(t), title: "" };
+    }
+  }
+  g.DOMParser = DOMParser;
+  // IntersectionObserver: scripts do not see the layout yet, so every
+  // element observed is reported in view, soon after (lazy content loads at
+  // once); ResizeObserver and MutationObserver report nothing yet
+  class IntersectionObserver {
+    constructor(cb, opts) { this.__cb = cb; this.__targets = new Set(); this.root = null;
+                            this.rootMargin = (opts && opts.rootMargin) || "0px"; this.thresholds = [0]; }
+    observe(el) {
+      if (this.__targets.has(el)) return;
+      this.__targets.add(el);
+      g.setTimeout(() => {
+        if (!this.__targets.has(el)) return;
+        const r = { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 };
+        try { this.__cb([{ target: el, isIntersecting: true, intersectionRatio: 1, time: 0,
+                           boundingClientRect: r, intersectionRect: r, rootBounds: r }], this); }
+        catch (e) { console.error(String(e) + (e && e.stack ? "\n" + e.stack : "")); }
+      }, 0);
+    }
+    unobserve(el) { this.__targets.delete(el); }
+    disconnect() { this.__targets.clear(); }
+    takeRecords() { return []; }
+  }
+  class ResizeObserver { constructor() {} observe() {} unobserve() {} disconnect() {} }
+  class MutationObserver { constructor() {} observe() {} disconnect() {} takeRecords() { return []; } }
+  g.IntersectionObserver = IntersectionObserver; g.ResizeObserver = ResizeObserver; g.MutationObserver = MutationObserver;
+  g.Headers = Headers; g.Response = Response; g.XMLHttpRequest = XMLHttpRequest;
+  g.URLSearchParams = URLSearchParams; g.FormData = FormData; g.AbortController = AbortController;
+
   g.window = g; g.self = g; g.top = g; g.parent = g; g.frames = g;
   Object.setPrototypeOf(g, EventTarget.prototype);
   g.Node = Node; g.Element = Element; g.HTMLElement = Element; g.Text = Text; g.Document = Document;

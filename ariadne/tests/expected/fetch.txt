@@ -1,0 +1,7 @@
+title: Fetch
+# Fetch and XMLHttpRequest
+fetch: (not yet)
+XMLHttpRequest: (not yet)
+data: URL: (not yet)
+async/await: (not yet)
+another origin: (not yet)

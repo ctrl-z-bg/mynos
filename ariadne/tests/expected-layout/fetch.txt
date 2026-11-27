@@ -1,0 +1,22 @@
+fill 0,21 800x212 #ffffff
+text 8,50 serif-bold 32 #000000 Fetch
+text 92,50 serif-bold 32 #000000 and
+text 152,50 serif-bold 32 #000000 XMLHttpRequest
+text 8,94 serif 16 #000000 fetch:
+text 48,94 serif 16 #000000 (not
+text 78,94 serif 16 #000000 yet)
+text 8,128 serif 16 #000000 XMLHttpRequest:
+text 132,128 serif 16 #000000 (not
+text 162,128 serif 16 #000000 yet)
+text 8,162 serif 16 #000000 data:
+text 43,162 serif 16 #000000 URL:
+text 83,162 serif 16 #000000 (not
+text 113,162 serif 16 #000000 yet)
+text 8,196 serif 16 #000000 async/await:
+text 92,196 serif 16 #000000 (not
+text 122,196 serif 16 #000000 yet)
+text 8,230 serif 16 #000000 another
+text 60,230 serif 16 #000000 origin:
+text 107,230 serif 16 #000000 (not
+text 137,230 serif 16 #000000 yet)
+height 249
