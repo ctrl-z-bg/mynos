@@ -175,6 +175,39 @@ let dom_api () =
   check "dom api: a bad selector is an error"
     (match call "query" [ a; "p[" ] with _ -> false | exception Failure m -> String.length m > 0)
 
+(* cookies (RFC 6265) *)
+let cookies () =
+  check "cookies: dates"
+    (Cookies.parse_date "Sun, 06 Nov 1994 08:49:37 GMT" = Some 784111777.
+     && Cookies.parse_date "Sunday, 06-Nov-94 08:49:37 GMT" = Some 784111777.
+     && Cookies.parse_date "Sun Nov  6 08:49:37 1994" = Some 784111777.);
+  let now = 1_800_000_000. in
+  let j = Cookies.create () in
+  let set ?(host = "www.example.com") ?(path = "/a/b") ?(secure = true) h =
+    Cookies.set j ~now ~host ~path ~secure_origin:secure h in
+  let get ?script ?(host = "www.example.com") ?(path = "/a/b") ?(secure = true) () =
+    Cookies.header ?script j ~now ~host ~path ~secure in
+  set "a=1";
+  set "b=2; Domain=example.com; Path=/";
+  set "c=3; Secure; HttpOnly";
+  set "d=4; Max-Age=60";
+  check "cookies: sent back, host-only and the domain's"
+    (get () = Some "a=1; c=3; d=4; b=2" && get ~host:"news.example.com" ~path:"/" () = Some "b=2");
+  check "cookies: the path, secure, HttpOnly"
+    (get ~path:"/x" () = Some "b=2" && get ~secure:false () = Some "a=1; d=4; b=2"
+     && get ~script:true () = Some "a=1; d=4; b=2");
+  set "a=one";
+  set "d=gone; Max-Age=0";
+  check "cookies: replaced, and deleted" (get () = Some "a=one; c=3; b=2");
+  set "e=5; Domain=com";
+  set "f=6; Domain=other.org";
+  check "cookies: a domain too wide, or another's, refused" (get ~host:"x.com" ~path:"/" () = None
+                                                            && get ~host:"other.org" ~path:"/" () = None);
+  set "g=7; Expires=Wed, 01 Jan 2031 00:00:00 GMT; Path=/";
+  let back = Cookies.of_string (Cookies.to_string j ~now) in
+  check "cookies: saved, those that outlive the session"
+    (Cookies.header back ~now ~host:"www.example.com" ~path:"/" ~secure:true = Some "g=7")
+
 (* rule 3: a tree far deeper than any stack would allow a recursion *)
 let deep () =
   let depth = 5000 in
@@ -211,6 +244,7 @@ let () =
     sources ();
     forms ();
     dom_api ();
+    cookies ();
     deep ();
     pages ();
     layouts ();

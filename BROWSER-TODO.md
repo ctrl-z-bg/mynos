@@ -191,7 +191,8 @@ Found in M5:
 - [x] Events from the user: the context kept while the page is shown (closed when another replaces it), the scripts run from the window's thread (no lock needed); `click` at what is under the pointer (a control, a link, else the innermost block: `Layout.hits`), `onclick=` attributes, `preventDefault` stops following a link, toggling, sending; `input`, `change`, `submit`; timers while the page is shown; style and layout again when a script changed the page. Repubblica's Menu button opens its menu
 - [ ] `fetch` and `XMLHttpRequest`
 - [x] Scripts in order, once the page is parsed (inline, `src`); Wikipedia's 4 run without an error (126 ms) and the page takes its `client-js` look
-- [ ] Cookies (a jar in `Http` or the Loader): Google's search goes to its consent page (consent.google.com) and back, which needs one; it then wants JavaScript too (since 2025)
+- [x] Cookies (`cookies.ml`, RFC 6265's essentials: Expires, Max-Age, Domain and host-only, Path, Secure, HttpOnly; no public suffix list, a Domain must have a dot and contain the host): Ariadne's jar in the Loader, sent with each request, set by each answer (redirects too), those that outlive the session in /disk/ariadne-cookies.txt (ARIADNE_COOKIES); `document.cookie` (not HttpOnly). Google's consent page now goes through
+- [ ] Google's results: its page is written by scripts it loads (scripts added by scripts, `fetch`): blank until those come
 - [ ] Scripts added by scripts (`createElement('script')`), `defer` and `async` as such, `type=module`, `document.write` while parsing
 - [ ] Layout again after the DOM changes (only what changed)
 

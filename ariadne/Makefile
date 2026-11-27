@@ -18,7 +18,7 @@ EXPECTED_LAYOUT = $(sort $(wildcard tests/expected-layout/*.txt))
 # the engine's core: no input or output (the plan's rule 5), so it is
 # built and checked on the host too
 CORE = url.cmo encoding.cmo entities_data.cmo tokenizer.cmo dom.cmo treebuilder.cmo \
-	html.cmo text.cmo css.cmo selector.cmo style.cmo ttf.cmo fonts.cmo forms.cmo dom_api.cmo layout.cmo pages.cmo
+	html.cmo text.cmo css.cmo selector.cmo style.cmo ttf.cmo fonts.cmo forms.cmo cookies.cmo dom_api.cmo layout.cmo pages.cmo
 
 all: ariadne.byte
 

@@ -107,7 +107,8 @@ let close s =
   Mutex.protect lock (fun () -> Hashtbl.remove sessions s.sid)
 
 (* the page's scripts run; [fetch] gives a script's text by its URL *)
-let run ~(log : string -> unit) ~url ~base ~width ~height ~(fetch : string -> string option) (doc : Dom.node) =
+let run ~(log : string -> unit) ~url ~base ~width ~height ~(fetch : string -> string option)
+    ?(cookies_get = fun _ -> "") ?(cookies_set = fun _ _ -> ()) (doc : Dom.node) =
   let trace fmt = Printf.ksprintf log fmt in
   let t0 = Unix.gettimeofday () in
   let scripts = ref [] in
@@ -119,7 +120,7 @@ let run ~(log : string -> unit) ~url ~base ~width ~height ~(fetch : string -> st
     | exception _ -> trace "scripts: no jsd"; None
     | js ->
       let name = Lazy.force service in
-      let t = Dom_api.create doc in
+      let t = Dom_api.create ~cookies:((fun () -> cookies_get url), cookies_set url) doc in
       let sid = Mutex.protect lock (fun () -> incr next_sid; Hashtbl.replace sessions !next_sid t; !next_sid) in
       let cx = Js.create ~js ~dom:name () in
       let s = { cx; dom = t; sid; pending = 0; log; out = Buffer.create 256 } in

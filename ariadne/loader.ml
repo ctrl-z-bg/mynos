@@ -100,6 +100,56 @@ let data_url url =
     let body = if is_b64 then base64 (percent_decode data) else percent_decode data in
     { url; status = "a data URL"; content_type = (if ct = "" then "text/plain" else ct); body }
 
+(* ---- cookies: Ariadne's jar (Cookies), kept in a file across runs ---- *)
+
+let cookie_file = match Sys.getenv_opt "ARIADNE_COOKIES" with
+  | Some f -> Some f
+  | None -> if Sys.file_exists "/disk" then Some "/disk/ariadne-cookies.txt" else None
+
+let cookie_lock = Mutex.create ()
+let jar = lazy (
+  match cookie_file with
+  | Some f when Sys.file_exists f ->
+    (try Cookies.of_string (In_channel.with_open_bin f In_channel.input_all) with _ -> Cookies.create ())
+  | _ -> Cookies.create ())
+
+let now () = Unix.gettimeofday ()
+
+let save_cookies () =
+  match cookie_file with
+  | Some f ->
+    (try Out_channel.with_open_bin f (fun oc -> output_string oc (Cookies.to_string (Lazy.force jar) ~now:(now ())))
+     with Sys_error _ -> ())
+  | None -> ()
+
+(* a URL's host, path (without the query), and whether it is https *)
+let where url =
+  match Http.parse_url url with
+  | tls, host, _, path ->
+    let path = match String.index_opt path '?' with Some i -> String.sub path 0 i | None -> path in
+    Some (host, path, tls)
+  | exception Http.Error _ -> None
+
+let cookie_header ?script url =
+  match where url with
+  | Some (host, path, secure) ->
+    Mutex.protect cookie_lock (fun () -> Cookies.header ?script (Lazy.force jar) ~now:(now ()) ~host ~path ~secure)
+  | None -> None
+
+let store_cookie url header =
+  match where url with
+  | Some (host, path, secure) ->
+    Mutex.protect cookie_lock (fun () ->
+        let j = Lazy.force jar in
+        let before = Cookies.to_string j ~now:(now ()) in
+        Cookies.set j ~now:(now ()) ~host ~path ~secure_origin:secure header;
+        if Cookies.to_string j ~now:(now ()) <> before then save_cookies ())
+  | None -> ()
+
+(* document.cookie: the page's cookies (not HttpOnly); one set by a script *)
+let script_cookies url = Option.value (cookie_header ~script:true url) ~default:""
+let script_set_cookie url header = store_cookie url header
+
 (* [post]: a form's body (application/x-www-form-urlencoded), sent with
    POST; a redirect after it is followed with GET *)
 let load ?post url =
@@ -133,7 +183,11 @@ let load ?post url =
             { url; status = "a file"; content_type = ct; body }
           | exception Sys_error m -> html ~status:m url (message "Cannot open" m))
     | Some ("http" | "https") ->
-      let headers = [ "User-Agent", user_agent; "Accept", "text/html,text/plain;q=0.9,*/*;q=0.5" ] in
+      let headers = [ "User-Agent", user_agent; "Accept", "text/html,text/plain;q=0.9,*/*;q=0.5" ]
+                    @ (match cookie_header url with Some c -> [ "Cookie", c ] | None -> []) in
+      (* the cookies an answer sets: kept, a redirect's too *)
+      let keep_cookies (r : Http.response) =
+        List.iter (fun (k, v) -> if k = "set-cookie" then store_cookie url v) r.headers in
       (match (match post with
            | Some body ->
              Http.post ~timeout:20000 ~headers:(("Content-Type", "application/x-www-form-urlencoded") :: headers)
@@ -141,8 +195,10 @@ let load ?post url =
            | None -> Http.get ~timeout:20000 ~headers url) with
        | r when r.Http.status >= 300 && r.status < 400 && redirects < 8
                 && Http.header "location" r <> None ->
+         keep_cookies r;
          go (Url.resolve url (Option.get (Http.header "location" r))) (redirects + 1)
        | r ->
+         keep_cookies r;
          { url; status = Printf.sprintf "%d %s" r.status r.reason;
            content_type = Option.value (Http.header "content-type" r) ~default:"";
            body = r.body }

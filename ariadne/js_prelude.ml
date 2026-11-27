@@ -270,7 +270,7 @@ let source = {js|
     createDocumentFragment() { return one(D("createFragment")); }
     createEvent() { return new Event(""); }
     get readyState() { return g.__readyState; }
-    get cookie() { return ""; } set cookie(v) {}
+    get cookie() { return D("cookie")[0]; } set cookie(v) { D("setCookie", str(v)); }
     get referrer() { return ""; }
     get defaultView() { return g; }
     get location() { return g.location; }
@@ -317,7 +317,7 @@ let source = {js|
   g.Node = Node; g.Element = Element; g.HTMLElement = Element; g.Text = Text; g.Document = Document;
   g.EventTarget = EventTarget; g.Event = Event; g.CustomEvent = CustomEvent;
   g.navigator = { userAgent: "Mozilla/5.0 (MyNOS) Ariadne/0.1", language: "en", languages: ["en"], platform: "MyNOS",
-                  cookieEnabled: false, onLine: true };
+                  cookieEnabled: true, onLine: true };
   g.innerWidth = 878; g.innerHeight = 600; g.devicePixelRatio = 1;
   g.screen = { width: 1024, height: 768 };
   g.getComputedStyle = el => el.style;

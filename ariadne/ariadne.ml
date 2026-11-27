@@ -101,7 +101,7 @@ let load ?post url =
     | r when Loader.ok r -> Some (snd (Encoding.to_utf8 ?transport:(Encoding.charset_of_content_type r.content_type) r.body))
     | _ -> None in
   let scripts = Scripts.run ~log:(fun m -> trace "%s" m) ~url:response.url ~base ~width:878 ~height:600
-      ~fetch:fetch_script doc in
+      ~fetch:fetch_script ~cookies_get:Loader.script_cookies ~cookies_set:Loader.script_set_cookie doc in
   let t5 = now () in
   let title = match Dom.find (fun n -> Dom.is_html n "title") doc with
     | Some t -> String.trim (Text.collapse (Dom.text_content t)) | None -> "" in
