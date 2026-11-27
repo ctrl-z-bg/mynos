@@ -26,15 +26,23 @@ Open:
 
 ## M0: the skeleton
 
-- [ ] `ariadne/`: Makefile, built by `tools/build-all.sh` (i386, x86-64, AArch64)
-- [ ] The window (`Gui`), an address bar, a page area that scrolls
-- [ ] `ariadne --dump URL`: the page as text on the standard output
-- [ ] `ariadne --time URL`: the time of each stage
-- [ ] Test pages on the RAM disk (no network needed)
-- [ ] The host test runner, in the dev container: the core's tests as bytecode
-- [ ] A `run-tests.sh` lane: `--dump` of the test pages, compared with the expected text
-- [ ] The quick loop: the host serves the pages and the fresh `ariadne.byte` at `10.0.2.2`, so a change needs no new image
-- [ ] Manual: a first page (command reference)
+- [x] `ariadne/`: Makefile, built by `tools/build-all.sh`, on the system RAM disk (tried on x86-64)
+- [ ] The same, tried on i386 and AArch64
+- [x] The window (`Gui`), an address bar, a page area that scrolls (wheel, Page Up/Down, Home, End)
+- [x] `ariadne --dump URL`: the page as text on the standard output, then its links
+- [x] `ariadne --time URL`: the time of each stage
+- [x] Test pages with no network needed: built into the program (`about:tests`, `about:test/NAME`) rather than on the flat RAM disk
+- [x] The host test runner: `tools/test-ariadne.sh` (`make -C ariadne test`; `make -C ariadne expected` writes the expected texts, to be read before committing)
+- [x] The same checks in MyNOS: `tests/ariadne`, a boot in lane b of `run-tests.sh` (tried alone; passes in 3 s)
+- [ ] The whole of lane b with the new boot, in the `mynos-test` container
+- [x] The quick loop: `tools/ariadne-dev.sh` builds only Ariadne and puts it in `/disk/bin`, which `PATH` finds first
+- [ ] The quick loop, part two: the host serves test pages at `10.0.2.2`
+- [x] Manual: ARIADNE in the command reference (chapter 13)
+
+Found in M0, for later:
+
+- The M0 parser walked the stack of open elements at every tag: a page nested 5,000 deep took minutes in MyNOS. It now counts the open elements by name. M1's parser needs the same, since the specification's "in scope" checks also walk the stack.
+- `en.m.wikipedia.org` redirects to the desktop site, whose menus come before the article. Without CSS (M3) they show.
 
 ## M1: the HTML parser and the DOM
 
@@ -114,10 +122,12 @@ Open:
 
 ## Measurements
 
-Timings in MyNOS under KVM, x86-64, on the test pages (`ariadne --time`).
+Timings in MyNOS under KVM, x86-64 (`ariadne --time`); the network's
+time apart. Until M3 the Layout column is the text's reading (`Text`).
 
-| Date | Milestone | Page | Parse | Cascade | Layout | Paint | Total |
-|---|---|---|---|---|---|---|---|
+| Date | Milestone | Page | Size | Parse | Cascade | Layout | Paint | Network |
+|---|---|---|---|---|---|---|---|---|
+| 2026-11-27 | M0 | en.wikipedia.org/wiki/Ariadne | 375 KB, 8,256 nodes | 110 ms | — | 80 ms | — | 5.4 s |
 
 html5lib-tests pass rate:
 

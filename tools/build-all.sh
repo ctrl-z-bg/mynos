@@ -36,8 +36,10 @@
 #   tests/stdio/stdio                C stdio over libmynos
 #   tests/stress/stress, ramdisk.dsk kernel stress test
 #   tests/libs/ramdisk.dsk           Str, Num and the calls they need, on tmpfs
+#   tests/ariadne/ramdisk.dsk        Ariadne's core: the test pages, URLs, a deep tree
 #   tests/ramdisk/ramdisk.dsk        RAM disk image for memrofs
 #   fetch/fetch.byte                 HTTP and HTTPS from the command line
+#   ariadne/ariadne.byte             Ariadne, the new browser (doc/decisions/browser.md)
 #   log/log.byte                     the kernel's log
 #   play/play.byte                   sound: WAV files, tones (soundd)
 set -eu
@@ -111,6 +113,8 @@ make -C gui
 make -C graphics
 make -C tests/net
 make -C shell
+make -C ariadne
+make -C tests/ariadne
 make -C pkg
 make -C system
 tools/build-examples.sh

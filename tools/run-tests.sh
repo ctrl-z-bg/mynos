@@ -5,7 +5,8 @@
 # Usage: tools/run-tests.sh            exit status 0 if all checks pass
 # The boots run in nine lanes at once (about 5 minutes in all):
 #   a  the first boots: bytecode, effects, the ATA disk, FAT, domains
-#   b  the library, files, the kernel stress test, spawning, the console
+#   b  the library, files, the kernel stress test, spawning, the console,
+#      Ariadne's core
 #   c  without COM2, and restarting again and again
 #   d  the graphical session: its windows, the recorder, Files, the Tour
 #   e  the network, then the whole system driven by the keyboard, in four
@@ -200,6 +201,18 @@ if [ -f tests/libs/ramdisk.dsk ]; then
         tests/libs/ramdisk.dsk \
         -- -display none -serial null -serial "file:$tmp/logl" || true
     cat "$tmp/logl" >> "$part"
+fi
+}
+
+sec_ariadne() {
+# Ariadne's core (ariadne/, doc/decisions/browser.md): init.byte from the
+# RAM disk is the program make -C ariadne test runs on the host
+if [ -f tests/ariadne/ramdisk.dsk ]; then
+    MEM=64 timeout "${WAIT:-15}" tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        tests/ariadne/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$tmp/logar" || true
+    cat "$tmp/logar" >> "$part"
 fi
 }
 
@@ -1291,7 +1304,7 @@ for lane in ${LANES:-a b c d e f g h i}; do
         : > "$part"
         case $lane in
             a) timed sec_first; timed sec_effects; timed sec_storage; timed sec_fat; timed sec_domains; timed sec_threads; timed sec_fpu; timed sec_smp ;;
-            b) timed sec_mlib; timed sec_files; timed sec_libs; timed sec_stress; timed sec_spawn; timed sec_console ;;
+            b) timed sec_mlib; timed sec_files; timed sec_libs; timed sec_ariadne; timed sec_stress; timed sec_spawn; timed sec_console ;;
             c) timed sec_nocom2; timed sec_reboots; timed sec_virtio ;;
             d) timed sec_gui ;;
             i) timed sec_gui2 ;;
@@ -1393,6 +1406,9 @@ if [ -f tests/mynos-ocaml/mynos_test.byte ]; then
 fi
 if [ -f tests/libs/ramdisk.dsk ]; then
     expect "libs: all checks passed"
+fi
+if [ -f tests/ariadne/ramdisk.dsk ]; then
+    expect "ariadne: all checks passed"
 fi
 if [ -f tests/files/ramdisk.dsk ]; then
     expect "files: all checks passed"

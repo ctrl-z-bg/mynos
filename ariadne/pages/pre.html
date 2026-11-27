@@ -1,0 +1,12 @@
+<title>Preformatted, and what is not shown</title>
+<h1>Pre</h1>
+<pre>
+let rec fact n =
+  if n = 0 then 1
+  else n * fact (n - 1)   (* &lt;- recursion *)
+</pre>
+<p>A comment <!-- not shown --> is not shown, nor <span hidden>hidden text</span>.</p>
+<template><p>A template</p></template>
+<noscript><p>No script: shown, since Ariadne has no JavaScript yet.</p></noscript>
+<style>p { margin: 0 }</style>
+<p>The end.</p>

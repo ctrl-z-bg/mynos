@@ -142,6 +142,46 @@ it. **See also** PACKAGES, PKG; chapter 10, 10.14.
 
 ---
 
+### ARIADNE
+
+**Purpose** The new web browser, in OCaml (in progress).
+
+**Syntax**
+
+```
+ariadne [URL]
+ariadne --dump URL
+ariadne --time URL
+```
+
+**Type** Program (`/ariadne.byte`); graphical, except with `--dump` and
+`--time`.
+
+**Description** Ariadne is MyNOS's new browser, being written in OCaml
+(`doc/decisions/browser.md`, `BROWSER-TODO.md`); the older `browser`
+package stays. It is at its first milestone: it shows a page's text,
+without styles, pictures or JavaScript. Without `--dump` or `--time` it
+opens a window: an address field (Enter or Go loads), Reload, and the
+page, which scrolls (the wheel, Page Up, Page Down, Home, End). `--dump`
+prints the page as text (`#` before headings, `-` before list items),
+then its links, resolved; `--time` prints how long each stage took
+(loading, parsing, reading the text). Addresses: `http:`, `https:`,
+`file:` (a file, or a folder as a list), `about:start`, `about:tests`
+(the test pages built into Ariadne, as `about:test/NAME`). A typed
+`example.com` is `https://example.com`; `/disk/page.html` is a file.
+
+**Examples**
+
+```
+ariadne &
+ariadne --dump about:test/basic
+ariadne --time https://en.m.wikipedia.org/wiki/Ariadne
+```
+
+**See also** FETCH.
+
+---
+
 ### ASK
 
 **Purpose** Asks a language model for a command line, and runs it if you

@@ -76,3 +76,7 @@ llm.env
 # the build's version (tools/version.sh, written by tools/build-all.sh)
 /VERSION
 
+
+# Ariadne: the test pages and expected texts, as OCaml (ariadne/gen-strings.sh)
+ariadne/pages.ml
+ariadne/expected.ml

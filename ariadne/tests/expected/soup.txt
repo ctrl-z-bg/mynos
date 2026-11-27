@@ -1,0 +1,8 @@
+# Tag soup
+A paragraph never closed
+Another, with a bold and italic mix.
+Stray end tags above are ignored.
+A div
+with a paragraph
+after it.
+Unquoted attributes: here; a lone & and < a less-than sign.

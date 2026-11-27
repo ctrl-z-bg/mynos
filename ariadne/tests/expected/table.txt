@@ -1,0 +1,7 @@
+title: A table
+# Processors
+Architecture | Bits | Since
+i386 | 32 | 2002
+x86-64 | 64 | 2026
+AArch64 | 64 | 2026
+[The Minotaur] and an image without words: .

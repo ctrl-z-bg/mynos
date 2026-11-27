@@ -89,11 +89,15 @@ a rendering proxy, Ladybird, Servo and an OCaml browser.
 - `ariadne URL` opens a window; `ariadne --dump URL` writes the page as text
   (or its display list) on the standard output, for `run-tests.sh`;
   `ariadne --time URL` prints the time of each stage.
-- The test pages are on the RAM disk, so they work with no network.
-- For a quick loop, the host serves the pages and the freshly built
-  `ariadne.byte` (QEMU's user network reaches the host at `10.0.2.2`), so
-  trying a change does not need a new image. M0 decides how: a script,
-  or `PKG=local` if `ariadne` is a package.
+- The test pages are built into the program (`about:tests`,
+  `about:test/NAME`), so they work with no network and do not crowd the
+  RAM disk, which is flat. The same pages and their expected text are
+  checked on the host (`tools/test-ariadne.sh`) and in MyNOS (a boot of
+  `run-tests.sh`).
+- For a quick loop, `tools/ariadne-dev.sh` builds only Ariadne and puts
+  it on the disk as `/disk/bin/ariadne.byte`, which `PATH` finds before
+  the RAM disk's: trying a change needs no new image. Pages can also be
+  served by the host (QEMU's user network reaches it at `10.0.2.2`).
 
 ## Open questions
 
