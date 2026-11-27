@@ -1,10 +1,9 @@
-# Decision: a new browser, in OCaml
+# Decision: Ariadne, a new browser in OCaml
 
 - **Issues:** none yet
 - **Date:** 2026-11-27
 - **Status:** proposed. The choices below are the owner's (2026-11-27);
-  the plan is to be reviewed. The program's name is open: `web` is
-  used here as a working name.
+  the plan is to be reviewed.
 
 ## Why
 
@@ -27,7 +26,9 @@ a rendering proxy, Ladybird, Servo and an OCaml browser.
   service of its own (`jsd`), as lwIP and mbedTLS are C inside `netd`.
   The pixels go through `Gfx`'s C primitives, as they do today, with a
   few more if needed. They stay generic, not the browser's own.
-- **A new program.** `packages/browser` stays as it is. The new one
+- **A new program, Ariadne** (`ariadne`): Minos's daughter, whose
+  thread led Theseus through the labyrinth and out again, as links and
+  history lead through the web. `packages/browser` stays as it is. The new one
   starts its HTML parser from the specification. It may reuse the old
   one's URL handling, window code and JPEG decoder.
 - **MyNOS first.** The browser lives in this repository, on the
@@ -40,10 +41,10 @@ a rendering proxy, Ladybird, Servo and an OCaml browser.
 
 | Piece | Where | Language |
 |---|---|---|
-| HTML parser (WHATWG tokenizer and tree builder), DOM | `web/` | OCaml |
-| CSS: syntax, selectors, cascade, computed values | `web/` | OCaml |
-| Layout: block, inline and line breaking, then floats, positioning, tables, flexbox | `web/` | OCaml |
-| Display list, painting, scrolling, the window, history, forms | `web/` | OCaml, painting with `Gfx` |
+| HTML parser (WHATWG tokenizer and tree builder), DOM | `ariadne/` | OCaml |
+| CSS: syntax, selectors, cascade, computed values | `ariadne/` | OCaml |
+| Layout: block, inline and line breaking, then floats, positioning, tables, flexbox | `ariadne/` | OCaml |
+| Display list, painting, scrolling, the window, history, forms | `ariadne/` | OCaml, painting with `Gfx` |
 | Fonts: TrueType outlines, rasterized once per glyph and size, cached as masks, drawn with `Gfx.draw_mask` (grey levels, so antialiased) | a library, usable by every GUI program | OCaml |
 | Images: PNG (inflate), JPEG, GIF | an `imaged` service, which decodes in parallel with the layout, on another processor | OCaml |
 | JavaScript: QuickJS, the DOM reached over typed IPC (handles, not objects) | a `jsd` service | C |
@@ -74,7 +75,7 @@ a rendering proxy, Ladybird, Servo and an OCaml browser.
 
 | | What | Done when |
 |---|---|---|
-| M0 | The skeleton: the program and its window, `web --dump`, the test pages, the host test runner, a `run-tests.sh` lane, the timing harness | `web` opens a page from the RAM disk and shows its text |
+| M0 | The skeleton: the program and its window, `ariadne --dump`, the test pages, the host test runner, a `run-tests.sh` lane, the timing harness | `ariadne` opens a page from the RAM disk and shows its text |
 | M1 | The HTML parser and the DOM | html5lib-tests' tree construction tests mostly pass on the host; `--dump` reads the test pages well |
 | M2 | Fonts: TrueType in OCaml, the glyph cache, measuring and drawing text | a paragraph in a proportional font, at several sizes, bold and italic, in a window |
 | M3 | CSS and the first layout: cascade, block and inline boxes, line breaking, the display list, painting, scrolling, links, history | a Wikipedia article reads well, over https |
@@ -85,18 +86,17 @@ a rendering proxy, Ladybird, Servo and an OCaml browser.
 
 ## Testing it inside the image
 
-- `web URL` opens a window; `web --dump URL` writes the page as text
+- `ariadne URL` opens a window; `ariadne --dump URL` writes the page as text
   (or its display list) on the standard output, for `run-tests.sh`;
-  `web --time URL` prints the time of each stage.
+  `ariadne --time URL` prints the time of each stage.
 - The test pages are on the RAM disk, so they work with no network.
 - For a quick loop, the host serves the pages and the freshly built
-  `web.byte` (QEMU's user network reaches the host at `10.0.2.2`), so
+  `ariadne.byte` (QEMU's user network reaches the host at `10.0.2.2`), so
   trying a change does not need a new image. M0 decides how: a script,
-  or `PKG=local` if `web` is a package.
+  or `PKG=local` if `ariadne` is a package.
 
 ## Open questions
 
-- **The name** of the program (`web` is a working name).
 - **The fonts:** which scalable family goes on the RAM disk, and under
   which licence (DejaVu, Noto, the Liberation fonts...).
 - **In the image or a package** (`packages.md`).

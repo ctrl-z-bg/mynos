@@ -1,8 +1,8 @@
 # BROWSER-TODO
 
-What is left to do for the new browser, milestone by milestone. The plan,
+What is left to do for Ariadne (`ariadne`), the new browser, milestone by milestone. The plan,
 its choices and rules are in [`doc/decisions/browser.md`](doc/decisions/browser.md);
-this file only keeps track. `web` is a working name.
+this file only keeps track.
 
 Tick a line when it is done and committed; add lines as work finds
 them. Timings go in "Measurements", decisions in "Decisions".
@@ -14,11 +14,11 @@ Taken (the owner, 2026-11-27):
 - [x] OCaml, as bytecode on `ocamlrun`; no C/C++ engine, no `ocamlopt`
 - [x] C only in services for specific jobs: QuickJS in `jsd`; generic `Gfx` primitives
 - [x] A new program; `packages/browser` stays as it is
+- [x] Its name: Ariadne, `ariadne`
 - [x] MyNOS first, in this repository, on the `browser` branch (from `next`); the host is a test bench
 
 Open:
 
-- [ ] The program's name
 - [ ] The scalable fonts on the RAM disk, and their licence (DejaVu, Noto, Liberation...)
 - [ ] In the image, or a package (`doc/decisions/packages.md`)
 - [ ] The target sites: which real pages must read well for it to count as usable
@@ -26,14 +26,14 @@ Open:
 
 ## M0: the skeleton
 
-- [ ] `web/`: Makefile, built by `tools/build-all.sh` (i386, x86-64, AArch64)
+- [ ] `ariadne/`: Makefile, built by `tools/build-all.sh` (i386, x86-64, AArch64)
 - [ ] The window (`Gui`), an address bar, a page area that scrolls
-- [ ] `web --dump URL`: the page as text on the standard output
-- [ ] `web --time URL`: the time of each stage
+- [ ] `ariadne --dump URL`: the page as text on the standard output
+- [ ] `ariadne --time URL`: the time of each stage
 - [ ] Test pages on the RAM disk (no network needed)
 - [ ] The host test runner, in the dev container: the core's tests as bytecode
 - [ ] A `run-tests.sh` lane: `--dump` of the test pages, compared with the expected text
-- [ ] The quick loop: the host serves the pages and the fresh `web.byte` at `10.0.2.2`, so a change needs no new image
+- [ ] The quick loop: the host serves the pages and the fresh `ariadne.byte` at `10.0.2.2`, so a change needs no new image
 - [ ] Manual: a first page (command reference)
 
 ## M1: the HTML parser and the DOM
@@ -55,7 +55,7 @@ Open:
 - [ ] Measuring text: advance widths, ascent, descent, line gap
 - [ ] Choosing a font: family, weight, style; a fallback glyph for missing characters
 - [ ] The fonts chosen, on the RAM disk, with their licence
-- [ ] A library usable by every GUI program, not only `web`
+- [ ] A library usable by every GUI program, not only `ariadne`
 - [ ] A paragraph in a window: several sizes, bold, italic
 
 ## M3: CSS and the first layout
@@ -114,7 +114,7 @@ Open:
 
 ## Measurements
 
-Timings in MyNOS under KVM, x86-64, on the test pages (`web --time`).
+Timings in MyNOS under KVM, x86-64, on the test pages (`ariadne --time`).
 
 | Date | Milestone | Page | Parse | Cascade | Layout | Paint | Total |
 |---|---|---|---|---|---|---|---|
