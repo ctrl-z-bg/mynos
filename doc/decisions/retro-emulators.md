@@ -113,8 +113,9 @@ kitty protocol has codes for modifiers), not to the package. Through
 One protocol for every emulator (Spectrum, MSX, C64, and `camlboy`
 adapted), so that what uses one uses them all; only what `info` says
 changes. Each registers `<machine><pid>` (`zx<pid>`, `msx<pid>`,
-`camlboy<pid>`), as Studio registers `studio<pid>`. Made with
-`Ipc.Make`, so it describes itself.
+`camlboy<pid>`), as Studio registers `studio<pid>`; `Emu_proto.find
+"zx"` lists the names made of the prefix and digits only (`zx1234`,
+not `zxspectrum`). Made with `Ipc.Make`, so it describes itself.
 
 Requests that only read (`safe`):
 
@@ -128,18 +129,28 @@ Requests that only read (`safe`):
   compared with the ROM's font (0x3D00), inverse cells too, `?` for the
   others; the MSX in its text modes: the name table. A model that reads
   only text sees the screen.
-- `screenshot path`: the screen as a PNG, which `view` opens.
+- `screenshot`: the screen as a PNG in `/tmp`, named after the
+  service and the frame (`zx1234-5000.png`), which `view` opens: its
+  path. The caller chooses no path: a safe request, which the agent asks
+  without confirming, must not be able to overwrite a file.
 
 Requests that change things (confirmed first when the agent asks them):
 
-- `pause`, `resume`, `step n` (instructions), `frames n`.
-- `break`, `unbreak`, `breaks`: on the PC, and watchpoints on reads or
-  writes of memory.
+- `pause`, `resume`, `step n` (instructions), `frames n`. `step` and
+  `frames` pause a running machine first, then advance it; `frames` runs
+  as fast as it can, not waiting for the clock (in a window or
+  headless), so that tests stay quick.
+- `break`, `unbreak`, `breaks`: on the PC (the fetch of an
+  instruction's opcode), and watchpoints on reads or writes of memory
+  (the CPU's reads: not its fetches of instructions).
 - `wait timeout`: returns when a breakpoint is hit or the machine
-  pauses. One connection per call, so a call that waits costs nothing.
+  pauses; at once, `Paused pc`, if it is paused. One connection per
+  call, so a call that waits costs nothing.
 - `keys`: a sequence of the machine's keys, each held for some frames,
   in a small notation (`"P 2 SS+K 2 ENTER"`); it returns once the last
-  key is let go, so that what follows (`screen_text`) sees its effect.
+  key is let go, so that what follows (`screen_text`) sees its effect;
+  an error ("paused") at once if the machine is paused, whose keys would
+  never be let go.
 - `poke`, `load` (tape, snapshot, cartridge), `save_state`, `load_state`
   (on the Spectrum the native `.z80` and `.sna`), `reset`.
 
@@ -165,15 +176,20 @@ does not mean PRINT. A translation from text to keys can come later.
   before taking the next (a `wait` would hold every other caller): it
   listens, decodes (`decode`), and queues the request with its channel;
   the loop answers on the channel (`reply`), at once, or later for
-  `wait` and `keys`. The loop looks at the queue once a frame, a field
-  read, without the lock (threads take turns on one domain); the lock
-  only when there is something. The thread and the queue are the same
-  for every machine: `emu_service.ml`.
+  `wait` and `keys`. The loop looks at the queue once a frame through an
+  `Atomic.t` (the cost of a field read, and right with any number of
+  domains); the lock only when there is something. The thread and the
+  queue are the same for every machine: `emu_service.ml`.
 - **Two loops.** `run_fast` checks nothing per instruction; `run_checked`
   checks the PC against the breakpoints before each one, and the bus
   that checks watchpoints is put in only while there are watchpoints. An
   emulator whose service is idle runs as fast as one without: to be
   measured.
+- **The bus.** The Z80's has `fetch` (an opcode's read, the M1 cycle)
+  apart from `read`: the watchpoints on reads look at `read` only (the
+  instructions' fetches are the breakpoints'), and the machines that
+  need it (contention, paging on M1) can tell them apart. On the
+  Spectrum, `fetch` is `read`.
 
 ### 7. What the services give, and what they make possible
 
