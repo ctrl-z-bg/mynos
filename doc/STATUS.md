@@ -2171,3 +2171,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   has it (QEMU's `raspi4b` has none); a new native call, 105
   (`mynos_piFirmware`), hands a driver's property request to the
   firmware's mailbox (the board's MAC address; the Wi-Fi's power next).
+- **2026-11-27** — GENET works on a Pi 400 (btq.8.4 closed): a cable
+  to the LAN, an address from its router's DHCP, ping 1-2 ms, MyNOS's
+  httpd reachable from the LAN. The time from the network is its own
+  bead now. Next: the Wi-Fi (btq.9, priority raised: the user wants it).

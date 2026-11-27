@@ -823,3 +823,33 @@ full-speed `usb-hub` never takes, and it works.
 **Lesson.** An error path that "goes on as before" is a path never
 tried; and a fix that came with the cure is not the cure until a log
 says so.
+
+## 2026-11-27 — GENET, the Pi 400's Ethernet, at the first try (mynos-btq.8.4)
+
+**What was done.** `services/net/genet.c`, netd's third card, from
+U-Boot's and Linux's drivers' registers: the receive buffer flushed and
+the UniMAC reset, the PHY (a BCM54213PE at MDIO address 1, RGMII with
+the receive clock delayed by the PHY: the MAC's own delay off,
+`ID_MODE_DIS`) reset and autonegotiated, the default queue's two rings.
+All 256 descriptors go to that ring, as U-Boot does: a descriptor is
+then the producer's or consumer's count modulo 256 whichever way the
+GENET counts, the one thing about it no document settles. The MAC
+address is the board's, asked of the firmware (tag 0x00010003) through
+a new native call, 105 (`mynos_piFirmware`), which the Wi-Fi will want
+too (its power is on the firmware's GPIO expander). The kernel lets a
+driver map the GENET only if the device tree has it: on QEMU's
+`raspi4b` netd finds no card and ends, as before.
+
+**A finding before the board.** netd, without a DHCP answer in 5 s,
+took QEMU's user network's address (10.0.2.15): on a real network a
+wrong address for good. On a GENET DHCP goes on trying.
+
+**Tried.** On the Pi 400, with a cable to the LAN's router: the link
+up, an address from its DHCP, ping 1-2 ms (the interrupt works:
+polling would be up to 100 ms), 1400-byte pings 50 of 50, MyNOS's httpd
+answering a browser of the LAN. The kernel's log can now be read from
+another computer: `log > /disk/web/log.txt` on the Pi.
+
+**Lesson.** Where two drivers that work disagree on nothing, copy what
+they agree on (here: every descriptor to one ring) rather than the
+cleverer layout.
