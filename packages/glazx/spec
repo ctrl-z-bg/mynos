@@ -1,0 +1,11 @@
+# The package glazx (tools/pkg-build.sh): a ZX Spectrum game, played by
+# zxspectrum
+NAME=glazx
+VERSION=1.0
+DESCRIPTION='GLAZX (Eugeny Novikov, 2019), an arcade duel for two at one keyboard on the ZX Spectrum 48K, played by zxspectrum; type glazx'
+LICENSE=MIT
+DEPENDS=zxspectrum
+COMMANDS=glazx
+RUN='zxspectrum /disk/pkg/glazx/glazx48.tap'
+EXTRA='third_party/glazx/glazx48.tap third_party/glazx/LICENSE third_party/glazx/README.md'
+DOC=third_party/glazx/README.md

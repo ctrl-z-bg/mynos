@@ -72,3 +72,8 @@ llm.env
 # the build's version (tools/version.sh, written by tools/build-all.sh)
 /VERSION
 
+tests/emu/zxspectrum.byte
+tests/emu/emutest.byte
+tests/emu/emu.img
+tests/emu/_b/
+tests/z80/_*/

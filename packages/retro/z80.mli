@@ -70,11 +70,14 @@ val decode : (int -> int) -> int -> prefix * int * int * int
     that order). A run of DD and FD counts as its last one, as [step]
     takes it. *)
 
-val r8 : string array
-(** "B" "C" "D" "E" "H" "L" "(HL)" "A": the 3-bit register field's names *)
+(** The fields' names: [r8] "B" "C" "D" "E" "H" "L" "(HL)" "A"; [rp] "BC"
+    "DE" "HL" "SP"; [rp2] "BC" "DE" "HL" "AF"; [cc] "NZ" "Z" "NC" "C" "PO"
+    "PE" "P" "M"; [alu] "ADD A," "ADC A," "SUB " "SBC A," "AND " "XOR "
+    "OR " "CP "; [rot] "RLC" "RRC" "RL" "RR" "SLA" "SRA" "SLL" "SRL". *)
 
-val rp : string array     (** "BC" "DE" "HL" "SP" *)
-val rp2 : string array    (** "BC" "DE" "HL" "AF" *)
-val cc : string array     (** "NZ" "Z" "NC" "C" "PO" "PE" "P" "M" *)
-val alu : string array    (** "ADD A," "ADC A," "SUB " "SBC A," "AND " "XOR " "OR " "CP " *)
-val rot : string array    (** "RLC" "RRC" "RL" "RR" "SLA" "SRA" "SLL" "SRL" *)
+val r8 : string array
+val rp : string array
+val rp2 : string array
+val cc : string array
+val alu : string array
+val rot : string array

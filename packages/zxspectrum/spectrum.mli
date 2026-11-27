@@ -44,8 +44,10 @@ val press : t -> Keyboard.key -> bool -> unit
 (** The window's keys: down or up. *)
 
 val queue_keys : t -> (Keyboard.key list * int) list -> unit
-(** emu/1's keys: each group held for its frames, then let go for one,
-    by the frames that follow; besides the window's. *)
+(** emu/1's keys: each group held for its frames, then let go for one
+    (six before a group that presses one of its keys again: the ROM
+    takes a key again once it was up for a while), by the frames that
+    follow; besides the window's. *)
 
 val keys_pending : t -> bool
 
@@ -60,6 +62,10 @@ val poke : t -> Emu_proto.space -> int -> int -> unit
 val screen : t -> int array
 (** 320 x 240 (the border 32 and 24 around 256 x 192), 0xRRGGBB, the
     border by lines, FLASH at its 16 frames. *)
+
+val changed : t -> bool array
+(** The rows of [screen] its last call changed (240): the drawer clears
+    them as it draws them. *)
 
 val screen_text : t -> string
 (** 24 lines of 32: each 8 x 8 cell compared with the ROM's font

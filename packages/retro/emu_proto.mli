@@ -68,10 +68,11 @@ type _ request =
       (** at most this many seconds, until a breakpoint is hit or the
           machine pauses; [Paused pc] at once if it is paused *)
   | Keys : string -> unit request
-      (** keys of the machine, each group held for some frames, then let
-          go for one: ["P 2 SS+K 2 ENTER"] (a group: names joined by +,
-          then the frames, 2 if not said). Answered once the last is let
-          go; an error ("paused") at once if the machine is paused *)
+      (** keys of the machine, a group after another, each held 2 frames
+          (or [:n] frames: ["CS+0:5"]), then let go for one: a group is
+          names joined by +. On the Spectrum ["P 2 SS+K 2 ENTER"] types
+          PRINT 2+2. Answered once the last is let go; an error
+          ("paused") at once if the machine is paused *)
   | Poke : space * int * int list -> unit request
       (** [(space, addr, bytes)]; ROM: an error *)
   | Load : string -> string request

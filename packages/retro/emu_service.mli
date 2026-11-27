@@ -22,6 +22,9 @@ val start : string -> t
 (** [start "zx"]: registers zx<pid> and starts the thread (a [Thread],
     not a [Domain]: a second domain slows every minor collection). *)
 
+val none : unit -> t
+(** No service: nothing registered, nothing listened to (benchmarks). *)
+
 val name : t -> string
 
 val pending : t -> bool

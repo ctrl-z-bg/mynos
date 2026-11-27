@@ -286,6 +286,39 @@ sys.exit(0 if b"nocom2-ok" in s else 1)' && nocom2=yes
 fi
 }
 
+sec_emu() {
+# an emulator as a service (doc/decisions/retro-emulators.md): the package
+# zxspectrum's program without a window (tests/emu: built from its
+# sources, on a disk with the ROM), then emutest.byte, which finds zx<pid>
+# and drives it through emu/1: the ROM's message read from the screen,
+# PRINT 2+2 typed and its 4 read back, registers, memory, a disassembly,
+# a screenshot, breakpoints, watchpoints, waits, a state saved and loaded
+if [ -f tests/emu/emu.img ] && [ -f system/ramdisk.dsk ]; then
+    cp tests/emu/emu.img "$tmp/emu.img"
+    : > "$tmp/logemu"
+    DISK=$tmp/emu.img MEM=256 tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        system/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$tmp/logemu" \
+           -monitor "unix:$tmp/mon-emu,server,nowait" &
+    qemu=$!
+    i=0
+    while [ $i -lt 30 ] && ! grep -aq 'mynos:/' "$tmp/logemu" 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    tools/type-keys.py "$tmp/mon-emu" '/disk/zx/zxspectrum.byte --headless &\n'
+    sleep 2
+    tools/type-keys.py "$tmp/mon-emu" '/disk/zx/emutest.byte\n'
+    i=0
+    while [ $i -lt 120 ] && ! grep -aq 'emu: all checks passed\|emu: some checks FAILED\|PANIC' "$tmp/logemu"; do
+        sleep 1; i=$((i + 1))
+    done
+    printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-emu" >/dev/null || true
+    wait $qemu || true
+    cat "$tmp/logemu" >> "$part"
+fi
+}
+
 sec_reboots() {
 # restarting again and again (shutdown -r): after a reset memory holds the
 # previous run's data, which the kernel once read as its own (a page given
@@ -1001,7 +1034,7 @@ for lane in ${LANES:-a b c d e}; do
         case $lane in
             a) sec_first || true; sec_effects || true; sec_storage || true; sec_fat || true; sec_domains || true; sec_threads || true; sec_fpu || true ;;
             b) sec_mlib || true; sec_files || true; sec_libs || true; sec_stress || true; sec_spawn || true; sec_console || true ;;
-            c) sec_nocom2 || true; sec_reboots || true ;;
+            c) sec_nocom2 || true; sec_reboots || true; sec_emu || true ;;
             d) sec_gui || true ;;
             e) sec_net || true; sec_seventh || true ;;
         esac
@@ -1361,6 +1394,14 @@ if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     expect 'console: line 4: "xabcy"'
     expect 'console: line 5: "013"'
     expect "console: end of input after 5 lines"
+fi
+if [ -f tests/emu/emu.img ]; then
+    expect "zxspectrum: zx"
+    expect "emu: screen_text: the ROM's message                             ok"
+    expect "emu: keys: P 2 SS+K 2 ENTER, then 4 on the screen               ok"
+    expect "emu: break 02BF, frames 5: hit there                            ok"
+    expect "emu: watch write 5C78, wait: hit                                ok"
+    expect "emu: all checks passed"
 fi
 reject "PANIC"
 reject "page fault (?)"

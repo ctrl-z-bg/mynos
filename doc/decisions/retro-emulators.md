@@ -94,7 +94,8 @@ watchpoints, only while there are some (section 6).
 `spectrum`, and `zxspectrum_main.ml` on the model of `camlboy_main.ml`
 (a window of 640 x 480 and a status line, 50 frames a second, the sound
 from a thread, off by default and turned off by itself below 50 frames
-a second; P pauses, M the sound, Escape quits). Frames of 69,888
+a second; Page Up pauses, Page Down the sound, Escape quits: P and M
+are Spectrum keys). Frames of 69,888
 T-states, the interrupt at the start, no memory contention (later, if a
 game needs it). `.tap` loaded through a trap on LD-BYTES (0x0556):
 instant. The game, a package of data as `tobutobugirl`: GLAZX (Eugeny
@@ -146,8 +147,10 @@ Requests that change things (confirmed first when the agent asks them):
 - `wait timeout`: returns when a breakpoint is hit or the machine
   pauses; at once, `Paused pc`, if it is paused. One connection per
   call, so a call that waits costs nothing.
-- `keys`: a sequence of the machine's keys, each held for some frames,
-  in a small notation (`"P 2 SS+K 2 ENTER"`); it returns once the last
+- `keys`: a sequence of the machine's keys, each group held for some
+  frames, in a small notation: groups separated by spaces, names joined
+  by `+`, held 2 frames unless `:n` says (`"CS+0:5"`); on the Spectrum
+  `"P 2 SS+K 2 ENTER"` types `PRINT 2+2`; it returns once the last
   key is let go, so that what follows (`screen_text`) sees its effect;
   an error ("paused") at once if the machine is paused, whose keys would
   never be let go.
@@ -219,9 +222,10 @@ the price of the protocol:
 ### 8. Tests
 
 - The Z80: zexdoc and zexall as CP/M programs (a trap on BDOS 0x0005,
-  C = 2 and C = 9, the end at 0x0000), run as native code on the host
-  (zexall is long in bytecode); FUSE's tests, registers, memory and
-  T-states instruction by instruction.
+  C = 2 and C = 9, the end at 0x0000), run on the host
+  (`tests/z80/run.sh zex`): as bytecode in the dev container, since no
+  native compiler is there (about 24 minutes each); FUSE's tests,
+  registers, memory and T-states instruction by instruction.
 - The Spectrum through "emu/1": the test of section 7, in the suite.
   For it, and for scripts, `zxspectrum --headless`: the machine and its
   service without a window, 50 frames a second by the clock.

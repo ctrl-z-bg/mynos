@@ -12,6 +12,9 @@ val create : unit -> t
 val set : t -> key -> bool -> unit
 (** [set k key down] *)
 
+val clear : t -> unit
+(** Every key up. *)
+
 val read : t -> int -> int
 (** [read k high]: bits 0-4 of port 0xFE for the half-rows whose bit in
     [high] is 0 (a key down: its bit 0), the others 1. *)
@@ -20,6 +23,7 @@ val names : string
 (** The names [parse] knows: "A".."Z" "0".."9" "ENTER" "SPACE" "CS" "SS". *)
 
 val parse : string -> (key list * int) list
-(** emu/1's notation: ["P 2 SS+K 2 ENTER"]: groups of names joined by +,
-    each followed by the frames it is held (2 if not said). Raises
-    [Failure] on a name it does not know. *)
+(** emu/1's notation: ["P 2 SS+K 2 ENTER"] (PRINT 2+2), groups separated
+    by spaces, each names joined by + and held 2 frames, or as many as a
+    [:n] after it says (["SS+K:5"]). Raises [Failure] on a name it does
+    not know. *)

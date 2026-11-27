@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-26
+Last updated: 2026-11-27
 
 ---
 
@@ -1897,3 +1897,11 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   woken twice (its timer, then a sender or the channel's close), and its
   next wait returned at once. Found on the version 2 line with several
   processors (JOURNAL). On `main`, not released yet.
+- **2026-11-27** — Retro emulators begun (branch `retro`, mynos-0bj,
+  doc/decisions/retro-emulators.md): `packages/retro` (a Z80 in OCaml:
+  FUSE's 1356 tests, zexdoc and zexall all passed; its disassembler; the
+  protocol emu/1 and its service), the package `zxspectrum` (a 48K: the
+  ULA, keyboard, beeper, `.tap` loaded at once, `.sna`, `.z80`; a window
+  at 50 frames a second under KVM, `--headless`, `--bench`) and `glazx`
+  (a game, MIT). The suite drives the Spectrum through emu/1 (lane c,
+  `tests/emu`). Not published yet.
