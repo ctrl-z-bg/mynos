@@ -2143,3 +2143,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `examples/25/hello_zx.ml`, built by `tools/build-examples.sh` and run
   in MyNOS), and appendix E.18. After the printed edition: the book is
   frozen.
+- **2026-11-27** — USB 2 hubs in usbd (mynos-btq.8.5): on a Pi 4 and
+  400 every USB 2 device, the 400's keyboard too, is behind the VL805's
+  own hub. Route strings, ports powered and reset, the TT for a low- or
+  full-speed device behind a high-speed hub; on QEMU the keyboard now
+  sits behind a `usb-hub` (`USB=1`, lane j). The SD card image
+  (`tools/make-sd-raspi.sh`) is ready for the first try on a Pi 400
+  (btq.8.1-3, .8.5).

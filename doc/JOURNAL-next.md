@@ -738,3 +738,30 @@ page before the network boot is stopped.
 
 **Lesson.** "Done" said by a thread is not "ended": its stack is still
 its own until it has returned.
+
+## 2026-11-27 — The USB's hubs, before the Pi 400 (mynos-btq.8.5)
+
+**Why now.** Before the first try on the Pi 400: on a Pi 4 and a 400
+the USB 2 devices are not on the VL805's root ports but behind its own
+USB 2 hub (VIA Labs 2109:3431), the 400's keyboard (a Holtek) too. A
+usbd without hubs would have found one device on the board, the hub,
+and no keyboard: the try would have told nothing about the keys.
+
+**What was done.** usbd attaches a USB 2 hub as any device, then: its
+configuration, its hub descriptor (ports, power-on time, the TT's think
+time), the hub's fields in its slot's context (Hub, ports, TTT, set
+with its interrupt endpoint's Configure Endpoint), its ports powered,
+each connected one reset (`SET_FEATURE PORT_RESET`, then `C_PORT_RESET`
+waited for), its speed from `wPortStatus`, the device attached with a
+route string (four bits a tier) under the same root port. A low- or
+full-speed device behind a high-speed hub names that hub's slot and
+port as its transaction translator. Devices are found once, when usbd
+starts (none plugged in later yet). The log names devices by where
+they are: `port 5.1` is port 1 of the hub on root port 5.
+
+**Tried.** QEMU's `virt` with `usb-hub` (a full-speed hub: no TT there)
+and the keyboard behind it, as on a 400; the suite's USB boot now has
+it so. The TT path runs only on the board.
+
+**Lesson.** Look at the board's USB tree (`lsusb -t` on its Linux)
+before deciding what "the keyboard on a root port" means.

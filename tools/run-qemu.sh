@@ -48,9 +48,9 @@
 #            record it; run-demo.sh picks one
 #   VERBOSE  if set, kernel messages stay on screen after boot (they always
 #            go to the second serial port)
-#   USB      if set, an xHCI controller (qemu-xhci) with a USB keyboard and
-#            a USB mouse (usbd); on aarch64's virt instead of the virtio
-#            keyboard and tablet
+#   USB      if set, an xHCI controller (qemu-xhci) with a USB keyboard
+#            behind a USB hub (as a Pi 400's) and a USB mouse (usbd); on
+#            aarch64's virt instead of the virtio keyboard and tablet
 #   POINTER  aarch64: tablet (the default: absolute, no grab in a window)
 #            or mouse (relative, as the PC's PS/2 mouse: QEMU's monitor's
 #            mouse_move, which the graphical tests use)
@@ -153,7 +153,8 @@ set -- ${cpu:+-cpu "${CPU:-$cpu}"} \
     ${DISK:+-drive file=$DISK,format=raw,if=$disk_if} ${DISK:+$disk_dev} \
     ${NET:+-netdev user,id=n0${HTTP:+,hostfwd=tcp:127.0.0.1:$HTTP-:80}${UDP:+,hostfwd=udp::$UDP-:$UDP}} \
     ${NET:+-device $net_dev} $audio \
-    ${USB:+-device qemu-xhci -device usb-kbd -device usb-mouse} "$@"
+    ${USB:+-device qemu-xhci,id=xhci -device usb-hub,bus=xhci.0,port=1} \
+    ${USB:+-device usb-kbd,bus=xhci.0,port=1.1 -device usb-mouse,bus=xhci.0,port=2} "$@"
 mem=${MEM:-32} archive=
 if [ "${ARCH:-i386}" = aarch64 ]; then
     [ "$mem" -lt 128 ] && mem=128

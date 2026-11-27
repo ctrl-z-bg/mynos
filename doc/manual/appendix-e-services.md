@@ -619,7 +619,10 @@ no graphical session: displayd logs it at boot and ends with code 0. Protocol **
 
 **usbd** (the USB) drives an xHCI controller: QEMU's `qemu-xhci`
 (`USB=1` for `tools/run-qemu.sh`), a Raspberry Pi 4's or 400's VL805.
-It finds its devices on the root ports (no hubs yet), and those that
+It finds its devices when it starts, on the root ports and behind USB 2
+hubs (a Pi 4's and 400's devices all sit behind the VL805's own hub);
+its log names each by where it is (`port 5.1`: port 1 of the hub on
+root port 5). Those that
 speak HID's boot protocol, keyboards and mice, become keys for `keys`
 (a held key repeated: 500 ms, then 30 a second) and reports for
 `pointer`. Without an xHCI it ends at once.

@@ -21,8 +21,9 @@
 #   (default tmp/mynos-raspi.img, 2048 MB: a card of 2 GB or more)
 #   then, e.g.: dd if=tmp/mynos-raspi.img of=/dev/sdX bs=4M conv=fsync
 # The console: the screen (HDMI), and the UART (GPIO 14 TX, 15 RX,
-# 115200 8N1, 3.3 V). No keyboard yet (USB: btq.10): the UART's terminal
-# is the keyboard.
+# 115200 8N1, 3.3 V). The keyboard: the UART's terminal; on a Pi 4 or 400
+# also a USB keyboard and mouse (usbd, behind the kernel's PCIe: btq.8.1-3,
+# .8.5), the 400's own keyboard too. A Pi 3's USB (DWC2) is not driven.
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 tree=$root/build/aarch64/tree

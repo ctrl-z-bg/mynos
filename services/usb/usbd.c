@@ -21,7 +21,12 @@
  * device addressed, its descriptors read (control transfers on endpoint
  * 0), and, for a keyboard or a mouse that speaks the boot protocol (HID,
  * subclass 1), its configuration set, the boot protocol chosen, its
- * interrupt endpoint configured and read.
+ * interrupt endpoint configured and read. A USB 2 hub (btq.8.5: a Pi 4's
+ * and 400's USB 2 devices all sit behind the VL805's own hub, the 400's
+ * keyboard too) is configured, its ports powered and reset, and each
+ * device on them attached the same way, reached by its route string; a
+ * low- or full-speed one behind a high-speed hub through that hub's
+ * transaction translator.
  *
  * A keyboard's reports (8 bytes: modifiers, six keys held) become a PC
  * keyboard's scan codes (set 1) for consoled's "keys" service: what was
@@ -33,8 +38,8 @@
  * DMA memory; their bytes are cleaned out of the processor's caches
  * before the controller reads them and dropped from them before the
  * processor reads what it wrote (a Pi 4's PCIe is not coherent with the
- * caches; elsewhere this costs nothing that matters). No hubs yet: the
- * devices on the root ports only.
+ * caches; elsewhere this costs nothing that matters). The devices are
+ * found once, when usbd starts: none plugged in later yet.
  */
 
 #include <string.h>
@@ -207,11 +212,17 @@ static struct ring cmd;
 /* ---- devices ---- */
 
 struct dev {
-  int slot, port, speed;
+  int slot, port, speed;              /* port: the root port */
+  unsigned int route;                 /* the hubs' ports below it, 4 bits each */
+  int depth;                          /* the hubs above it */
+  int tt_slot, tt_port;               /* a LS/FS device's high-speed hub */
+  int hub_ports, ttt, power_ms;       /* a hub's ports, its TT's think time, its
+                                         ports' time to power good */
+  char loc[24];                       /* "5", "5.1", ...: for the log */
   void * in_ctx, * out_ctx;           /* the input and the device contexts */
   unsigned long in_bus, out_bus;
   struct ring ep0, intr;
-  int intr_dci, intr_len, kind;       /* 1 a keyboard, 2 a mouse */
+  int intr_dci, intr_len, kind;       /* 1 a keyboard, 2 a mouse, 9 a hub */
   unsigned char * report;
   unsigned long report_bus;
   unsigned char last[8];              /* a keyboard's last report */
@@ -228,6 +239,18 @@ static unsigned long * dcbaa;
 static volatile unsigned int * ctx(void * base, int i)
 {
   return (volatile unsigned int *)((unsigned char *)base + i * ctx_size);
+}
+
+/* the slot's context (xHCI 6.2.2): its route, speed, entries, root port,
+   its hub's TT; a hub's own fields */
+static void slot_ctx(volatile unsigned int * c, struct dev * d, int entries)
+{
+  c[0] = d->route | (unsigned int)d->speed << 20 | (unsigned int)entries << 27 |
+         (d->hub_ports ? 1u << 26 : 0);
+  c[1] = (unsigned int)d->port << 16 | (unsigned int)d->hub_ports << 24;
+  c[2] = (unsigned int)d->tt_slot | (unsigned int)d->tt_port << 8 |
+         (unsigned int)d->ttt << 16;
+  c[3] = 0;
 }
 
 /* ---- events ---- */
@@ -487,14 +510,15 @@ static void handle_transfer(struct event * e)
     if (cc == 1 || cc == 13) {
       cache_drop(d->report, d->intr_len);
       if (d->kind == 1) keyboard_report(d, d->report);
-      else mouse_report(d->report, d->intr_len - (int)(e->status & 0xFFFFFF));
+      else if (d->kind == 2) mouse_report(d->report, d->intr_len - (int)(e->status & 0xFFFFFF));
+      else return;                    /* a hub's port changes: not read again yet */
     }
     queue_report(d);
     return;
   }
 }
 
-/* ---- a device on a root port ---- */
+/* ---- a device, on a root port or a hub's ---- */
 
 static int max_packet0(int speed)
 {
@@ -522,21 +546,38 @@ static int ep_interval(int speed, int b)
   return n;                          /* full and low speed: b ms */
 }
 
-static void attach(int port, int speed)
+static void hub_scan(struct dev * h);
+
+/* a device at root port [port], [route] below it, of [speed]: [hub] the
+   hub it is on (NULL: a root port), [hub_port] its port there */
+static void attach(int port, unsigned int route, int speed, struct dev * hub, int hub_port)
 {
   struct dev * d;
   int slot = 0, cc, n, i, cfg_len, config, iface = -1, proto = 0, ep_addr = 0, ep_len = 0,
-      ep_int = 10, mps;
+      ep_int = 10, mps, kind = 0;
   volatile unsigned int * c;
   unsigned char * p;
   if (ndevs == MAXDEV) return;
   d = &devs[ndevs];
   memset(d, 0, sizeof *d);
   d->port = port;
+  d->route = route;
   d->speed = speed;
+  if (hub) {
+    d->depth = hub->depth + 1;
+    snprintf(d->loc, sizeof d->loc, "%.20s.%u", hub->loc, hub_port & 15u);
+    if ((speed == 1 || speed == 2) && hub->speed == 3) {
+      d->tt_slot = hub->slot;         /* the high-speed hub's TT */
+      d->tt_port = hub_port;
+    } else {
+      d->tt_slot = hub->tt_slot;      /* (or the one above it, if any) */
+      d->tt_port = hub->tt_port;
+    }
+  } else
+    snprintf(d->loc, sizeof d->loc, "%d", port);
   cc = command(0, 0, TRB_TYPE(T_ENABLE_SLOT), &slot);
   if (cc != 1 || slot <= 0 || slot > (int)max_slots) {
-    mynos_log("usbd: port %d: no slot (%d)\n", port, cc);
+    mynos_log("usbd: port %s: no slot (%d)\n", d->loc, cc);
     return;
   }
   d->slot = slot;
@@ -547,9 +588,7 @@ static void attach(int port, int speed)
   cache_clean(&dcbaa[slot], 8);
   /* the input context: add the slot and endpoint 0 */
   c = ctx(d->in_ctx, 0); c[1] = 0x3;
-  c = ctx(d->in_ctx, 1);              /* the slot: speed, one entry, its port */
-  c[0] = (unsigned int)speed << 20 | 1u << 27;
-  c[1] = (unsigned int)port << 16;
+  slot_ctx(ctx(d->in_ctx, 1), d, 1);
   mps = max_packet0(speed);
   c = ctx(d->in_ctx, 2);              /* endpoint 0: control, its first TRB */
   c[1] = 3u << 1 | 4u << 3 | (unsigned int)mps << 16;
@@ -559,13 +598,13 @@ static void attach(int port, int speed)
   cache_clean(d->in_ctx, PAGE);
   cc = command(d->in_bus, 0, TRB_TYPE(T_ADDRESS_DEVICE) | (unsigned int)slot << 24, NULL);
   if (cc != 1) {
-    mynos_log("usbd: port %d: no address (%d)\n", port, cc);
+    mynos_log("usbd: port %s: no address (%d)\n", d->loc, cc);
     return;
   }
   ndevs++;
   /* the device descriptor's first 8 bytes: its endpoint 0's size */
   if (control(d, 0x80, 6, 0x100, 0, 8) < 0) {
-    mynos_log("usbd: port %d: no descriptor\n", port);
+    mynos_log("usbd: port %s: no descriptor\n", d->loc);
     ndevs--;
     return;
   }
@@ -577,19 +616,21 @@ static void attach(int port, int speed)
     command(d->in_bus, 0, TRB_TYPE(T_EVALUATE_CTX) | (unsigned int)slot << 24, NULL);
   }
   if (control(d, 0x80, 6, 0x100, 0, 18) < 18) { ndevs--; return; }
-  mynos_log("usbd: port %d: %s speed, %04x:%04x, class %d\n", port, speed_name(speed),
+  mynos_log("usbd: port %s: %s speed, %04x:%04x, class %d\n", d->loc, speed_name(speed),
             ctl_buf[8] | ctl_buf[9] << 8, ctl_buf[10] | ctl_buf[11] << 8, ctl_buf[4]);
-  /* the configuration: its interfaces, the first HID boot one's
-     interrupt IN endpoint */
+  /* the configuration: its interfaces, the first HID boot one's (or a
+     hub's) interrupt IN endpoint */
   if (control(d, 0x80, 6, 0x200, 0, 9) < 9) return;
   cfg_len = ctl_buf[2] | ctl_buf[3] << 8;
   if (cfg_len > PAGE) cfg_len = PAGE;
   if (control(d, 0x80, 6, 0x200, 0, cfg_len) < cfg_len) return;
   config = ctl_buf[5];
   for (p = ctl_buf, n = 0; n + 2 <= cfg_len && p[0] >= 2; n += p[0], p += p[0]) {
-    if (p[1] == 4 && iface < 0 && p[5] == 3 && p[6] == 1 && (p[7] == 1 || p[7] == 2)) {
+    if (p[1] == 4 && iface < 0 && p[3] == 0 &&
+        ((p[5] == 3 && p[6] == 1 && (p[7] == 1 || p[7] == 2)) || p[5] == 9)) {
       iface = p[2];
       proto = p[7];
+      kind = p[5] == 9 ? 9 : proto;
     } else if (p[1] == 4 && iface >= 0 && !ep_addr)
       break;                          /* the next interface: none found in it */
     else if (p[1] == 5 && iface >= 0 && !ep_addr && (p[2] & 0x80) && (p[3] & 3) == 3) {
@@ -598,21 +639,32 @@ static void attach(int port, int speed)
       ep_int = p[6];
     }
   }
-  if (iface < 0 || !ep_addr) return;  /* not a keyboard, not a mouse */
+  if (iface < 0 || !ep_addr) return;  /* not a keyboard, a mouse or a hub */
+  if (kind == 9 && speed == 4) {
+    mynos_log("usbd: port %s: a USB 3 hub: not yet\n", d->loc);
+    return;
+  }
   if (control(d, 0x00, 9, config, 0, 0) < 0) return;            /* SET_CONFIGURATION */
-  control(d, 0x21, 0x0B, 0, iface, 0);                          /* SET_PROTOCOL: boot */
-  control(d, 0x21, 0x0A, 0, iface, 0);                          /* SET_IDLE: only changes */
+  if (kind == 9) {
+    /* the hub's descriptor: its ports, its TT's think time (its slot's
+       context says it is a hub when its endpoint is configured) */
+    if (control(d, 0xA0, 6, 0x2900, 0, 7) < 7) return;
+    d->hub_ports = ctl_buf[2] > 15 ? 15 : ctl_buf[2];
+    d->ttt = speed == 3 ? (ctl_buf[3] >> 5) & 3 : 0;
+    d->power_ms = ctl_buf[5] * 2;
+  } else {
+    control(d, 0x21, 0x0B, 0, iface, 0);                        /* SET_PROTOCOL: boot */
+    control(d, 0x21, 0x0A, 0, iface, 0);                        /* SET_IDLE: only changes */
+  }
   /* its interrupt endpoint: configured, then read */
-  d->kind = proto;
+  d->kind = kind;
   d->intr_dci = (ep_addr & 0xF) * 2 + 1;
   d->intr_len = ep_len;               /* (a boot report: its first 8 bytes) */
   d->report = dma(1, &d->report_bus);
   if (!d->report || ring_init(&d->intr) < 0) return;
   memset(d->in_ctx, 0, PAGE);
   c = ctx(d->in_ctx, 0); c[1] = 1u | 1u << d->intr_dci;
-  c = ctx(d->in_ctx, 1);
-  c[0] = (unsigned int)speed << 20 | (unsigned int)d->intr_dci << 27;
-  c[1] = (unsigned int)port << 16;
+  slot_ctx(ctx(d->in_ctx, 1), d, d->intr_dci);
   c = ctx(d->in_ctx, 1 + d->intr_dci);  /* interrupt IN (7), its interval */
   c[0] = (unsigned int)ep_interval(speed, ep_int) << 16;
   c[1] = 3u << 1 | 7u << 3 | (unsigned int)ep_len << 16;
@@ -622,12 +674,62 @@ static void attach(int port, int speed)
   cache_clean(d->in_ctx, PAGE);
   cc = command(d->in_bus, 0, TRB_TYPE(T_CONFIGURE_EP) | (unsigned int)slot << 24, NULL);
   if (cc != 1) {
-    mynos_log("usbd: port %d: its endpoint refused (%d)\n", port, cc);
+    mynos_log("usbd: port %s: its endpoint refused (%d)\n", d->loc, cc);
     return;
   }
-  mynos_log("usbd: port %d: a %s\n", port, proto == 1 ? "keyboard" : "mouse");
+  if (kind == 9) {
+    mynos_log("usbd: port %s: a hub, %d ports\n", d->loc, d->hub_ports);
+    hub_scan(d);
+    return;
+  }
+  mynos_log("usbd: port %s: a %s\n", d->loc, proto == 1 ? "keyboard" : "mouse");
   for (i = 0; i < 8; i++) d->last[i] = 0;
   queue_report(d);
+}
+
+/* a hub's port's status (wPortStatus) and changes (wPortChange << 16),
+   or -1 */
+static int hub_port_status(struct dev * h, int n)
+{
+  if (control(h, 0xA3, 0, 0, n, 4) < 4) return -1;
+  return ctl_buf[0] | ctl_buf[1] << 8 | ctl_buf[2] << 16 | ctl_buf[3] << 24;
+}
+
+#define HUB_SET_FEATURE(H, F, N)   control(H, 0x23, 3, F, N, 0)
+#define HUB_CLEAR_FEATURE(H, F, N) control(H, 0x23, 1, F, N, 0)
+#define F_PORT_RESET     4
+#define F_PORT_POWER     8
+#define F_C_CONNECTION   16
+#define F_C_RESET        20
+
+/* a USB 2 hub's ports (USB 2.0, chapter 11.24): powered, those with a
+   device reset, each device attached */
+static void hub_scan(struct dev * h)
+{
+  int n, ms, st, speed;
+  if (h->depth >= 5) return;          /* the route string's five tiers */
+  for (n = 1; n <= h->hub_ports; n++) HUB_SET_FEATURE(h, F_PORT_POWER, n);
+  /* power good, then the connections seen (at least 100 ms) */
+  mynos_sleep((h->power_ms < 100 ? 100 : h->power_ms) * 1000);
+  for (n = 1; n <= h->hub_ports; n++) {
+    st = hub_port_status(h, n);
+    if (st < 0 || !(st & 1)) continue;             /* nothing connected */
+    HUB_CLEAR_FEATURE(h, F_C_CONNECTION, n);
+    HUB_SET_FEATURE(h, F_PORT_RESET, n);
+    for (ms = 0; ms < 500; ms += 10) {
+      mynos_sleep(10000);
+      st = hub_port_status(h, n);
+      if (st >= 0 && (st & (0x10 << 16))) break;   /* C_PORT_RESET */
+    }
+    if (st < 0 || !(st & 2)) {
+      mynos_log("usbd: port %s.%d: not enabled (%08x)\n", h->loc, n, st);
+      continue;
+    }
+    HUB_CLEAR_FEATURE(h, F_C_RESET, n);
+    speed = (st & 0x200) ? 2 : (st & 0x400) ? 3 : 1;   /* low, high, full */
+    mynos_sleep(20000);               /* the device's recovery after the reset */
+    attach(h->port, h->route | (unsigned int)n << (4 * h->depth), speed, h, n);
+  }
 }
 
 /* a root port's device: the port reset (a USB 2 port's; a USB 3 one's
@@ -648,7 +750,7 @@ static void port_scan(int n)
     return;
   }
   mynos_sleep(20000);                 /* the device's recovery after the reset */
-  attach(n, PS_SPEED(v));
+  attach(n, 0, PS_SPEED(v), NULL, 0);
 }
 
 /* ---- the controller ---- */

@@ -556,7 +556,8 @@ fi
 
 sec_usb() {
 # the USB (usbd, mynos-btq.8.2-3; AArch64's virt, as a Pi 4's VL805 is
-# one more xHCI): QEMU's qemu-xhci with a USB keyboard and a USB mouse
+# one more xHCI): QEMU's qemu-xhci with a USB keyboard behind a USB hub
+# (a Pi 400's keyboard is behind the VL805's hub) and a USB mouse
 # only (no virtio ones), one processor (the suites run side by side: the
 # load), a line typed on the keyboard; in the graphical
 # session the mouse moved onto the welcome window's Clock button and
@@ -2016,7 +2017,8 @@ if [ -n "$raspi" ]; then
     else echo "FAIL  raspi4: a file written on a Pi 4's SD card, read by the host"; fail=1; fi
     if [ -n "$raspi4_off" ]; then echo "ok    raspi4: turned off by the watchdog (QEMU ended)"
     else echo "FAIL  raspi4: turned off by the watchdog (QEMU ended)"; fail=1; fi
-    expect "usbd: port 5: a keyboard"
+    expect "usbd: port 5: a hub, 8 ports"
+    expect "usbd: port 5.1: a keyboard"
     expect "usbd: port 6: a mouse"
     expect "usbkeys-ok"
     if [ -n "$usb_gui" ]; then echo "ok    usb: a USB mouse clicked the welcome window's Clock"
