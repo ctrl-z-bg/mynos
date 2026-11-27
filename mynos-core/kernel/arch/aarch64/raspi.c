@@ -196,16 +196,49 @@ static uint32_t clock_tag(uint32_t tag, uint32_t rate)
   return mbox_buf[6];
 }
 
+/* the firmware's throttling (GET_THROTTLED): bit 0 under-voltage, 1 the
+   ARM's clock capped, 2 throttled, 3 the soft temperature limit; bits
+   16-19 the same since boot. ~0: no answer */
+static uint32_t throttled(void)
+{
+  mbox_buf[0] = 7 * 4;
+  mbox_buf[1] = 0;
+  mbox_buf[2] = 0x00030046;
+  mbox_buf[3] = 4;
+  mbox_buf[4] = 0;
+  mbox_buf[5] = 0;
+  mbox_buf[6] = 0;
+  if (raspi_mbox(mbox_buf) != 0 || !(mbox_buf[4] & 0x80000000u)) return ~0u;
+  return mbox_buf[5];
+}
+
+static void put_mhz(uint32_t hz)
+{
+  print_ulong(hz / 1000000);
+}
+
 void raspi_cpu_clock(void)
 {
-  uint32_t was = clock_tag(0x00030002, 0), max = clock_tag(0x00030004, 0), now;
+  uint32_t was = clock_tag(0x00030002, 0), max = clock_tag(0x00030004, 0),
+           min = clock_tag(0x00030007, 0), now = 0, th;
   if (!was || !max) return;                 /* (QEMU: no such clock) */
-  now = max > was ? clock_tag(0x00038002, max) : was;
+  if (max > was) now = clock_tag(0x00038002, max);
+  th = throttled();
   printk("ARM clock: ");
-  print_ulong(was / 1000000);
+  put_mhz(was);
   printk(" -> ");
-  print_ulong((now ? now : was) / 1000000);
-  printk(" MHz\n");
+  put_mhz(now ? now : was);
+  printk(" MHz (min ");
+  put_mhz(min);
+  printk(", max ");
+  put_mhz(max);
+  printk(")");
+  if (th != ~0u && th) {
+    printk(", throttled ");
+    print_ulong_hex(th);
+    if (th & 0x10001) printk(": under-voltage (the power supply?)");
+  }
+  printk("\n");
 }
 
 /* the ARM's RAM, from the firmware: its size (the rest, up to the
