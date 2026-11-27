@@ -1948,3 +1948,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   zxspectrum 1.1, camlboy 1.3, built from `retro` (f4e19c5); `glazx` and
   `tobutobugirl` out of the index (their archives kept one generation).
   The repository's README lists `zxspectrum` and `msx` with their games.
+- **2026-11-27** — zxspectrum 1.2 on `Emu_frontend`, as msx
+  (`zxspectrum_main.ml` 419 lines to 107; a machine says whether its
+  reset keeps what was loaded); msx 1.1 and zxspectrum 1.2: a key tapped
+  between two frames is held for two, not lost. Both windows looked at
+  under QEMU (`tools/pkg-shots.sh`, a throwaway script): 60 and 50
+  frames a second, keys, the PSG's and the beeper's sound. Lane c green.
+  Not published yet.

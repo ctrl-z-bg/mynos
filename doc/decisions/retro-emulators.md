@@ -301,7 +301,7 @@ configuration; eight blocks of 8 KB the bus reads at once, worked out
 again when a slot or a bank changes). In `packages/retro`: the AY-3-8910
 (`ay8910.ml`, for the Spectrum 128K too) and `emu_frontend.ml`, the
 window, emu/1's service and the command line made generic, which `msx`
-uses (zxspectrum keeps its own, which it came from).
+uses, and `zxspectrum` too since 1.2 (it came from its main).
 
 C-BIOS 0.29a (BSD) is the BIOS; a real MSX1's, if the user has one, in
 `/disk/roms/msx/msx1.rom`. The game: Westen House (Apache 2.0, a 48 KB

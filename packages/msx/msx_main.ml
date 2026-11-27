@@ -96,6 +96,7 @@ module Machine = struct
   let load t f = Msx.load t.m f
   let save_state t f = Msx.save_state t.m f
   let reset t = Msx.reset t.m
+  let reset_keeps_loaded = true
 end
 
 module F = Emu_frontend.Make (Machine)

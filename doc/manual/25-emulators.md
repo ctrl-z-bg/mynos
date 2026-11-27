@@ -248,5 +248,5 @@ recv, decode                             at the frame's end, or stopped:
   idle service costs nothing measurable (`packages/zxspectrum/MYNOS.md`).
 - **Written once.** All this, with the window, its sound and the
   command line, is `Emu_frontend` (`packages/retro/emu_frontend.mli`):
-  a machine gives a frame, its picture, its keys and its memory; `msx`
-  is the machine and a page of glue.
+  a machine gives a frame, its picture, its keys and its memory;
+  `zxspectrum` and `msx` are each a machine and a page of glue.

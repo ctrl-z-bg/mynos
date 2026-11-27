@@ -1,6 +1,7 @@
 (* An emulated machine's window, service and command line
-   (emu_frontend.mli): zxspectrum_main.ml's, made generic. The service's
-   requests are done here, between frames (Emu_service). *)
+   (emu_frontend.mli), first written in zxspectrum_main.ml, then made
+   generic. The service's requests are done here, between frames
+   (Emu_service). *)
 
 type stop = Frame_done | Breakpoint of int | Watch of int * int
 
@@ -38,6 +39,7 @@ module type MACHINE = sig
   val load : t -> string -> string
   val save_state : t -> string -> unit
   val reset : t -> unit
+  val reset_keeps_loaded : bool
 end
 
 module Make (M : MACHINE) = struct
@@ -214,7 +216,7 @@ module Make (M : MACHINE) = struct
         let what = M.load st.m f in
         Tracer.mark (Printf.sprintf "%s: state %s" (Emu_service.name st.svc) what);
         ok ()
-      | Reset -> M.reset st.m; ok ()
+      | Reset -> M.reset st.m; if not M.reset_keeps_loaded then st.loaded <- ""; ok ()
     with
     | Failure m | Sys_error m | Invalid_argument m -> Emu_service.fail ch m
     | e -> Emu_service.fail ch (Printexc.to_string e)
@@ -294,7 +296,15 @@ module Make (M : MACHINE) = struct
     let width = M.width * scale and pic_h = M.height * scale in
     let screen = Gfx.create width pic_h in
     let row = Gfx.create width 1 in
+    (* the machine's keys down, each with the frames it must still stay
+       down: a key pressed and let go between two frames (the window busy,
+       both events waiting) is held for two, as emu/1's keys are; else
+       the machine never sees it *)
     let down = ref [] in
+    let release held =
+      down := List.filter (fun (k, left) ->
+          if !left <= 0 && not (List.mem k held) then begin M.press st.m k false; false end
+          else true) !down in
     let draw () =
       let px = M.screen st.m and changed = M.changed st.m in
       for y = 0 to M.height - 1 do
@@ -351,9 +361,11 @@ module Make (M : MACHINE) = struct
                audio ()
              | _ -> ()) ui.Gui.keys;
          let now_down = List.sort_uniq compare (List.concat (List.filter_map M.keys_of ui.Gui.held)) in
-         List.iter (fun k -> if not (List.mem k !down) then M.press st.m k true) now_down;
-         List.iter (fun k -> if not (List.mem k now_down) then M.press st.m k false) !down;
-         down := now_down;
+         List.iter (fun k ->
+             if not (List.mem_assoc k !down) then begin
+               M.press st.m k true; down := (k, ref 2) :: !down
+             end) now_down;
+         release now_down;
          if ui.Gui.tick then begin
            serve st;
            if not st.paused then begin
@@ -363,6 +375,8 @@ module Make (M : MACHINE) = struct
              let i = ref 0 in
              while !i < n && not st.paused do
                if run_frame st then begin incr done_frames; incr frames; send (M.audio_samples st.m) end;
+               List.iter (fun (_, left) -> decr left) !down;
+               release now_down;
                incr i
              done;
              if st.paused then audio ()

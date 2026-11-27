@@ -1,13 +1,13 @@
 # The package zxspectrum (tools/pkg-build.sh): a ZX Spectrum 48K, MyNOS's
 # own emulator (doc/decisions/retro-emulators.md), and its service emu/1
 NAME=zxspectrum
-VERSION=1.1
+VERSION=1.2
 DESCRIPTION='A ZX Spectrum 48K, in a window and as a service (emu/1: zx<pid>): tapes loaded at once, snapshots, the beeper; two games with it (zxspectrum glazx, zxspectrum snake); type zxspectrum [file.tap]'
 LICENSE='MIT; the ROM: Amstrad; the games: MIT'
 LIBRARIES=threads
 SRC=packages/zxspectrum
 # in the order ocamldep -sort gives; packages/retro's shared with other machines
-SOURCES='../retro/z80.mli ../retro/z80.ml ../retro/z80_disasm.mli ../retro/z80_disasm.ml ../retro/png.ml ../retro/emu_proto.mli ../retro/emu_proto.ml ../retro/emu_service.mli ../retro/emu_service.ml keyboard.mli keyboard.ml ula.mli ula.ml beeper.mli beeper.ml tape.mli tape.ml snapshot.mli snapshot.ml spectrum.mli spectrum.ml zxspectrum_main.ml'
+SOURCES='../retro/z80.mli ../retro/z80.ml ../retro/z80_disasm.mli ../retro/z80_disasm.ml ../retro/png.ml ../retro/emu_proto.mli ../retro/emu_proto.ml ../retro/emu_service.mli ../retro/emu_service.ml ../retro/emu_frontend.mli ../retro/emu_frontend.ml keyboard.mli keyboard.ml ula.mli ula.ml beeper.mli beeper.ml tape.mli tape.ml snapshot.mli snapshot.ml spectrum.mli spectrum.ml zxspectrum_main.ml'
 # the games, in games/ (README.md says where a user's ROMs and tapes go)
 EXTRA='packages/zxspectrum/48.rom packages/zxspectrum/ROM-LICENSE packages/zxspectrum/LICENSE
   third_party/glazx/glazx48.tap:games/glazx.tap third_party/glazx/LICENSE:games/glazx-LICENSE

@@ -213,3 +213,44 @@ note of 440.4 Hz (register 0 at 254) measures 440.0.
 
 **Lesson.** Where two rates meet (ticks and samples, T-states and
 ticks), carry the remainder; a test that counts the samples finds it.
+
+## 2026-11-27 — zxspectrum onto Emu_frontend; msx's window looked at
+
+**What.** zxspectrum's main (window, sound, emu/1's requests,
+`--headless`, `--bench`) was the model `Emu_frontend` was copied from;
+it now uses it, as msx does: `zxspectrum_main.ml` is the machine (the
+ROM, its keys from a window's) and the functor, 419 lines down to 107.
+zxspectrum 1.2.
+
+**One difference found.** emu/1's `reset` emptied `info`'s `loaded` on
+the Spectrum (its reset drops the tape) and kept it on the MSX (the
+cartridge stays in its slot). The functor did the MSX's; a machine now
+says which (`reset_keeps_loaded`).
+
+**msx in a window.** Not seen until now (the tests run without one):
+`tools/pkg-shots.sh` with a throwaway `shots.sh` started `msx westen`
+in the graphical session under QEMU, its pictures taken and QEMU's sound
+recorded. 60 frames a second, the picture right, the keys reach the
+game; with Page Down, the PSG's music in the WAV file. The music stops
+for some seconds after the title (the letter's screen): Westen's own,
+the same on the host (`Msx.audio_samples` second by second, the same
+keys). Both emulators start with the sound off, as zxspectrum did.
+
+**A short tap lost.** The same look at zxspectrum on the functor:
+`zxspectrum snake`, the keys 9 then Enter (QEMU's `sendkey`, 100 ms
+down) left the level at 5, once both, once the 9 only; 1.1, the hand
+written main, took both in its one try. The code is the same in both:
+the machine's key goes down when `Gui`'s `held` has it and up when it
+has it no more, and frames run only at the window's ticks. When the
+window is late, the press and the release wait together in its queue,
+are handled one after the other with no tick between, and the machine
+never sees the key; 1.1 had been lucky. **Fix.** A key that goes down
+stays down for two of the machine's frames at least, as emu/1's `keys`
+holds one: 9, 3, 7 and Enter then each reached Snake, and a space
+Westen. msx 1.1 for it.
+
+**Lesson.** A copy made generic should take the original back soon:
+two copies drift, and the drift (here, `reset`) is found only by
+putting them side by side. And a window's keys are events, not a state
+sampled at the machine's pace: an event shorter than a frame must still
+make a frame.

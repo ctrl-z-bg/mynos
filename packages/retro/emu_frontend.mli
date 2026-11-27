@@ -1,8 +1,8 @@
 (** What an emulated Z80 machine needs around it: a window (its picture
     doubled, its keys, its sound), the service emu/1 (<name><pid>), a
     mode without a window and a benchmark; the command line. The
-    machine gives a frame at a time ({!MACHINE}); this does the rest, as
-    zxspectrum's main does by hand (it came first).
+    machine gives a frame at a time ({!MACHINE}); this does the rest, for
+    zxspectrum and msx alike.
 
     {[
       msx [FILE|GAME]               a window
@@ -76,6 +76,10 @@ module type MACHINE = sig
   val load : t -> string -> string
   val save_state : t -> string -> unit
   val reset : t -> unit
+
+  val reset_keeps_loaded : bool
+  (** After a reset, is what was loaded still there (an MSX's cartridge)
+      or gone (a Spectrum's tape)? [info]'s [loaded] says so. *)
 end
 
 module Make (M : MACHINE) : sig
