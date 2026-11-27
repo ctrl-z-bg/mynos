@@ -2156,3 +2156,6 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   VL805 at its PCI address instead of the processor's (libmynos's
   `pci_cpu_address` now); `VERBOSE=1 tools/make-sd-raspi.sh` keeps the
   services' messages on the screen.
+- **2026-11-27** — `tools/make-sd-raspi.sh DIR`: a MyNOS card's
+  partition, mounted, brought up to date in seconds (kernel8.img,
+  mynos.mod, config.txt) instead of a 2 GB `dd` at every try.

@@ -22,6 +22,10 @@
 #   after boot, for a board without its serial port wired)
 #   (default tmp/mynos-raspi.img, 2048 MB: a card of 2 GB or more)
 #   then, e.g.: dd if=tmp/mynos-raspi.img of=/dev/sdX bs=4M conv=fsync
+# Or OUT a directory: a card made so once, its partition mounted (the
+# desktop mounts it at /run/media/$USER/MYNOS): only what changed is
+# copied there (kernel8.img, mynos.mod, config.txt; the firmware if
+# missing), in seconds, and /disk's other files are kept.
 # The console: the screen (HDMI), and the UART (GPIO 14 TX, 15 RX,
 # 115200 8N1, 3.3 V). The keyboard: the UART's terminal; on a Pi 4 or 400
 # also a USB keyboard and mouse (usbd, behind the kernel's PCIe: btq.8.1-3,
@@ -84,6 +88,19 @@ disable_overscan=1
 hdmi_force_hotplug=1
 CFG
 printf 'This is the MyNOS disk of a Raspberry Pi: a FAT32 partition, mounted at /disk.\nThe Pi boots from its files: leave them.\n' > "$w/README.TXT"
+
+# a card already made, mounted: its files brought up to date
+if [ -d "$out" ]; then
+    [ -f "$out/start4.elf" ] || [ -f "$out/kernel8.img" ] ||
+        { echo "make-sd-raspi.sh: $out is not a MyNOS card's partition" >&2; exit 1; }
+    mkdir -p "$out/overlays"
+    for f in $files; do [ -f "$out/$f" ] || cp "$fw/$f" "$out/$f"; done
+    cp "$tree/build/aarch64/kernel8.img" "$out/kernel8.img"
+    cp "$w/mynos.mod" "$w/config.txt" "$w/README.TXT" "$out/"
+    sync
+    echo "make-sd-raspi.sh: $out updated: $(cat "$tree/VERSION")${VERBOSE:+, verbose}; unmount it before taking the card out"
+    exit 0
+fi
 
 # the card: SIZE_MB (default 2048: written whole to a card, the rest of
 # a larger card stays unused), an MBR with one partition (FAT32 LBA,
