@@ -74,9 +74,9 @@ let rec with_imports ~base ~depth ?media text =
         | None -> []) sh.imports in
   imported @ [ sh ]
 
-let load url =
+let load ?post url =
   let t0 = now () in
-  let response = Loader.load (Url.of_typed url) in
+  let response = Loader.load ?post (Url.of_typed url) in
   let t1 = now () in
   let text, _ = Loader.document response in
   let t2 = now () in
@@ -319,7 +319,44 @@ type st = {
   mutable forward : (string * int) list;
   mutable want_scroll : int option;
   mutable hover : string option;
+  mutable focus : (Dom.node * int) option;           (* a text control with the keys: its caret (a byte) *)
+  mutable popup : (Dom.node * int * int * int * Fonts.font) option;
+                                                     (* a select's options shown: x, y, w on the page *)
 }
+
+(* Chrome's accent for chosen check boxes and radio buttons *)
+let accent = 0x1A73E8
+let radio_ring = lazy { Gfx.mask_width = 13; mask_height = 13; grey = Forms.circle_mask 13 ~ring:true }
+let radio_dot = lazy { Gfx.mask_width = 13; mask_height = 13; grey = Forms.circle_mask 13 ~ring:false }
+
+(* text in a font, its baseline at y *)
+let draw_string g x y s color (font : Fonts.font) =
+  match font.ttf with
+  | Some _ ->
+    List.iter (fun (dx, dy, (b : Ttf.bitmap)) ->
+        Gfx.draw_mask g (x + dx) (y + dy) { Gfx.mask_width = b.width; mask_height = b.height; grey = b.grey } color)
+      (Fonts.glyphs font s)
+  | None -> ignore (Gfx.text g x (y - font.ascent) s color)
+
+(* UTF-8: the start of the character before, or after, byte i *)
+let prev_char s i =
+  let i = ref (i - 1) in
+  while !i > 0 && Char.code s.[!i] land 0xC0 = 0x80 do decr i done;
+  max 0 !i
+
+let next_char s i =
+  let n = String.length s in
+  let i = ref (i + 1) in
+  while !i < n && Char.code s.[!i] land 0xC0 = 0x80 do incr i done;
+  min n !i
+
+(* what a control shows before byte c of its value (a password's dots) *)
+let shown_prefix node c =
+  let v = Forms.value node in
+  let before = String.sub v 0 (min c (String.length v)) in
+  match Forms.kind node with
+  | Forms.Field { password = true } -> String.concat "" (List.init (Forms.utf8_length before) (fun _ -> "\xe2\x80\xa2"))
+  | _ -> before
 
 let offset = ref 0          (* how far the page is scrolled, as last drawn *)
 let last_relayout = ref 0.
@@ -332,23 +369,34 @@ let window first =
      first page is laid out once, at the width it is shown *)
   let page_width = ref (900 - 8 - 14) in
   let st = { shown = load "about:start"; address = first; loading = None; back = []; forward = [];
-             want_scroll = None; hover = None } in
-  let start url =
+             want_scroll = None; hover = None; focus = None; popup = None } in
+  let start ?post url =
     incr loads;
     let n = !loads in
     st.loading <- Some (url, n);
     st.address <- url;
     let width = !page_width in
     ignore (Thread.create (fun () ->
-        let l = load url in
+        let l = load ?post url in
         (* laid out here, for the width the window has now *)
         ignore (layout_at l ~width ~height:600);
         Mutex.protect lock (fun () -> arrived := Some (n, l))) ()) in
-  let go url =
+  let go ?post url =
     st.back <- (st.shown.response.url, !offset) :: st.back;
     st.forward <- [];
     st.want_scroll <- Some 0;
-    start url in
+    st.focus <- None; st.popup <- None;
+    start ?post url in
+  (* a form sent: by a button, or by Enter in a field (with the form's
+     first submit button) *)
+  let submit ?submitter node =
+    match Forms.form_of node with
+    | Some form ->
+      let submitter = match submitter with Some s -> Some s | None -> Forms.default_button form in
+      (match Forms.submit ~base:st.shown.base ?submitter form with
+       | Forms.Get url -> go url
+       | Forms.Post (url, body) -> go ~post:body url)
+    | None -> () in
   if first <> "about:start" then go first;
   Gui.run ~title:"Ariadne" ~tick:0.1 ~resizable:(400, 300) 900 640 st (fun ui st ->
       let t_frame = now () in
@@ -409,8 +457,34 @@ let window first =
            | _ -> s in
          Gui.scroll_to ui 2 s; st.want_scroll <- None
        | None -> ());
-      (* the keys scroll the page, when the address does not have them *)
-      if ui.Gui.field <> 1 then
+      (* a text control with the keys: typed into; else the keys scroll the
+         page, when the address does not have them *)
+      if ui.Gui.field = 1 then st.focus <- None;
+      (match st.focus with
+       | Some (node, caret) ->
+         let v = ref (Forms.value node) in
+         let c = ref (min caret (String.length !v)) in
+         let insert t = v := String.sub !v 0 !c ^ t ^ String.sub !v !c (String.length !v - !c); c := !c + String.length t in
+         List.iter (fun k ->
+             match k with
+             | "\r" | "\n" -> (match Forms.kind node with Forms.Area -> insert "\n" | _ -> submit node)
+             | "\127" | "\b" -> if !c > 0 then begin
+                 let p = prev_char !v !c in
+                 v := String.sub !v 0 p ^ String.sub !v !c (String.length !v - !c); c := p end
+             | "\027[3~" -> if !c < String.length !v then begin
+                 let nx = next_char !v !c in
+                 v := String.sub !v 0 !c ^ String.sub !v nx (String.length !v - nx) end
+             | "\027[D" -> c := prev_char !v !c
+             | "\027[C" -> c := next_char !v !c
+             | "\027[H" | "\027[1~" | "\001" -> c := 0
+             | "\027[F" | "\027[4~" | "\005" -> c := String.length !v
+             | "\027" -> st.focus <- None
+             | k when String.length k > 0 && k.[0] <> '\027' && Char.code k.[0] >= 32 -> insert k
+             | _ -> ()) ui.Gui.keys;
+         if !v <> Forms.value node then Forms.set_value node !v;
+         (match st.focus with Some (n, _) when n == node -> st.focus <- Some (node, !c) | _ -> ())
+       | None -> ());
+      if ui.Gui.field <> 1 && st.focus = None then
         List.iter (fun k ->
             let by d = Gui.scroll_to ui 2 (max 0 (min (page.height - box_h) (!offset + d))) in
             match k with
@@ -456,6 +530,59 @@ let window first =
                          (fun () -> Gfx.draw_image g (box_x + x) yy img)
                      | None -> Gfx.draw_image g (box_x + x) yy img)
                   | None -> ())
+              | Control { x; y; w; h; node; font; color; paint } ->
+                let sx = box_x + x and sy = top + y in
+                if paint && sy + h > box_y && sy < box_y + box_h && w > 2 && h > 2 then begin
+                  incr drawn;
+                  let sh = Forms.shown node in
+                  (match Forms.kind node, sh.mark with
+                   | Forms.Check, `Check ->
+                     Gfx.fill g sx sy w h accent;
+                     for t = 0 to 1 do
+                       Gfx.line g (sx + 3) (sy + 6 + t) (sx + 5) (sy + 8 + t) 0xFFFFFF;
+                       Gfx.line g (sx + 5) (sy + 8 + t) (sx + 9) (sy + 3 + t) 0xFFFFFF
+                     done
+                   | Forms.Radio, mark ->
+                     let on = mark = `Dot in
+                     Gfx.draw_mask g sx sy (Lazy.force radio_ring) (if on then accent else 0x767676);
+                     if on then Gfx.draw_mask g sx sy (Lazy.force radio_dot) accent
+                   | Forms.Select, _ ->
+                     let rx = sx + w - 13 and cy = sy + h / 2 - 2 in
+                     for i = 0 to 3 do Gfx.fill g (rx + i) (cy + i) (7 - 2 * i) 1 color done
+                   | _ -> ());
+                  let caret = match st.focus with Some (n, c) when n == node -> Some c | _ -> None in
+                  if sh.text <> "" || caret <> None then
+                    Gfx.with_clip (sx + 1) (sy + 1) (w - (if Forms.kind node = Forms.Select then 16 else 2)) (h - 2) (fun () ->
+                        let colour = if sh.placeholder then 0x757575 else color in
+                        match Forms.kind node with
+                        | Forms.Area ->
+                          (* lines from the top; the caret at its line's place *)
+                          let lines = String.split_on_char '\n' sh.text in
+                          List.iteri (fun i l ->
+                              draw_string g (sx + 4) (sy + 2 + font.ascent + i * font.line) l colour font) lines;
+                          (match caret with
+                           | Some c ->
+                             let before = shown_prefix node c in
+                             let row = List.length (String.split_on_char '\n' before) - 1 in
+                             let col = match String.rindex_opt before '\n' with
+                               | Some i -> String.sub before (i + 1) (String.length before - i - 1) | None -> before in
+                             Gfx.fill g (sx + 4 + Fonts.width font col) (sy + 2 + row * font.line) 1
+                               (font.ascent + font.descent) color
+                           | None -> ())
+                        | _ ->
+                          let base = sy + (h + font.ascent - font.descent) / 2 in
+                          let tw = Fonts.width font sh.text in
+                          let caret_px = match caret with
+                            | Some c when not sh.placeholder -> Fonts.width font (shown_prefix node c)
+                            | _ -> 0 in
+                          (* the text moved left, to keep the caret in sight *)
+                          let shift = max 0 (caret_px - (w - 10)) in
+                          let tx = if sh.centred then sx + (w - tw) / 2 else sx + 4 - shift in
+                          draw_string g tx base sh.text colour font;
+                          if caret <> None then
+                            Gfx.fill g (sx + 4 - shift + caret_px) (base - font.ascent) 1
+                              (font.ascent + font.descent) color)
+                end
               | Bg { x; y; w; h; layer; tint; clip } ->
                 let yy = top + y in
                 (match layer.image with
@@ -476,6 +603,24 @@ let window first =
                               (Layout.tiles ~x ~y ~w ~h layer ~natural))
                     | None -> ())
                  | _ -> ())) page.items;
+          (* a select's options, over the page *)
+          (match st.popup with
+           | Some (sel, px, py, pw, font) ->
+             let opts = Forms.options sel in
+             let rowh = font.line + 4 in
+             let ow = List.fold_left (fun m o -> max m (Fonts.width font (Forms.option_label o) + 16)) pw opts in
+             let sx = box_x + px and sy = top + py in
+             Gfx.fill g sx sy ow (rowh * List.length opts + 2) 0xFFFFFF;
+             Gfx.rect g sx sy ow (rowh * List.length opts + 2) 0x767676;
+             let chosen = Forms.selected sel in
+             List.iteri (fun i o ->
+                 let ry = sy + 1 + i * rowh in
+                 let over = ui.Gui.mx >= sx && ui.Gui.mx < sx + ow && ui.Gui.my >= ry && ui.Gui.my < ry + rowh in
+                 if over then Gfx.fill g (sx + 1) ry (ow - 2) rowh 0x1A73E8
+                 else if (match chosen with Some c -> c == o | None -> false) then Gfx.fill g (sx + 1) ry (ow - 2) rowh 0xE8EEF7;
+                 draw_string g (sx + 8) (ry + 2 + font.ascent) (Forms.option_label o) (if over then 0xFFFFFF else 0x202122) font)
+               opts
+           | None -> ());
           page.height);
       (* a link under the pointer: shown below; a click follows it *)
       let link_at mx my =
@@ -485,9 +630,67 @@ let window first =
           Array.fold_left (fun found (l : Layout.link) ->
               if px >= l.lx && px < l.lx + l.lw && py >= l.ly && py < l.ly + l.lh then Some l.href else found)
             None page.links in
+      (* the form control under the pointer: the last box there *)
+      let control_at mx my =
+        if my < box_y || my >= box_y + box_h then None
+        else
+          let px = mx - box_x and py = my - !top_ref in
+          Array.fold_left (fun found (it : Layout.item) ->
+              match it with
+              | Control { x; y; w; h; node; font; _ } when px >= x && px < x + w && py >= y && py < y + h ->
+                Some (node, x, y, w, h, font)
+              | _ -> found) None page.items in
+      (* the open select's option under the pointer *)
+      let popup_at mx my =
+        match st.popup with
+        | Some (sel, px, py, pw, font) ->
+          let opts = Forms.options sel in
+          let rowh = font.line + 4 in
+          let ow = List.fold_left (fun m o -> max m (Fonts.width font (Forms.option_label o) + 16)) pw opts in
+          let sx = box_x + px and sy = !top_ref + py + 1 in
+          if mx >= sx && mx < sx + ow && my >= sy && my < sy + rowh * List.length opts then
+            List.nth_opt opts ((my - sy) / rowh)
+          else None
+        | None -> None in
       st.hover <- Option.map (Url.resolve st.shown.base) (link_at ui.Gui.mx ui.Gui.my);
       if st.hover <> None then ui.Gui.pointer <- Display.Hand;
-      (if ui.Gui.clicked then
+      (match control_at ui.Gui.mx ui.Gui.my with
+       | Some (node, _, _, _, _, _) when st.popup = None ->
+         (match Forms.kind node with
+          | Forms.Field _ | Forms.Area -> ui.Gui.pointer <- Display.Text
+          | _ -> ())
+       | _ -> ());
+      if List.mem "\027" ui.Gui.keys then st.popup <- None;
+      let control_clicked =
+        ui.Gui.clicked && (st.popup <> None
+                           || (let px, py = ui.Gui.press in control_at px py <> None)) in
+      (if control_clicked then begin
+         let px, py = ui.Gui.press in
+         match st.popup with
+         | Some (sel, _, _, _, _) ->
+           (match popup_at px py with Some o -> Forms.select sel o | None -> ());
+           st.popup <- None
+         | None ->
+           match control_at px py, control_at ui.Gui.mx ui.Gui.my with
+           | Some (node, x, y, w, h, font), Some (n2, _, _, _, _, _) when node == n2 && not (Forms.disabled node) ->
+             (match Forms.kind node with
+              | Forms.Field _ | Forms.Area ->
+                (* the caret at the click, along the first line *)
+                let v = Forms.value node in
+                let target = px - (box_x + x + 4) in
+                let rec find c = if c >= String.length v then c
+                  else if Fonts.width font (shown_prefix node (next_char v c)) > target then c
+                  else find (next_char v c) in
+                st.focus <- Some (node, if Forms.kind node = Forms.Area then String.length v else find 0);
+                ui.Gui.field <- -1
+              | Forms.Check | Forms.Radio -> Forms.toggle node; st.focus <- None
+              | Forms.Button { submit = true; _ } -> st.focus <- None; submit ~submitter:node node
+              | Forms.Select -> st.focus <- None; st.popup <- Some (node, x, y + h, w, font)
+              | _ -> ())
+           | _ -> ()
+       end
+       else if ui.Gui.clicked then st.focus <- None);
+      (if ui.Gui.clicked && not control_clicked then
          let px, py = ui.Gui.press in
          match link_at px py, link_at ui.Gui.mx ui.Gui.my with
          | Some h, Some h2 when h = h2 ->

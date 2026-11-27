@@ -1,0 +1,9 @@
+title: Forms
+# Forms
+Name
+checked not checked
+one two
+hello
+Reset
+Outside the form, but in it:
+Post

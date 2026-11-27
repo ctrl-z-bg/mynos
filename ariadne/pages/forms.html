@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<title>Forms</title>
+<h1>Forms</h1>
+<form id="f" action="about:test/basic" method="get">
+<p><label>Name <input name="name" value="Ada"></label>
+<p><input name="q" placeholder="Search..."> <input type="password" name="pw" value="ab">
+<p><label><input type="checkbox" name="c" checked> checked</label>
+   <label><input type="checkbox" name="d" value="yes"> not checked</label>
+<p><label><input type="radio" name="r" value="1"> one</label>
+   <label><input type="radio" name="r" value="2" checked> two</label>
+<p><select name="s"><option>first<option value="b" selected>second<optgroup label="more"><option>third</optgroup></select>
+<p><textarea name="t" rows="2" cols="20">hello</textarea>
+<input type="hidden" name="h" value="x y&z">
+<p><input type="submit" name="go" value="Send"> <button type="reset">Reset</button>
+   <input type="submit" disabled name="no" value="Off">
+</form>
+<p>Outside the form, but in it: <input name="out" form="f" value="1">
+<form action="/post" method="post"><input name="a" value="b"><button name="btn" value="v">Post</button></form>

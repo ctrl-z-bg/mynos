@@ -165,7 +165,9 @@ Done before M2, at the owner's choice (2026-11-27): what gives pages their shape
 - [x] `inline-block`, `inline-flex`, `inline-grid` as boxes in the line, shrink-to-fit
 - [x] Margins collapsing through a parent's top and bottom (and out of the root)
 - [x] Boxes measured "dry" (nothing drawn), cached by element and width; min- and max-content widths cached by element
-- [ ] Forms without JavaScript: text fields, buttons, checkboxes, `select`; GET and POST (today: frames with their values)
+- [x] Forms without JavaScript (`forms.ml`, its state in the DOM): text fields (typing, a caret, Left, Right, Home, End, Delete, a password's dots, a placeholder), textareas, check boxes, radio buttons (their groups), `select` (a list of its options), submit buttons (`button`, `input`), hidden fields, `form=`; Enter sends; GET and POST (urlencoded; `formaction`, `formmethod`; a redirect after POST is followed with GET); Chrome's look for the controls (the UA sheet: 13.33 px sans-serif, fields and buttons' colours); a control's text on the line's baseline. Wikipedia's search works
+- [ ] Forms: `reset`, `multipart/form-data` (files), `input type=number` and dates' own editing, a textarea's caret by a click, Tab between controls, selecting text in a field, the select list by the keyboard, validation (`required`, `pattern`)
+- [x] The `font` shorthand sets the family too, and resets style, weight and line height
 - [x] New generic `Gfx` primitives if painting needs them: `Gfx.draw_image` (M4; scaling is `imaged`'s)
 - [ ] The test pages match their reference renderings (a browser's screenshots: not yet; the display lists are checked)
 - [x] A test page for floats, flexbox, grid, positioning, clipping, inline-blocks and spans (`pages/m5.html`)

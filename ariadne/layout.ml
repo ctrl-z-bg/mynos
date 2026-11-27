@@ -53,6 +53,11 @@ type item =
           y0, x1, y1, outside which it is not drawn *)
   | Bg of { x : int; y : int; w : int; h : int; layer : Style.layer; tint : int option;
             clip : (int * int * int * int) option }
+  | Control of { x : int; y : int; w : int; h : int; node : Dom.node; font : Fonts.font; color : int;
+                 paint : bool }
+      (** a form control's box (its frame is Fills): the painter draws what
+          it shows ({!Forms.shown}) unless [paint] is false (a button
+          element, whose content is laid out); the window's clicks find it *)
       (** a box's background picture (or mask: its alpha in [tint]),
           painted in the box x, y, w, h: its tiles from {!tiles} *)
 
@@ -120,6 +125,8 @@ let emit o it =
        | Bg b ->
          if b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0 then
            Dynarray.add_last o.items_ (Bg { b with clip = Some (x0, y0, x1, y1) })
+       | Control c ->
+         if c.x < x1 && c.x + c.w > x0 && c.y < y1 && c.y + c.h > y0 then Dynarray.add_last o.items_ it
        | Text t ->
          let w = Fonts.width t.font t.s in
          if t.y + t.font.descent > y0 && t.y - t.font.ascent < y1 && t.x < x1 && t.x + w > x0 then
@@ -146,7 +153,8 @@ let translate o m dx dy =
           | Image i -> Image { i with x = i.x + dx; y = i.y + dy;
                                       clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) i.clip }
           | Bg b -> Bg { b with x = b.x + dx; y = b.y + dy;
-                                clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) b.clip })
+                                clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) b.clip }
+          | Control c -> Control { c with x = c.x + dx; y = c.y + dy })
     done;
     for i = m.ml to Dynarray.length o.links_ - 1 do
       let l = Dynarray.get o.links_ i in
@@ -194,13 +202,25 @@ type atom_kind =
   | Word of string
   | Space
   | Break
-  | Box of { w : int; h : int; label : string; frame : bool; img : string option }
+  | Box of { w : int; h : int; label : string; frame : bool; img : string option; ctl : Dom.node option }
   | Ibox of { node : Dom.node; bw : int; bh : int; ml : int; mr : int }   (* an inline-block *)
   | Float of Dom.node                                                    (* a float met in a line *)
   | Abs of Dom.node                                                      (* where its static position is *)
 
 type atom = { kind : atom_kind; st : Style.t; font : Fonts.font; link : string option; bg : int;
               dy : int }   (* raised (negative) or lowered by vertical-align *)
+
+(* how far a box reaches above the baseline: a form control's text sits on
+   the line's baseline (the box reaching below it), any other box sits on
+   it *)
+let box_above (a : atom) =
+  match a.kind with
+  | Box { h; ctl = Some n; _ } ->
+    (match Forms.kind n with
+     | Forms.Field _ | Button _ | Select -> (h + a.font.ascent - a.font.descent) / 2
+     | _ -> h)
+  | Box { h; _ } -> h
+  | _ -> 0
 
 type piece =
   | P_block of Dom.node * Style.t
@@ -317,8 +337,8 @@ let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
     (* drawn (once its pixels arrive) when its size is known, given or its
        own; else, for now, a frame with the alt text *)
     let box w h =
-      if src <> None && (natural <> None || sized) then Box { w; h; label = ""; frame = false; img = src }
-      else Box { w; h; label = alt; frame = true; img = None } in
+      if src <> None && (natural <> None || sized) then Box { w; h; label = ""; frame = false; img = src; ctl = None }
+      else Box { w; h; label = alt; frame = true; img = None; ctl = None } in
     (match st.width, st.height, ratio with
      | Auto, Auto, None -> if alt = "" then None else Some (Word ("[" ^ alt ^ "]"))
      | w, Auto, Some r when not (is_auto w) ->
@@ -336,51 +356,47 @@ let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
        Some (box w (int_of_float (Float.round (float w *. r))))
      | _ -> let w, h = size 0 (Metrics.line_height st) in
        Some (box (clamp_w w) h))
-  | "input" ->
-    (match String.lowercase_ascii (Option.value (a "type") ~default:"text") with
-     | "hidden" -> None
-     | "checkbox" | "radio" -> Some (Box { w = 13; h = 13; label = (if a "checked" <> None then "x" else ""); frame = true; img = None })
-     | "submit" | "button" | "reset" ->
-       let label = Option.value (a "value") ~default:(if a "type" = Some "reset" then "Reset" else "Submit") in
-       let w, h = size (Metrics.width st label + 16) (Metrics.line_height st + 4) in
-       Some (Box { w; h; label; frame = true; img = None })
-     | _ ->
-       let label = match a "value" with Some v -> v | None -> Option.value (a "placeholder") ~default:"" in
-       let w, h = size 160 (Metrics.line_height st + 4) in
-       Some (Box { w; h; label; frame = true; img = None }))
-  | "button" ->
-    let label = String.trim (Dom.text_content n) in
-    let w, h = size (Metrics.width st label + 16) (Metrics.line_height st + 4) in
-    Some (Box { w; h; label; frame = true; img = None })
-  | "select" ->
-    let first = Dom.find (fun o -> Dom.is_html o "option") n in
-    let label = match first with Some o -> String.trim (Dom.text_content o) ^ " v" | None -> "v" in
-    let w, h = size (Metrics.width st label + 16) (Metrics.line_height st + 4) in
-    Some (Box { w; h; label; frame = true; img = None })
-  | "textarea" ->
-    let cols = Option.value (Option.bind (a "cols") int_of_string_opt) ~default:20 in
-    let rows = Option.value (Option.bind (a "rows") int_of_string_opt) ~default:2 in
-    let w, h = size (cols * Metrics.width st "n" + 8) (rows * Metrics.line_height st + 4) in
-    Some (Box { w; h; label = Dom.text_content n; frame = true; img = None })
+  | "input" | "button" | "select" | "textarea" ->
+    (* a form control: its box, the painter shows its state (Forms.shown) *)
+    let ctl w h = Some (Box { w; h; label = ""; frame = true; img = None; ctl = Some n }) in
+    let shown = (Forms.shown n).text in
+    (match Forms.kind n with
+     | Forms.Not_control -> None
+     | Check -> ctl 13 13
+     | Radio -> Some (Box { w = 13; h = 13; label = ""; frame = false; img = None; ctl = Some n })
+     | Button _ ->
+       let w, h = size (Metrics.width st shown + 16) (Metrics.line_height st + 4) in ctl w h
+     | Select ->
+       (* the chosen option, and its arrow *)
+       let w, h = size (Metrics.width st shown + 28) (Metrics.line_height st + 4) in ctl w h
+     | Area ->
+       let cols = Option.value (Option.bind (a "cols") int_of_string_opt) ~default:20 in
+       let rows = Option.value (Option.bind (a "rows") int_of_string_opt) ~default:2 in
+       let w, h = size (cols * Metrics.width st "n" + 8) (rows * Metrics.line_height st + 4) in ctl w h
+     | Field _ ->
+       let chars = Option.value (Option.bind (a "size") int_of_string_opt) ~default:20 in
+       let w, h = size (max 40 (int_of_float (float chars *. st.font_size *. 0.62) + 10)) (Metrics.line_height st + 6) in
+       ctl w h)
   | "iframe" | "video" | "canvas" | "embed" | "object" | "audio" ->
     let w, h = size 300 150 in
-    Some (Box { w; h; label = Dom.name n; frame = true; img = None })
+    Some (Box { w; h; label = Dom.name n; frame = true; img = None; ctl = None })
   | "svg" ->
     (match st.width, st.height, a "width", a "height" with
      | Auto, Auto, None, None -> None
      | _ ->
        let aw = Option.bind (a "width") float_of_string_opt and ah = Option.bind (a "height") float_of_string_opt in
        let w, h = size (int_of_float (Option.value aw ~default:0.)) (int_of_float (Option.value ah ~default:0.)) in
-       Some (Box { w; h; label = ""; frame = false; img = None }))
+       Some (Box { w; h; label = ""; frame = false; img = None; ctl = None }))
   | _ -> None
 
 (* a picture laid out as a block (a flex or grid item, display: block):
    its content size, and its src once its size is known *)
 let replaced o (n : Dom.node) (st : Style.t) ~cw =
-  if not (Dom.is_html n "img") then None
-  else match atomic o n st ~cw with
+  if Dom.is_html n "img" || (Forms.kind n <> Forms.Not_control && not (Dom.is_html n "button")) then
+    match atomic o n st ~cw with
     | Some (Box { w; h; img; _ }) -> Some (w, h, img)
     | _ -> None
+  else None
 
 (* the pieces of a container's content: its inline descendants flattened
    (a loop: Dom.walk), its block-level, floating and positioned ones as
@@ -470,7 +486,7 @@ let atoms_of pieces =
   let add a = out := a :: !out in
   List.iter (function
       | P_atom a -> add a; prev_space := (a.kind = Break)
-      | P_space (w, st) -> add { kind = Box { w; h = 0; label = ""; frame = false; img = None }; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
+      | P_space (w, st) -> add { kind = Box { w; h = 0; label = ""; frame = false; img = None; ctl = None }; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
       | P_float (n, st) -> add { kind = Float n; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
       | P_abs (n, st) -> add { kind = Abs n; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
       | P_block _ -> ()
@@ -795,6 +811,8 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
   let collapse_top = not own_bfc && b 0 = 0 && p 0 = 0 && valign = 0 && force_h = None in
   let collapse_bottom = not own_bfc && b 2 = 0 && p 2 = 0 && definite_h = None in
   let content_h, esc_top, esc_bottom =
+    (* a picture or a form control: no content laid out (a select's options) *)
+    if repl <> None then (0, 0, 0) else
     match st.display with
     | Flex | Inline_flex -> (flex o n st ~x:cx ~y:cy ~cw:content_w ~ch:definite_h ~depth, 0, 0)
     | Grid | Inline_grid -> (grid o n st ~x:cx ~y:cy ~cw:content_w ~depth, 0, 0)
@@ -816,6 +834,15 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
    | Some (_, _, Some src) when st.visible && not st.transparent && content_w > 0 && content_h > 0 ->
      emit o (Image { x = cx; y = cy; w = content_w; h = content_h; src; clip = None })
    | _ -> ());
+  (* a form control laid out as a block: its box for the painter and the
+     clicks (a button element's content is laid out as any) *)
+  if Forms.kind n <> Forms.Not_control && st.visible && not st.transparent then begin
+    let button = Dom.is_html n "button" in
+    let bx0, by0, bw0, bh0 = if button then (bx, y, bw, h) else (cx, cy, content_w, content_h) in
+    if bw0 > 0 && bh0 > 0 then
+      emit o (Control { x = bx0; y = by0; w = bw0; h = bh0; node = n; font = Metrics.font st; color = st.color;
+                        paint = not button })
+  end;
   o.clip <- saved_clip;
   if has_bg then Dynarray.set o.items_ bg_slot (Fill { x = bx; y; w = bw; h; color = rgb st.background });
   (match picture with
@@ -965,7 +992,7 @@ and inline_layout o ~bfc (container : Style.t) atoms ~x ~y ~w ~depth =
     let above, below = List.fold_left (fun (a, b) at ->
         match at.kind with
         | Word _ | Space -> let x, y = parts at.font (Metrics.line_height at.st) in (max a x, max b y)
-        | Box { h; _ } -> (max a h, b)
+        | Box { h; _ } -> let up = box_above at in (max a up, max b (h - up))
         | Ibox { bh; _ } -> (max a bh, b)
         | _ -> (a, b)) (sa, sb) line in
     let lh = above + below in
@@ -986,13 +1013,20 @@ and inline_layout o ~bfc (container : Style.t) atoms ~x ~y ~w ~depth =
             emit o (Fill { x = !cx; y = ty - f.ascent - 1; w = aw; h = f.ascent + f.descent + 2; color = rgb a.bg });
           (match a.kind with
            | Word s -> emit o (Text { x = !cx; y = ty; s; color = st.color; font = f })
-           | Box { w = bw; h = bh; label; frame; img } ->
-             let by = max line_y (baseline - bh) in
+           | Box { w = bw; h = bh; label; frame; img; ctl } ->
+             let by = max line_y (baseline - box_above a) in
+             (match ctl with
+              | Some _ when visible_color st.background && bw > 2 && bh > 2 && Forms.kind (Option.get ctl) <> Forms.Radio ->
+                emit o (Fill { x = !cx; y = by; w = bw; h = bh; color = rgb st.background })
+              | _ -> ());
+             (match ctl with
+              | Some node -> emit o (Control { x = !cx; y = by; w = bw; h = bh; node; font = f; color = st.color; paint = true })
+              | None -> ());
              (match img with
               | Some src when bw > 0 && bh > 0 -> emit o (Image { x = !cx; y = by; w = bw; h = bh; src; clip = None })
               | _ -> ());
              if frame && bw > 0 && bh > 0 then begin
-               let c = 0xA0A8B0 in
+               let c = if ctl <> None then 0x767676 else 0xA0A8B0 in
                emit o (Fill { x = !cx; y = by; w = bw; h = 1; color = c });
                emit o (Fill { x = !cx; y = by + bh - 1; w = bw; h = 1; color = c });
                emit o (Fill { x = !cx; y = by; w = 1; h = bh; color = c });
@@ -1620,7 +1654,7 @@ let layout ?(image = fun _ -> None) ~width ~height (styles : Style.styles) (doc 
   (* positioned boxes may reach below the flow *)
   let bottom = Dynarray.fold_left (fun m it -> match it with
       | Fill f -> max m (f.y + f.h) | Text t -> max m (t.y + t.font.descent)
-      | Image i -> max m (i.y + i.h) | Bg _ -> m) total o.items_ in
+      | Image i -> max m (i.y + i.h) | Bg _ | Control _ -> m) total o.items_ in
   { items = Dynarray.to_array o.items_; links = Dynarray.to_array o.links_; height = max total bottom; background;
     anchors = o.anchors_; unsized = o.unsized_ }
 
@@ -1633,6 +1667,11 @@ let dump p =
       | Text { x; y; s; color; font } ->
         Printf.bprintf b "text %d,%d %s #%06x %s\n" x y font.key color s
       | Image { x; y; w; h; src; _ } -> Printf.bprintf b "image %d,%d %dx%d %s\n" x y w h src
+      | Control { x; y; w; h; node; paint; _ } ->
+        let sh = Forms.shown node in
+        Printf.bprintf b "control %d,%d %dx%d %s%s%s\n" x y w h (Dom.name node)
+          (if paint then " " ^ sh.text else "")
+          (match sh.mark with `Check -> " [x]" | `Dot -> " (o)" | `None -> "")
       | Bg { x; y; w; h; layer; tint; _ } ->
         Printf.bprintf b "%s %d,%d %dx%d %s\n" (if tint = None then "bg" else "mask") x y w h
           (Option.value layer.image ~default:"")) p.items;

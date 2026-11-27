@@ -108,6 +108,32 @@ let () =
                done
              done
            | None -> ())
+        | Layout.Control { x; y; w = cw; h = ch; node; font; color; paint } when paint ->
+          let sh = Forms.shown node in
+          let mask m c = String.iteri (fun i g -> put (x + i mod 13) (y + i / 13) c (255 - Char.code g)) m in
+          (match Forms.kind node, sh.mark with
+           | Forms.Check, `Check ->
+             fill x y cw ch 0x1A73E8;
+             for i = 3 to 9 do put (x + i) (y + (if i <= 5 then 3 + i else 13 - i)) 0xFFFFFF 255 done
+           | Forms.Radio, mark ->
+             mask (Forms.circle_mask 13 ~ring:true) (if mark = `Dot then 0x1A73E8 else 0x767676);
+             if mark = `Dot then mask (Forms.circle_mask 13 ~ring:false) 0x1A73E8
+           | Forms.Select, _ ->
+             for i = 0 to 3 do fill (x + cw - 13 + i) (y + ch / 2 - 2 + i) (7 - 2 * i) 1 color done
+           | _ -> ());
+          let colour = if sh.placeholder then 0x757575 else color in
+          let tw = Fonts.width font sh.text in
+          let tx = if sh.centred then x + (cw - tw) / 2 else x + 4 in
+          let base = match Forms.kind node with
+            | Forms.Area -> y + 2 + font.ascent | _ -> y + (ch + font.ascent - font.descent) / 2 in
+          List.iter (fun (dx, dy, (b : Ttf.bitmap)) ->
+              for j = 0 to b.height - 1 do
+                for i = 0 to b.width - 1 do
+                  let px = tx + dx + i in
+                  if px < x + cw - 1 then put px (base + dy + j) colour (255 - Char.code b.grey.[j * b.width + i])
+                done
+              done) (Fonts.glyphs font (List.hd (String.split_on_char '\n' sh.text)))
+        | Layout.Control _ -> ()
         | Layout.Bg { x; y; w = bw; h = bh; layer; tint; clip } ->
           (match layer.image with
            | Some src ->

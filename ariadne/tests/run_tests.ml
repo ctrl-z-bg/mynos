@@ -120,6 +120,36 @@ let sources () =
   check "img: picture: a media query's source skipped, then src"
     (src {|<picture><source srcset="w.png" media="(min-width: 800px)"><img src="z.png"></picture>|} = Some "z.png")
 
+(* forms: the state, what controls show, a submission (M5) *)
+let forms () =
+  let doc = Html.parse (List.assoc "forms" Pages.pages) in
+  let by_name n = Option.get (Dom.find (fun x -> Dom.attr x "name" = Some n) doc) in
+  let forms = let out = ref [] in
+    Dom.iter (fun x -> if Dom.is_html x "form" then out := x :: !out) doc; List.rev !out in
+  let f = List.hd forms in
+  check "forms: the controls of a form, one outside it"
+    (List.map (fun n -> Option.value (Dom.attr n "name") ~default:"-") (Forms.controls f)
+     = [ "name"; "q"; "pw"; "c"; "d"; "r"; "r"; "s"; "t"; "go"; "-"; "no"; "out" ]);
+  check "forms: what they show"
+    ((Forms.shown (by_name "pw")).text = "\xe2\x80\xa2\xe2\x80\xa2"
+     && (Forms.shown (by_name "q")).placeholder && (Forms.shown (by_name "q")).text = "Search..."
+     && (Forms.shown (by_name "s")).text = "second"
+     && (Forms.shown (by_name "c")).mark = `Check && (Forms.shown (by_name "d")).mark = `None);
+  let base = "about:test/forms" in
+  check "forms: GET, by a button"
+    (Forms.submit ~base ~submitter:(by_name "go") f
+     = Forms.Get "about:test/basic?name=Ada&q=&pw=ab&c=on&r=2&s=b&t=hello&h=x+y%26z&go=Send&out=1");
+  Forms.toggle (by_name "d");
+  Forms.toggle (Option.get (Dom.find (fun x -> Dom.attr x "value" = Some "1") doc));
+  Forms.set_value (by_name "name") "Grace Hopper";
+  Forms.select (by_name "s") (List.nth (Forms.options (by_name "s")) 2);
+  check "forms: changed, and by Enter (no button)"
+    (Forms.submit ~base f
+     = Forms.Get "about:test/basic?name=Grace+Hopper&q=&pw=ab&c=on&d=yes&r=1&s=third&t=hello&h=x+y%26z&out=1");
+  check "forms: POST, a button element's value"
+    (Forms.submit ~base:"https://a.org/x" ~submitter:(by_name "btn") (List.nth forms 1)
+     = Forms.Post ("https://a.org/post", "a=b&btn=v"))
+
 (* rule 3: a tree far deeper than any stack would allow a recursion *)
 let deep () =
   let depth = 5000 in
@@ -154,6 +184,7 @@ let () =
     encodings ();
     fonts ();
     sources ();
+    forms ();
     deep ();
     pages ();
     layouts ();

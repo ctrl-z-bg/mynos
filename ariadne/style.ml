@@ -483,20 +483,31 @@ let apply_font_shorthand ctx s v =
     | Tok (Number (w, true)) :: r when w >= 100. && w <= 1000. -> s.font_weight <- int_of_float w; go r
     | Tok Whitespace :: r -> go r
     | r -> r in
+  (* the shorthand resets what it does not give *)
+  s.italic <- false; s.font_weight <- 400; s.line_height <- Lh_normal;
   let rest = go v in
+  let skip_ws = List.filter (fun c -> c <> Tok Whitespace) in
   match rest with
   | size :: r ->
     (match font_size_of ctx [ size ] with
      | Some fs -> s.font_size <- fs;
-       (match r with
-        | Tok (Delim "/") :: lh :: _ ->
-          (match lh with
-           | Tok (Number (f, _)) -> s.line_height <- Lh_factor f
-           | Tok (Ident "normal") -> s.line_height <- Lh_normal
-           | x -> (match length { ctx with fs } [ x ] with
-               | Some (Len (px, pct)) -> s.line_height <- Lh_px (px +. pct *. fs /. 100.)
-               | _ -> ()))
-        | _ -> ())
+       let r = match r with Tok Whitespace :: r -> r | r -> r in
+       let family =
+         match r with
+         | Tok (Delim "/") :: r ->
+           (match skip_ws (List.filteri (fun i _ -> i < 2) r) |> List.hd |> fun lh -> lh with
+            | Tok (Number (f, _)) -> s.line_height <- Lh_factor f
+            | Tok (Ident "normal") -> s.line_height <- Lh_normal
+            | x -> (match length { ctx with fs } [ x ] with
+                | Some (Len (px, pct)) -> s.line_height <- Lh_px (px +. pct *. fs /. 100.)
+                | _ -> ())
+            | exception _ -> ());
+           (* past the line height *)
+           let rec drop = function Tok Whitespace :: r -> drop r | _ :: r -> r | [] -> [] in
+           drop r
+         | r -> r in
+       let fam = String.trim (Css.to_string family) in
+       if fam <> "" then s.font_family <- fam
      | None -> ())
   | [] -> ()
 
@@ -1134,6 +1145,11 @@ td, th { vertical-align: inherit }
 sub { vertical-align: sub } sup { vertical-align: super }
 img, svg, video, canvas, iframe, input, button, select, textarea { display: inline-block }
 input, button, select, textarea { overflow: hidden }
+input, button, select, textarea { font: 13.3333px sans-serif; color: fieldtext; letter-spacing: normal }
+input, select, textarea { background-color: field }
+textarea { font-family: monospace }
+button, input[type=submit i], input[type=reset i], input[type=button i], select { background-color: buttonface }
+input[disabled], button[disabled], select[disabled], textarea[disabled] { color: graytext }
 caption { text-align: center }
 a:link, a:visited { color: linktext; text-decoration: underline }
 abbr[title], acronym[title] { text-decoration: underline }

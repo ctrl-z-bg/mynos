@@ -1,0 +1,95 @@
+fill 0,21 800x383 #ffffff
+text 8,50 serif-bold 32 #000000 Forms
+text 8,94 serif 16 #000000 Name
+fill 50,79 175x21 #ffffff
+control 50,79 175x21 input Ada
+fill 50,79 175x1 #767676
+fill 50,99 175x1 #767676
+fill 50,79 1x21 #767676
+fill 224,79 1x21 #767676
+fill 8,116 175x21 #ffffff
+control 8,116 175x21 input Search...
+fill 8,116 175x1 #767676
+fill 8,136 175x1 #767676
+fill 8,116 1x21 #767676
+fill 182,116 1x21 #767676
+fill 187,116 175x21 #ffffff
+control 187,116 175x21 input ••
+fill 187,116 175x1 #767676
+fill 187,136 175x1 #767676
+fill 187,116 1x21 #767676
+fill 361,116 1x21 #767676
+fill 8,155 13x13 #ffffff
+control 8,155 13x13 input  [x]
+fill 8,155 13x1 #767676
+fill 8,167 13x1 #767676
+fill 8,155 1x13 #767676
+fill 20,155 1x13 #767676
+text 25,168 serif 16 #000000 checked
+fill 81,155 13x13 #ffffff
+control 81,155 13x13 input 
+fill 81,155 13x1 #767676
+fill 81,167 13x1 #767676
+fill 81,155 1x13 #767676
+fill 93,155 1x13 #767676
+text 98,168 serif 16 #000000 not
+text 122,168 serif 16 #000000 checked
+control 8,189 13x13 input 
+text 25,202 serif 16 #000000 one
+control 52,189 13x13 input  (o)
+text 69,202 serif 16 #000000 two
+fill 8,222 70x19 #efefef
+control 8,222 70x19 select second
+fill 8,222 70x1 #767676
+fill 8,240 70x1 #767676
+fill 8,222 1x19 #767676
+fill 77,222 1x19 #767676
+fill 8,257 168x34 #ffffff
+control 8,257 168x34 textarea hello
+fill 8,257 168x1 #767676
+fill 8,290 168x1 #767676
+fill 8,257 1x34 #767676
+fill 175,257 1x34 #767676
+fill 8,311 46x19 #efefef
+control 8,311 46x19 input Send
+fill 8,311 46x1 #767676
+fill 8,329 46x1 #767676
+fill 8,311 1x19 #767676
+fill 53,311 1x19 #767676
+fill 58,311 50x19 #efefef
+control 58,311 50x19 button Reset
+fill 58,311 50x1 #767676
+fill 58,329 50x1 #767676
+fill 58,311 1x19 #767676
+fill 107,311 1x19 #767676
+fill 112,311 33x19 #efefef
+control 112,311 33x19 input Off
+fill 112,311 33x1 #767676
+fill 112,329 33x1 #767676
+fill 112,311 1x19 #767676
+fill 144,311 1x19 #767676
+text 8,361 serif 16 #000000 Outside
+text 62,361 serif 16 #000000 the
+text 86,361 serif 16 #000000 form,
+text 125,361 serif 16 #000000 but
+text 149,361 serif 16 #000000 in
+text 165,361 serif 16 #000000 it:
+fill 182,346 175x21 #ffffff
+control 182,346 175x21 input 1
+fill 182,346 175x1 #767676
+fill 182,366 175x1 #767676
+fill 182,346 1x21 #767676
+fill 356,346 1x21 #767676
+fill 8,383 175x21 #ffffff
+control 8,383 175x21 input b
+fill 8,383 175x1 #767676
+fill 8,403 175x1 #767676
+fill 8,383 1x21 #767676
+fill 182,383 1x21 #767676
+fill 183,384 42x19 #efefef
+control 183,384 42x19 button Post
+fill 183,384 42x1 #767676
+fill 183,402 42x1 #767676
+fill 183,384 1x19 #767676
+fill 224,384 1x19 #767676
+height 412

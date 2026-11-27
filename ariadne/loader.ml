@@ -100,8 +100,10 @@ let data_url url =
     let body = if is_b64 then base64 (percent_decode data) else percent_decode data in
     { url; status = "a data URL"; content_type = (if ct = "" then "text/plain" else ct); body }
 
-let load url =
-  let rec go url redirects =
+(* [post]: a form's body (application/x-www-form-urlencoded), sent with
+   POST; a redirect after it is followed with GET *)
+let load ?post url =
+  let rec go ?post url redirects =
     if Url.scheme_of url = Some "data" then data_url url else
     let url, _ = Url.strip_fragment url in
     match Url.scheme_of url with
@@ -113,6 +115,8 @@ let load url =
        | "tests" -> html url (tests_page ())
        | w when String.starts_with ~prefix:"test/" w ->
          let name = String.sub w 5 (String.length w - 5) in
+         (* a query (a form sent to a test page) does not name another page *)
+         let name = match String.index_opt name '?' with Some i -> String.sub name 0 i | None -> name in
          (match List.assoc_opt name Pages.pages with
           | Some p -> html ~status:"a test page" url p
           | None -> html ~status:"not found" url (message "Not found" ("There is no test page " ^ name ^ ".")))
@@ -129,8 +133,12 @@ let load url =
             { url; status = "a file"; content_type = ct; body }
           | exception Sys_error m -> html ~status:m url (message "Cannot open" m))
     | Some ("http" | "https") ->
-      (match Http.get ~timeout:20000 ~headers:[ "User-Agent", user_agent;
-                                                "Accept", "text/html,text/plain;q=0.9,*/*;q=0.5" ] url with
+      let headers = [ "User-Agent", user_agent; "Accept", "text/html,text/plain;q=0.9,*/*;q=0.5" ] in
+      (match (match post with
+           | Some body ->
+             Http.post ~timeout:20000 ~headers:(("Content-Type", "application/x-www-form-urlencoded") :: headers)
+               ~body url
+           | None -> Http.get ~timeout:20000 ~headers url) with
        | r when r.Http.status >= 300 && r.status < 400 && redirects < 8
                 && Http.header "location" r <> None ->
          go (Url.resolve url (Option.get (Http.header "location" r))) (redirects + 1)
@@ -141,8 +149,8 @@ let load url =
        | exception Http.Error m -> html ~status:m url (message "Not reached" (url ^ ": " ^ m))
        | exception e -> html ~status:"error" url (message "Not reached" (Printexc.to_string e)))
     | Some s -> html ~status:"not shown" url (message "Not shown" ("Ariadne does not open " ^ s ^ ": addresses."))
-    | None -> go (Url.of_typed url) redirects in
-  go url 0
+    | None -> go ?post (Url.of_typed url) redirects in
+  go ?post url 0
 
 (* the response as HTML in UTF-8, and the encoding its bytes were in:
    HTML decoded by its byte order mark, the HTTP header's charset, a <meta>
