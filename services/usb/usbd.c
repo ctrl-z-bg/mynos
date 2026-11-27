@@ -774,7 +774,7 @@ static int start(int bus, int dev)
   unsigned long * erst;
   unsigned int caplen, scratch, i, ms;
   if ((bar & 6) == 4) bar |= (unsigned long)pci_read32(bus, dev, 0, 0x14) << 32;
-  bar &= ~0xFUL;
+  bar = pci_cpu_address(bar & ~0xFUL);  /* (a Pi 4's: through its PCIe's window) */
   pci_write32(bus, dev, 0, 4, pci_read32(bus, dev, 0, 4) | 0x6);  /* memory, bus master */
   mmio = mynos_mapPhysical(bar, 16);
   if (!mmio) { mynos_log("usbd: cannot map the controller at %lx\n", bar); return -1; }

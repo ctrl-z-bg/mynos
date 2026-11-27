@@ -765,3 +765,27 @@ it so. The TT path runs only on the board.
 
 **Lesson.** Look at the board's USB tree (`lsusb -t` on its Linux)
 before deciding what "the keyboard on a root port" means.
+
+## 2026-11-27 — The Pi 400, first try: the PCIe up, the USB's address wrong
+
+**Symptom.** On the Pi 400 (the image of 7df92ac) MyNOS boots to the
+shell on HDMI, four processors, and the kernel says `PCIe: revision
+0x304, link up, 0x34831106 at 0x600000000`: the link trained, the VIA
+VL805 (0x1106:0x3483) answered on bus 1. But no key of the 400's
+keyboard reached the shell, and nothing of usbd showed: services'
+messages leave the screen once the shell starts.
+
+**Diagnosis.** usbd mapped its controller at the BAR's address, as on
+QEMU's `virt`. But a BAR holds an address of the PCI bus: the kernel
+had put the VL805 at PCI's 0xC000_0000, which the processor reaches at
+0x6_0000_0000 through the outbound window. usbd asked for 0xC000_0000,
+which the kernel refuses (RAM, not the window), and ended.
+
+**Fix.** libmynos's `pci_cpu_address`: the BAR's address as the
+processor reaches it (the Pi 4's window; the same elsewhere); usbd maps
+that. `make-sd-raspi.sh` takes `VERBOSE=1`: the kernel's command line
+says `verbose`, and the services' messages stay on the screen, for a
+board with no serial cable.
+
+**Lesson.** On `virt` the PCI bus's addresses and the processor's are
+the same: a driver tried only there never learns that they are two.

@@ -35,6 +35,10 @@
 
 unsigned int pci_read32(int bus, int dev, int fn, int reg);
 void pci_write32(int bus, int dev, int fn, int reg, unsigned int v);
+/* a BAR's address (the PCI bus's) as the processor reaches it, for
+   mynos_mapPhysical: the same but behind a Pi 4's PCIe, whose window
+   puts PCI's 0xC000_0000 at 0x6_0000_0000 */
+unsigned long pci_cpu_address(unsigned long bus_address);
 
 /* ---- a device ---- */
 

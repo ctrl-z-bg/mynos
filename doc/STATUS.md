@@ -2150,3 +2150,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   sits behind a `usb-hub` (`USB=1`, lane j). The SD card image
   (`tools/make-sd-raspi.sh`) is ready for the first try on a Pi 400
   (btq.8.1-3, .8.5).
+- **2026-11-27** — First try on a Pi 400: MyNOS boots on HDMI with four
+  processors and the PCIe's link up (the VL805 found on bus 1:
+  btq.8.1 works on the board). The USB did not start: usbd mapped the
+  VL805 at its PCI address instead of the processor's (libmynos's
+  `pci_cpu_address` now); `VERBOSE=1 tools/make-sd-raspi.sh` keeps the
+  services' messages on the screen.

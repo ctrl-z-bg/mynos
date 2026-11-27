@@ -70,6 +70,15 @@ void pci_write32(int bus, int dev, int fn, int reg, unsigned int v)
   volatile unsigned int * r = pci_reg(bus, dev, fn, reg);
   if (r) *r = v;
 }
+
+/* the Pi 4's outbound window (pcie4.c): PCI 0xC000_0000, 1 GB, at the
+   processor's 0x6_0000_0000; virt's PCI addresses are the processor's */
+unsigned long pci_cpu_address(unsigned long a)
+{
+  if (!ecam && pi4 && a >= 0xC0000000UL && a < 0x100000000UL)
+    return a - 0xC0000000UL + 0x600000000UL;
+  return a;
+}
 #else
 /* ---- PCI's configuration space: ports 0xCF8 (address), 0xCFC (data) ----
    Two accesses, the address then the data: the kernel does them (native
@@ -91,6 +100,11 @@ unsigned int pci_read32(int bus, int dev, int fn, int reg)
 void pci_write32(int bus, int dev, int fn, int reg, unsigned int v)
 {
   __mynos_syscall(103, 1, pci_address(bus, dev, fn, reg), v, 0, 0);
+}
+
+unsigned long pci_cpu_address(unsigned long a)
+{
+  return a;
 }
 
 #endif

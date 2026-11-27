@@ -17,7 +17,9 @@
 # Never the developer's system/disk.img (it holds llm.env): /disk starts
 # empty but for these files.
 #
-# Usage: [SIZE_MB=N] tools/make-sd-raspi.sh [OUT]
+# Usage: [SIZE_MB=N] [VERBOSE=1] tools/make-sd-raspi.sh [OUT]
+#   (VERBOSE: the kernel's and the services' messages stay on the screen
+#   after boot, for a board without its serial port wired)
 #   (default tmp/mynos-raspi.img, 2048 MB: a card of 2 GB or more)
 #   then, e.g.: dd if=tmp/mynos-raspi.img of=/dev/sdX bs=4M conv=fsync
 # The console: the screen (HDMI), and the UART (GPIO 14 TX, 15 RX,
@@ -66,7 +68,7 @@ mkdir -p "$root/tmp"
 w=$(mktemp -d "$root/tmp/sd-XXXXXX")
 trap 'rm -rf "$w"' EXIT
 # the modules' archive, as run-qemu.sh makes it for run-demo.sh's modules
-(cd "$tree" && python3 tools/mkmodules.py "$w/mynos.mod" "$(tools/ocamlrun-path.sh)" \
+(cd "$tree" && python3 tools/mkmodules.py ${VERBOSE:+-c verbose} "$w/mynos.mod" "$(tools/ocamlrun-path.sh)" \
     services/registry/registry services/fs/memrofs/memrofsd system/ramdisk.dsk)
 cat > "$w/config.txt" <<'CFG'
 # MyNOS on a Raspberry Pi 3, Zero 2 W, 4 or 400 (tools/make-sd-raspi.sh)
