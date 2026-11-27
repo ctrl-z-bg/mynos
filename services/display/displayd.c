@@ -424,6 +424,7 @@ struct window {
   int resizable, min_w, min_h;         /* a grip, a double click on the title */
   int maximized, rx, ry, rw, rh;       /* maximized: where and how big it was */
   long title_click;                    /* the last click on its title (ms) */
+  int pointer;                         /* the pointer's shape over its content (pointer_shapes) */
 };
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -499,15 +500,30 @@ static const struct menu_item menu[] = {
 #define MENU_W 160
 #define MENU_ITEM 22
 
-static const char * pointer_shape[] = {
-  "X           ", "XX          ", "X.X         ", "X..X        ",
-  "X...X       ", "X....X      ", "X.....X     ", "X......X    ",
-  "X.......X   ", "X........X  ", "X.........X ", "X......XXXXX",
-  "X...X..X    ", "X..XX..X    ", "X.X  X..X   ", "XX   X..X   ",
-  "X     X..X  ", "      XXX   ",
+/* the pointer's shapes, which a window asks for over itself (the request
+   pointer): an arrow, a hand (links), a text I-beam. Each is PW x PH, its
+   hot spot (where the pointer is) at column PHX of row 0 */
+static const char * pointer_shapes[][18] = {
+  { "    X           ", "    XX          ", "    X.X         ", "    X..X        ",
+    "    X...X       ", "    X....X      ", "    X.....X     ", "    X......X    ",
+    "    X.......X   ", "    X........X  ", "    X.........X ", "    X......XXXXX",
+    "    X...X..X    ", "    X..XX..X    ", "    X.X  X..X   ", "    XX   X..X   ",
+    "    X     X..X  ", "          XXX   " },
+  { "    XX          ", "   X..X         ", "   X..X         ", "   X..X         ",
+    "   X..XXX       ", "   X..X..XXX    ", "   X..X..X..XX  ", "XX X..X..X..X.X ",
+    "X..X..........X ", "X...X.........X ", " X............X ", "  X...........X ",
+    "  X..........X  ", "   X.........X  ", "   X........X   ", "    X.......X   ",
+    "    X.......X   ", "    XXXXXXXXX   " },
+  { "  XX.XX         ", "   .X.          ", "   .X.          ", "   .X.          ",
+    "   .X.          ", "   .X.          ", "   .X.          ", "   .X.          ",
+    "   .X.          ", "   .X.          ", "   .X.          ", "   .X.          ",
+    "   .X.          ", "   .X.          ", "   .X.          ", "   .X.          ",
+    "   .X.          ", "  XX.XX         " },
 };
-#define PW 12
+#define NPOINTERS 3
+#define PW 16
 #define PH 18
+#define PHX 4
 
 /* the top bar's tabs: the shown windows, in the order they were made */
 #define TABS_X 96
@@ -745,13 +761,27 @@ static void draw_menu(void)
   }
 }
 
+static int window_at(int x, int y);
+
+/* the shape: the one the window under the pointer asked for, over its
+   content; else the arrow */
+static int pointer_kind(void)
+{
+  int i = window_at(px, py);
+  if (i >= 0 && !menu_open && resizing < 0) {
+    struct window * w = &win[i];
+    if (px >= w->x && px < w->x + w->w && py >= w->y && py < w->y + w->h) return w->pointer;
+  }
+  return 0;
+}
+
 static void draw_pointer(void)
 {
-  int r, c;
+  int r, c, k0 = pointer_kind();
   for (r = 0; r < PH; r++)
     for (c = 0; c < PW; c++) {
-      char k = pointer_shape[r][c];
-      int x = px + c, y = py + r;
+      char k = pointer_shapes[k0][r][c];
+      int x = px - PHX + c, y = py + r;
       if (k == ' ' || x < cx0 || x >= cx1 || y < cy0 || y >= cy1) continue;
       back[y * W + x] = k == 'X' ? 0x000000 : 0xFFFFFF;
     }
@@ -1206,8 +1236,8 @@ static void pointer_to(int x, int y, int buttons)
     was_inside = inside;
   }
   if (menu_open) compose(MENU_X, TOP, MENU_X + MENU_W, TOP + NMENU * MENU_ITEM + 10);
-  compose(ox, oy, ox + PW, oy + PH);
-  compose(px, py, px + PW, py + PH);
+  compose(ox - PHX, oy, ox - PHX + PW, oy + PH);
+  compose(px - PHX, py, px - PHX + PW, py + PH);
 }
 
 /* the wheel: to the window under the pointer (positive: down); over the
@@ -1632,6 +1662,8 @@ static const wire_request_doc requests[] = {
     "multiple of 8, within the video memory)." },
   { 1, "sizes", "U", "L<(width:I,height:I)>",
     "The usual screen sizes the video memory holds (start_at takes others too)." },
+  { 0, "pointer", "(window:I,shape:I)", "U",
+    "The pointer's shape over the window's content: 0 an arrow, 1 a hand (a link), 2 a text I-beam." },
 };
 
 static void describe(int ch)
@@ -1894,6 +1926,18 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
     reply_unit(ch);
     compose(ox - 1, oy - TITLE - 1, ox + w->w + 5, oy + w->h + 5);
     compose_window(w);
+    break;
+  }
+  case 15: {                                       /* pointer */
+    int wid = wire_get_int(&r), shape = wire_get_int(&r);
+    END();
+    if (!(w = owned(ch, wid, caller))) return;
+    if (shape < 0 || shape >= NPOINTERS) shape = 0;
+    reply_unit(ch);
+    if (w->pointer != shape) {
+      w->pointer = shape;
+      compose(px - PHX, py, px - PHX + PW, py + PH);
+    }
     break;
   }
   default:

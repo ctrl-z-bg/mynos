@@ -15,6 +15,7 @@ type ui = {
   mutable wheel : int;
   mutable released : string list;
   mutable held : string list;
+  mutable pointer : Display.pointer;  (* this frame's pointer shape (Arrow unless set) *)
 }
 
 let width ui = ui.g.Gfx.width
@@ -283,6 +284,8 @@ let utf8_offset s k =
 
 let text_field ui id x y w value =
   let h = 22 in
+  if ui.mx >= x && ui.my >= y && ui.mx < x + w && ui.my < y + h && not (blocked ()) then
+    ui.pointer <- Display.Text;
   let room = max 1 ((w - 12) / Gfx.char_w) in
   let cur, first =
     match Hashtbl.find_opt field_state id with
@@ -413,7 +416,9 @@ let run ?(title = "") ?(tick = 0.) ?resizable ?unsaved w h state frame =
       prerr_endline "no display service (displayd)"; exit 2 in
   let ui = { window; g = window.Display.pixels; mx = -1; my = -1; buttons = 0;
              clicked = false; press = (-1, -1); keys = []; focused = true; tick = false;
-             field = -1; wheel = 0; released = []; held = [] } in
+             field = -1; wheel = 0; released = []; held = []; pointer = Display.Arrow } in
+  (* the shape displayd shows: told only when a frame wants another *)
+  let shown_pointer = ref Display.Arrow in
   (* the window may be gone already (the session ended: displayd closed
      every window), so its end is quiet *)
   (match resizable with
@@ -451,11 +456,16 @@ let run ?(title = "") ?(tick = 0.) ?resizable ?unsaved w h state frame =
     end;
     Gfx.fill ui.g 0 0 (width ui) (height ui) background;
     pieces := [];
+    ui.pointer <- Display.Arrow;
     match frame ui state with
     | exception Quit -> destroy ()
     | state when !closing && ask_close () -> destroy ()
     | state ->
       finish_selection ui !pieces;
+      if ui.pointer <> !shown_pointer then begin
+        shown_pointer := ui.pointer;
+        try Display.set_pointer ui.window ui.pointer with Ipc.Remote_error _ | Mynos.Error _ -> ()
+      end;
       match Display.damage ui.window with
       | exception (Ipc.Remote_error _ | Mynos.Error _) -> ()
       | () ->

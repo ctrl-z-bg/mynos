@@ -454,6 +454,7 @@ let window first =
               if px >= l.lx && px < l.lx + l.lw && py >= l.ly && py < l.ly + l.lh then Some l.href else found)
             None page.links in
       st.hover <- Option.map (Url.resolve st.shown.base) (link_at ui.Gui.mx ui.Gui.my);
+      if st.hover <> None then ui.Gui.pointer <- Display.Hand;
       (if ui.Gui.clicked then
          let px, py = ui.Gui.press in
          match link_at px py, link_at ui.Gui.mx ui.Gui.my with

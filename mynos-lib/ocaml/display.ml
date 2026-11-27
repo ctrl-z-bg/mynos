@@ -27,6 +27,7 @@ type _ request =
   | Resizable : int * int * int -> unit request
   | Start_at : int * int -> unit request
   | Sizes : (int * int) list request
+  | Pointer : int * int -> unit request
 
 let window_f = Wire.(field "window" int)
 let size_codec = Wire.(pair (field "width" int) (field "height" int))
@@ -98,7 +99,11 @@ module Protocol = struct
         Wire.(pair (field "width" int) (field "height" int)) Wire.unit;
       request ~safe:true 14 "sizes"
         "The usual screen sizes the video memory holds (start_at takes others too)."
-        Wire.unit Wire.(list (pair (field "width" int) (field "height" int))) ]
+        Wire.unit Wire.(list (pair (field "width" int) (field "height" int)));
+      request 15 "pointer"
+        "The pointer's shape over the window's content: 0 an arrow, 1 a hand (a link), 2 a \
+         text I-beam."
+        Wire.(pair (field "window" int) (field "shape" int)) Wire.unit ]
   type 'a r = 'a request
   type 'a request = 'a r
   type packed = Request : 'a request -> packed
@@ -121,6 +126,7 @@ module Protocol = struct
     | Resizable (i, x, y) -> case 12; Wire.write w resizable_args (i, x, y)
     | Start_at (x, y) -> case 13; Wire.write w Wire.(pair (field "width" int) (field "height" int)) (x, y)
     | Sizes -> case 14
+    | Pointer (wid, k) -> case 15; Wire.write w Wire.(pair (field "window" int) (field "shape" int)) (wid, k)
 
   let read_request r =
     match Wire.read r Wire.int with
@@ -140,6 +146,7 @@ module Protocol = struct
     | 13 -> let x, y = Wire.read r Wire.(pair (field "width" int) (field "height" int)) in
       Request (Start_at (x, y))
     | 14 -> Request Sizes
+    | 15 -> let w, k = Wire.read r Wire.(pair (field "window" int) (field "shape" int)) in Request (Pointer (w, k))
     | n -> raise (Wire.Error (Printf.sprintf "display: unknown request %d" n))
 
   let reply : type a. a request -> a Wire.t = function
@@ -158,6 +165,7 @@ module Protocol = struct
     | Resizable _ -> Wire.unit
     | Start_at _ -> Wire.unit
     | Sizes -> Wire.(list (pair (field "width" int) (field "height" int)))
+    | Pointer _ -> Wire.unit
 end
 
 module I = Ipc.Make (Protocol)
@@ -219,4 +227,9 @@ let resize win w h =
   { win with pixels }
 
 let set_resizable win w h = call win.display (Resizable (win.id, w, h))
+
+type pointer = Arrow | Hand | Text
+
+let set_pointer win p =
+  call win.display (Pointer (win.id, match p with Arrow -> 0 | Hand -> 1 | Text -> 2))
 let destroy win = try call win.display (Destroy win.id) with Ipc.Remote_error _ -> ()

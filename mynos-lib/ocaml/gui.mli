@@ -28,6 +28,8 @@ type ui = {
   mutable released : string list; (** let go in this frame, as they were typed *)
   mutable held : string list;     (** the keys held down now (games): typed, not yet
                                       let go; none while the window has not the focus *)
+  mutable pointer : Display.pointer;  (** the pointer's shape over the window in this frame:
+                                      the arrow unless the frame sets it (a link: Hand) *)
 }
 
 (** Colours *)

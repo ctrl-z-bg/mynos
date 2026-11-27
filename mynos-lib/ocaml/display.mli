@@ -43,6 +43,7 @@ type _ request =
   | Resizable : int * int * int -> unit request
   | Start_at : int * int -> unit request
   | Sizes : (int * int) list request
+  | Pointer : int * int -> unit request   (** [(window, shape)]: 0 arrow, 1 hand, 2 text *)
 
 module Protocol : Ipc.PROTOCOL with type 'a request = 'a request
 
@@ -80,4 +81,10 @@ val set_resizable : window -> int -> int -> unit
 (** [set_resizable w min_w min_h]: the user may resize it (a grip at its
     bottom right corner, a double click on its title to maximize), not
     below this size; 0 0: not. *)
+type pointer = Arrow | Hand | Text
+
+val set_pointer : window -> pointer -> unit
+(** The pointer's shape over the window's content (a hand over a link, an
+    I-beam over text); the arrow elsewhere. *)
+
 val destroy : window -> unit
