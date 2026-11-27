@@ -19,6 +19,12 @@ module Make (Bus : Word_addressable_intf.S) : sig
 
   val show : t -> string
 
+  (* MyNOS's (emu/1, packages/camlboy): the CPU's state, read *)
+  val pc : t -> int
+  val sp : t -> int
+  val halted : t -> bool
+  val ime : t -> bool
+
   module For_tests : sig
 
     val execute : t -> Inst_info.t -> int

@@ -7,6 +7,8 @@ module Make (Cartridge : Cartridge_intf.S) = struct
   module Cpu = Cpu.Make(Bus)
 
   type t = {
+    bus    : Bus.t;                   (* MyNOS's: emu/1's peek, poke, registers *)
+    regs   : Registers.t;
     cpu    : Cpu.t;
     timer  : Timer.t;
     gpu    : Gpu.t;
@@ -167,7 +169,7 @@ module Make (Cartridge : Cartridge_intf.S) = struct
         ~ime:false
     in
     initialize_state ~bus ~registers ~lcd_stat;
-    { cpu; timer; gpu; joypad; apu }
+    { bus; regs = registers; cpu; timer; gpu; joypad; apu }
 
   let run_instruction t =
     let mcycles = Cpu.run_instruction t.cpu in
@@ -178,6 +180,17 @@ module Make (Cartridge : Cartridge_intf.S) = struct
   let audio_samples t = Apu.take_samples t.apu
 
   let set_audio t b = Apu.set_enabled t.apu b
+
+  let registers t =
+    List.map (fun (n, r) -> n, Uint16.to_int (Registers.read_rr t.regs r))
+      Registers.[ "AF", AF; "BC", BC; "DE", DE; "HL", HL ]
+    @ [ "SP", Cpu.sp t.cpu; "PC", Cpu.pc t.cpu; "IME", Bool.to_int (Cpu.ime t.cpu);
+        "HALT", Bool.to_int (Cpu.halted t.cpu) ]
+
+  let pc t = Cpu.pc t.cpu
+  let peek t a = Uint8.to_int (Bus.read_byte t.bus (Uint16.of_int (a land 0xFFFF)))
+  let poke t a v =
+    Bus.write_byte t.bus ~addr:(Uint16.of_int (a land 0xFFFF)) ~data:(Uint8.of_int (v land 0xFF))
 
   let press t key = Joypad.press t.joypad key
 

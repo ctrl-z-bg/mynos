@@ -1,0 +1,12 @@
+48.rom: the ROM of the Sinclair ZX Spectrum 48K (16384 bytes,
+MD5 4c42a2f075212361c3117015b107ff68), as FUSE (the Free Unix Spectrum
+Emulator) distributes it.
+
+Amstrad have kindly given their permission for the redistribution of their
+copyrighted material but retain that copyright.
+
+As FUSE's roms/README.copyright puts it: the ROMs are copyright Amstrad,
+who allow distribution of the ROMs but retain the copyright. You may not
+sell the ROMs or embed the ROMs in hardware, although it is allowed to sell
+a product which contains the ROMs, so long as the charge is being made for
+the product, not for the ROMs themselves.

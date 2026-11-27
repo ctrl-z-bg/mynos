@@ -2023,6 +2023,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   reads kept by faults on AArch64 (ARMv8.0 has none for software); the
   PC's drivers (ata, keyboardd, seriald) end cleanly when their hardware
   is absent. `build-aarch64.sh` builds everything by default. JOURNAL.
+- **2026-11-25** — MyNOS 1.0.1: the kernel gives programs a real
+  auxiliary vector (it was empty: a new thread's `__thread` variables
+  lay on its stack's top). Found on the version 2 line (JOURNAL);
+  `tests/abi` checks it.
 - **2026-11-26** — The test suite on AArch64 (`tools/run-tests-all.sh
   aarch64`; the test container has QEMU's AArch64 emulator): the PC's
   options and checks of PC hardware replaced or left out, `storage` and
@@ -2051,6 +2055,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   processors). On
   AArch64, programs start slower only because the processor is emulated
   (GavML: 2.7 s; x86-64 emulated 3.0 s, under KVM 0.7 s).
+- **2026-11-26** — sysmonitor 1.1 (package): the load of all the
+  processors together, and their number, from the version 2 line, where
+  x86-64 has four (`Domain.recommended_domain_count`; on MyNOS 1.0, one).
+  Published.
+- **2026-11-26** — The kernel: a receiver waiting with a timeout could be
+  woken twice (its timer, then a sender or the channel's close), and its
+  next wait returned at once. Found on the version 2 line with several
+  processors (JOURNAL). On `main`, not released yet.
 - **2026-11-27** — The Raspberry Pis' base begun (mynos-btq.7.1, .7.2;
   doc/decisions/aarch64.md, choice 11): a second AArch64 kernel,
   `kernel8.img` (`MYNOS_RASPI`), boots on QEMU `raspi3b`
@@ -2109,3 +2121,20 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   where `next` left `main` (merges from `main` add to it without
   conflicts); the 25 entries of `next`'s own work moved, as they were, to
   `doc/JOURNAL-next.md`.
+- **2026-11-27** — Retro emulators begun (branch `retro`, mynos-0bj,
+  doc/decisions/retro-emulators.md): `packages/retro` (a Z80 in OCaml:
+  FUSE's 1356 tests, zexdoc and zexall all passed; its disassembler; the
+  protocol emu/1 and its service), the package `zxspectrum` (a 48K: the
+  ULA, keyboard, beeper, `.tap` loaded at once, `.sna`, `.z80`; a window
+  at 50 frames a second under KVM, `--headless`, `--bench`) and `glazx`
+  (a game, MIT). The suite drives the Spectrum through emu/1 (lane c,
+  `tests/emu`). Published (mynos-packages 20d0caf: zxspectrum 1.0,
+  glazx 1.0).
+- **2026-11-27** — The applications' journal: `doc/JOURNAL-apps.md`,
+  for the packages and their shared libraries (the Spectrum's entries
+  moved there); `doc/JOURNAL.md` keeps the kernel, the services, the
+  system's libraries and the toolchain. The book (`doc/book`) is frozen
+  until the next version.
+- **2026-11-27** — camlboy 1.2 serves emu/1 (`camlboy<pid>`): registers,
+  memory, screenshots, breakpoints on the PC, frames, buttons; the
+  suite's lane c drives it after the Spectrum (`tests/emu`).

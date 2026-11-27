@@ -16,6 +16,12 @@ module Make (Bus : Word_addressable_intf.S) = struct
     mutable prev_inst                    : Instruction.t; (* for debugging purpose *)
   }
 
+  (* MyNOS's (emu/1, packages/camlboy) *)
+  let pc t = Uint16.to_int t.pc
+  let sp t = Uint16.to_int t.sp
+  let halted t = t.halted
+  let ime t = t.ime
+
   let create ~bus ~ic ~registers ~sp ~pc ~halted ~ime =
     {
       registers;

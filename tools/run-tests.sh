@@ -623,6 +623,47 @@ PY
 fi
 }
 
+sec_emu() {
+# an emulator as a service (doc/decisions/retro-emulators.md): the package
+# zxspectrum's program without a window (tests/emu: built from its
+# sources, on a disk with the ROM), then emutest.byte, which finds zx<pid>
+# and drives it through emu/1: the ROM's message read from the screen,
+# PRINT 2+2 typed and its 4 read back, registers, memory, a disassembly,
+# a screenshot, breakpoints, watchpoints, waits, a state saved and loaded
+if [ -f tests/emu/emu.img ] && [ -f system/ramdisk.dsk ]; then
+    cp tests/emu/emu.img "$tmp/emu.img"
+    : > "$tmp/logemu"
+    DISK=$tmp/emu.img MEM=256 tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        system/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$tmp/logemu" \
+           -monitor "unix:$tmp/mon-emu,server,nowait" &
+    qemu=$!
+    i=0
+    while [ $i -lt 30 ] && ! grep -aq 'mynos:/' "$tmp/logemu" 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    tools/type-keys.py "$tmp/mon-emu" '/disk/zx/zxspectrum.byte --headless &\n'
+    sleep 2
+    tools/type-keys.py "$tmp/mon-emu" '/disk/zx/emutest.byte\n'
+    i=0
+    while [ $i -lt 120 ] && ! grep -aq 'emu: all checks passed\|emu: some checks FAILED\|PANIC' "$tmp/logemu"; do
+        sleep 1; i=$((i + 1))
+    done
+    # camlboy too: the Game Boy through the same protocol
+    tools/type-keys.py "$tmp/mon-emu" '/disk/gb/camlboy.byte --headless /disk/gb/tobutobugirl.gb &\n'
+    sleep 2
+    tools/type-keys.py "$tmp/mon-emu" '/disk/gb/emutest_gb.byte\n'
+    i=0
+    while [ $i -lt 120 ] && ! grep -aq 'emu-gb: all checks passed\|emu-gb: some checks FAILED\|PANIC' "$tmp/logemu"; do
+        sleep 1; i=$((i + 1))
+    done
+    printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-emu" >/dev/null || true
+    wait $qemu || true
+    cat "$tmp/logemu" >> "$part"
+fi
+}
+
 sec_reboots() {
 # restarting again and again (shutdown -r): after a reset memory holds the
 # previous run's data, which the kernel once read as its own (a page given
@@ -1544,7 +1585,7 @@ for lane in ${LANES:-$lanes_all}; do
         case $lane in
             a) timed sec_first; timed sec_effects; timed sec_storage; timed sec_fat; timed sec_domains; timed sec_threads; timed sec_fpu; timed sec_smp ;;
             b) timed sec_mlib; timed sec_files; timed sec_libs; timed sec_stress; timed sec_spawn; timed sec_console ;;
-            c) timed sec_nocom2; timed sec_reboots; timed sec_virtio ;;
+            c) timed sec_nocom2; timed sec_reboots; timed sec_virtio; timed sec_emu ;;
             d) timed sec_gui ;;
             i) timed sec_gui2 ;;
             e) timed sec_net; timed sec_seventh_a ;;
@@ -1974,6 +2015,16 @@ if [ -n "$raspi" ]; then
     expect "usbkeys-ok"
     if [ -n "$usb_gui" ]; then echo "ok    usb: a USB mouse clicked the welcome window's Clock"
     else echo "FAIL  usb: a USB mouse clicked the welcome window's Clock"; fail=1; fi
+fi
+if [ -f tests/emu/emu.img ]; then
+    expect "zxspectrum: zx"
+    expect "emu: screen_text: the ROM's message                             ok"
+    expect "emu: keys: P 2 SS+K 2 ENTER, then 4 on the screen               ok"
+    expect "emu: break 02BF, frames 5: hit there                            ok"
+    expect "emu: watch write 5C78, wait: hit                                ok"
+    expect "emu: all checks passed"
+    expect "emu-gb: break 0040, frames 10: the VBlank interrupt        ok"
+    expect "emu-gb: all checks passed"
 fi
 reject "PANIC"
 reject "page fault (?)"

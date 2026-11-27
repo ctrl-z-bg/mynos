@@ -96,6 +96,7 @@ make -C services/fatfs
 make -C services/virtio
 make -C tests/storage
 make -C tests/fat
+make -C tests/emu
 make -C services/net
 make -C httpd
 make -C trace
