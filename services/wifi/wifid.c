@@ -273,6 +273,7 @@ static unsigned char tx_seq, tx_max = 4;
 static unsigned short reqid;
 static unsigned char frame[FRAME + 512];
 static int events;
+static void on_event(const unsigned char * p, int len);
 
 static void put32(unsigned char * p, unsigned int v)
 {
@@ -338,21 +339,25 @@ static int handle_frames(int want_id, unsigned char * out, int max, int * status
     if (m & 0x08) mynos_log("wifid: the firmware says it is ready\n");
   }
   if (!(st & I_HMB_FRAME_IND)) return -2;
+  /* every frame waiting (their interrupt is acknowledged: none is left) */
   while ((len = read_frame(frame)) > 0) {
     int ch = frame[5] & 0xF, off = frame[7];
     unsigned char * p = frame + off;
+    if (off < 12 || off > len) continue;
     if (ch == 0 && len >= off + 16) {
       unsigned int flags = get32(p + 8);
       int n = (int)get32(p + 4);
-      if ((int)(flags >> 16) != want_id) continue;
+      if (want_id < 0 || (int)(flags >> 16) != want_id) continue;
       *status = (int)get32(p + 12);
-      if (flags & 1) return -1;
+      if (flags & 1) { r = -1; continue; }
       if (n > len - off - 16) n = len - off - 16;
       if (n > max) n = max;
-      memcpy(out, p + 16, (size_t)n);
-      r = n;
-    } else if (ch == 1)
+      if (n > 0) memcpy(out, p + 16, (size_t)n);
+      r = n > 0 ? n : 0;
+    } else if (ch == 1) {
       events++;
+      on_event(p, len - off);
+    }
   }
   return r;
 }
@@ -380,7 +385,15 @@ static int dcmd(unsigned int cmd, int set, const void * data, int len, void * re
   return -1;
 }
 
-#define C_GET_VAR 262
+#define C_UP          2
+#define C_SET_INFRA   20
+#define C_SET_AUTH    22
+#define C_SET_SSID    26
+#define C_SET_WSEC    134
+#define C_SET_WPA_AUTH 165
+#define C_GET_VAR     262
+#define C_SET_VAR     263
+#define C_SET_WSEC_PMK 268
 
 /* an iovar read: "name\0" sent in a buffer of max bytes, the value back */
 static int get_var(const char * name, void * out, int max)
@@ -391,6 +404,249 @@ static int get_var(const char * name, void * out, int max)
   memset(b, 0, sizeof b);
   memcpy(b, name, (size_t)n);
   return dcmd(C_GET_VAR, 0, b, len, out, max);
+}
+
+/* an iovar set: "name\0" and its value */
+static int set_var(const char * name, const void * value, int len)
+{
+  static unsigned char b[2048];
+  unsigned char dummy[4];
+  int n = (int)strlen(name) + 1;
+  if (n + len > (int)sizeof b) return -1;
+  memcpy(b, name, (size_t)n);
+  memcpy(b + n, value, (size_t)len);
+  return dcmd(C_SET_VAR, 1, b, n + len, dummy, 0) < 0 ? -1 : 0;
+}
+
+static int set_int(unsigned int cmd, int v)
+{
+  unsigned char b[4], dummy[4];
+  put32(b, (unsigned int)v);
+  return dcmd(cmd, 1, b, 4, dummy, 0) < 0 ? -1 : 0;
+}
+
+static int set_var_int(const char * name, int v)
+{
+  unsigned char b[4];
+  put32(b, (unsigned int)v);
+  return set_var(name, b, 4);
+}
+
+/* ---- events (on channel 1: BDC's header, an Ethernet frame of type
+   0x886C, Broadcom's event message, big-endian) ---- */
+
+#define E_SET_SSID     0
+#define E_AUTH         3
+#define E_DEAUTH       5
+#define E_DEAUTH_IND   6
+#define E_ASSOC        7
+#define E_DISASSOC     11
+#define E_DISASSOC_IND 12
+#define E_LINK         16
+#define E_PSK_SUP      46
+#define E_ESCAN_RESULT 69
+#define S_PARTIAL      8
+
+static unsigned int be32(const unsigned char * p)
+{
+  return (unsigned int)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3];
+}
+
+struct bss { unsigned char bssid[6], ssid[33]; int channel, rssi, secured; };
+static struct bss bsses[48];
+static int nbss, scan_done, link_up, keyed, joined;
+
+static void scan_result(const unsigned char * d, int n)
+{
+  const unsigned char * b;
+  struct bss * x;
+  int i, len;
+  if (n < 12 + 82) return;
+  b = d + 12;                          /* (buflen, version, sync_id, bss_count) */
+  len = b[18] > 32 ? 32 : b[18];
+  for (i = 0; i < nbss; i++) if (!memcmp(bsses[i].bssid, b + 8, 6)) break;
+  if (i == nbss) {
+    if (nbss == 48) return;
+    nbss++;
+  }
+  x = &bsses[i];
+  memcpy(x->bssid, b + 8, 6);
+  memcpy(x->ssid, b + 19, (size_t)len);
+  x->ssid[len] = 0;
+  x->channel = (b[72] | b[73] << 8) & 0xFF;
+  x->rssi = (short)(b[78] | b[79] << 8);
+  x->secured = (b[16] & 0x10) != 0;    /* the capability's privacy bit */
+}
+
+static void on_event(const unsigned char * p, int len)
+{
+  const unsigned char * eth, * ev;
+  unsigned int type, status, reason, dlen, flags;
+  if (len < 4) return;
+  eth = p + 4 + p[3] * 4;
+  if (eth + 14 + 10 + 48 > p + len || eth[12] != 0x88 || eth[13] != 0x6C) return;
+  ev = eth + 14 + 10;
+  flags = (unsigned int)(ev[2] << 8 | ev[3]);
+  type = be32(ev + 4);
+  status = be32(ev + 8);
+  reason = be32(ev + 12);
+  dlen = be32(ev + 20);
+  if (ev + 48 + dlen > p + len) dlen = (unsigned int)(p + len - (ev + 48));
+  switch (type) {
+  case E_ESCAN_RESULT:
+    if (status == S_PARTIAL) scan_result(ev + 48, (int)dlen);
+    else scan_done = 1;
+    break;
+  case E_SET_SSID:
+    joined = status == 0;
+    mynos_log("wifid: join %s (status %u)\n", status == 0 ? "done" : "failed", status);
+    break;
+  case E_LINK:
+    link_up = flags & 1;
+    mynos_log("wifid: link %s (reason %u)\n", link_up ? "up" : "down", reason);
+    if (!link_up) keyed = 0;
+    break;
+  case E_PSK_SUP:
+    keyed = status == 6;
+    mynos_log("wifid: WPA2 %s (supplicant state %u, reason %u)\n",
+              keyed ? "keys installed" : "not done", status, reason);
+    break;
+  case E_DEAUTH: case E_DEAUTH_IND: case E_DISASSOC: case E_DISASSOC_IND:
+    mynos_log("wifid: disconnected (event %u, reason %u)\n", type, reason);
+    break;
+  case E_AUTH: case E_ASSOC:
+    if (status) mynos_log("wifid: %s failed (status %u, reason %u)\n",
+                          type == E_AUTH ? "authentication" : "association", status, reason);
+    break;
+  }
+}
+
+/* the events, for ms milliseconds (or until *flag) */
+static void poll_events(int ms, int * flag)
+{
+  unsigned char dummy[4];
+  int i, st;
+  for (i = 0; i < ms / 10 && !(flag && *flag); i++) {
+    handle_frames(-1, dummy, 0, &st);
+    mynos_sleep(10000);
+  }
+}
+
+/* ---- the radio's rules, a scan, a network joined ---- */
+
+/* the CLM blob, in pieces of 1400 bytes ("clmload": a 12-byte header,
+   its flags' first and last pieces, its type 2, the CLM) */
+static void clm_load(const unsigned char * d, long n)
+{
+  static unsigned char b[12 + 1400];
+  unsigned int flag = 0x1000 | 0x0002, st = 0;
+  long off = 0;
+  while (off < n) {
+    int chunk = n - off > 1400 ? 1400 : (int)(n - off);
+    if (off + chunk == n) flag |= 0x0004;
+    b[0] = flag; b[1] = flag >> 8;
+    b[2] = 2; b[3] = 0;
+    put32(b + 4, (unsigned int)chunk);
+    put32(b + 8, 0);
+    memcpy(b + 12, d + off, (size_t)chunk);
+    if (set_var("clmload", b, 12 + chunk) < 0) { mynos_log("wifid: the CLM not loaded\n"); return; }
+    flag &= ~0x0002u;
+    off += chunk;
+  }
+  if (get_var("clmload_status", &st, 4) >= 4 && st != 0)
+    mynos_log("wifid: the CLM's status %u\n", st);
+  else
+    mynos_log("wifid: the CLM loaded (%ld bytes)\n", n);
+}
+
+static void scan(void)
+{
+  unsigned char p[76];
+  int i, j;
+  memset(p, 0, sizeof p);
+  put32(p, 1);                         /* version */
+  p[4] = 1;                            /* start */
+  p[6] = 0x34; p[7] = 0x12;            /* the sync id */
+  memset(p + 44, 0xFF, 6);             /* any BSSID */
+  p[50] = 2;                           /* any BSS type */
+  p[51] = 0;                           /* active */
+  for (i = 52; i < 68; i += 4) put32(p + i, 0xFFFFFFFF);   /* the defaults' times */
+  nbss = 0;
+  scan_done = 0;
+  if (set_var("escan", p, sizeof p) < 0) { mynos_log("wifid: no scan\n"); return; }
+  poll_events(10000, &scan_done);
+  for (i = 1; i < nbss; i++)           /* the strongest first */
+    for (j = i; j > 0 && bsses[j].rssi > bsses[j - 1].rssi; j--) {
+      struct bss t = bsses[j]; bsses[j] = bsses[j - 1]; bsses[j - 1] = t;
+    }
+  mynos_log("wifid: %d networks%s\n", nbss, scan_done ? "" : " (the scan did not end)");
+  for (i = 0; i < nbss; i++)
+    mynos_log("wifid:   %-32s channel %3d, %4d dBm, %s\n",
+              bsses[i].ssid[0] ? (char *)bsses[i].ssid : "(hidden)", bsses[i].channel,
+              bsses[i].rssi, bsses[i].secured ? "secured" : "open");
+}
+
+/* /disk/wifi.env: SSID=, PASSPHRASE=, COUNTRY= (each line's value to its
+   end, as written) */
+static char env_ssid[33], env_pass[65], env_country[3];
+
+static void read_env(void)
+{
+  FILE * f = fopen("/disk/wifi.env", "r");
+  char line[160];
+  if (!f) return;
+  while (fgets(line, sizeof line, f)) {
+    char * v = strchr(line, '='), * e;
+    if (!v || line[0] == '#') continue;
+    *v++ = 0;
+    for (e = v + strlen(v); e > v && (e[-1] == '\n' || e[-1] == '\r'); ) *--e = 0;
+    if (!strcmp(line, "SSID")) snprintf(env_ssid, sizeof env_ssid, "%s", v);
+    else if (!strcmp(line, "PASSPHRASE")) snprintf(env_pass, sizeof env_pass, "%s", v);
+    else if (!strcmp(line, "COUNTRY")) snprintf(env_country, sizeof env_country, "%s", v);
+  }
+  fclose(f);
+}
+
+static void set_country(const char * cc)
+{
+  unsigned char b[12];
+  memset(b, 0, sizeof b);
+  b[0] = cc[0]; b[1] = cc[1];
+  put32(b + 4, 0xFFFFFFFF);            /* (its revision: the firmware's) */
+  b[8] = cc[0]; b[9] = cc[1];
+  if (set_var("country", b, sizeof b) == 0) mynos_log("wifid: country %s\n", cc);
+}
+
+/* WPA2-PSK with AES, the firmware's supplicant, the passphrase */
+static void join(const char * ssid, const char * pass)
+{
+  unsigned char pmk[133], s[36];
+  int n = (int)strlen(ssid);
+  if (*pass) {
+    set_int(C_SET_WSEC, 4);            /* AES */
+    set_var_int("sup_wpa", 1);
+    set_int(C_SET_WPA_AUTH, 0x80);     /* WPA2-PSK */
+    memset(pmk, 0, sizeof pmk);
+    pmk[0] = (unsigned char)strlen(pass);
+    pmk[2] = 1;                        /* a passphrase */
+    memcpy(pmk + 4, pass, strlen(pass));
+    mynos_sleep(10000);
+    if (dcmd(C_SET_WSEC_PMK, 1, pmk, sizeof pmk, s, 0) < 0)
+      mynos_log("wifid: the passphrase refused\n");
+  } else {
+    set_int(C_SET_WSEC, 0);
+    set_int(C_SET_WPA_AUTH, 0);
+  }
+  set_int(C_SET_INFRA, 1);
+  set_int(C_SET_AUTH, 0);              /* open system (WPA2 is above it) */
+  memset(s, 0, sizeof s);
+  put32(s, (unsigned int)n);
+  memcpy(s + 4, ssid, (size_t)n);
+  mynos_log("wifid: joining \"%s\" (%s)\n", ssid, *pass ? "WPA2" : "open");
+  if (dcmd(C_SET_SSID, 1, s, sizeof s, pmk, 0) < 0) return;
+  poll_events(15000, *pass ? &keyed : &link_up);
+  if (*pass ? keyed : link_up) mynos_log("wifid: connected to \"%s\"\n", ssid);
+  else mynos_log("wifid: not connected to \"%s\" (in 15 s)\n", ssid);
 }
 
 /* ---- the board ---- */
@@ -505,5 +761,31 @@ int main(void)
   if (n >= 6)
     mynos_log("wifid: MAC address %02x:%02x:%02x:%02x:%02x:%02x (%d events so far)\n",
               check[0], check[1], check[2], check[3], check[4], check[5], events);
+  /* the radio's rules, the country, the events wanted, the radio up */
+  {
+    long clmlen;
+    unsigned char * clm;
+    unsigned char mask[16];
+    static const int wanted[] = { E_SET_SSID, 1, E_AUTH, E_DEAUTH, E_DEAUTH_IND, E_ASSOC,
+                                  E_DISASSOC, E_DISASSOC_IND, E_LINK, E_PSK_SUP,
+                                  E_ESCAN_RESULT };
+    snprintf(name, sizeof name, "brcmfmac%s-sdio.clm_blob", chip);
+    clm = load(name, &clmlen);
+    if (clm) { clm_load(clm, clmlen); free(clm); }
+    else mynos_log("wifid: no CLM in " WIFI_DIR "\n");
+    read_env();
+    if (env_country[0] && env_country[1]) set_country(env_country);
+    memset(mask, 0, sizeof mask);
+    if (get_var("event_msgs", mask, sizeof mask) < 0) memset(mask, 0, sizeof mask);
+    for (i = 0; i < sizeof wanted / sizeof wanted[0]; i++)
+      mask[wanted[i] / 8] |= (unsigned char)(1 << (wanted[i] % 8));
+    if (set_var("event_msgs", mask, sizeof mask) < 0) mynos_log("wifid: events not set\n");
+    if (set_int(C_UP, 1) < 0) { mynos_log("wifid: the radio not up\n"); return 0; }
+  }
+  scan();
+  if (env_ssid[0]) join(env_ssid, env_pass);
+  else mynos_log("wifid: no network to join (/disk/wifi.env: SSID=, PASSPHRASE=, COUNTRY=)\n");
+  /* the events, from now on */
+  for (;;) poll_events(1000, NULL);
   return 0;
 }

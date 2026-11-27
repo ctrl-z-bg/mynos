@@ -281,11 +281,16 @@ int sdio_init(void)
   mmc = mynos_mapPhysical(MMC_PHYS, 1);
   if (!gpio || !mmc) { mynos_log("wifid: cannot map the SDHCI\n"); return -1; }
   /* the chip off, the pins, the chip on (as Linux's mmc-pwrseq-simple) */
-  if (wl_on(0) < 0) mynos_log("wifid: the firmware did not set WL_ON\n");
-  pins();
-  mynos_sleep(20000);
-  wl_on(1);
-  mynos_sleep(150000);
+  {
+    int off = wl_on(0), on;
+    pins();
+    mynos_sleep(20000);
+    on = wl_on(1);
+    mynos_sleep(150000);
+    if (off < 0 || on < 0)
+      mynos_log("wifid: the firmware did not set WL_ON (off: %s, on: %s)\n",
+                off < 0 ? "refused" : "done", on < 0 ? "refused" : "done");
+  }
   /* the controller: reset, powered (3.3 V), the card detected whatever
      its pin says (it is soldered), polled, 400 kHz */
   W(CONTROL1, 1u << 24);

@@ -2186,3 +2186,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   sdhcid share the Arasan controller rightly (QEMU's `raspi4b` has its
   SD card there). A USB mouse's wheel works (btq.8.7: report protocol,
   its report descriptor parsed).
+- **2026-11-27** — The Wi-Fi's first try on the Pi 400 (btq.9): the
+  CYW43456 found on SDIO (7 cores), its firmware loaded and started
+  (7.45.96.252), its MAC address read, at the first try. Next written:
+  the CLM loaded, a scan logged, a WPA2 network joined from
+  `/disk/wifi.env` (SSID=, PASSPHRASE=, COUNTRY=), its events logged;
+  wifid stays up.

@@ -62,11 +62,12 @@ wants the Wi-Fi.
 1. The chip powered, SDIO, its id; its cores from its enumeration ROM;
    the firmware and NVRAM written to its RAM, its ARM started; the fast
    clock, function 2; SDPCM (the frames' header) and BCDC (commands):
-   its version and MAC address. *Written, first try pending.*
+   its version and MAC address. *Done on a Pi 400, at the first try
+   (firmware 7.45.96.252).*
 2. The CLM loaded (`clmload`), the country set; a scan (`escan`): the
-   networks logged.
+   networks logged. *Written.*
 3. Joining a WPA2-PSK network (`wsec`, `wpa_auth`, `sup_wpa`,
-   `WLC_SET_WSEC_PMK`, `WLC_SET_SSID`), its events (link up, down).
+   `WLC_SET_WSEC_PMK`, `WLC_SET_SSID`), its events (link up, down). *Written.*
 4. The frames: Ethernet frames on SDPCM's data channel (with BDC's
    4-byte header), to and from netd; DHCP over the air.
 5. `wifi/1` and a `wifi` command: scan, join, status; the networks
