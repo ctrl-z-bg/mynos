@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<title>SVG</title>
+<style>
+  .icon { width: 32px; height: 32px; vertical-align: middle }
+  .blue { color: #1a5fb4 }
+  .wide { display: block; width: 200px; border: 1px solid #999 }
+</style>
+<svg style="display:none">
+  <symbol id="star" viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5 2 7.5-6.5-4.5-6.5 4.5 2-7.5L2 9h7z"/></symbol>
+  <symbol id="ring" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3"/></symbol>
+</svg>
+<h1>SVG</h1>
+<p>Shapes: <svg width="60" height="40"><rect x="2" y="2" width="36" height="36" fill="#e01b24"/><circle cx="48" cy="20" r="10" fill="#2ec27e"/></svg> a red square, a green circle.</p>
+<p class="blue">An icon in the text's colour: <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M3 12h18M12 3v18" stroke="currentColor" stroke-width="4"/></svg> (blue).</p>
+<p>From a sprite: <svg class="icon"><use href="#star"></use></svg> a star, sized by CSS; <span class="blue"><svg width="20" height="20"><use href="#ring"/></svg></span> a blue ring.</p>
+<svg class="wide" viewBox="0 0 100 20"><rect width="100" height="20" fill="#f6d32d"/><text x="5" y="14">text is not drawn</text></svg>
+<p>A block 200 wide, its height from the viewBox (40).</p>

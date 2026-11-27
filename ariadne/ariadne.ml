@@ -115,9 +115,12 @@ let load ?post url =
     session = Option.map snd scripts;
     times = [ "load", ms t0 t1; "decode", ms t1 t2; "parse", ms t2 t3; "css", ms t3 t4; "scripts", ms t4 t5 ] }
 
+(* a picture's URL: a data: URL as it is (an inline svg's), else resolved *)
+let resolve_pic l src = if String.starts_with ~prefix:"data:" src then src else Url.resolve l.base src
+
 (* a picture's own size, if it has arrived *)
 let pic_size l src =
-  let u = Url.resolve l.base src in
+  let u = resolve_pic l src in
   Mutex.protect pics_lock (fun () -> match Hashtbl.find_opt l.pics u with
       | Some (Some p) -> Some (p.nw, p.nh) | _ -> None)
 
@@ -236,7 +239,7 @@ let fetch_pictures l =
       (if Dom.is_html node "img" && !n < max_pics then
          match Layout.img_source ~vw:!fetch_width node with
          | Some src ->
-           let u = Url.resolve l.base src in
+           let u = resolve_pic l src in
            let fresh = Mutex.protect pics_lock (fun () -> register l u) in
            if fresh then (incr n; enqueue (Fetch (l, u)))
          | _ -> ());
@@ -245,7 +248,7 @@ let fetch_pictures l =
 (* a background picture's own size, if it has arrived; met for the first
    time (on screen), fetched before the others *)
 let pic_natural l src =
-  let u = Url.resolve l.base src in
+  let u = resolve_pic l src in
   let fetch = ref false in
   let r = Mutex.protect pics_lock (fun () ->
       match Hashtbl.find_opt l.pics u with
@@ -261,7 +264,7 @@ let pic_natural l src =
 
 (* a picture's pixels at w x h: drawn now if there, asked for if not *)
 let pic_image l src w h =
-  let u = Url.resolve l.base src in
+  let u = resolve_pic l src in
   let ask = ref None and first = ref false in
   let r = Mutex.protect pics_lock (fun () ->
       match Hashtbl.find_opt l.pics u with
@@ -280,7 +283,12 @@ let pic_image l src w h =
           Hashtbl.replace l.hurried u (); first := true
         end;
         None
-      | _ -> None) in
+      | None ->
+        (* not met before (an inline svg's): fetched first *)
+        if Hashtbl.length l.pics < max_pics && register l u then begin
+          Hashtbl.replace l.hurried u (); first := true
+        end;
+        None) in
   (match !ask with Some p -> enqueue (Scale (p, w, h)) | None -> ());
   if !first then enqueue ~first:true (Fetch (l, u));
   r
@@ -613,6 +621,18 @@ let window first =
                           if caret <> None then
                             Gfx.fill g (sx + 4 - shift + caret_px) (base - font.ascent) 1
                               (font.ascent + font.descent) color)
+                end
+              | Gradient { x; y; w; h; g = gr; clip } ->
+                let yy = top + y in
+                if yy + h > box_y && yy < box_y + box_h && w > 0 && h > 0 then begin
+                  incr drawn;
+                  let cx0, cy0, cx1, cy1 = Option.value clip ~default:(min_int, min_int, max_int, max_int) in
+                  List.iter (fun (bx, by, bw, bh, c) ->
+                      let x0 = max bx cx0 and y0 = max by cy0 in
+                      let x1 = min (bx + bw) cx1 and y1 = min (by + bh) cy1 in
+                      if x1 > x0 && y1 > y0 && c lsr 24 <> 0 then
+                        Gfx.fill g (box_x + x0) (top + y0) (x1 - x0) (y1 - y0) (c land 0xFFFFFF))
+                    (Layout.bands ~x ~y ~w ~h gr)
                 end
               | Bg { x; y; w; h; layer; tint; clip } ->
                 let yy = top + y in

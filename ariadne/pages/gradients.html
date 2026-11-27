@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<title>Gradients</title>
+<style>
+  div.g { height: 40px; margin: 8px 0; color: white; padding: 4px }
+  .lr { background: linear-gradient(to right, #1a5fb4, #e01b24) }
+  .tb { background-image: linear-gradient(#f6d32d, #26a269) }
+  .three { background: linear-gradient(45deg, red, white, blue) }
+  .conic { background: conic-gradient(#42505f 0 0) }
+  .band { margin: 8px 100px; padding: 8px; color: white;
+          border-image: conic-gradient(#42505f 0 0) fill 0/0/0 0; border-image-outset: 0 100vw }
+  .nofill { margin: 8px 100px; padding: 8px; border-image: conic-gradient(#42505f 0 0) 0/0/0 0;
+            border-image-outset: 0 100vw }
+  .line { height: 30px; margin: 8px 0; background: linear-gradient(0deg, grey 2px, #f7f7f7 0) }
+  .edge { margin: 8px 0; padding: 6px; border: 3px solid; border-image: linear-gradient(to right, #f75b00, #f75b00) 1 }
+</style>
+<h1>Gradients</h1>
+<div class="g lr">to the right, blue to red</div>
+<div class="g tb">to the bottom, yellow to green</div>
+<div class="g three">45deg, red, white, blue</div>
+<div class="g conic">a conic one of one colour</div>
+<div class="band">A band the width of the page (border-image's outset, fill), its box 100 px in from each side</div>
+<div class="nofill">Without fill and without a border: nothing painted</div>
+<div class="line">Stops with positions: a grey line 2 px at the bottom, #f7f7f7 above</div>
+<div class="edge">A border painted by border-image (orange, 3 px)</div>

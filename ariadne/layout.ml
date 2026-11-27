@@ -55,6 +55,8 @@ type item =
             clip : (int * int * int * int) option }
   | Control of { x : int; y : int; w : int; h : int; node : Dom.node; font : Fonts.font; color : int;
                  paint : bool }
+  | Gradient of { x : int; y : int; w : int; h : int; g : Style.gradient; clip : (int * int * int * int) option }
+      (** a gradient filling the box: the painter draws it in bands ({!bands}) *)
       (** a form control's box (its frame is Fills): the painter draws what
           it shows ({!Forms.shown}) unless [paint] is false (a button
           element, whose content is laid out); the window's clicks find it *)
@@ -132,6 +134,12 @@ let emit o it =
            Dynarray.add_last o.items_ (Bg { b with clip = Some (x0, y0, x1, y1) })
        | Control c ->
          if c.x < x1 && c.x + c.w > x0 && c.y < y1 && c.y + c.h > y0 then Dynarray.add_last o.items_ it
+       | Gradient gr ->
+         if gr.x < x1 && gr.x + gr.w > x0 && gr.y < y1 && gr.y + gr.h > y0 then
+           let clip = match gr.clip with
+             | Some (a, b, c, d) -> (max a x0, max b y0, min c x1, min d y1)
+             | None -> (x0, y0, x1, y1) in
+           Dynarray.add_last o.items_ (Gradient { gr with clip = Some clip })
        | Text t ->
          let w = Fonts.width t.font t.s in
          if t.y + t.font.descent > y0 && t.y - t.font.ascent < y1 && t.x < x1 && t.x + w > x0 then
@@ -160,7 +168,9 @@ let translate o m dx dy =
                                       clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) i.clip }
           | Bg b -> Bg { b with x = b.x + dx; y = b.y + dy;
                                 clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) b.clip }
-          | Control c -> Control { c with x = c.x + dx; y = c.y + dy })
+          | Control c -> Control { c with x = c.x + dx; y = c.y + dy }
+          | Gradient gr -> Gradient { gr with x = gr.x + dx; y = gr.y + dy;
+                                              clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) gr.clip })
     done;
     for i = m.mh to Dynarray.length o.hits_ - 1 do
       let h = Dynarray.get o.hits_ i in
@@ -391,18 +401,32 @@ let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
     let w, h = size 300 150 in
     Some (Box { w; h; label = Dom.name n; frame = true; img = None; ctl = None })
   | "svg" ->
-    (match st.width, st.height, a "width", a "height" with
-     | Auto, Auto, None, None -> None
-     | _ ->
-       let aw = Option.bind (a "width") float_of_string_opt and ah = Option.bind (a "height") float_of_string_opt in
-       let w, h = size (int_of_float (Option.value aw ~default:0.)) (int_of_float (Option.value ah ~default:0.)) in
-       Some (Box { w; h; label = ""; frame = false; img = None; ctl = None }))
+    (* drawn by imaged, as a data: URL (Svg): its size from CSS, else its
+       attributes, the other side from the viewBox's ratio; 300 x 150 *)
+    let num k = Option.bind (a k) (fun v ->
+        let v = String.trim v in
+        let v = if String.ends_with ~suffix:"px" v then String.sub v 0 (String.length v - 2) else v in
+        Option.map int_of_float (float_of_string_opt v)) in
+    let w = match st.width with Auto -> num "width" | l -> Some (px l ~of_:cw) in
+    let h = match st.height with Auto -> num "height" | l -> Some (px l ~of_:cw) in
+    let ratio = Svg.ratio n in
+    let w, h = match w, h, ratio with
+      | Some w, Some h, _ -> (w, h)
+      | Some w, None, Some r -> (w, int_of_float (Float.round (float w *. r)))
+      | Some w, None, None -> (w, 150)
+      | None, Some h, Some r when r > 0. -> (int_of_float (Float.round (float h /. r)), h)
+      | None, Some h, _ -> (300, h)
+      | None, None, Some r -> (300, int_of_float (300. *. r))
+      | None, None, None -> (300, 150) in
+    if w <= 0 || h <= 0 || not st.visible then None
+    else Some (Box { w; h; label = ""; frame = false; ctl = None;
+                     img = (if o.dry > 0 then Some "" else Some (Svg.data_url ~color:st.color ~w ~h n)) })
   | _ -> None
 
 (* a picture laid out as a block (a flex or grid item, display: block):
    its content size, and its src once its size is known *)
 let replaced o (n : Dom.node) (st : Style.t) ~cw =
-  if Dom.is_html n "img" || (Forms.kind n <> Forms.Not_control && not (Dom.is_html n "button")) then
+  if Dom.is_html n "img" || Dom.name n = "svg" || (Forms.kind n <> Forms.Not_control && not (Dom.is_html n "button")) then
     match atomic o n st ~cw with
     | Some (Box { w; h; img; _ }) -> Some (w, h, img)
     | _ -> None
@@ -787,8 +811,17 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
   if o.dry = 0 then Dynarray.add_last o.hits_ { hx = 0; hy = 0; hw = 0; hh = 0; hnode = n };
   (* the background first: its height is known after the content *)
   let has_bg = visible_color st.background && st.visible && not st.masked && not st.transparent && o.dry = 0 in
+  let paints = st.visible && not st.transparent && o.dry = 0 in
+  (* border-image's gradient (a band, widened by its outset), under all *)
+  let band_slot = Dynarray.length o.items_ in
+  let has_band = paints && st.border_image <> None in
+  if has_band then Dynarray.add_last o.items_ (Fill { x = 0; y = 0; w = 0; h = 0; color = 0 });
   let bg_slot = Dynarray.length o.items_ in
   if has_bg then Dynarray.add_last o.items_ (Fill { x = 0; y = 0; w = 0; h = 0; color = 0 });
+  (* a gradient background *)
+  let grad_slot = Dynarray.length o.items_ in
+  let has_grad = paints && not st.masked && st.bg.gradient <> None && st.bg.image = None in
+  if has_grad then Dynarray.add_last o.items_ (Fill { x = 0; y = 0; w = 0; h = 0; color = 0 });
   (* its background picture, or its mask (the background's colour through
      the picture's alpha): after the colour, before the content *)
   let picture = match st.masked, st.mask.image, st.bg.image with
@@ -858,6 +891,29 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
   o.clip <- saved_clip;
   if o.dry = 0 then Dynarray.set o.hits_ hit_slot { hx = bx; hy = y; hw = bw; hh = h; hnode = n };
   if has_bg then Dynarray.set o.items_ bg_slot (Fill { x = bx; y; w = bw; h; color = rgb st.background });
+  (match st.bg.gradient with
+   | Some g when has_grad ->
+     Dynarray.set o.items_ grad_slot
+       (Gradient { x = bx + b 3; y = y + b 0; w = max 0 (bw - b 1 - b 3); h = max 0 (h - b 0 - b 2); g; clip = o.clip })
+   | _ -> ());
+  (match st.border_image with
+   | Some g when has_band ->
+     let out i = px st.border_outset.(i) ~of_:o.vw in
+     let x0 = max 0 (bx - out 3) and x1 = min o.vw (bx + bw + out 1) in
+     let y0 = y - out 0 and y1 = y + h + out 2 in
+     let w = max 0 (x1 - x0) and hh = max 0 (y1 - y0) in
+     if st.border_fill then
+       (* the whole of it: a band, often the page's width (outset 100vw) *)
+       Dynarray.set o.items_ band_slot (Gradient { x = x0; y = y0; w; h = hh; g; clip = o.clip })
+     else if b 0 + b 1 + b 2 + b 3 > 0 then begin
+       (* the border's strips only, the gradient across the whole area *)
+       let strip sx sy sw sh =
+         if sw > 0 && sh > 0 then
+           emit o (Gradient { x = x0; y = y0; w; h = hh; g; clip = Some (sx, sy, sx + sw, sy + sh) }) in
+       strip x0 y0 w (b 0); strip x0 (y1 - b 2) w (b 2);
+       strip x0 y0 (b 3) hh; strip (x1 - b 1) y0 (b 1) hh
+     end
+   | _ -> ());
   (match picture with
    | Some (layer, tint) ->
      (* the padding box *)
@@ -865,7 +921,8 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
        (Bg { x = bx + b 3; y = y + b 0; w = max 0 (bw - b 1 - b 3); h = max 0 (h - b 0 - b 2); layer; tint;
              clip = o.clip })
    | None -> ());
-  if st.visible && not st.transparent && o.dry = 0 then begin
+  (* a border-image draws the border instead *)
+  if st.visible && not st.transparent && o.dry = 0 && st.border_image = None then begin
     (* a border's colour: currentcolor (-1), or 0xAARRGGBB; transparent ones are not drawn *)
     let c i = if st.border_color.(i) < 0 then st.color else rgb st.border_color.(i) in
     let shown i = b i > 0 && (st.border_color.(i) < 0 || visible_color st.border_color.(i)) in
@@ -1671,7 +1728,7 @@ let layout ?(image = fun _ -> None) ~width ~height (styles : Style.styles) (doc 
   (* positioned boxes may reach below the flow *)
   let bottom = Dynarray.fold_left (fun m it -> match it with
       | Fill f -> max m (f.y + f.h) | Text t -> max m (t.y + t.font.descent)
-      | Image i -> max m (i.y + i.h) | Bg _ | Control _ -> m) total o.items_ in
+      | Image i -> max m (i.y + i.h) | Bg _ | Control _ | Gradient _ -> m) total o.items_ in
   { items = Dynarray.to_array o.items_; links = Dynarray.to_array o.links_; height = max total bottom; background;
     anchors = o.anchors_; unsized = o.unsized_; hits = Dynarray.to_array o.hits_ }
 
@@ -1689,6 +1746,10 @@ let dump p =
         Printf.bprintf b "control %d,%d %dx%d %s%s%s\n" x y w h (Dom.name node)
           (if paint then " " ^ sh.text else "")
           (match sh.mark with `Check -> " [x]" | `Dot -> " (o)" | `None -> "")
+      | Gradient { x; y; w; h; g; _ } ->
+        Printf.bprintf b "gradient %d,%d %dx%d %.0fdeg %s\n" x y w h g.angle
+          (String.concat " " (List.map (fun (c, p) -> Printf.sprintf "#%08x%s" c (match p with
+               | Some (Style.Len (a, q)) -> Printf.sprintf "@%g+%g%%" a q | _ -> "")) g.stops))
       | Bg { x; y; w; h; layer; tint; _ } ->
         Printf.bprintf b "%s %d,%d %dx%d %s\n" (if tint = None then "bg" else "mask") x y w h
           (Option.value layer.image ~default:"")) p.items;
@@ -1730,3 +1791,77 @@ let tiles ~x ~y ~w ~h (l : Style.layer) ~natural:(nw, nh) =
     if List.length xs * List.length ys > 4000 then []
     else List.concat_map (fun ty -> List.map (fun tx -> (tx, ty, tw, th)) xs) ys
   end
+
+(* ---- gradients ---- *)
+
+(* a gradient's bands, for painters: (x, y, w, h, colour) filling the
+   box. Its axis: the one it travels further along across the box; its
+   stops placed along it (CSS's rules: missing positions spread between
+   their neighbours, none before the one before), each segment between two
+   stops a band of one colour if they are the same, else one every 3 px
+   (96 at most) *)
+let bands ~x ~y ~w ~h (g : Style.gradient) =
+  match g.stops with
+  | [] -> []
+  | [ (c, _) ] -> [ (x, y, w, h, c) ]
+  | stops ->
+    let a = g.angle *. Float.pi /. 180. in
+    let sx = Float.sin a and sy = -. Float.cos a in
+    let horizontal = Float.abs (float w *. sx) >= Float.abs (float h *. sy) in
+    let forward = if horizontal then sx >= 0. else sy >= 0. in
+    let len = if horizontal then w else h in
+    if len <= 0 then []
+    else begin
+      let n = List.length stops in
+      let cols = Array.of_list (List.map fst stops) in
+      let pos = Array.of_list (List.map (fun (_, p) -> Option.map (fun l -> float (px l ~of_:len)) p) stops) in
+      if pos.(0) = None then pos.(0) <- Some 0.;
+      if pos.(n - 1) = None then pos.(n - 1) <- Some (float len);
+      (* none before the one before *)
+      let mx = ref 0. in
+      Array.iteri (fun i p -> match p with
+          | Some v -> let v = Float.max v !mx in pos.(i) <- Some v; mx := v
+          | None -> ()) pos;
+      (* the missing ones spread evenly *)
+      let i = ref 0 in
+      while !i < n do
+        if pos.(!i) = None then begin
+          let j = ref !i in
+          while pos.(!j) = None do incr j done;
+          let a = Option.get pos.(!i - 1) and b = Option.get pos.(!j) in
+          for k = !i to !j - 1 do
+            pos.(k) <- Some (a +. (b -. a) *. float (k - !i + 1) /. float (!j - !i + 1))
+          done;
+          i := !j
+        end else incr i
+      done;
+      let p k = Option.get pos.(k) in
+      let mix c1 c2 t =
+        let ch sh = let a = (c1 lsr sh) land 255 and b = (c2 lsr sh) land 255 in
+          (a + int_of_float (Float.round (float (b - a) *. t))) land 255 in
+        (ch 24 lsl 24) lor (ch 16 lsl 16) lor (ch 8 lsl 8) lor ch 0 in
+      (* spans along the axis, from its start: (from, to, colour) *)
+      let spans = ref [] in
+      let add a b c =
+        let a = max 0 (int_of_float (Float.round a)) and b = min len (int_of_float (Float.round b)) in
+        if b > a then spans := (a, b, c) :: !spans in
+      add 0. (p 0) cols.(0);
+      for k = 0 to n - 2 do
+        let a = p k and b = p (k + 1) in
+        if b > a then begin
+          if cols.(k) = cols.(k + 1) then add a b cols.(k)
+          else begin
+            let m = max 1 (min 96 (int_of_float ((b -. a) /. 3.))) in
+            for q = 0 to m - 1 do
+              let t = (float q +. 0.5) /. float m in
+              add (a +. (b -. a) *. float q /. float m) (a +. (b -. a) *. float (q + 1) /. float m)
+                (mix cols.(k) cols.(k + 1) t)
+            done
+          end
+        end
+      done;
+      add (p (n - 1)) (float len) cols.(n - 1);
+      List.rev_map (fun (a, b, c) ->
+          let a, b = if forward then (a, b) else (len - b, len - a) in
+          if horizontal then (x + a, y, b - a, h, c) else (x, y + a, w, b - a, c)) !spans
+    end

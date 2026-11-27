@@ -1,0 +1,84 @@
+fill 0,21 800x458 #ffffff
+text 8,50 serif-bold 32 #000000 Gradients
+gradient 8,79 784x48 90deg #ff1a5fb4 #ffe01b24
+text 12,98 serif 16 #ffffff to
+text 28,98 serif 16 #ffffff the
+text 52,98 serif 16 #ffffff right,
+text 90,98 serif 16 #ffffff blue
+text 122,98 serif 16 #ffffff to
+text 138,98 serif 16 #ffffff red
+gradient 8,135 784x48 180deg #fff6d32d #ff26a269
+text 12,154 serif 16 #ffffff to
+text 28,154 serif 16 #ffffff the
+text 52,154 serif 16 #ffffff bottom,
+text 105,154 serif 16 #ffffff yellow
+text 153,154 serif 16 #ffffff to
+text 169,154 serif 16 #ffffff green
+gradient 8,191 784x48 45deg #ffff0000 #ffffffff #ff0000ff
+text 12,210 serif 16 #ffffff 45deg,
+text 59,210 serif 16 #ffffff red,
+text 87,210 serif 16 #ffffff white,
+text 131,210 serif 16 #ffffff blue
+gradient 8,247 784x48 180deg #ff42505f
+text 12,266 serif 16 #ffffff a
+text 23,266 serif 16 #ffffff conic
+text 62,266 serif 16 #ffffff one
+text 89,266 serif 16 #ffffff of
+text 106,266 serif 16 #ffffff one
+text 133,266 serif 16 #ffffff colour
+gradient 0,303 800x52 180deg #ff42505f
+text 116,326 serif 16 #ffffff A
+text 132,326 serif 16 #ffffff band
+text 167,326 serif 16 #ffffff the
+text 191,326 serif 16 #ffffff width
+text 231,326 serif 16 #ffffff of
+text 248,326 serif 16 #ffffff the
+text 272,326 serif 16 #ffffff page
+text 306,326 serif 16 #ffffff (border-image's
+text 410,326 serif 16 #ffffff outset,
+text 456,326 serif 16 #ffffff fill),
+text 488,326 serif 16 #ffffff its
+text 507,326 serif 16 #ffffff box
+text 535,326 serif 16 #ffffff 100
+text 563,326 serif 16 #ffffff px
+text 583,326 serif 16 #ffffff in
+text 599,326 serif 16 #ffffff from
+text 634,326 serif 16 #ffffff each
+text 116,344 serif 16 #ffffff side
+fill 0,21 0x0 #000000
+text 116,386 serif 16 #000000 Without
+text 172,386 serif 16 #000000 fill
+text 195,386 serif 16 #000000 and
+text 222,386 serif 16 #000000 without
+text 275,386 serif 16 #000000 a
+text 286,386 serif 16 #000000 border:
+text 336,386 serif 16 #000000 nothing
+text 389,386 serif 16 #000000 painted
+gradient 8,405 784x30 0deg #ff808080@2+0% #fff7f7f7@0+0%
+text 8,420 serif 16 #000000 Stops
+text 48,420 serif 16 #000000 with
+text 80,420 serif 16 #000000 positions:
+text 146,420 serif 16 #000000 a
+text 157,420 serif 16 #000000 grey
+text 189,420 serif 16 #000000 line
+text 217,420 serif 16 #000000 2
+text 229,420 serif 16 #000000 px
+text 249,420 serif 16 #000000 at
+text 265,420 serif 16 #000000 the
+text 289,420 serif 16 #000000 bottom,
+text 342,420 serif 16 #000000 #f7f7f7
+text 394,420 serif 16 #000000 above
+fill 0,21 0x0 #000000
+text 17,467 serif 16 #000000 A
+text 33,467 serif 16 #000000 border
+text 79,467 serif 16 #000000 painted
+text 130,467 serif 16 #000000 by
+text 150,467 serif 16 #000000 border-image
+text 240,467 serif 16 #000000 (orange,
+text 297,467 serif 16 #000000 3
+text 309,467 serif 16 #000000 px)
+gradient 8,443 784x36 90deg #fff75b00 #fff75b00
+gradient 8,443 784x36 90deg #fff75b00 #fff75b00
+gradient 8,443 784x36 90deg #fff75b00 #fff75b00
+gradient 8,443 784x36 90deg #fff75b00 #fff75b00
+height 487

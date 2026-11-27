@@ -196,8 +196,11 @@ Found in M5:
 - [x] `fetch` (`Response`, `Headers`), `XMLHttpRequest`, `URLSearchParams`, `FormData` (basic), `DOMParser` (a detached element): requests made by Ariadne (`Loader.fetch`: any method, headers, body; redirects; cookies), synchronous inside, their callbacks later; another origin's: no cookies, readable only if it allows it (Access-Control-Allow-Origin), only GET, HEAD, POST (no preflight); `data:` URLs anyone's. jsd runs pending jobs (promises, async functions) after each run, and the time waited for the browser does not count against a run's 5 s
 - [x] `IntersectionObserver`: every element observed reported in view soon after (scripts do not see the layout): Repubblica's lazy sections load at once; `ResizeObserver`, `MutationObserver` report nothing yet
 - [ ] Layout geometry for scripts (`getBoundingClientRect`, `offsetWidth`...): today zeros; then a real IntersectionObserver
-- [ ] Inline `<svg>` drawn (serialized, `<use>` resolved to its `<symbol>`, `currentColor` set, given to imaged): Repubblica's icons (their sprite now arrives by XMLHttpRequest)
-- [ ] Gradients (`linear-gradient`, `conic-gradient`...) as backgrounds, and `border-image` with one (Repubblica's top strip: `border-image: conic-gradient(#42505f 0 0)` with `border-image-outset: 0 100vw`, a full-width band)
+- [x] Inline `<svg>` drawn (`svg.ml`: serialized into a document of its own, `<use>` replaced by what it names, a lone symbol's viewBox the picture's, `currentColor` and the outer fill the element's colour; a data: URL, which goes the pictures' way to imaged); sized by CSS, its attributes, the viewBox's ratio, else 300 x 150. Repubblica's icons
+- [ ] SVG's `<text>` (NanoSVG draws none), CSS's `fill` and `stroke` on SVG elements
+- [x] Gradients: `linear-gradient` (direction, stops with positions, hard stops), `conic-` and `radial-` as one colour; as backgrounds, and as `border-image` (with `fill`: the box and its outset, Repubblica's full-width band; without: the border's strips, instead of the border); drawn in bands of one colour (`Layout.bands`)
+- [ ] Gradients: diagonals (drawn along the nearer axis), radial and conic ones, several layers
+- [ ] Repubblica: a white box over the top strip's video picture
 - [ ] Web fonts (`@font-face`: WOFF needs zlib, WOFF2 Brotli): Repubblica's Eugenio
 - [ ] Google: its home page is not centred (to look at); its results need scripts added by scripts
 - [ ] The host's renderer: protocol-relative picture URLs (`//host/...`) not downloaded

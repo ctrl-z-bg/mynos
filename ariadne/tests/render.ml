@@ -134,6 +134,12 @@ let () =
                 done
               done) (Fonts.glyphs font (List.hd (String.split_on_char '\n' sh.text)))
         | Layout.Control _ -> ()
+        | Layout.Gradient { x; y; w = gw; h = gh; g = gr; clip } ->
+          let cx0, cy0, cx1, cy1 = Option.value clip ~default:(min_int, min_int, max_int, max_int) in
+          List.iter (fun (bx, by, bw, bh, c) ->
+              let x0 = max bx cx0 and y0 = max by cy0 and x1 = min (bx + bw) cx1 and y1 = min (by + bh) cy1 in
+              if x1 > x0 && y1 > y0 && c lsr 24 <> 0 then fill x0 y0 (x1 - x0) (y1 - y0) (c land 0xFFFFFF))
+            (Layout.bands ~x ~y ~w:gw ~h:gh gr)
         | Layout.Bg { x; y; w = bw; h = bh; layer; tint; clip } ->
           (match layer.image with
            | Some src ->

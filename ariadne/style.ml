@@ -27,6 +27,12 @@ type line_height = Lh_normal | Lh_px of float | Lh_factor of float
 
 (* a picture painted in a box: background-image's, or mask-image's (its
    alpha, in the background's colour) *)
+(* a gradient: its direction (degrees, as CSS: 180 is to the bottom) and
+   its stops: a colour (0xAARRGGBB) and where (along the gradient: a
+   length or percentage; None: spread between its neighbours); conic and
+   radial ones as one colour, their stops' average *)
+type gradient = { angle : float; stops : (int * length option) list }
+
 type layer_size = Size_auto | Cover | Contain | Size of length * length   (* Auto: from the ratio *)
 type layer = {
   mutable image : string option;    (* its URL (resolved against its sheet's, if it had one) *)
@@ -35,10 +41,11 @@ type layer = {
   mutable pos_x : length;           (* a percentage: of the box less the picture *)
   mutable pos_y : length;
   mutable size : layer_size;
+  mutable gradient : gradient option;   (* a gradient instead of an image *)
 }
 
 let new_layer () = { image = None; rep_x = true; rep_y = true; pos_x = Len (0., 0.); pos_y = Len (0., 0.);
-                     size = Size_auto }
+                     size = Size_auto; gradient = None }
 let copy_layer l = { l with image = l.image }
 
 type t = {
@@ -106,6 +113,9 @@ type t = {
   mutable masked : bool;              (* a mask-image: the background is painted through it (mask) *)
   mutable bg : layer;                 (* background-image and the rest *)
   mutable shift : (length * length) option;  (* transform's translations (a percentage: of the box) *)
+  mutable border_image : gradient option;    (* border-image's source, when a gradient *)
+  mutable border_fill : bool;                (* border-image's fill: its middle painted too *)
+  mutable border_outset : length array;      (* border-image-outset: top, right, bottom, left *)
   mutable mask : layer;               (* mask-image and the rest *)
   mutable transparent : bool;         (* opacity: 0 here or on an ancestor: nothing painted *)
   mutable content : cv list option;   (* a ::before's or ::after's content *)
@@ -129,7 +139,8 @@ let initial () = {
   row_gap = Len (0., 0.); column_gap = Len (0., 0.);
   grid_columns = []; grid_rows = []; grid_areas = []; grid_area = []; grid_column = []; grid_row = [];
   border_spacing = 0.; border_collapse = false; masked = false; transparent = false;
-  content = None; caption_bottom = false; bg = new_layer (); mask = new_layer (); shift = None }
+  content = None; caption_bottom = false; bg = new_layer (); mask = new_layer (); shift = None;
+  border_image = None; border_fill = false; border_outset = Array.make 4 (Len (0., 0.)) }
 
 (* a child's start: the inherited properties from its parent, the others initial *)
 let inherit_from p =
@@ -557,9 +568,62 @@ let url_of (c : cv) = match c with
   | Func ("url", args) -> (match Css.trim args with [ Tok (String u) ] -> Some u | _ -> None)
   | _ -> None
 
-let layer_image (l : layer) v =
+let gradient_of ~current (c : cv) =
+  match c with
+  | Func (("linear-gradient" | "-webkit-linear-gradient" | "repeating-linear-gradient" | "conic-gradient"
+          | "radial-gradient" | "repeating-radial-gradient" | "repeating-conic-gradient" as f), args) ->
+    let parts = split_commas args in
+    let words p = List.filter_map (function Tok (Ident i) -> Some (String.lowercase_ascii i) | _ -> None) p in
+    let direction p =
+      match words p, List.filter (fun c -> c <> Tok Whitespace) p with
+      | "to" :: ws, _ ->
+        let has w = List.mem w ws in
+        Some (match has "top", has "bottom", has "left", has "right" with
+            | true, _, true, _ -> 315. | true, _, _, true -> 45. | _, true, true, _ -> 225. | _, true, _, true -> 135.
+            | true, _, _, _ -> 0. | _, true, _, _ -> 180. | _, _, true, _ -> 270. | _, _, _, true -> 90.
+            | _ -> 180.)
+      | _, [ Tok (Dimension (a, u)) ] ->
+        (match String.lowercase_ascii u with
+         | "deg" -> Some a | "turn" -> Some (a *. 360.) | "rad" -> Some (a *. 180. /. Float.pi)
+         | "grad" -> Some (a *. 0.9) | _ -> None)
+      | _ -> None in
+    let angle, stop_parts = match parts with
+      | first :: rest when f <> "conic-gradient" && f <> "radial-gradient" ->
+        (match direction first with Some a -> (a, rest) | None -> (180., parts))
+      | first :: rest when (match words first with ("from" | "at" | "circle" | "ellipse" | "closest-side"
+                                                   | "farthest-corner" | "closest-corner" | "farthest-side") :: _ -> true
+                                                  | _ -> false) -> (180., rest)
+      | _ -> (180., parts) in
+    (* each stop: its colour, and its positions (two: a stop twice) *)
+    let ctx = { vw = 0.; vh = 0.; root_fs = 16.; fs = 16.; parent_fs = 16. } in
+    let stops = List.concat_map (fun p ->
+        match List.filter (fun c -> c <> Tok Whitespace) p with
+        | c :: pos ->
+          (match color ~current [ c ] with
+           | Some col ->
+             (match List.filter_map (fun x -> match length ctx [ x ] with Some (Len _ as l) -> Some l | _ -> None) pos with
+              | [] -> [ (col, None) ]
+              | [ a ] -> [ (col, Some a) ]
+              | a :: b :: _ -> [ (col, Some a); (col, Some b) ])
+           | None -> [])
+        | [] -> []) stop_parts in
+    (match stops with
+     | [] -> None
+     | _ when f = "conic-gradient" || f = "radial-gradient" || f = "repeating-radial-gradient"
+              || f = "repeating-conic-gradient" ->
+       let n = List.length stops in
+       let avg sh = List.fold_left (fun a (c, _) -> a + ((c lsr sh) land 255)) 0 stops / n in
+       Some { angle = 180.; stops = [ ((avg 24 lsl 24) lor (avg 16 lsl 16) lor (avg 8 lsl 8) lor avg 0, None) ] }
+     | _ -> Some { angle; stops })
+  | _ -> None
+
+let layer_image ?(current = 0) (l : layer) v =
+  l.gradient <- None;
   match List.filter (fun c -> c <> Tok Whitespace) (first_layer v) with
-  | [ c ] -> (match url_of c with Some u -> l.image <- Some u | None -> l.image <- None)
+  | [ c ] ->
+    (match url_of c with
+     | Some u -> l.image <- Some u
+     | None -> l.image <- None; l.gradient <- gradient_of ~current c)
   | _ -> l.image <- None
 
 let layer_repeat (l : layer) words =
@@ -616,6 +680,7 @@ let layer_shorthand ctx (l : layer) v =
   let before, after = split [] v in
   let ps = parts before in
   l.image <- List.find_map (function [ c ] -> url_of c | _ -> None) ps;
+  l.gradient <- List.find_map (function [ c ] -> gradient_of ~current:0 c | _ -> None) ps;
   let words = List.filter_map (function [ Tok (Ident i) ] -> Some (String.lowercase_ascii i) | _ -> None) ps in
   layer_repeat l (List.filter is_repeat words);
   let position = List.filter (fun p ->
@@ -654,7 +719,39 @@ let rec apply ctx (s : t) (parent : t) name (v : cv list) =
     List.iter (fun p -> match color ~current:s.color p with Some c -> s.background <- c | None -> ()) (parts v);
     s.bg <- new_layer ();
     layer_shorthand ctx s.bg v
-  | "background-image" -> layer_image s.bg v
+  | "background-image" -> layer_image ~current:s.color s.bg v
+  | "border-image" | "-webkit-border-image" | "border-image-source" ->
+    (* the gradient (a full-width band's trick); the outset after the second / *)
+    let v' = List.filter (fun c -> c <> Tok Whitespace) v in
+    s.border_image <- (match v' with c :: _ -> gradient_of ~current:s.color c | [] -> None);
+    if name <> "border-image-source" then s.border_fill <- List.mem "fill" (idents v);
+    if name <> "border-image-source" then begin
+      let rec after_slashes n = function
+        | Tok (Delim "/") :: r -> if n = 1 then r else after_slashes (n - 1) r
+        | _ :: r -> after_slashes n r
+        | [] -> [] in
+      let outset = after_slashes 2 v in
+      let ls = List.filter_map (fun p -> length ctx p) (parts outset) in
+      let a = Array.make 4 (Len (0., 0.)) in
+      (match ls with
+       | [ x ] -> Array.fill a 0 4 x
+       | [ y; x ] -> a.(0) <- y; a.(2) <- y; a.(1) <- x; a.(3) <- x
+       | [ t; x; b ] -> a.(0) <- t; a.(1) <- x; a.(3) <- x; a.(2) <- b
+       | t :: r :: b :: l :: _ -> a.(0) <- t; a.(1) <- r; a.(2) <- b; a.(3) <- l
+       | [] -> ());
+      s.border_outset <- a
+    end
+  | "border-image-slice" -> s.border_fill <- List.mem "fill" (idents v)
+  | "border-image-outset" ->
+    let ls = List.filter_map (fun p -> length ctx p) (parts v) in
+    let a = Array.make 4 (Len (0., 0.)) in
+    (match ls with
+     | [ x ] -> Array.fill a 0 4 x
+     | [ y; x ] -> a.(0) <- y; a.(2) <- y; a.(1) <- x; a.(3) <- x
+     | [ t; x; b ] -> a.(0) <- t; a.(1) <- x; a.(3) <- x; a.(2) <- b
+     | t :: r :: b :: l :: _ -> a.(0) <- t; a.(1) <- r; a.(2) <- b; a.(3) <- l
+     | [] -> ());
+    s.border_outset <- a
   | "background-repeat" -> layer_repeat s.bg (idents (first_layer v))
   | "background-position" -> layer_position ctx s.bg (parts (first_layer v))
   | "background-size" -> layer_size ctx s.bg (parts (first_layer v))

@@ -1,0 +1,10 @@
+title: Gradients
+# Gradients
+to the right, blue to red
+to the bottom, yellow to green
+45deg, red, white, blue
+a conic one of one colour
+A band the width of the page (border-image's outset, fill), its box 100 px in from each side
+Without fill and without a border: nothing painted
+Stops with positions: a grey line 2 px at the bottom, #f7f7f7 above
+A border painted by border-image (orange, 3 px)

@@ -1,0 +1,6 @@
+title: SVG
+# SVG
+Shapes: a red square, a green circle.
+An icon in the text's colour: (blue).
+From a sprite: a star, sized by CSS; a blue ring.
+A block 200 wide, its height from the viewBox (40).
