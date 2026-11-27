@@ -4319,3 +4319,25 @@ looks for an MBR's first FAT partition.
 **Lesson.** A field read from a register dump needs its bit positions
 written down beside the code: the arithmetic is easy to get wrong. And
 lanes that share a directory need names of their own.
+
+## 2026-11-27 — Ending the graphical session without a mouse
+
+**Symptom.** On QEMU's Raspberry Pi (no mouse), `gui &` then `gui stop`
+stayed stuck for the user: the shell and the session's keys read one
+console, and the line went to the window in front.
+
+**Fix.** A key: Ctrl-Alt-End. consoled sends it in raw mode as xterm
+does (`ESC [ 1 ; 7 F`, the modifier 7: Ctrl and Alt), a serial terminal
+sends the same; displayd ends the session on it.
+
+**Two more findings on the way.** The sequence is 6 bytes: the first
+try compared 7 (and consoled sent the string's NUL too), and nothing
+happened. And from a serial terminal the bytes come as they come: a
+read of displayd's could end inside a sequence, whose ESC then counted
+as the Escape key and the rest as text. displayd now keeps an
+unfinished sequence for the next read; an ESC that nothing follows
+within 0.1 s is still Escape.
+
+**Lesson.** Count an escape sequence's bytes, don't guess them; and
+code that assumes "a read ends with a whole key" holds for one source
+(consoled's keyboard) and not for another (a terminal's bytes).

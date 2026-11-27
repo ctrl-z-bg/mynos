@@ -220,11 +220,15 @@ machine's one UART (which plays COM2: the log and a terminal's keys);
 `dev-aarch64` container's (without a window).
 
 **A Raspberry Pi.** `ARCH=aarch64 MACHINE=raspi3b tools/run-demo.sh`
-runs `kernel8.img` on QEMU's Raspberry Pi 3: its four processors, its
-1 GB, the console on the screen (the framebuffer) and the terminal (the
-UART), the disk on its SD card. It has no network, keyboard or mouse
-yet: the terminal is the keyboard. `tools/make-sd-raspi.sh` makes an SD
-card image for a real Pi 3 or Zero 2 W (`tmp/mynos-raspi.img`): the
+runs `kernel8.img` on QEMU's Raspberry Pi 3 (`MACHINE=raspi4b`: its Pi
+4, the same kernel): its four processors, its 1 GB, the console on the
+screen (the framebuffer) and the terminal (the UART), the disk on its SD
+card. It has no network, keyboard or mouse yet: the terminal is the
+keyboard, and Ctrl-Alt-End ends the graphical session. A real Pi has
+the same limits for now: they are MyNOS's drivers (USB, Ethernet,
+Wi-Fi), not QEMU's. `tools/make-sd-raspi.sh` makes an SD card image
+for a real Pi 3, Zero 2 W, 4 or 400 (`tmp/mynos-raspi.img`, 2 GB;
+`SIZE_MB` for another size): the
 Pi's firmware (downloaded once, at a fixed version, checked), its
 `config.txt`, the kernel and the modules, on one FAT32 partition that is
 also `/disk`. Written to a card (`dd`), it boots on the Pi; its terminal

@@ -163,8 +163,10 @@ el1:
 	ldr	x1, =BLOCK_DEVICE
 	str	x1, [x0]
 #ifdef MYNOS_RASPI
-	ldr	x1, =(0x40000000 | BLOCK_DEVICE)   /* the local peripherals' GB */
+	ldr	x1, =(0x40000000 | BLOCK_DEVICE)   /* a Pi 3's local peripherals' GB */
 	str	x1, [x0, #8]
+	ldr	x1, =(0xC0000000 | BLOCK_DEVICE)   /* a Pi 4's peripherals' and GIC's */
+	str	x1, [x0, #24]
 #else
 	ldr	x1, =(0x4000000000 | BLOCK_DEVICE)
 	str	x1, [x0, #(256 * 8)]

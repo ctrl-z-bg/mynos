@@ -2068,3 +2068,16 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `raspi3b`: the UART, the SD card, the console and the graphical
   session on the framebuffer, the power off (mynos-btq.7.4). A rare
   crash of the stress test on `virt` under the suites' load is mynos-4dz.
+- **2026-11-27** — Ctrl-Alt-End ends the graphical session (consoled sends
+  it as xterm does, `ESC [ 1 ; 7 F`; displayd ends the session): the Pi
+  has no mouse yet. displayd keeps an escape sequence a read ended in the
+  middle of (a serial terminal's bytes) for the next read. Lane j uses it.
+- **2026-11-27** — The Raspberry Pi 4 and 400's base (mynos-btq.8): the
+  same `kernel8.img` tells a Pi 4 from a Pi 3 by its processor and uses
+  its peripherals' addresses and its GIC-400; `sdhcid` drives the Pi 4's
+  EMMC2; the device tree's memory is read in its root's cells. On QEMU
+  `raspi4b` (`MACHINE=raspi4b`): the shell, four processors, the
+  framebuffer and `gui`, the SD card, the power off; the suite's lane j
+  boots it too. The SD card image has the Pi 4's and 400's firmware.
+  USB (PCIe, xHCI) and Ethernet (GENET) are next, on the board (QEMU's
+  model has none).

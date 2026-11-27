@@ -409,6 +409,9 @@ with `&` from `sh`.
   machine off: QEMU ends.
 - `gui stop`, typed in a terminal or anywhere else, ends the session
   like Exit.
+- **Ctrl-Alt-End** ends it like Exit too, from the keyboard: on a
+  screen without a mouse (a Raspberry Pi, for now), or from a serial
+  terminal (which sends it as `ESC [ 1 ; 7 F`).
 
 `shutdown` and `shutdown -r` (chapter 13) do the same from the shell:
 `init` ends the session first, then turns the machine off or restarts

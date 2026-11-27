@@ -10,13 +10,15 @@
 */
 
 /*
- * sdhcid: the SD card of a Raspberry Pi 3 or Zero 2 W (btq.7.3,
+ * sdhcid: the SD card of a Raspberry Pi (btq.7.3, btq.8,
  * doc/decisions/aarch64.md, choice 11), through its SDHCI controller
- * (Arasan's, "EMMC", at 0x3F300000), served as the block service "sd0",
+ * (a Pi 3's or Zero 2 W's: Arasan's, "EMMC", at 0x3F300000; a Pi 4's or
+ * 400's: EMMC2, at 0xFE340000), served as the block service "sd0",
  * protocol block/1, the same as ata's and vblkd's: fatfs uses any.
  *
- * The card's pins (GPIO 48-53) go to this controller (their function
- * ALT3; the firmware leaves them to the Broadcom SDHOST). Then the
+ * On a Pi 3 the card's pins (GPIO 48-53) go to this controller (their
+ * function ALT3; the firmware leaves them to the Broadcom SDHOST); a
+ * Pi 4's EMMC2 has the card's pins of its own. Then the
  * controller is reset, its clock set to 400 kHz, and the card
  * identified as the SD specification says (CMD0, CMD8, ACMD41, CMD2,
  * CMD3, CMD9 for its size, CMD7), then 4 data lines at 25 MHz at most.
@@ -37,8 +39,11 @@
 #define SECTOR   512
 #define MAXCOUNT 32
 
-#define GPIO_PHYS 0x3F200000UL
-#define EMMC_PHYS 0x3F300000UL
+#define GPIO_PHYS 0x3F200000UL           /* a Pi 3's */
+#define EMMC_PHYS 0x3F300000UL           /* a Pi 3's Arasan SDHCI */
+#define GPIO4_PHYS 0xFE200000UL          /* a Pi 4's */
+#define EMMC4_PHYS 0xFE300000UL          /* a Pi 4's Arasan SDHCI (the Wi-Fi's) */
+#define EMMC2_PHYS 0xFE340000UL          /* a Pi 4's EMMC2 (its card's own pins) */
 
 /* the registers, as 32-bit words */
 #define ARG2       0x00
@@ -86,6 +91,7 @@
 #define T_MULTI  (1u << 5)
 
 static volatile unsigned int * emmc, * gpio;
+static int pi4;                        /* (its GPIO's pulls are elsewhere) */
 static unsigned int rca;
 static int sdhc;                       /* block addresses (SDHC, SDXC) */
 static unsigned long long capacity;    /* sectors */
@@ -214,6 +220,7 @@ static void pins_to_sdhci(void)
   f5 = (f5 & ~0xFFFu) | 7u | (7u << 3) | (7u << 6) | (7u << 9);
   gpio[0x10 / 4] = f4;
   gpio[0x14 / 4] = f5;
+  if (pi4) return;                   /* (the BCM2711's pulls: not these registers) */
   gpio[0x94 / 4] = 2;                /* pull-up */
   spin(1000);
   gpio[0x9C / 4] = 0x3Eu << 17;      /* GPPUDCLK1: pins 49-53 (CMD, DAT0-3) */
@@ -354,16 +361,32 @@ int main(void)
 {
   int port;
 #ifdef __aarch64__
-  emmc = mynos_mapPhysical(EMMC_PHYS, 1);
-  gpio = mynos_mapPhysical(GPIO_PHYS, 1);
+  /* a Pi 4's EMMC2; else its Arasan SDHCI, where QEMU's raspi4b puts the
+     card (a real Pi 4's has its Wi-Fi there: tried only without a card in
+     the EMMC2); else a Pi 3's (the kernel maps only its own Pi's) */
+  if ((emmc = mynos_mapPhysical(EMMC2_PHYS, 1))) {
+    pi4 = 1;
+    if (card_init() < 0) {
+      emmc = mynos_mapPhysical(EMMC4_PHYS, 1);
+      gpio = mynos_mapPhysical(GPIO4_PHYS, 1);
+      if (emmc && gpio) pins_to_sdhci();
+      if (!emmc || !gpio || card_init() < 0) {
+        mynos_log("sdhcid: no SD card\n");
+        return 0;
+      }
+    }
+  } else if ((emmc = mynos_mapPhysical(EMMC_PHYS, 1)) &&
+             (gpio = mynos_mapPhysical(GPIO_PHYS, 1))) {
+    pins_to_sdhci();
+    if (card_init() < 0) {
+      mynos_log("sdhcid: no SD card\n");
+      return 0;
+    }
+  } else
+    emmc = NULL;
 #endif
-  if (!emmc || !gpio) {
+  if (!emmc) {
     mynos_log("sdhcid: no SD card controller (a Raspberry Pi's)\n");
-    return 0;
-  }
-  pins_to_sdhci();
-  if (card_init() < 0) {
-    mynos_log("sdhcid: no SD card\n");
     return 0;
   }
   port = mynos_registryRegister(SERVICE);

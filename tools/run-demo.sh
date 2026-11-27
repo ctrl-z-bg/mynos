@@ -23,7 +23,7 @@
 # tried before they are published.
 # ARCH=x86_64 runs the x86-64 build (tools/build-x86_64.sh), ARCH=aarch64
 # the AArch64 one (tools/build-aarch64.sh) on QEMU's virt machine (with
-# MACHINE=raspi3b on QEMU's Raspberry Pi 3, kernel8.img: the console on
+# MACHINE=raspi3b or raspi4b on QEMU's Raspberry Pi 3 or 4, kernel8.img: the console on
 # its screen too, its SD card the disk, no network yet): no text
 # screen there (a virtio GPU, for the graphical session: type gui), so
 # this terminal is its console (SERIAL=1); no sound, no KVM; QEMU from the
@@ -50,8 +50,8 @@ if [ "${ARCH:-i386}" = aarch64 ]; then
     # AArch64 (doc/decisions/aarch64.md): no text screen: the console on
     # this terminal; no Sound Blaster; the host's processor is not ARM
     export SERIAL=${SERIAL-1} SOUND= KVM=
-    # (QEMU's Raspberry Pi 3, MACHINE=raspi3b: no network yet)
-    [ "${MACHINE:-virt}" = raspi3b ] && export NET=
+    # (QEMU's Raspberry Pis, MACHINE=raspi3b or raspi4b: no network yet)
+    case ${MACHINE:-virt} in raspi*) export NET= ;; esac
 fi
 cd "$root"
 

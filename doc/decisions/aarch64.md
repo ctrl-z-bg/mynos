@@ -172,6 +172,19 @@ one that finds out: RAM's base is a constant of the kernel's numbering
   faults unaligned copies); the console is drawn again when the session
   ends.
 
+**The Pi 4 and 400 (btq.8)** run the same `kernel8.img`: the kernel
+tells the boards apart by the processor (MIDR's part number: a
+Cortex-A72 is a BCM2711, a Pi 4 or 400; a Cortex-A53 a BCM2837). On a
+Pi 4 the peripherals are at 0xFE000000 (the firmware's "low peripheral"
+mode), the interrupt controller a GIC-400 (`pic.c`'s GICv2, at its own
+addresses; its numbers translated to MyNOS's lines as on the Pi 3), the
+SD card on EMMC2 (an SDHCI: `sdhcid`). One SD card boots every model
+(each one's firmware files, device trees and `config.txt` side by side).
+QEMU's `raspi4b` (`MACHINE=raspi4b`) has no PCIe, so no USB and no
+Ethernet: those (the VL805's xHCI behind PCIe, GENET) are written on the
+board; and it puts the SD card on the Arasan controller, as a Pi 3's
+(`sdhcid` tries EMMC2 first, then that).
+
 The SD card is driven through the SDHCI controller (`sdhcid`, the block
 service `sd0`), whose driver the Pi 4 (EMMC2) and the Wi-Fi (SDIO,
 btq.9) want too; on the Zero 2 W, the Wi-Fi's SDIO then wants the

@@ -23,7 +23,7 @@
 #ifdef MYNOS_RASPI
 /* no text mode: the console drawn on the framebuffer (fbcon.c) */
 #define ARCH_TEXT_ON_FB
-#define ARCH_PIC_NAME   "the BCM2836 and BCM2835 interrupt controllers"
+#define ARCH_PIC_NAME   "a Raspberry Pi's interrupt controllers"
 #else
 #define ARCH_PIC_NAME   "the GICv2 interrupt controller"
 #endif
@@ -42,9 +42,8 @@
    0x3F000000), PCI's configuration space (ECAM). A Pi: the VideoCore's
    memory (its framebuffer), the peripherals, the local ones */
 #ifdef MYNOS_RASPI
-#define ARCH_DEVICE_PHYS_OK(P, N) \
-  ((P) >= ((unsigned long)__total_phy_pages << 12) && \
-   (P) + ((unsigned long)(N) << 12) <= 0x40040000UL)
+int raspi_device_ok(unsigned long p, unsigned long n);
+#define ARCH_DEVICE_PHYS_OK(P, N) raspi_device_ok((P), (N))
 #else
 #define ARCH_DEVICE_PHYS_OK(P, N) \
   ((((P) >= 0x08000000UL && (P) + ((unsigned long)(N) << 12) <= 0x3F000000UL) || \

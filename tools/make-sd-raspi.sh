@@ -1,9 +1,12 @@
 #!/bin/sh
-# An SD card image of MyNOS for a Raspberry Pi 3 or Zero 2 W (btq.7.4,
-# doc/decisions/aarch64.md, choice 11). One FAT32 partition (an MBR: the
+# An SD card image of MyNOS for a Raspberry Pi 3, Zero 2 W, 4 or 400
+# (btq.7.4, btq.8, doc/decisions/aarch64.md, choice 11): one kernel8.img,
+# which finds out which Pi it is on. One FAT32 partition (an MBR: the
 # Pi's boot ROM wants one), which is also MyNOS's /disk (sdhcid, fatfs):
-#   - the Pi's firmware: bootcode.bin, start.elf, fixup.dat, the device
-#     trees of the Pi 3 B, 3 B+ and Zero 2 W, the disable-bt overlay
+#   - the Pi's firmware: bootcode.bin, start.elf, fixup.dat (the Pi 3's
+#     and Zero 2 W's), start4.elf, fixup4.dat (the Pi 4's and 400's, whose
+#     boot loader is in their EEPROM), the device trees of the Pi 3 B,
+#     3 B+, Zero 2 W, 4 B and 400, the disable-bt overlay
 #     (the PL011 on GPIO 14 and 15, Bluetooth off), from
 #     github.com/raspberrypi/firmware at FW_TAG, checked against the
 #     sums below, kept in build/raspi-firmware/FW_TAG;
@@ -27,7 +30,8 @@ out=${1:-$root/tmp/mynos-raspi.img}
 FW_TAG=1.20260915
 fw=$root/build/raspi-firmware/$FW_TAG
 files="bootcode.bin start.elf fixup.dat bcm2710-rpi-3-b.dtb bcm2710-rpi-3-b-plus.dtb
-bcm2710-rpi-zero-2-w.dtb overlays/disable-bt.dtbo"
+bcm2710-rpi-zero-2-w.dtb start4.elf fixup4.dat bcm2711-rpi-4-b.dtb bcm2711-rpi-400.dtb
+overlays/disable-bt.dtbo"
 
 for f in build/aarch64/kernel8.img system/ramdisk.dsk services/registry/registry \
          services/fs/memrofs/memrofsd; do
@@ -49,6 +53,10 @@ done
 cd922193672e391b6194d6d94e34ffab6fc154205375fcfb362cad191f7f8aae  bcm2710-rpi-3-b.dtb
 d41256bdc25b09dbba0bcdb27592560561d39752ebb09c64e82a449e3271807d  bcm2710-rpi-3-b-plus.dtb
 ce3ca3176658cddfad2ef6414d858bad61ce5242382eb0755248ea0edfcb0783  bcm2710-rpi-zero-2-w.dtb
+560ead37044d849325755d3684ac1f74654b3ce6450604a42df6dd832cda9ede  start4.elf
+d181d5055daebac22513d6904fa9ce21d1e99b852cc391af095ade6f0b45c400  fixup4.dat
+75761b73c284e26623e4d1624bff13e67bce2ae620880efd81d6571a3739fcfb  bcm2711-rpi-4-b.dtb
+d750046f964db97ded3bffccafcc30f96336da7cf9f2e8b6575aef45c73ee3d2  bcm2711-rpi-400.dtb
 ea69d22dedc607fee75eec57d8a4cc0f0eab93cd75393e61a64c49fbac912d02  overlays/disable-bt.dtbo
 SUMS
 
@@ -60,7 +68,7 @@ trap 'rm -rf "$w"' EXIT
 (cd "$tree" && python3 tools/mkmodules.py "$w/mynos.mod" "$(tools/ocamlrun-path.sh)" \
     services/registry/registry services/fs/memrofs/memrofsd system/ramdisk.dsk)
 cat > "$w/config.txt" <<'CFG'
-# MyNOS on a Raspberry Pi 3 or Zero 2 W (tools/make-sd-raspi.sh)
+# MyNOS on a Raspberry Pi 3, Zero 2 W, 4 or 400 (tools/make-sd-raspi.sh)
 arm_64bit=1
 kernel=kernel8.img
 # the modules' archive where the kernel looks for it: 64 MB

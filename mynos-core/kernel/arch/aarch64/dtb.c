@@ -60,6 +60,7 @@ static void read_fdt(const uint8_t * fdt, uint64_t * mem, uint64_t * rd_start,
 {
   const uint8_t * s = fdt + be32(fdt + 8), * strings = fdt + be32(fdt + 12);
   int depth = 0, in_memory = 0, in_chosen = 0;
+  uint32_t acells = 2, scells = 1;              /* the root's (its #...-cells) */
   for (;;) {
     uint32_t token = be32(s);
     s += 4;
@@ -78,10 +79,13 @@ static void read_fdt(const uint8_t * fdt, uint64_t * mem, uint64_t * rd_start,
       uint32_t len = be32(s), nameoff = be32(s + 4);
       const char * pname = (const char *)strings + nameoff;
       const uint8_t * v = s + 8;
-      if (in_memory && streq(pname, "reg") && len >= 16)
-        *mem = be_cells(v + 8, 8);
-      else if (in_memory && streq(pname, "reg") && len == 8)
-        *mem = be32(v + 4);                        /* one cell each (a Pi's) */
+      if (depth == 1 && streq(pname, "#address-cells") && len == 4) acells = be32(v);
+      if (depth == 1 && streq(pname, "#size-cells") && len == 4) scells = be32(v);
+      /* the first region's size: after its address, in the root's cells
+         (virt: 2 and 2; a Pi 3: 1 and 1; a Pi 4: 2 and 1) */
+      if (in_memory && streq(pname, "reg") && acells <= 2 && scells >= 1 && scells <= 2 &&
+          len >= 4 * (acells + scells))
+        *mem = be_cells(v + 4 * acells, 4 * scells);
       if (in_chosen && streq(pname, "linux,initrd-start"))
         *rd_start = be_cells(v, len);
       if (in_chosen && streq(pname, "linux,initrd-end"))
@@ -99,6 +103,7 @@ static void read_fdt(const uint8_t * fdt, uint64_t * mem, uint64_t * rd_start,
 
 void arch_pci_assign(void);
 #ifdef MYNOS_RASPI
+void raspi_detect(void);
 void raspi_uart_init(void);
 unsigned long raspi_ram_size(void);
 void raspi_fb_init(void);
@@ -111,6 +116,7 @@ void arch_boot(uint64_t dtb)
   const uint8_t * fdt = PHYS_TO_VIRT(0);
   uint64_t mem = 0, rd_start = 0, rd_end = 0;
 #ifdef MYNOS_RASPI
+  raspi_detect();                           /* a Pi 3 or a Pi 4 (raspi.c) */
   raspi_uart_init();
   fdt = dtb && dtb < 0x3F000000UL ? PHYS_TO_VIRT(dtb) : 0;
   if (fdt && be32(fdt) == 0xd00dfeed) read_fdt(fdt, &mem, &rd_start, &rd_end);

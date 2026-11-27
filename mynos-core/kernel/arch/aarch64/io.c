@@ -35,7 +35,8 @@
 #include "io.h"
 
 #ifdef MYNOS_RASPI
-#define UART      0x3F201000UL          /* a Pi's PL011 (raspi.c) */
+extern unsigned long raspi_peri;
+#define UART      (raspi_peri + 0x201000UL)   /* a Pi's PL011 (raspi.c) */
 #else
 #define UART      0x09000000UL          /* PL011 */
 #endif

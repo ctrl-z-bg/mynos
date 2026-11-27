@@ -27,7 +27,8 @@
  * font, which stay as they were for when the session ends.
  *
  * Input: the PS/2 mouse (IRQ 12), with QEMU's vmmouse for absolute
- * coordinates when it is there (no pointer capture); keys from the console
+ * coordinates when it is there (no pointer capture); Ctrl-Alt-End ends
+ * the session (a screen without a mouse); keys from the console
  * service, read in raw mode while the session lasts, with their releases
  * (CONSOLE_RELEASES): a key event for each key, a key_up for each release.
  *
@@ -1548,6 +1549,7 @@ static void * keys_thread(void * arg)
 {
   struct termios saved, t;
   unsigned char buf[256];
+  int pend = 0;
   (void)arg;
   tcgetattr(0, &saved);
   t = saved;
@@ -1559,12 +1561,33 @@ static void * keys_thread(void * arg)
   tcsetattr(0, TCSANOW, &t);
   mynos_consoleKeyReleases(1);
   for (;;) {
-    int n = read(0, buf, sizeof buf), i = 0;
+    /* a sequence a read ended in the middle of (a serial terminal's
+       bytes come as they come), kept for the next: buf starts with it */
+    int got = read(0, buf + pend, sizeof buf - pend), n = pend + (got > 0 ? got : 0), i = 0;
+    pend = 0;
     pthread_mutex_lock(&lock);
     if (!active) { pthread_mutex_unlock(&lock); break; }
-    while (n > 0 && i < n && focus >= 0) {
+    while (n > 0 && i < n) {
       struct event e;
       int len = key_length(buf + i, n - i);
+      /* unfinished (ESC alone, or ESC [ without its final byte), and more
+         came just now: kept, to be whole after the next read; if nothing
+         more comes (0.1 s), it is what it is (ESC alone: Escape) */
+      if (got > 0 && buf[i] == 0x1B && i + len == n && n - i < 16 &&
+          (n - i == 1 || (buf[i + 1] == '[' &&
+                          !(buf[n - 1] >= 0x40 && buf[n - 1] <= 0x7E && n - i > 2)))) {
+        pend = n - i;
+        memmove(buf, buf + i, pend);
+        break;
+      }
+      /* Ctrl-Alt-End (consoled's, a terminal's ESC [ 1 ; 7 F): the
+         session ends, as the menu's last item (a screen without a
+         mouse: a Raspberry Pi's, for now) */
+      if (len == 6 && !memcmp(buf + i, "\033[1;7F", 6)) {
+        end_session();
+        break;
+      }
+      if (focus < 0) break;
       memset(&e, 0, sizeof e);
       if (release_text(buf + i, len, e.text)) e.kind = EV_KEY_UP;
       else {

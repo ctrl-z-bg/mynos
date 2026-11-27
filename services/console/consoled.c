@@ -75,6 +75,9 @@
 #define UNI 0x1000000
 /* an arrow, Home or End with Shift (selecting text: ESC [ 1 ; 2 A...) */
 #define SHIFTED 0x2000000
+/* End with Ctrl and Alt (ESC [ 1 ; 7 F, as xterm: displayd ends the
+   graphical session, for a screen without a mouse) */
+#define CTRL_ALT 0x4000000
 
 /* the line being edited (keyboard thread only), and the cursor in it
    (a byte offset, at the start of a character) */
@@ -450,6 +453,10 @@ static void raw_key(unsigned int c)
 {
   const char * seq = NULL;
   char b;
+  if (c & CTRL_ALT) {
+    if ((c & ~CTRL_ALT) == KEY_END) queue_input("\033[1;7F", 6, 0);
+    return;
+  }
   if (c & SHIFTED) {                   /* as xterm: the modifier 2 */
     switch (c & ~SHIFTED) {
     case KEY_UP:    seq = "\033[1;2A"; break;
@@ -521,6 +528,10 @@ static void queue_release(unsigned int num, char final)
 static void release_key(unsigned int c)
 {
   if (canon || !releases) return;
+  if (c & CTRL_ALT) {
+    if ((c & ~CTRL_ALT) == KEY_END) queue_release_mod(1, 7, 'F');
+    return;
+  }
   if (c & SHIFTED) {
     switch (c & ~SHIFTED) {
     case KEY_UP:    queue_release_mod(1, 2, 'A'); return;
@@ -592,7 +603,7 @@ static void key_typed(unsigned int c)
     raw_key(c);
     return;
   }
-  c &= ~SHIFTED;                       /* line editing: an arrow is an arrow */
+  c &= ~(SHIFTED | CTRL_ALT);          /* line editing: an arrow is an arrow */
   if (c == KEY_UP || c == CTRL_P) {
     history_move(-1);
   } else if (c == KEY_DOWN || c == CTRL_N) {
@@ -718,6 +729,8 @@ static void scancode(unsigned int key)
   if ((control_keys & CK_SHIFT) && (c == KEY_UP || c == KEY_DOWN || c == KEY_LEFT ||
 				    c == KEY_RIGHT || c == KEY_HOME || c == KEY_END))
     c |= SHIFTED;
+  else if ((control_keys & (CK_CTRL | CK_ALT)) == (CK_CTRL | CK_ALT) && c == KEY_END)
+    c |= CTRL_ALT;
   /* a key let go: its release, if its press sent something */
   if (key & 0x80) {
     unsigned int was = pressed[ext][key & 0x7F];

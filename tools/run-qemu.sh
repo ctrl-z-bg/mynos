@@ -21,7 +21,9 @@
 #            UART (a caller's two -serial: the second, COM2's, is kept),
 #            RAM 128 MB to 1 GB; the host's qemu-system-aarch64, or the
 #            dev-aarch64 container's (no window from there)
-#   MACHINE  aarch64: virt (the default) or raspi3b, QEMU's Raspberry Pi 3
+#   MACHINE  aarch64: virt (the default), raspi3b, QEMU's Raspberry Pi 3,
+#            or raspi4b, its Pi 4 (the same kernel8.img; 2 GB, the kernel
+#            uses 1; no PCIe in QEMU's model, so no USB, no Ethernet)
 #            (btq.7: build/aarch64/kernel8.img, the archive at 64 MB, its
 #            1 GB, its four processors; DISK its SD card; no network,
 #            keyboard or mouse yet)
@@ -69,7 +71,7 @@ case ${ARCH:-i386} in
             kernel=${KERNEL:-$root/build/x86_64/kernel.elf} ;;
     aarch64) qemu=qemu-system-aarch64 cpu=cortex-a72 smp=${SMP:-4}  # four processors, as x86-64
             kernel=${KERNEL:-$root/build/aarch64/kernel.elf}
-            if [ "${MACHINE:-virt}" = raspi3b ]; then   # its own processors (four A53)
+            if [ "${MACHINE:-virt}" = raspi3b ] || [ "${MACHINE:-virt}" = raspi4b ]; then   # its own processors
                 cpu= smp= kernel=${KERNEL:-$root/build/aarch64/kernel8.img}
             fi ;;
     *)      qemu=qemu-system-i386 cpu=qemu32,+rdrand,+rdseed smp=      # one processor
@@ -104,7 +106,7 @@ esac
 # virt always has here (keyboard, tablet, GPU) are not added twice
 if [ "${ARCH:-i386}" = aarch64 ]; then
     VIRTIO=1 audio= KVM= rom=,romfile=     # (no network boot ROM: no firmware)
-    [ "${MACHINE:-virt}" = raspi3b ] && NET=    # (a Pi 3's network is USB's: not yet)
+    case ${MACHINE:-virt} in raspi*) NET= ;; esac   # (a Pi's network: not yet)
     n=0
     for a; do [ "$a" = -serial ] && n=$((n + 1)); done
     drop=$((n >= 2)) skip= prev=
@@ -127,7 +129,7 @@ fi
 # the disk and the network card: virtio devices, or the PC's IDE and NE2000;
 # a Raspberry Pi's disk is its SD card (sdhcid; QEMU wants its size a
 # power of 2)
-if [ "${ARCH:-i386}" = aarch64 ] && [ "${MACHINE:-virt}" = raspi3b ]; then
+if [ "${ARCH:-i386}" = aarch64 ] && case ${MACHINE:-virt} in raspi*) true ;; *) false ;; esac; then
     disk_if=sd disk_dev=
 elif [ -n "${VIRTIO:-}" ]; then
     disk_if=none,id=vd disk_dev="-device virtio-blk-pci,drive=vd"
@@ -160,9 +162,10 @@ if [ "${ARCH:-i386}" = aarch64 ]; then
     IFS=$old_ifs
     # (virt's own network card, without NET, would want a boot ROM)
     nonic=; [ -z "${NET:-}" ] && nonic="-nic none"
-    if [ "${MACHINE:-virt}" = raspi3b ]; then
+    if [ "${MACHINE:-virt}" = raspi3b ] || [ "${MACHINE:-virt}" = raspi4b ]; then
         # (its RAM at 0: the archive at 64 MB, where kernel8.img looks)
-        set -- -M raspi3b -kernel "$kernel" -m 1G \
+        pimem=1G; [ "$MACHINE" = raspi4b ] && pimem=2G
+        set -- -M "$MACHINE" -kernel "$kernel" -m $pimem \
             -device "loader,file=$archive,addr=0x04000000,force-raw=on" "$@"
     else
     # shellcheck disable=SC2086

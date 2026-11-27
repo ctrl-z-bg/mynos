@@ -10,20 +10,23 @@
 */
 
 /*
- * The Raspberry Pi 3 and Zero 2 W (BCM2837; MYNOS_RASPI, btq.7,
- * doc/decisions/aarch64.md): what QEMU virt's GIC, PSCI and PL031 do
+ * The Raspberry Pis (MYNOS_RASPI, doc/decisions/aarch64.md, choice 11):
+ * the Pi 3 and Zero 2 W (BCM2837, btq.7) and the Pi 4 and 400 (BCM2711,
+ * btq.8), told apart at boot (raspi_detect: the peripherals' address,
+ * the interrupt controller); what QEMU virt's GIC, PSCI and PL031 do
  * there.
  *
  *   - the VideoCore's mailbox (property channel 8): RAM's size, later the
  *     framebuffer. Its buffer is given by its bus address (the
  *     uncached alias, 0xC0000000 | physical), cleaned out of the caches
  *     before and dropped from them after;
- *   - the interrupts: each processor's local controller (0x40000000:
+ *   - the interrupts, a Pi 3's: each processor's local controller (0x40000000:
  *     its generic timer, its four mailboxes, the GPU's interrupts routed
  *     to processor 0) and the BCM2835's controller of the GPU's (the
  *     peripherals'). The kernel keeps the GIC's numbers (pic.h): the
  *     timer 27, the IPI 0 (mailbox 0), MyNOS's line n 32 + n, n the
- *     peripheral's place in lines[];
+ *     peripheral's place in lines[]; a Pi 4's: its GIC-400 (pic.c),
+ *     the numbers translated the same way (lines4[]);
  *   - the other processors: the firmware's spin tables (0xD8 + 8 n: an
  *     address written there, an event, and processor n starts there at
  *     EL2, MMU off);
@@ -41,10 +44,52 @@
 #include "pic.h"
 #include "kutils.h"
 #include "mem/mem.h"
+#include "video.h"
 
-#define PERI        0x3F000000UL
-#define LOCAL       0x40000000UL
 #define R(A)        (*(volatile uint32_t *)DEVICE(A))
+
+/* ---- the model ----
+   From the processor (MIDR's part number), as early as anything: a
+   Cortex-A72 is a Pi 4 or 400 (BCM2711: the peripherals at 0xFE000000,
+   in "low peripheral" mode, the firmware's default; a GIC-400), a
+   Cortex-A53 a Pi 3 or Zero 2 W (BCM2837: the peripherals at
+   0x3F000000; the BCM2836's local controller at 0x40000000) */
+int raspi_pi4;
+unsigned long raspi_peri = 0x3F000000UL;
+#define PERI        raspi_peri
+#define LOCAL       0x40000000UL
+#define GIC4_DIST   0xFF841000UL
+#define GIC4_CPU    0xFF842000UL
+
+void gicv2_bases(unsigned long dist, unsigned long cpuif);
+void gicv2_init(void);
+void gicv2_cpu_init(void);
+void gicv2_enable(uint32_t intid);
+void gicv2_disable(uint32_t intid);
+void gicv2_sgi(uint32_t cpu, uint32_t sgi);
+uint32_t gicv2_ack(void);
+void gicv2_eoi(uint32_t iar);
+
+void raspi_detect(void)
+{
+  uint64_t midr;
+  __asm__ volatile ("mrs %0, midr_el1" : "=r"(midr));
+  raspi_pi4 = ((midr >> 4) & 0xFFF) == 0xD08;
+  if (raspi_pi4) {
+    raspi_peri = 0xFE000000UL;
+    gicv2_bases(GIC4_DIST, GIC4_CPU);
+  }
+}
+
+/* mapPhysical's devices (arch.h): the VideoCore's memory past the ARM's
+   (its framebuffer), and the peripherals (a Pi 3's local ones too) */
+int raspi_device_ok(unsigned long p, unsigned long n)
+{
+  unsigned long end = p + (n << 12);
+  if (end < p || p < ((unsigned long)__total_phy_pages << 12)) return 0;
+  if (end <= (raspi_pi4 ? 0x40000000UL : 0x40040000UL)) return 1;
+  return raspi_pi4 && p >= 0xFC000000UL && end <= 0x100000000UL;
+}
 
 /* ---- the mailbox ---- */
 
@@ -118,11 +163,13 @@ void raspi_uart_init(void)
   sel &= ~((7u << 12) | (7u << 15));
   sel |= (4u << 12) | (4u << 15);           /* ALT0: TXD0, RXD0 */
   R(GPIO + GPFSEL1) = sel;
-  R(GPIO + GPPUD) = 0;                      /* no pull-up or down */
-  delay_cycles(150);
-  R(GPIO + GPPUDCLK0) = (1u << 14) | (1u << 15);
-  delay_cycles(150);
-  R(GPIO + GPPUDCLK0) = 0;
+  if (!raspi_pi4) {                         /* (the BCM2711's pulls are elsewhere: */
+    R(GPIO + GPPUD) = 0;                    /* the firmware's are kept) */
+    delay_cycles(150);                      /* no pull-up or down */
+    R(GPIO + GPPUDCLK0) = (1u << 14) | (1u << 15);
+    delay_cycles(150);
+    R(GPIO + GPPUDCLK0) = 0;
+  }
   R(UART0 + 0x44) = 0x7FF;                  /* ICR: everything cleared */
   R(UART0 + 0x24) = 26;                     /* IBRD, FBRD: 115200 from 48 MHz */
   R(UART0 + 0x28) = 3;
@@ -154,7 +201,11 @@ void raspi_reset(int halt)
   for (;;) __asm__ volatile ("wfi");
 }
 
-/* ---- the interrupt controllers ---- */
+/* ---- the interrupt controllers ----
+   A Pi 3's: each processor's local controller and the BCM2835's for
+   the GPU's. A Pi 4's: the GIC-400 (pic.c), its interrupts' numbers
+   translated (the peripherals' are the GIC's 96 + the GPU's number:
+   lines4[]); the IAR each processor got, kept for its end */
 
 #define LOCAL_GPU_ROUTE   0x0C
 #define LOCAL_TIMER_CTL   0x40              /* + 4 n: bit 3, the virtual timer's IRQ */
@@ -180,6 +231,12 @@ void raspi_reset(int halt)
 static const signed char lines[16] = { -1, 57, 62, 56, 9, -1, -1, -1,
                                   -1, -1, -1, -1, -1, -1, -1, -1 };
 static uint32_t lines_on;
+/* a Pi 4's lines: the GIC's interrupt of each, -1 none. 1 the UART
+   (SPI 121), 2 the SD card's EMMC2 (SPI 126), 4 PCIe's INTA (SPI 143:
+   the USB's xHCI), 5 the Ethernet's GENET (SPI 157) */
+static const short lines4[16] = { -1, 153, 158, -1, 175, 189, -1, -1,
+                                  -1, -1, -1, -1, -1, -1, -1, -1 };
+static uint32_t last_iar[4];
 
 static uint32_t cpu_id(void)
 {
@@ -197,6 +254,13 @@ static void gpu_irq(int g, int on)
 
 void init_pics()
 {
+  lines_on = 0;
+  if (raspi_pi4) {
+    printk("(GIC-400) ");
+    gicv2_init();
+    return;
+  }
+  printk("(BCM2836 and BCM2835) ");
   R(IC + IC_DISABLE1) = 0xFFFFFFFF;
   R(IC + IC_DISABLE2) = 0xFFFFFFFF;
   R(IC + 0x24) = 0xFF;                      /* the basic ones too */
@@ -208,17 +272,20 @@ void init_pics()
 void gic_cpu_init(void)
 {
   uint32_t n = cpu_id();
+  if (raspi_pi4) { gicv2_cpu_init(); return; }
   R(LOCAL + LOCAL_TIMER_CTL + 4 * n) = SRC_CNTV;
   R(LOCAL + LOCAL_MBOX_CTL + 4 * n) = 1;
 }
 
 void gic_enable(uint32_t intid)
 {
+  if (raspi_pi4) { gicv2_enable(intid); return; }
   if (intid == GIC_TIMER) R(LOCAL + LOCAL_TIMER_CTL + 4 * cpu_id()) = SRC_CNTV;
 }
 
 void gic_sgi(uint32_t cpu, uint32_t sgi)
 {
+  if (raspi_pi4) { gicv2_sgi(cpu, sgi); return; }
   (void)sgi;
   __asm__ volatile ("dsb ishst" : : : "memory");
   R(LOCAL + LOCAL_MBOX_SET + 16 * cpu) = 1;
@@ -228,6 +295,7 @@ void enable_irq(ushort16_t irq_no)
 {
   if (irq_no >= 16) return;
   lines_on |= 1u << irq_no;
+  if (raspi_pi4) { if (lines4[irq_no] >= 0) gicv2_enable(lines4[irq_no]); return; }
   gpu_irq(lines[irq_no], 1);
 }
 
@@ -235,6 +303,7 @@ void disable_irq(ushort16_t irq_no)
 {
   if (irq_no >= 16) return;
   lines_on &= ~(1u << irq_no);
+  if (raspi_pi4) { if (lines4[irq_no] >= 0) gicv2_disable(lines4[irq_no]); return; }
   gpu_irq(lines[irq_no], 0);
 }
 
@@ -251,9 +320,24 @@ void disable_all_irqs()
 }
 
 /* the interrupt to serve, as the GIC would number it (1023: none) */
+static uint32_t gic4_ack(void)
+{
+  uint32_t iar = gicv2_ack(), id = iar & 0x3FF, i;
+  last_iar[cpu_id()] = iar;
+  if (id < 32 || id >= 1020) return id;
+  for (i = 0; i < 16; i++)
+    if (lines4[i] == (short)id) return GIC_SPI_BASE + i;
+  gicv2_disable(id);                        /* not MyNOS's: off, ended */
+  gicv2_eoi(iar);
+  return 1023;
+}
+
 uint32_t gic_ack(void)
 {
-  uint32_t n = cpu_id(), src = R(LOCAL + LOCAL_IRQ_SOURCE + 4 * n);
+  uint32_t n, src;
+  if (raspi_pi4) return gic4_ack();
+  n = cpu_id();
+  src = R(LOCAL + LOCAL_IRQ_SOURCE + 4 * n);
   if (src & SRC_CNTV) return GIC_TIMER;
   if (src & SRC_MBOX0) {
     R(LOCAL + LOCAL_MBOX_CLR + 16 * n) = 0xFFFFFFFF;
@@ -270,9 +354,14 @@ uint32_t gic_ack(void)
   return 1023;
 }
 
-void gic_eoi(uint32_t iar) { (void)iar; }
+void gic_eoi(uint32_t iar)
+{
+  (void)iar;
+  if (raspi_pi4 && (iar & 0x3FF) < 1020) gicv2_eoi(last_iar[cpu_id()]);
+}
 
-/* no PCI on a Pi 3 (QEMU virt's: pci.c) */
+/* no PCI to assign here (QEMU virt's: pci.c); a Pi 4's PCIe, the
+   USB's, is its driver's */
 void arch_pci_assign(void) { }
 
 /* processor n started at [entry] (a physical address) by the
