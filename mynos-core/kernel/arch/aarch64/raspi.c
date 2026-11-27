@@ -217,22 +217,46 @@ static void put_mhz(uint32_t hz)
   print_ulong(hz / 1000000);
 }
 
+/* the clock as it is: the processor's cycles (PMCCNTR_EL0) in 10 ms of
+   the generic timer, in MHz */
+static uint32_t measured_mhz(void)
+{
+  uint64_t f, t0, t1, c0, c1, pmcr;
+  __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(f));
+  if (!f) return 0;
+  __asm__ volatile("mrs %0, pmcr_el0" : "=r"(pmcr));
+  __asm__ volatile("msr pmcr_el0, %0" :: "r"((pmcr | 1) & ~8ul));   /* E; no divider */
+  __asm__ volatile("msr pmcntenset_el0, %0" :: "r"(1ul << 31));     /* the cycle counter */
+  __asm__ volatile("isb; mrs %0, cntpct_el0; mrs %1, pmccntr_el0" : "=r"(t0), "=r"(c0));
+  do __asm__ volatile("isb; mrs %0, cntpct_el0" : "=r"(t1)); while (t1 - t0 < f / 100);
+  __asm__ volatile("mrs %0, pmccntr_el0" : "=r"(c1));
+  return (uint32_t)((c1 - c0) * f / (t1 - t0) / 1000000);
+}
+
 void raspi_cpu_clock(void)
 {
   uint32_t was = clock_tag(0x00030002, 0), max = clock_tag(0x00030004, 0),
-           min = clock_tag(0x00030007, 0), now = 0, th;
+           min = clock_tag(0x00030007, 0), before = measured_mhz(), set = 0, now, th;
   if (!was || !max) return;                 /* (QEMU: no such clock) */
-  if (max > was) now = clock_tag(0x00038002, max);
+  if (max > was) set = clock_tag(0x00038002, max);
+  now = clock_tag(0x00030002, 0);
   th = throttled();
   printk("ARM clock: ");
   put_mhz(was);
-  printk(" -> ");
-  put_mhz(now ? now : was);
-  printk(" MHz (min ");
-  put_mhz(min);
-  printk(", max ");
+  printk(" MHz (measured ");
+  print_ulong(before);
+  printk("), asked ");
   put_mhz(max);
-  printk(")");
+  printk(": answered ");
+  put_mhz(set);
+  printk(", now ");
+  put_mhz(now);
+  printk(" (measured ");
+  print_ulong(measured_mhz());
+  printk(", firmware's ");
+  put_mhz(clock_tag(0x00030047, 0));
+  printk("); min ");
+  put_mhz(min);
   if (th != ~0u && th) {
     printk(", throttled ");
     print_ulong_hex(th);
