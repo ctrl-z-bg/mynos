@@ -2192,3 +2192,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   the CLM loaded, a scan logged, a WPA2 network joined from
   `/disk/wifi.env` (SSID=, PASSPHRASE=, COUNTRY=), its events logged;
   wifid stays up.
+- **2026-11-27** — The Pi 400 joins the LAN's Wi-Fi network (associated,
+  link up) but its firmware has no WPA2 supplicant: the 4-way handshake
+  is now wifid's (`services/wifi/wpa.c`, its cryptography checked
+  against the standards' vectors), and SDPCM's credit is respected (the
+  firmware dropped commands beyond it). Second try pending.

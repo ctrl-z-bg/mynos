@@ -51,8 +51,15 @@ wants the Wi-Fi.
   radio's rules by country) from RPi-Distro's `firmware-nonfree` at a
   fixed commit, checks their sums and puts them in the card's `/wifi`
   (`/disk/wifi`). The Pi 4's CYW43455 files: later.
-- **WPA2 in the firmware** (its own supplicant: the passphrase given as
-  a PMK), not on the host: no 4-way handshake, no EAPOL in MyNOS.
+- **WPA2 on the host** (`wpa.c`). First chosen in the firmware (its own
+  supplicant, the passphrase given as a PMK: no EAPOL in MyNOS), but the
+  Pi 400's firmware answers `sup_wpa` with -23, unsupported: it
+  associates, and the AP's 4-way handshake times out (reason 15). The
+  handshakes are wifid's, as wpa_supplicant's on Linux: PBKDF2, the PRF,
+  HMAC-SHA1 MICs, AES key unwrap (SHA-1 and AES from mbedTLS, the rest
+  checked against the standards' test vectors), the keys given to the
+  firmware (`wsec_key`), our RSN element too (`wpaie`). WPA2-PSK with
+  CCMP only; no WPA3 (SAE).
 - **The network's name and passphrase** in `/disk/wifi.env`, written by
   the user on the Pi's card: never in git, never served (httpd serves
   only `/disk/web`, and never `.env` files).
@@ -65,9 +72,12 @@ wants the Wi-Fi.
    its version and MAC address. *Done on a Pi 400, at the first try
    (firmware 7.45.96.252).*
 2. The CLM loaded (`clmload`), the country set; a scan (`escan`): the
-   networks logged. *Written.*
-3. Joining a WPA2-PSK network (`wsec`, `wpa_auth`, `sup_wpa`,
-   `WLC_SET_WSEC_PMK`, `WLC_SET_SSID`), its events (link up, down). *Written.*
+   networks logged. *The CLM and the country work; the scan's command
+   was dropped (SDPCM's credit, below): written again.*
+3. Joining a WPA2-PSK network (`wsec`, `wpa_auth`, `wpaie`,
+   `WLC_SET_SSID`), the 4-way handshake on the host, the keys installed;
+   the events (link up, down). *Associating works on the Pi 400; the
+   host's handshake written.*
 4. The frames: Ethernet frames on SDPCM's data channel (with BDC's
    4-byte header), to and from netd; DHCP over the air.
 5. `wifi/1` and a `wifi` command: scan, join, status; the networks

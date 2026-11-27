@@ -55,6 +55,7 @@ services/sd/sdhcid
 system/sdhcid
 services/usb/usbd
 services/wifi/wifid
+services/wifi/mbedtls/
 system/usbd
 system/wifid
 services/net/netd

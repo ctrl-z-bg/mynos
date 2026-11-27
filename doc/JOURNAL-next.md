@@ -881,3 +881,33 @@ protocol as before. QEMU's mouse reports its wheel that way.
 
 **Lesson.** "This controller is the Wi-Fi's" is a fact of a board, not
 of a chip: ask the board's description, not the address.
+
+## 2026-11-27 — The Pi 400 joins a network, and the handshake times out
+
+**What the log said.** The CLM loaded, the country set, the join done,
+the link up; then `disconnected (event 6, reason 15)` (a deauthentication
+from the AP: reason 15 is "4-way handshake timeout"), again and again.
+Two commands had no answer at all (the scan, `SET_AUTH`); one failed
+with -23: `sup_wpa`.
+
+**Two causes.** -23 is the firmware's "unsupported": the Pi 400's
+firmware has no supplicant of its own, the one thing the design counted
+on (doc/decisions/wifi.md: corrected). The AP sent its first EAPOL-Key
+frame and nobody answered. The commands without an answer: SDPCM's
+credit. The firmware says in every frame's header up to which sequence
+number it will take frames; wifid ignored it, and after the CLM's six
+pieces sent in a row the firmware dropped what came beyond its window,
+silently.
+
+**Fix.** A frame waits for the firmware's credit (reading its frames
+meanwhile). The handshakes are the host's: `services/wifi/wpa.c`
+(PBKDF2-HMAC-SHA1, the 802.11i PRF, HMAC-SHA1 MICs, RFC 3394's unwrap;
+SHA-1 and AES from mbedTLS), checked on the host against IEEE 802.11's
+PBKDF2 vectors, RFC 2202's HMAC and RFC 3394's unwrap, and the PRF's
+test vector. EAPOL frames come on SDPCM's data channel, after BDC's
+header; they are queued and answered outside the frames' loop (the
+replies and the keys go through the same buffer as the commands).
+
+**Lesson.** A protocol's flow control is part of the protocol even when
+the first messages get through without it; and a firmware's feature is
+a fact to ask it (`cap`), not to assume from another firmware.

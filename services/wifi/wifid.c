@@ -48,6 +48,7 @@
 #include <string.h>
 #include <mynos.h>
 #include "sdio.h"
+#include "wpa.h"
 
 #define WIFI_DIR "/disk/wifi/"
 
@@ -274,6 +275,12 @@ static unsigned short reqid;
 static unsigned char frame[FRAME + 512];
 static int events;
 static void on_event(const unsigned char * p, int len);
+static int handle_frames(int want_id, unsigned char * out, int max, int * status);
+
+/* EAPOL frames received, handled after the frames' loop (their replies
+   and the keys go out through frame[]) */
+static unsigned char eapol[4][600];
+static int eapol_len[4], neapol;
 
 static void put32(unsigned char * p, unsigned int v)
 {
@@ -284,10 +291,29 @@ static unsigned int get32(const unsigned char * p)
   return p[0] | p[1] << 8 | p[2] << 16 | (unsigned int)p[3] << 24;
 }
 
-/* a frame on channel ch: its payload already at frame + 12 */
+/* the firmware's window: may a frame be sent (SDPCM's credit: the
+   sequence number below the last window it gave) */
+static int credit(void)
+{
+  unsigned char d = (unsigned char)(tx_max - tx_seq);
+  return d != 0 && !(d & 0x80);
+}
+
+/* a frame on channel ch: its payload already at frame + 12 (credit waited
+   for: a frame beyond the window is dropped by the firmware) */
 static int send_frame(int ch, int len)
 {
-  int total = len + 12, padded = (total + 3) & ~3;
+  int total = len + 12, padded = (total + 3) & ~3, i, st;
+  static unsigned char hold[FRAME + 512];
+  if (!credit()) {
+    memcpy(hold, frame, (size_t)total);   /* (the frames read go through frame[]) */
+    for (i = 0; i < 1000 && !credit(); i++) {
+      handle_frames(-1, hold + FRAME, 0, &st);
+      if (!credit()) mynos_sleep(1000);
+    }
+    memcpy(frame, hold, (size_t)total);
+    if (!credit()) mynos_log("wifid: no credit from the firmware (seq %u, max %u)\n", tx_seq, tx_max);
+  }
   if (padded > 512) padded = (padded + 511) & ~511;
   frame[0] = total; frame[1] = total >> 8;
   frame[2] = ~total; frame[3] = ~total >> 8;
@@ -357,6 +383,14 @@ static int handle_frames(int want_id, unsigned char * out, int max, int * status
     } else if (ch == 1) {
       events++;
       on_event(p, len - off);
+    } else if (ch == 2 && len - off > 4 + p[3] * 4 + 14) {
+      /* data: BDC's header, an Ethernet frame; EAPOL's kept */
+      const unsigned char * eth = p + 4 + p[3] * 4;
+      int n = len - off - 4 - p[3] * 4;
+      if (eth[12] == 0x88 && eth[13] == 0x8E && neapol < 4 && n <= 600) {
+        memcpy(eapol[neapol], eth, (size_t)n);
+        eapol_len[neapol++] = n;
+      }
     }
   }
   return r;
@@ -425,13 +459,6 @@ static int set_int(unsigned int cmd, int v)
   return dcmd(cmd, 1, b, 4, dummy, 0) < 0 ? -1 : 0;
 }
 
-static int set_var_int(const char * name, int v)
-{
-  unsigned char b[4];
-  put32(b, (unsigned int)v);
-  return set_var(name, b, 4);
-}
-
 /* ---- events (on channel 1: BDC's header, an Ethernet frame of type
    0x886C, Broadcom's event message, big-endian) ---- */
 
@@ -452,7 +479,7 @@ static unsigned int be32(const unsigned char * p)
   return (unsigned int)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3];
 }
 
-struct bss { unsigned char bssid[6], ssid[33]; int channel, rssi, secured; };
+struct bss { unsigned char bssid[6], ssid[33]; int channel, rssi, secured, group; };
 static struct bss bsses[48];
 static int nbss, scan_done, link_up, keyed, joined;
 
@@ -476,6 +503,16 @@ static void scan_result(const unsigned char * d, int n)
   x->channel = (b[72] | b[73] << 8) & 0xFF;
   x->rssi = (short)(b[78] | b[79] << 8);
   x->secured = (b[16] & 0x10) != 0;    /* the capability's privacy bit */
+  x->group = 0;
+  {                                    /* its RSN element's group cipher */
+    int io = b[116] | b[117] << 8, il = (int)get32(b + 120), at = io;
+    while (io && at + 2 <= io + il && 12 + at + 2 <= n) {
+      int t = b[at], l = b[at + 1];
+      if (12 + at + 2 + l > n) break;
+      if (t == 0x30 && l >= 8) { x->group = b[at + 7]; x->secured = 2; break; }
+      at += 2 + l;
+    }
+  }
 }
 
 static void on_event(const unsigned char * p, int len)
@@ -507,9 +544,7 @@ static void on_event(const unsigned char * p, int len)
     if (!link_up) keyed = 0;
     break;
   case E_PSK_SUP:
-    keyed = status == 6;
-    mynos_log("wifid: WPA2 %s (supplicant state %u, reason %u)\n",
-              keyed ? "keys installed" : "not done", status, reason);
+    mynos_log("wifid: the firmware's supplicant: state %u, reason %u\n", status, reason);
     break;
   case E_DEAUTH: case E_DEAUTH_IND: case E_DISASSOC: case E_DISASSOC_IND:
     mynos_log("wifid: disconnected (event %u, reason %u)\n", type, reason);
@@ -521,6 +556,62 @@ static void on_event(const unsigned char * p, int len)
   }
 }
 
+/* ---- WPA2's keys ---- */
+
+static unsigned char own_mac[6];
+
+/* an Ethernet frame on the data channel (BDC's header: version 2) */
+static int send_data(const unsigned char * eth, int n)
+{
+  unsigned char * p = frame + 12;
+  if (n > FRAME - 64) return -1;
+  p[0] = 0x20; p[1] = 0; p[2] = 0; p[3] = 0;
+  memcpy(p + 4, eth, (size_t)n);
+  return send_frame(2, 4 + n);
+}
+
+/* a key to the firmware ("wsec_key": brcmfmac's brcmf_wsec_key_le, 164
+   bytes): AES-CCM; a pairwise one with the AP's address */
+static int set_key(int index, const unsigned char * key, int len, const unsigned char * ea, int primary)
+{
+  unsigned char k[164];
+  memset(k, 0, sizeof k);
+  put32(k, (unsigned int)index);
+  put32(k + 4, (unsigned int)len);
+  memcpy(k + 8, key, (size_t)len);
+  put32(k + 112, 4);                   /* CRYPTO_ALGO_AES_CCM */
+  put32(k + 116, primary ? 2 : 0);     /* BRCMF_PRIMARY_KEY */
+  if (ea) memcpy(k + 156, ea, 6);
+  return set_var("wsec_key", k, sizeof k);
+}
+
+static void handle_eapol(void)
+{
+  static unsigned char reply[300], f[600];
+  struct wpa_keys k;
+  int i, r, n = 0, fl;
+  while (neapol > 0) {                 /* (a queue: more may come meanwhile) */
+    fl = eapol_len[0];
+    memcpy(f, eapol[0], (size_t)fl);
+    for (i = 1; i < neapol; i++) {
+      memcpy(eapol[i - 1], eapol[i], (size_t)eapol_len[i]);
+      eapol_len[i - 1] = eapol_len[i];
+    }
+    neapol--;
+    memset(&k, 0, sizeof k);
+    r = wpa_eapol(f, fl, reply, &n, &k);
+    if (r & WPA_REPLY) send_data(reply, n);
+    if ((r & WPA_PTK) && set_key(0, k.tk, 16, k.ap, 0) < 0)
+      mynos_log("wifid: the pairwise key not installed\n");
+    if ((r & WPA_GTK) && set_key(k.gtk_idx, k.gtk, k.gtk_len, NULL, 1) < 0)
+      mynos_log("wifid: the group key not installed\n");
+    if (r & WPA_PTK) {
+      keyed = 1;
+      mynos_log("wifid: WPA2 keys installed (group key %d)\n", k.gtk_idx);
+    }
+  }
+}
+
 /* the events, for ms milliseconds (or until *flag) */
 static void poll_events(int ms, int * flag)
 {
@@ -528,6 +619,7 @@ static void poll_events(int ms, int * flag)
   int i, st;
   for (i = 0; i < ms / 10 && !(flag && *flag); i++) {
     handle_frames(-1, dummy, 0, &st);
+    if (neapol) handle_eapol();
     mynos_sleep(10000);
   }
 }
@@ -583,7 +675,7 @@ static void scan(void)
   for (i = 0; i < nbss; i++)
     mynos_log("wifid:   %-32s channel %3d, %4d dBm, %s\n",
               bsses[i].ssid[0] ? (char *)bsses[i].ssid : "(hidden)", bsses[i].channel,
-              bsses[i].rssi, bsses[i].secured ? "secured" : "open");
+              bsses[i].rssi, bsses[i].secured == 2 ? "WPA2" : bsses[i].secured ? "secured" : "open");
 }
 
 /* /disk/wifi.env: SSID=, PASSPHRASE=, COUNTRY= (each line's value to its
@@ -617,22 +709,23 @@ static void set_country(const char * cc)
   if (set_var("country", b, sizeof b) == 0) mynos_log("wifid: country %s\n", cc);
 }
 
-/* WPA2-PSK with AES, the firmware's supplicant, the passphrase */
+/* WPA2-PSK with AES: the handshake on the host (wpa.c: the firmware has
+   no supplicant, "sup_wpa" unsupported), our RSN element given to the
+   firmware for the association */
 static void join(const char * ssid, const char * pass)
 {
-  unsigned char pmk[133], s[36];
-  int n = (int)strlen(ssid);
+  unsigned char s[36];
+  const unsigned char * rsn;
+  int n = (int)strlen(ssid), i, group = 4, rl;
   if (*pass) {
+    for (i = 0; i < nbss; i++)
+      if (!strcmp((char *)bsses[i].ssid, ssid) && bsses[i].group) { group = bsses[i].group; break; }
+    if (group != 4) mynos_log("wifid: the network's group cipher is %d, not CCMP\n", group);
+    wpa_start(ssid, pass, own_mac, group);
     set_int(C_SET_WSEC, 4);            /* AES */
-    set_var_int("sup_wpa", 1);
     set_int(C_SET_WPA_AUTH, 0x80);     /* WPA2-PSK */
-    memset(pmk, 0, sizeof pmk);
-    pmk[0] = (unsigned char)strlen(pass);
-    pmk[2] = 1;                        /* a passphrase */
-    memcpy(pmk + 4, pass, strlen(pass));
-    mynos_sleep(10000);
-    if (dcmd(C_SET_WSEC_PMK, 1, pmk, sizeof pmk, s, 0) < 0)
-      mynos_log("wifid: the passphrase refused\n");
+    rsn = wpa_ie(&rl);
+    if (set_var("wpaie", rsn, rl) < 0) mynos_log("wifid: the RSN element refused\n");
   } else {
     set_int(C_SET_WSEC, 0);
     set_int(C_SET_WPA_AUTH, 0);
@@ -643,7 +736,7 @@ static void join(const char * ssid, const char * pass)
   put32(s, (unsigned int)n);
   memcpy(s + 4, ssid, (size_t)n);
   mynos_log("wifid: joining \"%s\" (%s)\n", ssid, *pass ? "WPA2" : "open");
-  if (dcmd(C_SET_SSID, 1, s, sizeof s, pmk, 0) < 0) return;
+  if (dcmd(C_SET_SSID, 1, s, sizeof s, s, 0) < 0) return;
   poll_events(15000, *pass ? &keyed : &link_up);
   if (*pass ? keyed : link_up) mynos_log("wifid: connected to \"%s\"\n", ssid);
   else mynos_log("wifid: not connected to \"%s\" (in 15 s)\n", ssid);
@@ -758,6 +851,12 @@ int main(void)
     mynos_log("wifid: %s\n", ver);
   }
   n = get_var("cur_etheraddr", check, 6);
+  if (n >= 6) memcpy(own_mac, check, 6);
+  {
+    char cap[256];
+    memset(cap, 0, sizeof cap);
+    if (get_var("cap", cap, 255) > 0) { cap[255] = 0; mynos_log("wifid: capabilities: %s\n", cap); }
+  }
   if (n >= 6)
     mynos_log("wifid: MAC address %02x:%02x:%02x:%02x:%02x:%02x (%d events so far)\n",
               check[0], check[1], check[2], check[3], check[4], check[5], events);
