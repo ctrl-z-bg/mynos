@@ -227,7 +227,8 @@ All services are linked statically against `libmynos` and placed at
   `scheme` (OCS, R5RS, `third_party/ocs`), `camlboy` (CAMLBOY, a Game
   Boy emulator in OCaml, `third_party/camlboy`: 60 frames a second under
   KVM; it comes with Tobu Tobu Girl), `zxspectrum` (MyNOS's ZX Spectrum
-  48K, with GLAZX and Snake), `zork1`, `zork2`, `zork3` (Infocom's story
+  48K, with GLAZX and Snake), `msx` (MyNOS's MSX1, C-BIOS, with Westen
+  House), `zork1`, `zork2`, `zork3` (Infocom's story
   files, MIT since 2025, `third_party/zork`), `minotaur` (an original text adventure
   inside MyNOS). A package may give the agent
   a tool (`tool.json`: `wikipedia`, `calculate`) (mynos-vws).
@@ -1943,3 +1944,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   without. Tests: `tests/msx/run.sh` (host), sec_emu (lane c,
   `emutest_msx.byte`). An interrupt is now a step of its own, in the
   Spectrum too: a breakpoint on 0x0038 was never hit.
+- **2026-11-27** — Published to mynos-packages (bd5ed56): msx 1.0,
+  zxspectrum 1.1, camlboy 1.3, built from `retro` (f4e19c5); `glazx` and
+  `tobutobugirl` out of the index (their archives kept one generation).
+  The repository's README lists `zxspectrum` and `msx` with their games.
