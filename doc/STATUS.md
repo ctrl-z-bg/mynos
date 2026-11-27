@@ -1970,7 +1970,6 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   Under KVM: an IPC round trip 3.4 µs, a thread switch 1.1 µs, a
   program started 5.6 ms. Found on the way: /disk writes at 0.63 MB/s
   (mynos-ro7), an HTTP fetch from the host takes 1.5 s (mynos-yxl).
-  Not published yet.
 - **2026-11-27** — msx 2.0 (mynos-ccb): an MSX2 beside the MSX1 (`msx2`,
   `msx --msx2`). The VDP draws each line as the beam reaches it (split
   screens; not drawn without a window), the MSX1 unchanged; the V9938
@@ -1979,5 +1978,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   expanded, a 512 KB mapper, the RP5C01 clock; C-BIOS 0.29a's MSX2 ROMs
   (third_party/cbios). Tested with the owner's Robotron against
   openMSX's pictures: 164 frames a second under KVM. `Emu_frontend` got
-  a horizontal scale and `set_draw`. Not published; Robotron not in the
-  package (the owner decides).
+  a horizontal scale and `set_draw`. Robotron not in the package (the
+  owner's choice: no MSX2 game with it).
+- **2026-11-27** — Published to mynos-packages (8544170): msx 2.0 (`msx`
+  and `msx2` both commands) and bench 1.0, built from d57e6e4.
