@@ -14,6 +14,7 @@ for f in doc/manual/examples/*/*.ml; do
     case "$name" in
         othreads|keys) extra="-I +unix -I +threads unix.cma threads.cma -noautolink" ;;
         circles|tree) extra="-I graphics graphics.cma" ;;
+        hello_zx) extra="-I packages/retro packages/retro/emu_proto.mli packages/retro/emu_proto.ml" ;;
     esac
     ocamlc -use-prims $prims -I mynos-lib/ocaml -I "$(dirname "$f")" mynos.cma $extra \
         -o "$out/$name.byte" "$f"
@@ -25,5 +26,5 @@ for f in doc/manual/examples/*/*.c; do
         -Wl,-u,__stdio_read -Wl,-u,__stdio_write -Wl,-u,__stdout_write \
         -Wl,-u,__stdio_seek -Wl,-u,__stdio_close
 done
-rm -f doc/manual/examples/*/*.cm[io]
+rm -f doc/manual/examples/*/*.cm[io] packages/retro/*.cm[io]
 echo "examples: $(ls $out | wc -l) programs"

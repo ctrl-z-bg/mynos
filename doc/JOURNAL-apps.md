@@ -91,3 +91,24 @@ vector (0x0040) hit by `frames`, buttons, a screenshot, the refusals.
 **Lesson.** A protocol shared by machines that cannot all do everything
 is honest when a request a machine cannot serve fails with the reason:
 a caller (the agent) learns from the error what to ask instead.
+
+## 2026-11-27 — The manual's example of emu/1, three tries
+
+**Symptom.** `hello_zx` (the manual's chapter 25) typed a BASIC line and
+RUN, read the screen and stopped the machine at a breakpoint. In MyNOS:
+no `hello` on the screen, then `keys` answered "paused".
+
+**Causes.** Two, both in the example, not in the emulator. RUN was typed
+as soon as the line's ENTER was let go: the ROM was still putting the
+line into the program, and the R was lost (the same keys, run apart in
+a test without MyNOS, had frames between them). And the breakpoint was on
+the ROM's character printer, which the running program called at once:
+the machine stopped before the next `keys` arrived, and `keys` on a
+paused machine is an error by design.
+
+**Fix.** Ten frames after a line's ENTER (written in the chapter's
+section on keys); the breakpoint on the ROM's keyboard scan, which every
+interrupt calls, reached by `resume` and `wait`.
+
+**Lesson.** An example in a manual is a test that nobody runs: this one
+runs (built by `tools/build-examples.sh`, its output pasted from MyNOS).

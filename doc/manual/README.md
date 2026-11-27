@@ -53,6 +53,8 @@ Conventions:
 22. [The event recorder](22-recorder.md)
 23. [Writing a driver](23-writing-a-driver.md)
 24. [Reference pages](24-reference.md)
+25. [Emulators as services: emu/1](25-emulators.md) (after the printed
+    edition: not in `doc/book`)
 
 **Appendices — Architecture**
 
