@@ -43,6 +43,7 @@ struct context {
   char * out;                            /* console's text in this run */
   size_t out_len, out_cap;
   long deadline;                         /* ms, while running */
+  char dom[64];                          /* the DOM's service (the browser's), or "" */
 };
 
 static struct context ctxs[MAXCTX];
@@ -128,7 +129,70 @@ static int interrupt(JSContext * cx, void * opaque)
   return c->deadline > 0 && now_ms() > c->deadline;
 }
 
-static int new_context(int owner)
+/* __dom(op, ...args): the DOM's operation [op], at the browser's service
+   (protocol dom/1: one request, call (op:S, args:L<S>) -> L<S>); the
+   answer as an array of strings, an error thrown. The arguments are made
+   strings; the DOM's API over it is JavaScript (Ariadne's prelude) */
+#define DOM_PROTOCOL "dom/1"
+#define DOM_WAIT_MS 10000
+
+static JSValue dom_call(JSContext * cx, JSValueConst this, int argc, JSValueConst * argv)
+{
+  struct context * c = JS_GetContextOpaque(cx);
+  wire_writer w;
+  wire_reader r;
+  mynos_msg_t * msg;
+  int port, ch, i;
+  (void)this;
+  if (c->dom[0] == 0) return JS_ThrowReferenceError(cx, "no DOM in this context");
+  if (argc < 1) return JS_ThrowTypeError(cx, "__dom: no operation");
+  wire_writer_init(&w);
+  wire_put_cstring(&w, DOM_PROTOCOL);
+  wire_put_int(&w, 0);
+  for (i = 0; i < argc; i++) {
+    size_t n;
+    const char * s = JS_ToCStringLen(cx, &n, argv[i]);
+    if (!s) { wire_writer_free(&w); return JS_EXCEPTION; }
+    if (i == 1) wire_put_int(&w, argc - 1);          /* the arguments: a list */
+    wire_put_string(&w, s, (unsigned int)n);
+    JS_FreeCString(cx, s);
+  }
+  if (argc == 1) wire_put_int(&w, 0);
+  port = mynos_registryLookUp(c->dom);
+  if (w.error || port < 0 || (ch = mynos_connectToPort(port)) < 0) {
+    wire_writer_free(&w);
+    return JS_ThrowInternalError(cx, "the DOM's service is not there");
+  }
+  mynos_send(ch, w.buf, w.len, 0);
+  wire_writer_free(&w);
+  if (mynos_recv(ch, &msg, 0, DOM_WAIT_MS) < 0) {
+    mynos_freeChannel(ch);
+    return JS_ThrowInternalError(cx, "the DOM's service did not answer");
+  }
+  mynos_freeChannel(ch);
+  wire_reader_init(&r, msg->start, msg->size);
+  if (wire_get_int(&r) != 0) {
+    unsigned int n;
+    const char * m = wire_get_string(&r, &n);
+    JSValue e = r.error ? JS_ThrowPlainError(cx, "the DOM's service failed")
+                        : JS_ThrowPlainError(cx, "%.*s", (int)n, m);
+    mynos_freeMsg(&msg);
+    return e;
+  } else {
+    long long count = wire_get_int(&r), k;
+    JSValue arr = JS_NewArray(cx);
+    for (k = 0; k < count && !r.error; k++) {
+      unsigned int n;
+      const char * s = wire_get_string(&r, &n);
+      if (r.error) break;
+      JS_SetPropertyUint32(cx, arr, (uint32_t)k, JS_NewStringLen(cx, s, n));
+    }
+    mynos_freeMsg(&msg);
+    return arr;
+  }
+}
+
+static int new_context(int owner, const char * dom, unsigned int dom_len)
 {
   int i;
   struct context * c;
@@ -153,6 +217,11 @@ static int new_context(int owner)
   JS_SetPropertyStr(c->cx, console, "warn", JS_NewCFunctionMagic(c->cx, console_print, "warn", 1, JS_CFUNC_generic_magic, 1));
   JS_SetPropertyStr(c->cx, console, "error", JS_NewCFunctionMagic(c->cx, console_print, "error", 1, JS_CFUNC_generic_magic, 2));
   JS_SetPropertyStr(c->cx, global, "console", console);
+  if (dom_len > 0 && dom_len < sizeof c->dom) {
+    memcpy(c->dom, dom, dom_len);
+    c->dom[dom_len] = 0;
+    JS_SetPropertyStr(c->cx, global, "__dom", JS_NewCFunction(c->cx, dom_call, "__dom", 1));
+  }
   JS_FreeValue(c->cx, global);
   c->used = 1;
   c->id = next_id++;
@@ -240,8 +309,9 @@ static void owner_checks(void)
 /* ---- requests ---- */
 
 static const wire_request_doc requests[] = {
-  { 0, "create", "U", "context:I",
-    "A JavaScript context of its own (a page's): its globals, console; its memory and run time limited." },
+  { 0, "create", "dom:S", "context:I",
+    "A JavaScript context of its own (a page's): its globals, console; its memory and run time limited. "
+    "dom: the service (dom/1) its __dom(op, ...args) calls, or \"\": none." },
   { 0, "eval", "(context:I,code:S,name:S)", "(ok:B,value:S,console:S)",
     "Run code (a script; name: its file, for the stack) in the context: whether it ended without an "
     "exception, its value (or the exception, with the stack), and what console printed." },
@@ -282,9 +352,11 @@ static void handle(int ch, int caller, const char * msg, unsigned int len)
   switch (kind) {
   case 0: {                                        /* create */
     int i;
+    unsigned int dlen;
+    const char * dom = wire_get_string(&r, &dlen);
     wire_writer w;
     END();
-    if ((i = new_context(caller)) < 0) { reply_error(ch, "jsd: no more contexts"); return; }
+    if ((i = new_context(caller, dom, dlen)) < 0) { reply_error(ch, "jsd: no more contexts"); return; }
     wire_writer_init(&w);
     wire_reply_ok(&w);
     wire_put_int(&w, ctxs[i].id);

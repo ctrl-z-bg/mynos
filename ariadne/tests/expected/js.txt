@@ -1,0 +1,6 @@
+title: JavaScript
+# JavaScript (not run)
+A paragraph a timer changes.
+One, red.
+Two, blue.
+Scripts are off: this shows.

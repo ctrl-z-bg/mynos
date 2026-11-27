@@ -182,13 +182,16 @@ Found in M5:
 - [x] QuickJS-ng v0.18.0 copied into the repository (third_party/quickjs-ng, the library only), built with musl (x86-64 so far)
 - [ ] Built and checked on i386 and AArch64
 - [x] `jsd` (services/js): protocol `js/1` (create a context, eval, destroy), module `Js`; a runtime per context (64 MB, a stack limit, a run stopped after 5 s); the contexts of a program that ended freed; `ariadne --check-js` in tools/run-tests.sh
-- [ ] DOM nodes as handles: jsd calling back the browser (a port of Ariadne's) for the DOM's operations during a run
+- [x] DOM nodes as handles: jsd's `__dom(op, ...args)` calls Ariadne's service `dom/1` (one request: an operation, strings) during a run; `Dom_api` (in the core) does the operations, nodes answered as handle, type, name; an IPC round trip costs 130-210 µs under KVM, so the API does bulk work in one call (querySelectorAll, innerHTML)
 - [x] `console` (log, info, debug, warn, error): its text returned with each run
-- [ ] Timers (`setTimeout`, `setInterval`, `requestAnimationFrame`)
-- [ ] The core DOM: `document`, `querySelector`, attributes, `textContent`, creating and moving nodes
-- [ ] Events: `click`, `input`, `submit`, `DOMContentLoaded`, `load`
+- [x] Timers (`setTimeout`, `setInterval`, `requestAnimationFrame`): those due within the first second, run once the scripts have
+- [ ] Timers later on (a page left open): with events
+- [x] The core DOM (`js_prelude.ml`, JavaScript over `__dom`): `document`, `window`, `Node`, `Element`, `Text`; queries, attributes, `id`, `className`, `classList`, `dataset`, `style` (the attribute), `textContent`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`, creating, inserting, moving and removing nodes, form values; `location`, `navigator`, `localStorage` (in memory), `URL`; `<noscript>` not shown when scripts ran; `ARIADNE_NOJS` turns scripts off
+- [x] Events: `addEventListener`, `dispatchEvent` (bubbling), `DOMContentLoaded` and `load`
+- [ ] Events from the user: `click`, `input`, `submit` (the context kept while the page is shown; the DOM then under a lock)
 - [ ] `fetch` and `XMLHttpRequest`
-- [ ] Scripts in order: inline, `defer`, `async`
+- [x] Scripts in order, once the page is parsed (inline, `src`); Wikipedia's 4 run without an error (126 ms) and the page takes its `client-js` look
+- [ ] Scripts added by scripts (`createElement('script')`), `defer` and `async` as such, `type=module`, `document.write` while parsing
 - [ ] Layout again after the DOM changes (only what changed)
 
 ## Later

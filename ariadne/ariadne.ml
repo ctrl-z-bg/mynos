@@ -44,6 +44,7 @@ type loaded = {
   mutable sized : int;                            (* pictures whose size arrived (pics_lock) *)
   mutable laid_sized : int;                       (* ... when laid out *)
   times : (string * float) list;       (* the stages' times, in ms *)
+  console : string;                    (* what the page's scripts printed, their errors *)
 }
 
 let now = Unix.gettimeofday
@@ -93,15 +94,24 @@ let load ?post url =
         (match fetch_css u with Some t -> with_imports ~base:u ~depth:0 ?media t | None -> []))
       (Style.sources doc) in
   let t4 = now () in
+  (* the page's scripts (Scripts: jsd), before the cascade *)
+  let fetch_script u =
+    match Loader.load u with
+    | r when Loader.ok r -> Some (snd (Encoding.to_utf8 ?transport:(Encoding.charset_of_content_type r.content_type) r.body))
+    | _ -> None in
+  let scripts = Scripts.run ~log:(fun m -> trace "%s" m) ~url:response.url ~base ~width:878 ~height:600
+      ~fetch:fetch_script doc in
+  let t5 = now () in
   let title = match Dom.find (fun n -> Dom.is_html n "title") doc with
     | Some t -> String.trim (Text.collapse (Dom.text_content t)) | None -> "" in
   let ms a b = (b -. a) *. 1000. in
-  trace "page %s: load %.0f, decode %.0f, parse %.0f, css %.0f ms (%d sheets)" url (ms t0 t1) (ms t1 t2) (ms t2 t3)
-    (ms t3 t4) (List.length sheets);
+  trace "page %s: load %.0f, decode %.0f, parse %.0f, css %.0f ms (%d sheets), scripts %.0f ms" url
+    (ms t0 t1) (ms t1 t2) (ms t2 t3) (ms t3 t4) (List.length sheets) (ms t4 t5);
   { response; doc; base; sheets; title; laid = None; styled = None; pics = Hashtbl.create 16;
     started = Hashtbl.create 16; hurried = Hashtbl.create 16;
     sized = 0; laid_sized = 0;
-    times = [ "load", ms t0 t1; "decode", ms t1 t2; "parse", ms t2 t3; "css", ms t3 t4 ] }
+    console = (match scripts with Some r -> r.Scripts.console | None -> "");
+    times = [ "load", ms t0 t1; "decode", ms t1 t2; "parse", ms t2 t3; "css", ms t3 t4; "scripts", ms t4 t5 ] }
 
 (* a picture's own size, if it has arrived *)
 let pic_size l src =

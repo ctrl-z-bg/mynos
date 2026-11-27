@@ -1,0 +1,19 @@
+fill 0,21 800x178 #ffffff
+text 8,50 serif-bold 32 #000000 JavaScript
+text 164,50 serif-bold 32 #000000 (not
+text 227,50 serif-bold 32 #000000 run)
+text 8,94 serif 16 #000000 A
+text 24,94 serif 16 #000000 paragraph
+text 92,94 serif 16 #000000 a
+text 103,94 serif 16 #000000 timer
+text 141,94 serif 16 #000000 changes.
+text 8,128 serif 16 #000000 One,
+text 43,128 serif 16 #000000 red.
+text 8,162 serif 16 #000000 Two,
+text 44,162 serif 16 #000000 blue.
+text 8,196 serif 16 #000000 Scripts
+text 56,196 serif 16 #000000 are
+text 80,196 serif 16 #000000 off:
+text 107,196 serif 16 #000000 this
+text 134,196 serif 16 #000000 shows.
+height 215

@@ -18,14 +18,14 @@ EXPECTED_LAYOUT = $(sort $(wildcard tests/expected-layout/*.txt))
 # the engine's core: no input or output (the plan's rule 5), so it is
 # built and checked on the host too
 CORE = url.cmo encoding.cmo entities_data.cmo tokenizer.cmo dom.cmo treebuilder.cmo \
-	html.cmo text.cmo css.cmo selector.cmo style.cmo ttf.cmo fonts.cmo forms.cmo layout.cmo pages.cmo
+	html.cmo text.cmo css.cmo selector.cmo style.cmo ttf.cmo fonts.cmo forms.cmo dom_api.cmo layout.cmo pages.cmo
 
 all: ariadne.byte
 
 core: $(CORE) expected.cmo expected_layout.cmo
 
-ariadne.byte: $(CORE) loader.ml check_images.ml check_js.ml ariadne.ml $(MYNOS)
-	$(OCAMLC) mynos.cma unix.cma threads.cma -o $@ $(CORE) loader.ml check_images.ml check_js.ml ariadne.ml
+ariadne.byte: $(CORE) loader.ml check_images.ml check_js.ml js_prelude.ml scripts.ml ariadne.ml $(MYNOS)
+	$(OCAMLC) mynos.cma unix.cma threads.cma -o $@ $(CORE) loader.ml check_images.ml check_js.ml js_prelude.ml scripts.ml ariadne.ml
 
 # generated at every make, replaced only when they change (so that a file
 # copied back with an older date, as rsync does, still counts): the test
@@ -63,6 +63,7 @@ selector.cmo: css.cmo dom.cmi
 style.cmo: css.cmo selector.cmo dom.cmi
 fonts.cmo: ttf.cmo
 forms.cmo: dom.cmi text.cmo url.cmo
+dom_api.cmo: dom.cmi html.cmi selector.cmo css.cmo forms.cmo text.cmo
 layout.cmo: style.cmo fonts.cmo forms.cmo dom.cmi
 
 # the checks, on the host's ocamlrun: the core's (tests/run_tests.ml), and

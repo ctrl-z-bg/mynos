@@ -150,6 +150,31 @@ let forms () =
     (Forms.submit ~base:"https://a.org/x" ~submitter:(by_name "btn") (List.nth forms 1)
      = Forms.Post ("https://a.org/post", "a=b&btn=v"))
 
+(* the DOM's operations for scripts (M6) *)
+let dom_api () =
+  let doc = Html.parse {|<div id="a" class="x y"><p>one</p><p class="x">two &amp; three</p></div>|} in
+  let t = Dom_api.create doc in
+  let call op args = Dom_api.call t op args in
+  let handles l = List.filteri (fun i _ -> i mod 3 = 0) l in
+  let a = call "byId" [ "a" ] in
+  check "dom api: a node, as handle, type, name" (List.length a = 3 && List.nth a 1 = "1" && List.nth a 2 = "DIV");
+  let a = List.hd a in
+  check "dom api: querySelectorAll" (List.length (handles (call "queryAll" [ a; "p" ])) = 2
+                                    && List.length (handles (call "byClass" [ List.hd (call "document" []); "x" ])) = 2);
+  call "setAttr" [ a; "title"; "t" ] |> ignore;
+  check "dom api: attributes" (call "getAttr" [ a; "title" ] = [ "t" ] && call "getAttr" [ a; "nope" ] = []);
+  let li = List.hd (call "create" [ "li" ]) in
+  ignore (call "setText" [ li; "new <one>" ]);
+  ignore (call "insert" [ a; li; "" ]);
+  check "dom api: innerHTML, as the page now is"
+    (call "html" [ a ] = [ {|<p>one</p><p class="x">two &amp; three</p><li>new &lt;one&gt;</li>|} ] && t.changed);
+  ignore (call "setHtml" [ a; "<b>b</b>c" ]);
+  check "dom api: innerHTML set" (call "text" [ a ] = [ "bc" ] && List.length (handles (call "children" [ a ])) = 2);
+  check "dom api: a node into its own child is refused"
+    (match call "insert" [ List.hd (call "children" [ a ]); a; "" ] with _ -> false | exception Failure _ -> true);
+  check "dom api: a bad selector is an error"
+    (match call "query" [ a; "p[" ] with _ -> false | exception Failure m -> String.length m > 0)
+
 (* rule 3: a tree far deeper than any stack would allow a recursion *)
 let deep () =
   let depth = 5000 in
@@ -185,6 +210,7 @@ let () =
     fonts ();
     sources ();
     forms ();
+    dom_api ();
     deep ();
     pages ();
     layouts ();

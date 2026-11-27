@@ -14,7 +14,7 @@
     after 5 s with an exception. *)
 
 type _ request =
-  | Create : int request                        (** a new context: its number *)
+  | Create : string -> int request              (** a new context, the DOM's service (or ""): its number *)
   | Eval : int * string * string -> (bool * string * string) request
       (** [(context, code, name)]: ended without an exception, the value
           (or the exception and its stack), what console printed *)
@@ -31,7 +31,10 @@ val call : t -> 'a request -> 'a
 
 type context = { js : t; id : int }
 
-val create : ?js:t -> unit -> context
+val create : ?js:t -> ?dom:string -> unit -> context
+(** A context; with [dom], the name of a service of protocol ["dom/1"]
+    (one request, [call (op, args)] to a list of strings): its global
+    [__dom(op, ...args)] calls it, and throws its errors. *)
 
 type result = {
   ok : bool;             (** no exception *)

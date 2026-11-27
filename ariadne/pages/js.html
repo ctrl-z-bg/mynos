@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<title>JavaScript</title>
+<h1 id="h">JavaScript (not run)</h1>
+<p id="p">A paragraph a timer changes.</p>
+<ul id="list"></ul>
+<p class="x">One, red.</p><p class="x">Two, blue.</p>
+<div id="out"></div>
+<noscript><p>Scripts are off: this shows.</p></noscript>
+<script>
+document.getElementById("h").textContent = "JavaScript ran";
+const ul = document.getElementById("list");
+for (const w of ["alpha", "beta", "gamma"]) {
+  const li = document.createElement("li");
+  li.textContent = w;
+  ul.appendChild(li);
+}
+document.querySelectorAll("p.x").forEach((p, i) => { p.style.color = i ? "blue" : "red"; p.classList.add("done"); });
+document.getElementById("out").innerHTML =
+  "<b>Bold</b> and <i>italic</i> from innerHTML; " + document.querySelectorAll("li").length + " items in the list.";
+document.title = "JavaScript: done";
+console.log("title:", document.title, "| the list:", ul.innerHTML);
+setTimeout(() => { document.getElementById("p").textContent = "Changed by a timer."; }, 100);
+document.addEventListener("DOMContentLoaded", () => {
+  const p = document.createElement("p");
+  p.id = "loaded";
+  p.textContent = "DOMContentLoaded fired.";
+  document.body.appendChild(p);
+});
+</script>
