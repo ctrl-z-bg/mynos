@@ -64,6 +64,7 @@ module Machine = struct
   let hz = 50.
   let width = Ula.width
   let height = Ula.height
+  let x_scale = 2
   let game_exts = [ ".tap"; ".z80"; ".sna" ]
 
   let create () =
@@ -92,6 +93,7 @@ module Machine = struct
   let peek = Spectrum.peek
   let poke = Spectrum.poke
   let screen = Spectrum.screen
+  let set_draw _ _ = ()                       (* the ULA draws when asked *)
   let changed = Spectrum.changed
   let screen_text = Spectrum.screen_text
   let set_audio = Spectrum.set_audio

@@ -1,17 +1,19 @@
-# The package msx (tools/pkg-build.sh): an MSX1, MyNOS's own emulator
+# The package msx (tools/pkg-build.sh): an MSX1 and an MSX2, MyNOS's own emulator
 # (doc/decisions/retro-emulators.md), and its service emu/1
 NAME=msx
-VERSION=1.1
-DESCRIPTION='An MSX1, in a window and as a service (emu/1: msx<pid>): cartridges (MegaROMs too), the TMS9918A, the PSG; C-BIOS with it, a real BIOS if you have one; a game with it (msx westen); type msx [cartridge.rom]'
+VERSION=2.0
+DESCRIPTION='An MSX1 or an MSX2, in a window and as a service (emu/1: msx<pid>, msx2<pid>): cartridges (MegaROMs too), the TMS9918A or the V9938, the PSG, on the MSX2 a memory mapper and the clock; C-BIOS with it, a real BIOS if you have one; a game with it (msx westen); type msx or msx2 [cartridge.rom]'
 LICENSE='MIT; C-BIOS: BSD; the game: Apache-2.0'
 LIBRARIES=threads
 SRC=packages/msx
 # in the order ocamldep -sort gives; packages/retro's shared with other machines
-SOURCES='../retro/z80.mli ../retro/z80.ml ../retro/z80_disasm.mli ../retro/z80_disasm.ml ../retro/png.ml ../retro/emu_proto.mli ../retro/emu_proto.ml ../retro/emu_service.mli ../retro/emu_service.ml ../retro/ay8910.mli ../retro/ay8910.ml ../retro/emu_frontend.mli ../retro/emu_frontend.ml vdp.mli vdp.ml cartridge.mli cartridge.ml msx_keys.mli msx_keys.ml msx.mli msx.ml msx_main.ml'
+SOURCES='../retro/z80.mli ../retro/z80.ml ../retro/z80_disasm.mli ../retro/z80_disasm.ml ../retro/png.ml ../retro/emu_proto.mli ../retro/emu_proto.ml ../retro/emu_service.mli ../retro/emu_service.ml ../retro/ay8910.mli ../retro/ay8910.ml ../retro/emu_frontend.mli ../retro/emu_frontend.ml vdp_cmd.mli vdp_cmd.ml vdp.mli vdp.ml rtc.mli rtc.ml cartridge.mli cartridge.ml msx_keys.mli msx_keys.ml msx.mli msx.ml msx_main.ml'
 # C-BIOS, its licence; the game, in games/ (README.md says where a
 # user's ROMs go)
 EXTRA='third_party/cbios/cbios_main_msx1.rom third_party/cbios/cbios_logo_msx1.rom
+  third_party/cbios/cbios_main_msx2.rom third_party/cbios/cbios_logo_msx2.rom third_party/cbios/cbios_sub.rom
   third_party/cbios/LICENSE:CBIOS-LICENSE packages/msx/LICENSE packages/msx/MYNOS.md
   third_party/westen/westen.rom:games/westen.rom third_party/westen/LICENSE:games/westen-LICENSE
   third_party/westen/README.md:games/westen-README.md'
+COMMANDS=msx2
 DOC=packages/msx/README.md

@@ -310,11 +310,42 @@ a second under KVM, 600 in bytecode on the host without the picture, 7
 without KVM; emu/1's test in the suite (lane c) and `tests/msx/run.sh`
 on the host (the VDP's ports, the mappers on made-up MegaROMs, the PSG's
 pitch, C-BIOS's message, a state). Not done: the SCC's sound, the
-cassette, disks, the MSX2.
+cassette, disks.
+
+### 13. The MSX2 (2026-11-27)
+
+The same package (`msx` 2.0, command `msx2`), the same machine with a
+SUB-ROM given (mynos-ccb). Done in two steps:
+
+1. The VDP drawn a line at a time as the beam reaches it, for the MSX1
+   too (the same pictures, and now split screens): the machine calls
+   `Vdp.line` at each of the frame's 262 lines; the frame's interrupt
+   at the picture's end. Without a window the lines are not drawn (only
+   the sprites' status), the picture made when asked: a headless
+   emulator runs as fast as before. `Emu_frontend` got a horizontal
+   scale (1 for the MSX2's 512 columns) and `set_draw`.
+2. The V9938 in the same `vdp.ml` (a flag): 128 KB of VRAM, the
+   palette, registers 0-46 and status 0-9, the modes up to SCREEN 8 and
+   text of 80 columns, sprites of mode 2 (eight a line, a colour a line,
+   CC, IC, EC), 212 lines, register 23's scroll, register 19's line
+   interrupt; the command engine (`vdp_cmd.ml`), every command done at
+   once, HMMC, LMMC and LMCM a unit at a time with TR. The machine:
+   slot 3 expanded (0xFFFF), the SUB-ROM in 3-0, a memory mapper of 512
+   KB in 3-2 (ports 0xFC-0xFF), the RP5C01 clock (`rtc.ml`, ports
+   0xB4-0xB5), as openMSX's C-BIOS MSX2.
+
+C-BIOS 0.29a's MSX2 ROMs come with it; a real MSX2's main ROM and
+SUB-ROM, if the user has them, in `/disk/roms/msx/msx2.rom` and
+`msx2ext.rom`. The test game: the owner's Robotron (SCREEN 4, sprites
+of mode 2), compared with openMSX's pictures of the same frames on the
+host; not in the package yet (the owner decides). Results: C-BIOS's
+MSX2 and Robotron run; 164 frames a second under KVM (the MSX1 212);
+host tests of the palette, HMMV, LMMV, HMMC, the line interrupt, C-BIOS
+and Robotron. Not done: the commands' speed, interlace, register 18,
+the VRAM's interleaving in SCREEN 7 and 8, the MSX2+.
 
 ## Not now
 
 The 128K (its AY is written, with the MSX); memory
-contention; Shift and Ctrl alone in windows; the MSX2 (its V9938 is
-another VDP); the C64 cycle by cycle, its 1541 drive emulated; a `type`
+contention; Shift and Ctrl alone in windows; the C64 cycle by cycle, its 1541 drive emulated; a `type`
 of free text with BASIC's keywords; an assembler.

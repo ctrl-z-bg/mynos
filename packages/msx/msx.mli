@@ -1,15 +1,30 @@
-(** An MSX1 (doc/decisions/retro-emulators.md): a Z80 at 3.58 MHz, the
-    TMS9918A (16 KB of VRAM), the AY-3-8910, the PPI (slots, keyboard),
-    64 KB of RAM. Slot 0: the BIOS (C-BIOS, or a real one), slot 1: a
-    cartridge, slot 2: empty, slot 3: the RAM; no expanded slots. Frames
-    of 59,736 T-states (262 lines of 228, 60 a second), the VDP's
-    interrupt at their end. No cassette, no disk. *)
+(** An MSX1 or an MSX2 (doc/decisions/retro-emulators.md): a Z80 at 3.58
+    MHz, the AY-3-8910 (the MSX2's YM2149, the same), the PPI (slots,
+    keyboard).
+
+    The MSX1: the TMS9918A (16 KB of VRAM), 64 KB of RAM. Slot 0: the
+    BIOS (C-BIOS, or a real one), slot 1: a cartridge, slot 2: empty,
+    slot 3: the RAM; no expanded slots.
+
+    The MSX2: the V9938 (128 KB of VRAM), a memory mapper of 512 KB, the
+    RP5C01 clock. Slot 0: the BIOS; slot 1: a cartridge; slot 2: empty;
+    slot 3 expanded, 3-0 the SUB-ROM, 3-2 the mapper's RAM (as openMSX's
+    C-BIOS MSX2).
+
+    Frames of 59,736 T-states (262 lines of 228, 60 a second): the VDP
+    draws each line as it begins, the picture's first (192 or 212); its
+    interrupt at the picture's end, and on the MSX2 at the line register
+    19 names. No cassette, no disk. *)
 
 type t
 
-val create : bios:string -> ?logo:string -> unit -> t
+val create : ?sub:string -> ?clock:(unit -> float) -> bios:string -> ?logo:string -> unit -> t
 (** [bios]: 32 KB at 0x0000 of slot 0; [logo]: C-BIOS's 16 KB at 0x8000
-    there (its picture at start), none for a real BIOS. *)
+    there (its picture at start), none for a real BIOS. With [sub] (16 KB,
+    the SUB-ROM) an MSX2, whose clock reads [clock] (seconds since 1970;
+    0 by default). *)
+
+val msx2 : t -> bool
 
 val reset : t -> unit
 (** Power off and on: the RAM cleared, the cartridge kept. *)
@@ -41,18 +56,23 @@ val keys_pending : t -> bool
 
 val peek : t -> Emu_proto.space -> int -> int
 val poke : t -> Emu_proto.space -> int -> int -> unit
-(** [Cpu]: as the slots are now; [Ram]: the 64 KB of slot 3; [Vram]: the
-    VDP's 16 KB; [Rom]: the BIOS (and C-BIOS's logo from 0x8000), read
-    only. *)
+(** [Cpu]: as the slots are now; [Ram]: the 64 KB of slot 3 (MSX2: the
+    mapper's 512 KB, segment after segment); [Vram]: the VDP's 16 KB (128);
+    [Rom]: the BIOS (C-BIOS's logo from 0x8000; the MSX2's SUB-ROM from
+    0xC000), read only. *)
 
 val screen : t -> int array
-(** [Vdp.width] x [Vdp.height], 0xRRGGBB. *)
+(** The VDP's picture ({!Vdp.width} x {!Vdp.height}), 0xRRGGBB. *)
+
+val set_draw : t -> bool -> unit
+(** {!Vdp.set_draw}: whether the lines are drawn as they go (a window
+    looks), or the picture made only when {!screen} asks. *)
 
 val changed : t -> bool array
 val screen_text : t -> string
-(** The text modes' screen (40 or 32 columns, 24 lines), the names'
-    table's characters; [Failure] in Graphics II and multicolor, where
-    there are no characters to read. *)
+(** The text modes' screen (40, 80 or 32 columns, 24 lines), the names'
+    table's characters; [Failure] in the other modes, where there are no
+    characters to read. *)
 
 val set_audio : t -> bool -> unit
 val audio_samples : t -> string

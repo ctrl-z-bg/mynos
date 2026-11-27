@@ -295,3 +295,56 @@ over HTTP from the host takes 1.5 s every time (mynos-yxl).
 **Lesson.** On the i386, an OCaml program's arithmetic is 31-bit: a
 product of two numbers above 46340 must be guarded, and code that works
 on the host proves nothing about it.
+
+## 2026-11-27 — The MSX2: the VDP a line at a time, then the V9938
+
+**What.** `msx` 2.0 (mynos-ccb): an MSX2 beside the MSX1, `msx2` (or
+`msx --msx2`), with C-BIOS's MSX2 ROMs. The test game is the owner's
+Robotron (SCREEN 4, sprites of mode 2), not in the package yet.
+
+**The picture a line at a time.** MSX2 games split the screen with the
+line interrupt, so the VDP could no longer draw its picture once, at the
+frame's end, from the VRAM as it was then. The machine now calls
+`Vdp.line` at each of the frame's 262 lines (228 T-states each), the
+picture's lines drawn with the registers and VRAM of that moment, the
+sprites' status found as each line goes, the frame's interrupt at the
+picture's end (line 192, or 212). The MSX1's pictures were checked
+unchanged (Westen's) and a test changes the backdrop at line 100.
+
+**And the suite failed.** Lane c's emu-msx stopped after `regs`: the
+test asks the headless emulator for 600 frames, which used to cost no
+drawing (the picture was made only for a screenshot) and now drew 600
+pictures, longer than the test's wait. **Fix**: `Vdp.set_draw`: without
+a window the lines only find their sprites' status, and `pixels` draws
+the whole picture when asked, the status left alone; `Emu_frontend`'s
+headless mode turns the drawing off.
+
+**The V9938.** In the same `vdp.ml`, behind a flag: 128 KB of VRAM, the
+palette (port 0x9A), registers 0-46 (port 0x9B too) and status 0-9,
+SCREEN 4 to 8 and 80 columns, sprites of mode 2 (eight a line, a colour
+a line; CC or's a sprite's colour with the one before, IC keeps it out
+of collisions), register 23's scroll, register 19's line interrupt, and
+a command engine (`vdp_cmd.ml`) whose commands are done at once. The
+machine: slot 3 expanded (0xFFFF, read back complemented), the SUB-ROM
+in 3-0, a mapper of 512 KB in 3-2, the RP5C01 clock, as openMSX's
+`C-BIOS_MSX2` configuration lays them out.
+
+**C-BIOS stuck, blue.** C-BIOS's MSX2 and Robotron both showed a blue
+screen for ever. The PC went round 0x11C2-0x11C8 in the SUB-ROM
+(page 0 in slot 3-0): status register 2 read, bit 0, CE, until clear.
+A command was still running: C-BIOS writes its text with HMMC, whose
+first byte is register 44 *before* the command starts; the engine
+waited for that byte from the CPU too, one more than C-BIOS sends.
+**Fix**: HMMC and LMMC take register 44 as their first unit. C-BIOS's
+message and Robotron then showed, and openMSX's pictures of the same
+frames (taken on the host with the owner's msxdsl `run --screenshot`)
+match them, but for the blinking and the colour-cycling border.
+
+**Speed.** Under KVM, 164 frames a second for the MSX2 (Robotron), 212
+for the MSX1 (as before); on the host in bytecode 157 and 209.
+
+**Lesson.** A change of when the work is done (each line instead of on
+demand) is a change of how much: the headless user that asked for 600
+frames found it first. And a protocol's first step can be a register
+written before the go: read the chip's sequence, not just its list of
+commands.

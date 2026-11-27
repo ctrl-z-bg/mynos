@@ -1,14 +1,16 @@
-(* msx: an MSX1 in a window, and the service msx<pid> (emu/1)
-   (doc/decisions/retro-emulators.md); the window, the service and the
-   command line are Emu_frontend's.
+(* msx, msx2: an MSX1 or an MSX2 in a window, and the service msx<pid> or
+   msx2<pid> (emu/1) (doc/decisions/retro-emulators.md); the window, the
+   service and the command line are Emu_frontend's.
 
-     msx [CARTRIDGE|GAME]               a window
+     msx [CARTRIDGE|GAME]               an MSX1, in a window
+     msx2 [CARTRIDGE|GAME]              an MSX2 (or msx --msx2)
      msx --headless [CARTRIDGE|GAME]    no window
      msx --bench N [--no-service] [CARTRIDGE|GAME]
 
    The BIOS: a real MSX1's, if /disk/roms/msx/msx1.rom is there (32 KB:
-   it brings MSX-BASIC), else C-BIOS (the package's, free: it starts
-   cartridges only).
+   it brings MSX-BASIC); a real MSX2's, if /disk/roms/msx/msx2.rom (32
+   KB) and msx2ext.rom (16 KB, the SUB-ROM) are; else C-BIOS (the
+   package's, free: it starts cartridges only).
 
    Keys: letters, digits, the punctuation as on a PC (the MSX's
    international keyboard has the same over the same keys), Enter, Space,
@@ -25,33 +27,51 @@ let read_file f =
   let ic = open_in_bin f in
   Fun.protect ~finally:(fun () -> close_in ic) (fun () -> really_input_string ic (in_channel_length ic))
 
-let real_bios = "/disk/roms/msx/msx1.rom"
+let roms = "/disk/roms/msx/"
 
-module Machine = struct
+let sized f n what =
+  let s = read_file f in
+  if String.length s <> n then failwith (Printf.sprintf "%s: %s is %d KB" f what (n / 1024));
+  s
+
+(* the machine: MSX1's or MSX2's, with its BIOS *)
+let machine2 msx2 () =
+  if not msx2 then
+    if Sys.file_exists (roms ^ "msx1.rom") then
+      Msx.create ~bios:(sized (roms ^ "msx1.rom") 0x8000 "an MSX1's BIOS") (),
+      "MSX1 BIOS (" ^ roms ^ "msx1.rom)"
+    else match find_file "cbios_main_msx1.rom", find_file "cbios_logo_msx1.rom" with
+      | Some b, Some l -> Msx.create ~bios:(read_file b) ~logo:(read_file l) (), "C-BIOS 0.29a"
+      | _ -> failwith "no BIOS: C-BIOS is not in /disk/pkg/msx (pkg install msx)"
+  else
+    let clock = Mynos.time in
+    if Sys.file_exists (roms ^ "msx2.rom") && Sys.file_exists (roms ^ "msx2ext.rom") then
+      Msx.create ~clock ~bios:(sized (roms ^ "msx2.rom") 0x8000 "an MSX2's BIOS")
+        ~sub:(sized (roms ^ "msx2ext.rom") 0x4000 "an MSX2's SUB-ROM") (),
+      "MSX2 BIOS (" ^ roms ^ "msx2.rom, msx2ext.rom)"
+    else match find_file "cbios_main_msx2.rom", find_file "cbios_logo_msx2.rom",
+               find_file "cbios_sub.rom" with
+      | Some b, Some l, Some s ->
+        Msx.create ~clock ~bios:(read_file b) ~logo:(read_file l) ~sub:(read_file s) (),
+        "C-BIOS 0.29a"
+      | _ -> failwith "no BIOS: C-BIOS's MSX2 ROMs are not in /disk/pkg/msx (pkg install msx)"
+
+module Machine (P : sig val msx2 : bool end) = struct
   type t = { m : Msx.t; rom : string }
   type key = Msx_keys.key
 
-  let program = "msx"
-  let service = "msx"
-  let title = "MSX"
+  let program = "msx"                   (* the games: /disk/pkg/msx/games *)
+  let service = if P.msx2 then "msx2" else "msx"
+  let title = if P.msx2 then "MSX2" else "MSX"
   let hz = 60.
-  let width = Vdp.width
-  let height = Vdp.height
+  let width = if P.msx2 then 576 else 288
+  let height = if P.msx2 then 228 else 216
+  let x_scale = if P.msx2 then 1 else 2
   let game_exts = [ ".rom"; ".mx1"; ".mx2" ]
 
-  let create () =
-    if Sys.file_exists real_bios then begin
-      let bios = read_file real_bios in
-      if String.length bios <> 0x8000 then
-        failwith (real_bios ^ ": an MSX1's BIOS is 32 KB (its main ROM only)");
-      { m = Msx.create ~bios (); rom = "MSX1 BIOS (" ^ real_bios ^ ")" }
-    end else
-      match find_file "cbios_main_msx1.rom", find_file "cbios_logo_msx1.rom" with
-      | Some b, Some l ->
-        { m = Msx.create ~bios:(read_file b) ~logo:(read_file l) (); rom = "C-BIOS 0.29a" }
-      | _ -> failwith "no BIOS: C-BIOS is not in /disk/pkg/msx (pkg install msx)"
+  let create () = let m, rom = machine2 P.msx2 () in { m; rom }
 
-  let machine _ = "MSX1"
+  let machine _ = if P.msx2 then "MSX2" else "MSX1"
   let rom_name t = t.rom
   let z80 t = Msx.z80 t.m
   let frame t = Msx.frame t.m
@@ -89,6 +109,7 @@ module Machine = struct
   let peek t = Msx.peek t.m
   let poke t = Msx.poke t.m
   let screen t = Msx.screen t.m
+  let set_draw t b = Msx.set_draw t.m b
   let changed t = Msx.changed t.m
   let screen_text t = Msx.screen_text t.m
   let set_audio t on = Msx.set_audio t.m on
@@ -99,6 +120,13 @@ module Machine = struct
   let reset_keeps_loaded = true
 end
 
-module F = Emu_frontend.Make (Machine)
+module F1 = Emu_frontend.Make (Machine (struct let msx2 = false end))
+module F2 = Emu_frontend.Make (Machine (struct let msx2 = true end))
 
-let () = F.main ()
+(* msx2 is a script of one line that runs this program (pkg's COMMANDS):
+   its path comes first *)
+let () =
+  match List.tl (Array.to_list Sys.argv) with
+  | script :: rest when Filename.basename script = "msx2" -> F2.main ~args:rest ()
+  | "--msx2" :: rest -> F2.main ~args:rest ()
+  | args -> F1.main ~args ()

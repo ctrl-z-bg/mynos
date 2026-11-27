@@ -2,7 +2,7 @@
 
 MyNOS's emulators are not only windows. Each one registers a service of
 its own, `<machine><pid>` (`zx1234` for a ZX Spectrum, `camlboy1234` for
-a Game Boy, `msx1234` for an MSX), and answers the same typed protocol, emu/1
+a Game Boy, `msx1234` for an MSX, `msx21234` for an MSX2), and answers the same typed protocol, emu/1
 (`packages/retro/emu_proto.mli`): what the machine is, its registers and
 memory, its screen; pausing it, stepping it, running it for some frames,
 stopping it at a breakpoint; pressing its keys; loading a tape; saving
@@ -29,6 +29,7 @@ camlboy ROM.gb                a window
 camlboy --headless ROM.gb
 msx [CARTRIDGE]               a window; CARTRIDGE a .rom
 msx --headless [CARTRIDGE]
+msx2 [CARTRIDGE]              an MSX2 (msx2 --headless, as msx)
 ```
 
 (`pkg install zxspectrum`, `pkg install camlboy`, `pkg install msx`;
@@ -87,8 +88,9 @@ address a watchpoint saw touched; for `exec`, the PC).
 A machine without something answers an error that says so: a Game Boy
 has no text screen (`screen_text`: use `screenshot`), and camlboy has no
 disassembler, watchpoints or saved states yet; an MSX has characters on
-its screen only in the text modes (BASIC's SCREEN 0 and 1), and in
-Graphics II, where most games are, `screen_text` says so. The error is the answer:
+its screen only in the text modes (BASIC's SCREEN 0 and 1; the MSX2's
+80 columns too), and in Graphics II, where most games are, or the
+MSX2's bitmaps, `screen_text` says so. The error is the answer:
 a caller learns from it what to ask instead.
 
 ## 25.3 Keys

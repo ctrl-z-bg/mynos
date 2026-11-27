@@ -36,7 +36,12 @@ module type MACHINE = sig
 
   val width : int
   val height : int
-  (** The picture, before it is doubled. *)
+  (** The picture, before it is doubled: in the window its lines are, and
+      its columns [x_scale] times. *)
+
+  val x_scale : int
+  (** 2, or 1 for a picture already as wide as a window wants it (an
+      MSX2's 512 columns). *)
 
   val game_exts : string list
   (** The extensions a game of the package's may have: [".rom"]. *)
@@ -69,6 +74,10 @@ module type MACHINE = sig
   val peek : t -> Emu_proto.space -> int -> int
   val poke : t -> Emu_proto.space -> int -> int -> unit
   val screen : t -> int array
+  val set_draw : t -> bool -> unit
+  (** Whether the picture is drawn as the machine goes (false: no window
+      looks; [screen] makes it when asked). *)
+
   val changed : t -> bool array
   val screen_text : t -> string
   val set_audio : t -> bool -> unit
@@ -83,7 +92,8 @@ module type MACHINE = sig
 end
 
 module Make (M : MACHINE) : sig
-  val main : unit -> unit
-  (** The command line ({!Sys.argv}), then the window, the headless loop
-      or the benchmark; it does not return. *)
+  val main : ?args:string list -> unit -> unit
+  (** The command line ([args], by default {!Sys.argv}'s after the
+      program), then the window, the headless loop or the benchmark; it
+      does not return. *)
 end

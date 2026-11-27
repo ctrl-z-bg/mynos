@@ -14,6 +14,7 @@ module type MACHINE = sig
   val hz : float
   val width : int
   val height : int
+  val x_scale : int
   val game_exts : string list
   val create : unit -> t
   val machine : t -> string
@@ -32,6 +33,7 @@ module type MACHINE = sig
   val peek : t -> Emu_proto.space -> int -> int
   val poke : t -> Emu_proto.space -> int -> int -> unit
   val screen : t -> int array
+  val set_draw : t -> bool -> unit
   val changed : t -> bool array
   val screen_text : t -> string
   val set_audio : t -> bool -> unit
@@ -253,6 +255,7 @@ module Make (M : MACHINE) = struct
 
   let headless file =
     let st = make file in
+    M.set_draw st.m false;
     Printf.printf "%s: %s, no window\n%!" M.program (Emu_service.name st.svc);
     let start = ref (Mynos.uptime ()) and done_frames = ref 0 in
     let frames = ref 0 and since = ref !start in
@@ -293,7 +296,7 @@ module Make (M : MACHINE) = struct
   let windowed file =
     let st = make file in
     let scale = 2 in
-    let width = M.width * scale and pic_h = M.height * scale in
+    let width = M.width * M.x_scale and pic_h = M.height * scale in
     let screen = Gfx.create width pic_h in
     let row = Gfx.create width 1 in
     (* the machine's keys down, each with the frames it must still stay
@@ -311,11 +314,16 @@ module Make (M : MACHINE) = struct
         if changed.(y) then begin
           changed.(y) <- false;
           let base = y * M.width in
-          for x = 0 to M.width - 1 do
-            let c = Int32.of_int (Array.unsafe_get px (base + x)) in
-            Bigarray.Array1.unsafe_set row.Gfx.pixels (2 * x) c;
-            Bigarray.Array1.unsafe_set row.Gfx.pixels (2 * x + 1) c
-          done;
+          if M.x_scale = 2 then
+            for x = 0 to M.width - 1 do
+              let c = Int32.of_int (Array.unsafe_get px (base + x)) in
+              Bigarray.Array1.unsafe_set row.Gfx.pixels (2 * x) c;
+              Bigarray.Array1.unsafe_set row.Gfx.pixels (2 * x + 1) c
+            done
+          else
+            for x = 0 to M.width - 1 do
+              Bigarray.Array1.unsafe_set row.Gfx.pixels x (Int32.of_int (Array.unsafe_get px (base + x)))
+            done;
           Gfx.blit row 0 0 screen 0 (2 * y) width 1;
           Gfx.blit row 0 0 screen 0 (2 * y + 1) width 1
         end
@@ -403,8 +411,8 @@ module Make (M : MACHINE) = struct
     Option.iter (fun s -> try Sound.stop s with _ -> ()) stream;
     exit 0
 
-  let main () =
-    match List.tl (Array.to_list Sys.argv) with
+  let main ?(args = List.tl (Array.to_list Sys.argv)) () =
+    match args with
     | "--headless" :: rest -> headless (match rest with f :: _ -> Some f | [] -> None)
     | "--bench" :: n :: rest ->
       let service = not (List.mem "--no-service" rest) in
