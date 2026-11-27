@@ -2203,3 +2203,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   are now read whether the chip signals them or not, read failures are
   logged; "connected" only once both keys are installed. llmd reads its
   `/disk/llm.env` on the Pi.
+- **2026-11-27** — The Pi 400 connected to the LAN's Wi-Fi, WPA2 (the
+  lost answers were SDPCM superframes: turned off). Step 4 written: wifid
+  serves its frames (`wifi`, `wifirx`), netd uses the Wi-Fi when the
+  cable has no link (`services/net/wifinet.c`); untried on the board.
+  `mynos_piDevices` returns 0 on a PC (it returned the kernel's error).

@@ -46,7 +46,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <pthread.h>
 #include <mynos.h>
+#include <mynos_wire.h>
 #include "sdio.h"
 #include "wpa.h"
 
@@ -278,6 +281,7 @@ static int events;
 static int seen_ctl, seen_ev, seen_data, seen_other, seen_ids[4][3];
 static void on_event(const unsigned char * p, int len);
 static int handle_frames(int want_id, unsigned char * out, int max, int * status);
+static void rx_frame(const unsigned char * eth, int n);
 
 /* EAPOL frames received, handled after the frames' loop (their replies
    and the keys go out through frame[]) */
@@ -411,10 +415,13 @@ static int handle_frames(int want_id, unsigned char * out, int max, int * status
       const unsigned char * eth = p + 4 + p[3] * 4;
       int n = len - off - 4 - p[3] * 4;
       seen_data++;
-      if (eth[12] == 0x88 && eth[13] == 0x8E && neapol < 4 && n <= 600) {
-        memcpy(eapol[neapol], eth, (size_t)n);
-        eapol_len[neapol++] = n;
-      }
+      if (eth[12] == 0x88 && eth[13] == 0x8E) {
+        if (neapol < 4 && n <= 600) {
+          memcpy(eapol[neapol], eth, (size_t)n);
+          eapol_len[neapol++] = n;
+        }
+      } else
+        rx_frame(eth, n);              /* to netd */
     } else {
       if (seen_other++ < 3)
         mynos_log("wifid: a frame on channel %d, %d bytes (flags %02x)\n", ch, len, frame[5]);
@@ -784,6 +791,160 @@ static void join(const char * ssid, const char * pass)
   else mynos_log("wifid: not connected to \"%s\" (in 15 s)\n", ssid);
 }
 
+/* ---- the service: wifi/1, for netd (doc/decisions/wifi.md) ----
+
+   Two services, each served by a thread of its own, so that a waiting
+   receive never holds a send up: "wifi" (0 our MAC address, 1 send an
+   Ethernet frame, 2 the status: connected, the network's name) and
+   "wifirx" (3 receive: the frames waiting, or those that come within
+   max_ms, each as a 16-bit length and its bytes). Only the main thread
+   touches the SDIO: frames go through two queues. */
+
+#define QLEN   64
+#define QFRAME 1600
+struct fq { unsigned char d[QLEN][QFRAME]; int len[QLEN], head, n; };
+static struct fq rxq, txq;
+static pthread_mutex_t qlock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t rx_ready = PTHREAD_COND_INITIALIZER, work = PTHREAD_COND_INITIALIZER;
+static int rx_attached;                 /* netd asked: frames are kept */
+
+static int fq_put(struct fq * q, const unsigned char * d, int n)
+{
+  int i;
+  if (q->n == QLEN || n > QFRAME) return -1;
+  i = (q->head + q->n) % QLEN;
+  memcpy(q->d[i], d, (size_t)n);
+  q->len[i] = n;
+  q->n++;
+  return 0;
+}
+
+static int fq_get(struct fq * q, unsigned char * d)
+{
+  int n;
+  if (!q->n) return -1;
+  n = q->len[q->head];
+  memcpy(d, q->d[q->head], (size_t)n);
+  q->head = (q->head + 1) % QLEN;
+  q->n--;
+  return n;
+}
+
+static void rx_frame(const unsigned char * eth, int n)
+{
+  pthread_mutex_lock(&qlock);
+  if (rx_attached && fq_put(&rxq, eth, n) == 0) pthread_cond_signal(&rx_ready);
+  pthread_mutex_unlock(&qlock);
+}
+
+static void deadline(struct timespec * t, int ms)
+{
+  clock_gettime(CLOCK_REALTIME, t);
+  t->tv_nsec += (long)ms % 1000 * 1000000L;
+  t->tv_sec += ms / 1000 + t->tv_nsec / 1000000000L;
+  t->tv_nsec %= 1000000000L;
+}
+
+static void serve(wire_reader * r, wire_writer * w)
+{
+  long long k = wire_get_int(r);
+  if (r->error) { wire_reply_error(w, "invalid: wifi speaks wifi/1"); return; }
+  if (k == 0) {
+    wire_reply_ok(w);
+    wire_put_string(w, own_mac, 6);
+  } else if (k == 1) {
+    unsigned int n;
+    const char * f = wire_get_string(r, &n);
+    int e;
+    if (r->error || n < 14 || n > QFRAME) { wire_reply_error(w, "invalid: a frame"); return; }
+    pthread_mutex_lock(&qlock);
+    e = fq_put(&txq, (const unsigned char *)f, (int)n);
+    pthread_cond_signal(&work);
+    pthread_mutex_unlock(&qlock);
+    if (e) wire_reply_error(w, "busy: the queue is full");
+    else wire_reply_ok(w);
+  } else if (k == 2) {
+    wire_reply_ok(w);
+    wire_put_int(w, link_up && keyed);
+    wire_put_cstring(w, env_ssid);
+  } else if (k == 3) {
+    static unsigned char out[16384], f[QFRAME];
+    struct timespec t;
+    long long ms = wire_get_int(r);
+    int used = 0, n;
+    if (ms < 0 || ms > 10000) ms = 1000;
+    deadline(&t, (int)ms);
+    pthread_mutex_lock(&qlock);
+    rx_attached = 1;
+    while (!rxq.n && pthread_cond_timedwait(&rx_ready, &qlock, &t) == 0) ;
+    while (rxq.n && used + 2 + rxq.len[rxq.head] <= (int)sizeof out) {
+      n = fq_get(&rxq, f);
+      out[used] = (unsigned char)n; out[used + 1] = (unsigned char)(n >> 8);
+      memcpy(out + used + 2, f, (size_t)n);
+      used += 2 + n;
+    }
+    pthread_mutex_unlock(&qlock);
+    wire_reply_ok(w);
+    wire_put_string(w, out, (unsigned int)used);
+  } else
+    wire_reply_error(w, "invalid: wifi speaks wifi/1");
+}
+
+static void * listener(void * arg)
+{
+  int port = (int)(long)arg;
+  for (;;) {
+    mynos_msg_t * m;
+    wire_reader r;
+    wire_writer w;
+    int ch = mynos_listenPort(port);
+    if (ch < 0) continue;
+    if (mynos_recv(ch, &m, 0, 1000) < 0) { mynos_freeChannel(ch); continue; }
+    wire_reader_init(&r, m->start, m->size);
+    wire_writer_init(&w);
+    if (wire_check_protocol(&r, "wifi/1") != 0) wire_reply_error(&w, "invalid: wifi speaks wifi/1");
+    else serve(&r, &w);
+    if (!w.error) mynos_send(ch, w.buf, w.len, 0);
+    wire_writer_free(&w);
+    mynos_freeMsg(&m);
+    mynos_freeChannel(ch);
+  }
+  return NULL;
+}
+
+static void start_services(void)
+{
+  pthread_t t;
+  int p1 = mynos_registryRegister("wifi"), p2 = mynos_registryRegister("wifirx");
+  if (p1 < 0 || p2 < 0) { mynos_log("wifid: cannot register (%d, %d)\n", p1, p2); return; }
+  pthread_create(&t, NULL, listener, (void *)(long)p1);
+  pthread_create(&t, NULL, listener, (void *)(long)p2);
+}
+
+/* the main thread from now on: the chip's frames, the frames to send */
+static void service_loop(void)
+{
+  static unsigned char f[QFRAME];
+  unsigned char dummy[4];
+  struct timespec t;
+  int n, st;
+  for (;;) {
+    handle_frames(-1, dummy, 0, &st);
+    if (neapol) handle_eapol();
+    for (;;) {
+      pthread_mutex_lock(&qlock);
+      n = fq_get(&txq, f);
+      pthread_mutex_unlock(&qlock);
+      if (n < 0) break;
+      if (keyed) send_data(f, n);
+    }
+    deadline(&t, 5);
+    pthread_mutex_lock(&qlock);
+    if (!txq.n) pthread_cond_timedwait(&work, &qlock, &t);
+    pthread_mutex_unlock(&qlock);
+  }
+}
+
 /* ---- the board ---- */
 
 /* the board's revision code's type: 0x11 a Pi 4 B, 0x13 a 400, 0x14 a CM4 */
@@ -884,6 +1045,10 @@ int main(void)
   wr(sdc->base + SDIO_HOSTINTMASK, HOSTINTMASK);
   sdio_byte(1, SB_WATERMARK, 8);
   mynos_log("wifid: the firmware runs\n");
+  {                                    /* no superframes (glom) to the host */
+    unsigned char zero[4] = { 0, 0, 0, 0 };
+    if (set_var("bus:txglom", zero, 4) < 0) mynos_log("wifid: superframes not turned off\n");
+  }
   /* its version, its MAC address */
   memset(ver, 0, sizeof ver);
   n = get_var("ver", ver, 255);
@@ -923,10 +1088,10 @@ int main(void)
     if (set_var("event_msgs", mask, sizeof mask) < 0) mynos_log("wifid: events not set\n");
     if (set_int(C_UP, 1) < 0) { mynos_log("wifid: the radio not up\n"); return 0; }
   }
+  start_services();
   scan();
   if (env_ssid[0]) join(env_ssid, env_pass);
   else mynos_log("wifid: no network to join (/disk/wifi.env: SSID=, PASSPHRASE=, COUNTRY=)\n");
-  /* the events, from now on */
-  for (;;) poll_events(1000, NULL);
+  service_loop();
   return 0;
 }

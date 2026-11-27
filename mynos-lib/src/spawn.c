@@ -47,7 +47,8 @@ int mynos_piFirmware(unsigned int * buf, int len) {
 
 /* piDevices (106): mynos.h */
 int mynos_piDevices(void) {
-  return (int)__mynos_syscall(106, 0, 0, 0, 0, 0);
+  long r = __mynos_syscall(106, 0, 0, 0, 0, 0);
+  return r < 0 ? 0 : (int)r;          /* (an error, elsewhere: no device) */
 }
 
 /* dmaArea (29): the DMA area mapped here, its physical address in *phys;

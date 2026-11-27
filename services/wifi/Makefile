@@ -18,7 +18,7 @@ LDFLAGS = -L../../mynos-lib/lib/ -lmynos $(MYNOS_LDFLAGS)
 all: wifid
 
 wifid: wifid.o sdio.o wpa.o $(MBEDTLS_OBJ) ../../mynos-lib/lib/libmynos.a
-	$(CC) wifid.o sdio.o wpa.o $(MBEDTLS_OBJ) -o $@ $(LDFLAGS)
+	$(CC) wifid.o sdio.o wpa.o $(MBEDTLS_OBJ) -o $@ -lpthread $(LDFLAGS)
 
 mbedtls/%.o: $(MBEDTLS)/library/%.c
 	@mkdir -p mbedtls

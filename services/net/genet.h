@@ -19,6 +19,9 @@
    line; -1 if there is none */
 int genet_init(unsigned char mac[6], int * irq);
 
+/* whether its link was up when it started (a cable to something) */
+int genet_link(void);
+
 /* send a frame: 0, or -1 */
 int genet_send(const void * frame, unsigned int len);
 

@@ -136,6 +136,7 @@ static unsigned int rx_cons;                /* the frames taken (16 bits) */
 static int rx_i;                            /* the next one's descriptor */
 static unsigned int tx_prod;                /* the frames given (16 bits) */
 static int tx_i;
+static int has_link;
 
 static void cache_clean(const void * p, unsigned long len)
 {
@@ -341,6 +342,7 @@ int genet_init(unsigned char mac[6], int * irq)
   R(RDMA_REGS + DMA_CTRL) = 1u << 17 | DMA_EN;
   /* the PHY: the link, its speed; the UniMAC told, then on */
   speed = phy_start(&full);
+  has_link = speed >= 0;
   if (speed < 0) {
     mynos_log("netd: GENET: no link (a cable?): 1000 Mb/s assumed\n");
     speed = 2;
@@ -409,6 +411,11 @@ int genet_recv(void * buf)
   return n;
 }
 
+int genet_link(void)
+{
+  return has_link;
+}
+
 void genet_ack(void)
 {
   R(INTRL2_0 + CPU_CLEAR) = R(INTRL2_0 + CPU_STAT) & ~R(INTRL2_0 + CPU_MASK_STATUS);
@@ -418,6 +425,7 @@ void genet_ack(void)
 #else   /* not a Raspberry Pi */
 
 int genet_init(unsigned char mac[6], int * irq) { (void)mac; (void)irq; return -1; }
+int genet_link(void) { return 0; }
 int genet_send(const void * frame, unsigned int len) { (void)frame; (void)len; return -1; }
 int genet_recv(void * buf) { (void)buf; return 0; }
 void genet_ack(void) { }

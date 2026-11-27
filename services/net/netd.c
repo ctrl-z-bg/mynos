@@ -11,7 +11,8 @@
 
 /*
  * netd: the network service. The TCP/IP stack is lwIP (third_party/lwip),
- * the card a virtio one (vnet.c), a Raspberry Pi 4's GENET (genet.c) or
+ * the card a virtio one (vnet.c), a Raspberry Pi 4's GENET (genet.c), its
+ * Wi-Fi when no cable has a link (wifinet.c: wifid's frames over IPC) or
  * an NE2000 (ne2k.c), all in this process: a frame is a function
  * call, not an IPC exchange. Programs talk to it over typed IPC, protocol
  * "net/1" (mynos-lib/ocaml/net.mli, which is its definition: the case
@@ -63,6 +64,7 @@
 #include "ne2k.h"
 #include "vnet.h"
 #include "genet.h"
+#include "wifinet.h"
 
 #include "mbedtls/ssl.h"
 #include "mbedtls/x509_crt.h"
@@ -171,15 +173,17 @@ static unsigned char mac[6];
 
 /* the card: a virtio one if there is one, else a Pi 4's GENET, else the
    NE2000 */
-enum { NE2K, VIRTIO, GENET };
+enum { NE2K, VIRTIO, GENET, WIFI };
 static int card = NE2K;
 static int card_send(const void * frame, unsigned int len) {
   return card == VIRTIO ? vnet_send(frame, len) :
-         card == GENET ? genet_send(frame, len) : ne2k_send(frame, len);
+         card == GENET ? genet_send(frame, len) :
+         card == WIFI ? wifi_send(frame, len) : ne2k_send(frame, len);
 }
 static int card_recv(void * buf) {
   return card == VIRTIO ? vnet_recv(buf) :
-         card == GENET ? genet_recv(buf) : ne2k_recv(buf);
+         card == GENET ? genet_recv(buf) :
+         card == WIFI ? wifi_recv(buf) : ne2k_recv(buf);
 }
 
 static err_t linkoutput(struct netif * n, struct pbuf * p) {
@@ -230,7 +234,7 @@ static void status_changed(struct netif * n) {
 static void check_address(void) {
   ip4_addr_t a, m, g, d;
   if (ready || sys_now() - started < DHCP_WAIT) return;
-  if (card == GENET) return;          /* a real network: DHCP goes on trying */
+  if (card == GENET || card == WIFI) return;   /* a real network: DHCP goes on trying */
   mynos_log("netd: no DHCP answer, using 10.0.2.15\n");
   dhcp_release_and_stop(&netif);
   IP4_ADDR(&a, 10, 0, 2, 15);
@@ -1224,6 +1228,14 @@ static pthread_cond_t wake = PTHREAD_COND_INITIALIZER;
 static struct request * queue, ** queue_end = &queue;
 static int interrupted = 0;
 
+/* the Wi-Fi's frames came (wifinet.c's thread): as an interrupt */
+static void card_wake(void) {
+  pthread_mutex_lock(&lock);
+  interrupted = 1;
+  pthread_cond_signal(&wake);
+  pthread_mutex_unlock(&lock);
+}
+
 /* the card's interrupts: wake the main loop */
 static void * irq_thread(void * arg) {
   int sem = IDX(arg);
@@ -1274,16 +1286,26 @@ static void * listener(void * arg) {
 
 int main(void) {
   pthread_t t;
-  int port;
+  int port = -1;
 
   int irq = NE2K_IRQ;
   if (vnet_init(mac, &irq) == 0) {
     card = VIRTIO;
     mynos_log("netd: virtio card, IRQ %d, %02x:%02x:%02x:%02x:%02x:%02x\n",
               irq, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  } else if (genet_init(mac, &irq) == 0) {
+  } else if (genet_init(mac, &irq) == 0 &&
+             (genet_link() || !(mynos_piDevices() & MYNOS_PI_WIFI))) {
     card = GENET;
     mynos_log("netd: GENET, %02x:%02x:%02x:%02x:%02x:%02x\n",
+              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  } else if ((mynos_piDevices() & MYNOS_PI_WIFI) &&
+             /* (the service first: wifid may take half a minute, and
+                programs give up after 5 s; requests wait for an address) */
+             (port = mynos_registryRegister(SERVICE)) >= 0 &&
+             pthread_create(&t, NULL, listener, ARG(port)) == 0 &&
+             wifi_init(mac, 30, card_wake) == 0) {
+    card = WIFI;                  /* (no cable's link: the Wi-Fi, wifid's) */
+    mynos_log("netd: Wi-Fi (wifid), %02x:%02x:%02x:%02x:%02x:%02x\n",
               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   } else if (ne2k_init(NE2K_IOBASE, mac) < 0) {
     mynos_log("netd: no network card (virtio, NE2000 at 0x%x)\n", NE2K_IOBASE);
@@ -1307,7 +1329,7 @@ int main(void) {
   started = sys_now();
   dhcp_start(&netif);
 
-  {
+  if (card != WIFI) {
     int sem = mynos_driverRegister(card == VIRTIO ? "virtio-net" : card == GENET ? "genet" : "ne2k",
                                    card != NE2K ? (irq | MYNOS_IRQ_PCI) : irq, NULL, NULL);
     if (sem < 0)
@@ -1322,12 +1344,14 @@ int main(void) {
   raw_recv(icmp_pcb, on_icmp, NULL);
   raw_bind(icmp_pcb, IP_ADDR_ANY);
 
-  port = mynos_registryRegister(SERVICE);
-  if (port < 0) {
-    mynos_log("netd: cannot register (%d)\n", port);
-    return 1;
+  if (card != WIFI) {
+    port = mynos_registryRegister(SERVICE);
+    if (port < 0) {
+      mynos_log("netd: cannot register (%d)\n", port);
+      return 1;
+    }
+    pthread_create(&t, NULL, listener, ARG(port));
   }
-  pthread_create(&t, NULL, listener, ARG(port));
 
   for (;;) {
     struct request * r = NULL;

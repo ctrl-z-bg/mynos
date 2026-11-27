@@ -911,3 +911,37 @@ replies and the keys go through the same buffer as the commands).
 **Lesson.** A protocol's flow control is part of the protocol even when
 the first messages get through without it; and a firmware's feature is
 a fact to ask it (`cap`), not to assume from another firmware.
+
+## 2026-11-27 — The lost answers were in superframes (glom)
+
+**Symptom.** Commands without an answer, a different one each try (the
+scan, `SET_INFRA`, `SET_AUTH`), and always the pairwise key's after the
+handshake's message 4; no frame read failed.
+
+**Diagnosis.** wifid was taught to log what came while it waited: frames
+on channel 3, 16 bytes with flags 0x83 and then 1056 or 448 bytes. SDPCM's
+glom: the firmware gathers several frames into a superframe, announced
+by a descriptor (the subframes' lengths), and wifid dropped both. The
+answers in them were lost; others came late, behind them (the scan's
+answer, id 15, arrived while the next command waited). With one more
+attempt for a command without an answer, both keys went in and the Pi
+400 was connected, WPA2, to the LAN's network.
+
+**Fix.** `bus:txglom` set to 0 when the firmware starts, as Plan 9's
+ether4330 does: no superframes to the host.
+
+**Then the frames (step 4).** wifid serves `wifi` (its MAC address, a
+frame to send, its status) and `wifirx` (the frames received), each on a
+thread of its own so that a waiting receive holds no send up; only its
+main thread touches the SDIO, the frames go through two queues. netd
+uses the Wi-Fi as its card when the GENET has no link (`wifinet.c`: a
+thread waits on `wifirx` and wakes the main loop as an interrupt would),
+and registers its service before waiting for wifid (half a minute;
+programs give up after 5 s).
+
+**And a near miss.** `mynos_piDevices` returned the kernel's error on a
+PC (-3, no call 106): -3 & 4 is 4, "a Wi-Fi". netd on i386 would have
+waited for a wifid. It returns 0 on an error now.
+
+**Lesson.** Log what you drop: the superframes were there from the first
+try, silent.

@@ -77,19 +77,20 @@ wants the Wi-Fi.
 3. Joining a WPA2-PSK network (`wsec`, `wpa_auth`, `wpaie`,
    `WLC_SET_SSID`), the 4-way handshake on the host, the keys installed;
    the events (link up, down). *Associating works on the Pi 400; the
-   host's handshake written.*
+   host's handshake works: the Pi 400 connected, WPA2 (once the
+   superframes, glom, were turned off: `bus:txglom` 0).*
 4. The frames: Ethernet frames on SDPCM's data channel (with BDC's
-   4-byte header), to and from netd; DHCP over the air.
+   4-byte header), to and from netd; DHCP over the air. *Written: wifid
+   serves `wifi` and `wifirx` (wifi/1), netd's `wifinet.c` uses them
+   when the cable has no link.*
 5. `wifi/1` and a `wifi` command: scan, join, status; the networks
    remembered in `/disk/wifi.env`.
 
 ## Open
 
-- **netd and two networks**: netd has one interface today (virtio,
-  GENET or NE2000). With both a cable and the Wi-Fi, either netd learns
-  two lwIP interfaces, or the Wi-Fi is used only without a cable's link.
-  To decide at step 4.
-- **How frames reach netd**: in netd's process (the Wi-Fi driver a
-  library, as GENET's), or wifid giving them over IPC. wifid in its own
-  process is simpler to bring up and keeps the firmware's 600 KB out of
-  netd; a frame per IPC message costs little at Wi-Fi's speeds.
+- **netd and two networks**: netd has one interface; the Wi-Fi is its
+  card when the cable has no link at netd's start (decided at step 4).
+  Both at once (two lwIP interfaces): later, if wanted.
+- **How frames reach netd**: over IPC, from wifid (decided at step 4):
+  simpler to bring up, the firmware's 600 KB out of netd, a frame per
+  message cheap enough at the Wi-Fi's speeds.
