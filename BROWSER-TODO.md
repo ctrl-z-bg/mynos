@@ -156,6 +156,7 @@ Done before M2, at the owner's choice (2026-11-27): what gives pages their shape
 - [x] Floats (left, right) in their block formatting context: lines and new formatting contexts shortened beside them, the context's height holding them; `clear`
 - [x] `position`: relative (offsets), absolute (in the nearest positioned ancestor, insets, static position), fixed (as absolute in the page; it does not stay on screen yet), sticky (as static)
 - [ ] `z-index` and stacking contexts (today: positioned boxes are painted after the flow)
+- [x] `transform`'s translations (`translate`, `translateX`, `translateY`, `translate3d`, and the `translate` property): the box moved as drawn, a percentage of its own size (Repubblica's off-canvas menu was shown over half the page); scale and rotate are not drawn
 - [x] `overflow: hidden` and `clip` clip to the padding box; other values make a new formatting context; `clip: rect()` and `clip-path: inset(50%)` (screen-reader text) hide
 - [x] `opacity: 0` hides; an element with `mask-image` paints no background (icons, until masks)
 - [x] Tables: automatic layout (columns from their cells' minimum and maximum widths), `colspan`, `rowspan`, `thead` before and `tfoot` after, captions, `border-spacing`, `border-collapse` (as no spacing), cells' `vertical-align`, row backgrounds, the `width` of tables and cells
@@ -185,12 +186,12 @@ Found in M5:
 - [x] DOM nodes as handles: jsd's `__dom(op, ...args)` calls Ariadne's service `dom/1` (one request: an operation, strings) during a run; `Dom_api` (in the core) does the operations, nodes answered as handle, type, name; an IPC round trip costs 130-210 µs under KVM, so the API does bulk work in one call (querySelectorAll, innerHTML)
 - [x] `console` (log, info, debug, warn, error): its text returned with each run
 - [x] Timers (`setTimeout`, `setInterval`, `requestAnimationFrame`): those due within the first second, run once the scripts have
-- [ ] Timers later on (a page left open): with events
 - [x] The core DOM (`js_prelude.ml`, JavaScript over `__dom`): `document`, `window`, `Node`, `Element`, `Text`; queries, attributes, `id`, `className`, `classList`, `dataset`, `style` (the attribute), `textContent`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`, creating, inserting, moving and removing nodes, form values; `location`, `navigator`, `localStorage` (in memory), `URL`; `<noscript>` not shown when scripts ran; `ARIADNE_NOJS` turns scripts off
 - [x] Events: `addEventListener`, `dispatchEvent` (bubbling), `DOMContentLoaded` and `load`
-- [ ] Events from the user: `click`, `input`, `submit` (the context kept while the page is shown; the DOM then under a lock)
+- [x] Events from the user: the context kept while the page is shown (closed when another replaces it), the scripts run from the window's thread (no lock needed); `click` at what is under the pointer (a control, a link, else the innermost block: `Layout.hits`), `onclick=` attributes, `preventDefault` stops following a link, toggling, sending; `input`, `change`, `submit`; timers while the page is shown; style and layout again when a script changed the page. Repubblica's Menu button opens its menu
 - [ ] `fetch` and `XMLHttpRequest`
 - [x] Scripts in order, once the page is parsed (inline, `src`); Wikipedia's 4 run without an error (126 ms) and the page takes its `client-js` look
+- [ ] Cookies (a jar in `Http` or the Loader): Google's search goes to its consent page (consent.google.com) and back, which needs one; it then wants JavaScript too (since 2025)
 - [ ] Scripts added by scripts (`createElement('script')`), `defer` and `async` as such, `type=module`, `document.write` while parsing
 - [ ] Layout again after the DOM changes (only what changed)
 

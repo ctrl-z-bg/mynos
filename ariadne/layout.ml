@@ -61,7 +61,10 @@ type item =
       (** a box's background picture (or mask: its alpha in [tint]),
           painted in the box x, y, w, h: its tiles from {!tiles} *)
 
-type link = { lx : int; ly : int; lw : int; lh : int; href : string }
+type link = { lx : int; ly : int; lw : int; lh : int; href : string; anode : Dom.node }   (* its <a> *)
+
+(* an element's box: what is under the pointer (a script's click target) *)
+type hit = { hx : int; hy : int; hw : int; hh : int; hnode : Dom.node }
 
 type page = {
   items : item array;
@@ -69,6 +72,7 @@ type page = {
   height : int;
   background : int;                  (* the canvas *)
   anchors : (string * int) list;     (* ids, and where they are *)
+  hits : hit array;                  (* the block-level boxes, in the order laid out (inner after outer) *)
   unsized : string list;             (* pictures whose size was asked for and not known *)
 }
 
@@ -85,6 +89,7 @@ type pending = { pn : Dom.node; pst : Style.t; sx : int; sy : int }
 type out = {
   items_ : item Dynarray.t;
   links_ : link Dynarray.t;
+  hits_ : hit Dynarray.t;
   mutable anchors_ : (string * int) list;
   styles : Style.styles;
   vw : int;
@@ -141,8 +146,9 @@ let add_link o l =
 let add_anchor o id y = if o.dry = 0 then o.anchors_ <- (id, y) :: o.anchors_
 
 (* what was emitted since a mark, moved by (dx, dy) *)
-type mark = { mi : int; ml : int; ma : int }
-let mark o = { mi = Dynarray.length o.items_; ml = Dynarray.length o.links_; ma = List.length o.anchors_ }
+type mark = { mi : int; ml : int; ma : int; mh : int }
+let mark o = { mi = Dynarray.length o.items_; ml = Dynarray.length o.links_; ma = List.length o.anchors_;
+               mh = Dynarray.length o.hits_ }
 
 let translate o m dx dy =
   if (dx <> 0 || dy <> 0) && o.dry = 0 then begin
@@ -155,6 +161,10 @@ let translate o m dx dy =
           | Bg b -> Bg { b with x = b.x + dx; y = b.y + dy;
                                 clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) b.clip }
           | Control c -> Control { c with x = c.x + dx; y = c.y + dy })
+    done;
+    for i = m.mh to Dynarray.length o.hits_ - 1 do
+      let h = Dynarray.get o.hits_ i in
+      Dynarray.set o.hits_ i { h with hx = h.hx + dx; hy = h.hy + dy }
     done;
     for i = m.ml to Dynarray.length o.links_ - 1 do
       let l = Dynarray.get o.links_ i in
@@ -207,7 +217,7 @@ type atom_kind =
   | Float of Dom.node                                                    (* a float met in a line *)
   | Abs of Dom.node                                                      (* where its static position is *)
 
-type atom = { kind : atom_kind; st : Style.t; font : Fonts.font; link : string option; bg : int;
+type atom = { kind : atom_kind; st : Style.t; font : Fonts.font; link : (string * Dom.node) option; bg : int;
               dy : int }   (* raised (negative) or lowered by vertical-align *)
 
 (* how far a box reaches above the baseline: a form control's text sits on
@@ -227,7 +237,7 @@ type piece =
   | P_float of Dom.node * Style.t
   | P_abs of Dom.node * Style.t
   | P_atom of atom
-  | P_text of string * Style.t * string option * int * int
+  | P_text of string * Style.t * (string * Dom.node) option * int * int
   | P_space of int * Style.t
 
 let block_level = function
@@ -446,7 +456,7 @@ let pieces o (container : Dom.node) ~cw ~depth =
              false
            end else begin
              let href = if Dom.is_html n "a" then Dom.attr n "href" else None in
-             links := (match href with Some h -> Some h | None -> top_link ()) :: !links;
+             links := (match href with Some h -> Some (h, n) | None -> top_link ()) :: !links;
              bgs := (if visible_color st.background then st.background else (match !bgs with b :: _ -> b | [] -> 0)) :: !bgs;
              shifts := (dy () + (match st.vertical_align with
                  | "super" -> - int_of_float (st.font_size *. 0.45)
@@ -773,6 +783,8 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
   let cx = bx + b 3 + p 3 and cy = y + b 0 + p 0 + valign in
   (match Dom.attr n "id" with Some id -> add_anchor o id y | None -> ());
   let start = mark o in
+  let hit_slot = Dynarray.length o.hits_ in
+  if o.dry = 0 then Dynarray.add_last o.hits_ { hx = 0; hy = 0; hw = 0; hh = 0; hnode = n };
   (* the background first: its height is known after the content *)
   let has_bg = visible_color st.background && st.visible && not st.masked && not st.transparent && o.dry = 0 in
   let bg_slot = Dynarray.length o.items_ in
@@ -844,6 +856,7 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
                         paint = not button })
   end;
   o.clip <- saved_clip;
+  if o.dry = 0 then Dynarray.set o.hits_ hit_slot { hx = bx; hy = y; hw = bw; hh = h; hnode = n };
   if has_bg then Dynarray.set o.items_ bg_slot (Fill { x = bx; y; w = bw; h; color = rgb st.background });
   (match picture with
    | Some (layer, tint) ->
@@ -885,6 +898,10 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
     let dy = match ins 0, ins 2 with Some t, _ -> t | None, Some bo -> - bo | _ -> 0 in
     translate o start dx dy
   end;
+  (* transform's translation: moved as drawn, a percentage of its own box *)
+  (match st.shift with
+   | Some (tx, ty) -> translate o start (px tx ~of_:bw) (px ty ~of_:h)
+   | None -> ());
   let mt = Option.value (m 0) ~default:0 and mb = Option.value (m 2) ~default:0 in
   { h; w = bw;
     mt = (if collapse_top && esc_top <> 0 then collapse mt esc_top else mt);
@@ -1058,7 +1075,7 @@ and inline_layout o ~bfc (container : Style.t) atoms ~x ~y ~w ~depth =
            | _ -> ())
         end;
         (match a.link with
-         | Some href when aw > 0 -> add_link o { lx = !cx; ly = line_y; lw = aw; lh = lh; href }
+         | Some (href, anode) when aw > 0 -> add_link o { lx = !cx; ly = line_y; lw = aw; lh = lh; href; anode }
          | _ -> ());
         cx := !cx + aw) line;
     y := !y + lh;
@@ -1625,7 +1642,7 @@ and table o (n : Dom.node) (st : Style.t) ~x ~y ~cw ~depth =
 (* ---- the page ---- *)
 
 let layout ?(image = fun _ -> None) ~width ~height (styles : Style.styles) (doc : Dom.node) =
-  let o = { items_ = Dynarray.create (); links_ = Dynarray.create (); anchors_ = []; styles;
+  let o = { items_ = Dynarray.create (); links_ = Dynarray.create (); hits_ = Dynarray.create (); anchors_ = []; styles;
             vw = width; vh = height; dry = 0; clip = None; measures = Hashtbl.create 1024;
             intrinsics = Hashtbl.create 1024; abs = [ ref [] ]; image; unsized_ = [] } in
   let root = Dom.find (fun n -> Dom.is_html n "html") doc in
@@ -1656,7 +1673,7 @@ let layout ?(image = fun _ -> None) ~width ~height (styles : Style.styles) (doc 
       | Fill f -> max m (f.y + f.h) | Text t -> max m (t.y + t.font.descent)
       | Image i -> max m (i.y + i.h) | Bg _ | Control _ -> m) total o.items_ in
   { items = Dynarray.to_array o.items_; links = Dynarray.to_array o.links_; height = max total bottom; background;
-    anchors = o.anchors_; unsized = o.unsized_ }
+    anchors = o.anchors_; unsized = o.unsized_; hits = Dynarray.to_array o.hits_ }
 
 (* ---- the display list as text, for the tests ---- *)
 

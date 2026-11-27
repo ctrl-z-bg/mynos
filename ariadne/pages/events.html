@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<title>Events</title>
+<h1>Events</h1>
+<p><button id="b" type="button">Count</button> <span id="n">0</span> clicks</p>
+<p><a href="about:test/basic" id="l">A link its script stops</a></p>
+<p><input id="i" placeholder="type here"> <span id="echo"></span></p>
+<p><label><input type="checkbox" id="c"> a box</label>: <span id="cs">off</span></p>
+<p id="clock">ticks: 0</p>
+<form id="f" action="about:test/basic"><input name="q" value="x"> <input type="submit" value="Send"></form>
+<p id="fs"></p>
+<p onclick="this.textContent = 'Clicked: an onclick attribute ran.'">Click this paragraph.</p>
+<script>
+let n = 0;
+document.getElementById("b").addEventListener("click", () => { document.getElementById("n").textContent = ++n; });
+document.getElementById("l").addEventListener("click", e => {
+  e.preventDefault();
+  e.target.textContent = "The link was stopped by its script.";
+});
+document.getElementById("i").addEventListener("input", e => {
+  document.getElementById("echo").textContent = "you typed: " + e.target.value;
+});
+document.getElementById("c").addEventListener("change", e => {
+  document.getElementById("cs").textContent = e.target.checked ? "on" : "off";
+});
+let t = 0;
+setInterval(() => { document.getElementById("clock").textContent = "ticks: " + (++t); }, 1000);
+document.getElementById("f").addEventListener("submit", e => {
+  e.preventDefault();
+  document.getElementById("fs").textContent = "Submit stopped; q = " + document.querySelector("[name=q]").value;
+});
+</script>

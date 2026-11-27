@@ -34,17 +34,22 @@ module S = Ipc.Make (Protocol)
 
 let enabled = Sys.getenv_opt "ARIADNE_NOJS" = None
 
-(* the page whose scripts run now; the service, started once *)
-let current : Dom_api.t option ref = ref None
+(* the pages with scripts, by session (a page loading and the one shown
+   both have one: the first argument of every call says whose); the
+   service, started once *)
+let sessions : (int, Dom_api.t) Hashtbl.t = Hashtbl.create 8
 let lock = Mutex.create ()
+let next_sid = ref 0
 let service = lazy (
   let name = Printf.sprintf "ariadne-dom.%d" (Mynos.getpid ()) in
   let handler = { S.handle = fun (type a) _caller (r : a request) : a ->
       match r with
-      | Call (op, args) ->
-        match Mutex.protect lock (fun () -> !current) with
-        | Some t -> Dom_api.call t op args
-        | None -> failwith "no page" } in
+      | Call (op, sid :: args) ->
+        (match Mutex.protect lock (fun () -> Hashtbl.find_opt sessions (int_of_string sid)) with
+         | Some t -> Dom_api.call t op args
+         | None -> failwith "no such page"
+         | exception Failure _ -> failwith "no such page")
+      | Call (_, []) -> failwith "no page" } in
   ignore (Thread.create (fun () -> S.serve name handler) ());
   (* registered by the thread: a moment to be there *)
   Thread.delay 0.05;
@@ -58,6 +63,48 @@ let is_js s =
   | _ -> false
 
 type report = { ran : int; failed : int; console : string; ms : float; changed : bool }
+
+(* a page's scripts, kept while it is shown: their context, its tree *)
+type session = {
+  cx : Js.context;
+  dom : Dom_api.t;
+  sid : int;
+  mutable pending : int;                   (* timers waiting *)
+  log : string -> unit;
+  out : Buffer.t;                          (* console, errors *)
+}
+
+let eval s ~name code =
+  match Js.eval ~name s.cx code with
+  | r ->
+    Buffer.add_string s.out r.Js.console;
+    if not r.ok then begin
+      Buffer.add_string s.out ("error: " ^ r.value ^ "\n");
+      s.log (Printf.sprintf "script %s: %s" name (List.hd (String.split_on_char '\n' r.value)))
+    end;
+    Some r
+  | exception e -> s.log ("script " ^ name ^ ": " ^ Printexc.to_string e); None
+
+(* an event at a node (click, input, submit, change): whether its default
+   action is still to happen (no preventDefault) *)
+let event s (n : Dom.node) typ =
+  let h = Dom_api.handle s.dom n in
+  match eval s ~name:typ (Printf.sprintf "__event(%S, %d, %S, %S)" h (Dom_api.node_type n) (Dom_api.node_name n) typ) with
+  | Some r when r.ok -> r.value <> "false"
+  | _ -> true
+
+(* the timers due within [ms] *)
+let tick s ms =
+  match eval s ~name:"timers" (Printf.sprintf "__runTimers(%d)" ms) with
+  | Some r when r.ok -> s.pending <- Option.value (int_of_string_opt r.value) ~default:0
+  | _ -> s.pending <- 0
+
+(* the scripts changed the tree since asked last *)
+let changed s = let c = s.dom.changed in s.dom.changed <- false; c
+
+let close s =
+  Js.destroy s.cx;
+  Mutex.protect lock (fun () -> Hashtbl.remove sessions s.sid)
 
 (* the page's scripts run; [fetch] gives a script's text by its URL *)
 let run ~(log : string -> unit) ~url ~base ~width ~height ~(fetch : string -> string option) (doc : Dom.node) =
@@ -73,40 +120,33 @@ let run ~(log : string -> unit) ~url ~base ~width ~height ~(fetch : string -> st
     | js ->
       let name = Lazy.force service in
       let t = Dom_api.create doc in
-      Mutex.protect lock (fun () -> current := Some t);
-      let console = Buffer.create 256 in
+      let sid = Mutex.protect lock (fun () -> incr next_sid; Hashtbl.replace sessions !next_sid t; !next_sid) in
+      let cx = Js.create ~js ~dom:name () in
+      let s = { cx; dom = t; sid; pending = 0; log; out = Buffer.create 256 } in
       let ran = ref 0 and failed = ref 0 in
-      Fun.protect ~finally:(fun () -> Mutex.protect lock (fun () -> current := None)) (fun () ->
-          let cx = Js.create ~js ~dom:name () in
-          Fun.protect ~finally:(fun () -> Js.destroy cx) (fun () ->
-              let eval ~name code =
-                let r = Js.eval ~name cx code in
-                Buffer.add_string console r.Js.console;
-                if not r.ok then begin
-                  incr failed;
-                  Buffer.add_string console ("error: " ^ r.value ^ "\n");
-                  trace "script %s: %s" name (List.hd (String.split_on_char '\n' r.value))
-                end;
-                r in
-              ignore (eval ~name:"url.js" Js_prelude.url_polyfill);
-              ignore (eval ~name:"prelude.js" Js_prelude.source);
-              let quote s = "\"" ^ String.concat "\\\"" (String.split_on_char '"' s) ^ "\"" in
-              ignore (eval ~name:"init" (Printf.sprintf "__init(%s, %d, %d)" (quote url) width height));
-              List.iteri (fun i s ->
-                  let code, name = match Dom.attr s "src" with
-                    | Some src when String.trim src <> "" ->
-                      let u = Url.resolve base (String.trim src) in
-                      (fetch u, u)
-                    | _ -> (Some (Dom.text_content s), Printf.sprintf "%s#script%d" url (i + 1)) in
-                  match code with
-                  | Some code -> incr ran; ignore (eval ~name code)
-                  | None -> trace "script %s: not fetched" name) scripts;
-              ignore (eval ~name:"after" "__afterScripts()");
-              ignore (eval ~name:"timers" "__runTimers(1000)")));
+      let run_one ~name code =
+        match eval s ~name code with Some r when not r.ok -> incr failed | _ -> () in
+      run_one ~name:"url.js" Js_prelude.url_polyfill;
+      run_one ~name:"prelude.js" Js_prelude.source;
+      let quote x = "\"" ^ String.concat "\\\"" (String.split_on_char '"' x) ^ "\"" in
+      run_one ~name:"init" (Printf.sprintf "__init(%s, %d, %d, %d)" (quote url) width height sid);
+      List.iteri (fun i sc ->
+          let code, name = match Dom.attr sc "src" with
+            | Some src when String.trim src <> "" ->
+              let u = Url.resolve base (String.trim src) in
+              (fetch u, u)
+            | _ -> (Some (Dom.text_content sc), Printf.sprintf "%s#script%d" url (i + 1)) in
+          match code with
+          | Some code -> incr ran; run_one ~name code
+          | None -> trace "script %s: not fetched" name) scripts;
+      run_one ~name:"after" "__afterScripts()";
+      tick s 1000;
       (* with scripts on, noscript's content is not shown *)
       let noscripts = ref [] in
       Dom.iter (fun n -> if Dom.is_html n "noscript" then noscripts := n :: !noscripts) doc;
       List.iter Dom.remove !noscripts;
       let ms = (Unix.gettimeofday () -. t0) *. 1000. in
       trace "scripts: %d run, %d failed, %.0f ms%s" !ran !failed ms (if t.changed then ", the page changed" else "");
-      Some { ran = !ran; failed = !failed; console = Buffer.contents console; ms; changed = t.changed }
+      let report = { ran = !ran; failed = !failed; console = Buffer.contents s.out; ms; changed = t.changed } in
+      t.changed <- false;
+      Some (report, s)

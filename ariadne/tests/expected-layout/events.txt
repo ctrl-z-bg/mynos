@@ -1,0 +1,67 @@
+fill 0,21 800x288 #ffffff
+text 8,50 serif-bold 32 #000000 Events
+fill 8,80 51x19 #efefef
+control 8,80 51x19 button Count
+fill 8,80 51x1 #767676
+fill 8,98 51x1 #767676
+fill 8,80 1x19 #767676
+fill 58,80 1x19 #767676
+text 63,94 serif 16 #000000 0
+text 75,94 serif 16 #000000 clicks
+text 8,130 serif 16 #0000ee A
+fill 8,131 12x1 #0000ee
+fill 20,131 4x1 #0000ee
+text 24,130 serif 16 #0000ee link
+fill 24,131 25x1 #0000ee
+fill 49,131 4x1 #0000ee
+text 53,130 serif 16 #0000ee its
+fill 53,131 15x1 #0000ee
+fill 68,131 4x1 #0000ee
+text 72,130 serif 16 #0000ee script
+fill 72,131 36x1 #0000ee
+fill 108,131 4x1 #0000ee
+text 112,130 serif 16 #0000ee stops
+fill 112,131 33x1 #0000ee
+fill 8,149 175x21 #ffffff
+control 8,149 175x21 input type here
+fill 8,149 175x1 #767676
+fill 8,169 175x1 #767676
+fill 8,149 1x21 #767676
+fill 182,149 1x21 #767676
+fill 8,188 13x13 #ffffff
+control 8,188 13x13 input 
+fill 8,188 13x1 #767676
+fill 8,200 13x1 #767676
+fill 8,188 1x13 #767676
+fill 20,188 1x13 #767676
+text 25,201 serif 16 #000000 a
+text 36,201 serif 16 #000000 box
+text 60,201 serif 16 #000000 :
+text 68,201 serif 16 #000000 off
+text 8,235 serif 16 #000000 ticks:
+text 47,235 serif 16 #000000 0
+fill 8,254 175x21 #ffffff
+control 8,254 175x21 input x
+fill 8,254 175x1 #767676
+fill 8,274 175x1 #767676
+fill 8,254 1x21 #767676
+fill 182,254 1x21 #767676
+fill 187,255 46x19 #efefef
+control 187,255 46x19 input Send
+fill 187,255 46x1 #767676
+fill 187,273 46x1 #767676
+fill 187,255 1x19 #767676
+fill 232,255 1x19 #767676
+text 8,306 serif 16 #000000 Click
+text 47,306 serif 16 #000000 this
+text 74,306 serif 16 #000000 paragraph.
+link 8,115 12x18 about:test/basic
+link 20,115 4x18 about:test/basic
+link 24,115 25x18 about:test/basic
+link 49,115 4x18 about:test/basic
+link 53,115 15x18 about:test/basic
+link 68,115 4x18 about:test/basic
+link 72,115 36x18 about:test/basic
+link 108,115 4x18 about:test/basic
+link 112,115 33x18 about:test/basic
+height 325

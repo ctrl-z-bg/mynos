@@ -9,7 +9,8 @@
 let source = {js|
 (function () {
   "use strict";
-  const D = globalThis.__dom;
+  const raw = globalThis.__dom;
+  const D = (op, ...a) => raw(op, g.__sid, ...a);   // the page's session first
   const objects = new Map();
   const g = globalThis;
 
@@ -54,7 +55,16 @@ let source = {js|
           if (x.once) n.removeEventListener(ev.type, x.f);
         }
         const on = n["on" + ev.type];
-        if (typeof on === "function") { try { on.call(n, ev); } catch (e) { console.error(String(e)); } }
+        if (typeof on === "function") {
+          try { if (on.call(n, ev) === false) ev.preventDefault(); } catch (e) { console.error(String(e)); }
+        } else if (n.nodeType === 1 && ev.type !== "load") {
+          // an onclick="..." attribute
+          const code = n.getAttribute("on" + ev.type);
+          if (code) {
+            try { if (new Function("event", code).call(n, ev) === false) ev.preventDefault(); }
+            catch (e) { console.error(String(e) + (e && e.stack ? "\n" + e.stack : "")); }
+          }
+        }
         if (!ev.bubbles || ev.__stopped) break;
       }
       return !ev.defaultPrevented;
@@ -323,7 +333,8 @@ let source = {js|
   g.scrollTo = g.scroll = g.scrollBy = () => {};
   g.__readyState = "loading";
 
-  g.__init = function (url, width, height) {
+  g.__init = function (url, width, height, sid) {
+    g.__sid = String(sid);
     g.innerWidth = width; g.innerHeight = height;
     const u = new URL(url);
     g.location = {
@@ -332,6 +343,12 @@ let source = {js|
       toString() { return this.href; }, assign() {}, replace() {}, reload() {}
     };
     g.document = one(D("document"));
+  };
+  // an event from the user (Ariadne): whether its default action stays
+  g.__event = function (h, type, name, what) {
+    const n = wrap(h, type, name);
+    const ev = new Event(what, { bubbles: what !== "load", cancelable: what === "click" || what === "submit" });
+    return n.dispatchEvent(ev);
   };
   g.__afterScripts = function () {
     g.__readyState = "interactive";

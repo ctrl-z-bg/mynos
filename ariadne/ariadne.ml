@@ -45,6 +45,7 @@ type loaded = {
   mutable laid_sized : int;                       (* ... when laid out *)
   times : (string * float) list;       (* the stages' times, in ms *)
   console : string;                    (* what the page's scripts printed, their errors *)
+  session : Scripts.session option;    (* its scripts, kept while it is shown *)
 }
 
 let now = Unix.gettimeofday
@@ -110,7 +111,8 @@ let load ?post url =
   { response; doc; base; sheets; title; laid = None; styled = None; pics = Hashtbl.create 16;
     started = Hashtbl.create 16; hurried = Hashtbl.create 16;
     sized = 0; laid_sized = 0;
-    console = (match scripts with Some r -> r.Scripts.console | None -> "");
+    console = (match scripts with Some (r, _) -> r.Scripts.console | None -> "");
+    session = Option.map snd scripts;
     times = [ "load", ms t0 t1; "decode", ms t1 t2; "parse", ms t2 t3; "css", ms t3 t4; "scripts", ms t4 t5 ] }
 
 (* a picture's own size, if it has arrived *)
@@ -400,22 +402,31 @@ let window first =
     start ?post url in
   (* a form sent: by a button, or by Enter in a field (with the form's
      first submit button) *)
+  (* an event for the page's scripts: whether its default action stays *)
+  let event node typ =
+    match st.shown.session with Some s -> Scripts.event s node typ | None -> true in
   let submit ?submitter node =
     match Forms.form_of node with
-    | Some form ->
+    | Some form when event form "submit" ->
       let submitter = match submitter with Some s -> Some s | None -> Forms.default_button form in
       (match Forms.submit ~base:st.shown.base ?submitter form with
        | Forms.Get url -> go url
        | Forms.Post (url, body) -> go ~post:body url)
-    | None -> () in
+    | _ -> () in
+  let last_tick = ref (now ()) in
   if first <> "about:start" then go first;
   Gui.run ~title:"Ariadne" ~tick:0.1 ~resizable:(400, 300) 900 640 st (fun ui st ->
       let t_frame = now () in
       let g = ui.Gui.g and width = Gui.width ui and height = Gui.height ui in
       (* a page arrived: shown, if it is the one asked for last *)
+      (match Mutex.protect lock (fun () -> !arrived) with
+       | Some (n, l) when not (match st.loading with Some (_, m) -> m = n | None -> false) ->
+         Option.iter Scripts.close l.session
+       | _ -> ());
       (match Mutex.protect lock (fun () -> let a = !arrived in arrived := None; a) with
        | Some (n, l) when (match st.loading with Some (_, m) -> m = n | None -> false) ->
          let asked = match st.loading with Some (u, _) -> u | None -> l.response.url in
+         Option.iter Scripts.close st.shown.session;
          st.shown <- l; st.loading <- None;
          fetch_pictures l;
          st.address <- l.response.url ^ (match snd (Url.strip_fragment asked) with
@@ -460,6 +471,15 @@ let window first =
                           && Mutex.protect pics_lock (fun () -> l.sized) <> l.laid_sized ->
          last_relayout := now (); l.laid <- None
        | _ -> ());
+      (match st.shown.session with
+       | Some s ->
+         if s.Scripts.pending > 0 && now () -. !last_tick >= 0.1 then begin
+           Scripts.tick s (int_of_float ((now () -. !last_tick) *. 1000.));
+           last_tick := now ()
+         end else if s.pending = 0 then last_tick := now ();
+         (* the scripts changed the page: its style and layout again *)
+         if Scripts.changed s then (st.shown.laid <- None; st.shown.styled <- None)
+       | None -> ());
       let page = layout_at st.shown ~width:!page_width ~height:box_h in
       (match st.want_scroll with
        | Some s ->
@@ -492,7 +512,7 @@ let window first =
              | "\027" -> st.focus <- None
              | k when String.length k > 0 && k.[0] <> '\027' && Char.code k.[0] >= 32 -> insert k
              | _ -> ()) ui.Gui.keys;
-         if !v <> Forms.value node then Forms.set_value node !v;
+         if !v <> Forms.value node then (Forms.set_value node !v; ignore (event node "input"));
          (match st.focus with Some (n, _) when n == node -> st.focus <- Some (node, !c) | _ -> ())
        | None -> ());
       if ui.Gui.field <> 1 && st.focus = None then
@@ -672,14 +692,36 @@ let window first =
           | _ -> ())
        | _ -> ());
       if List.mem "\027" ui.Gui.keys then st.popup <- None;
+      (* a click: an event for the scripts at what is under it (a control,
+         a link, else the innermost block); its default action unless
+         they prevent it *)
+      let click_target mx my =
+        match control_at mx my with
+        | Some (n, _, _, _, _, _) -> Some n
+        | None ->
+          if my < box_y || my >= box_y + box_h then None
+          else
+            let px = mx - box_x and py = my - !top_ref in
+            let inside x y w h = px >= x && px < x + w && py >= y && py < y + h in
+            match Array.fold_left (fun f (l : Layout.link) -> if inside l.lx l.ly l.lw l.lh then Some l.anode else f)
+                    None page.links with
+            | Some a -> Some a
+            | None ->
+              Array.fold_left (fun f (h : Layout.hit) -> if inside h.hx h.hy h.hw h.hh then Some h.hnode else f)
+                None page.hits in
+      let allowed =
+        if ui.Gui.clicked && st.popup = None && st.shown.session <> None then
+          let px, py = ui.Gui.press in
+          match click_target px py with Some n -> event n "click" | None -> true
+        else true in
       let control_clicked =
         ui.Gui.clicked && (st.popup <> None
                            || (let px, py = ui.Gui.press in control_at px py <> None)) in
-      (if control_clicked then begin
+      (if control_clicked && allowed then begin
          let px, py = ui.Gui.press in
          match st.popup with
          | Some (sel, _, _, _, _) ->
-           (match popup_at px py with Some o -> Forms.select sel o | None -> ());
+           (match popup_at px py with Some o -> Forms.select sel o; ignore (event sel "change") | None -> ());
            st.popup <- None
          | None ->
            match control_at px py, control_at ui.Gui.mx ui.Gui.my with
@@ -694,14 +736,14 @@ let window first =
                   else find (next_char v c) in
                 st.focus <- Some (node, if Forms.kind node = Forms.Area then String.length v else find 0);
                 ui.Gui.field <- -1
-              | Forms.Check | Forms.Radio -> Forms.toggle node; st.focus <- None
+              | Forms.Check | Forms.Radio -> Forms.toggle node; ignore (event node "change"); st.focus <- None
               | Forms.Button { submit = true; _ } -> st.focus <- None; submit ~submitter:node node
               | Forms.Select -> st.focus <- None; st.popup <- Some (node, x, y + h, w, font)
               | _ -> ())
            | _ -> ()
        end
        else if ui.Gui.clicked then st.focus <- None);
-      (if ui.Gui.clicked && not control_clicked then
+      (if ui.Gui.clicked && not control_clicked && allowed then
          let px, py = ui.Gui.press in
          match link_at px py, link_at ui.Gui.mx ui.Gui.my with
          | Some h, Some h2 when h = h2 ->

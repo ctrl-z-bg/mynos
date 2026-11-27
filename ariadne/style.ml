@@ -105,6 +105,7 @@ type t = {
   mutable border_collapse : bool;
   mutable masked : bool;              (* a mask-image: the background is painted through it (mask) *)
   mutable bg : layer;                 (* background-image and the rest *)
+  mutable shift : (length * length) option;  (* transform's translations (a percentage: of the box) *)
   mutable mask : layer;               (* mask-image and the rest *)
   mutable transparent : bool;         (* opacity: 0 here or on an ancestor: nothing painted *)
   mutable content : cv list option;   (* a ::before's or ::after's content *)
@@ -128,7 +129,7 @@ let initial () = {
   row_gap = Len (0., 0.); column_gap = Len (0., 0.);
   grid_columns = []; grid_rows = []; grid_areas = []; grid_area = []; grid_column = []; grid_row = [];
   border_spacing = 0.; border_collapse = false; masked = false; transparent = false;
-  content = None; caption_bottom = false; bg = new_layer (); mask = new_layer () }
+  content = None; caption_bottom = false; bg = new_layer (); mask = new_layer (); shift = None }
 
 (* a child's start: the inherited properties from its parent, the others initial *)
 let inherit_from p =
@@ -866,6 +867,32 @@ let rec apply ctx (s : t) (parent : t) name (v : cv list) =
      | [ Tok (Number (a, _)) ] -> if a <= 0.01 then s.transparent <- true
      | [ Tok (Percentage a) ] -> if a <= 1. then s.transparent <- true
      | _ -> ())
+  | "transform" | "-webkit-transform" | "-ms-transform" ->
+    (* the translations, added up; the other functions (scale, rotate...)
+       are not drawn, nor do they move the box *)
+    if ident v = Some "none" then s.shift <- None
+    else begin
+      let zero = Len (0., 0.) in
+      let add (a, b) (c, d) = match a, c, b, d with
+        | Len (p, q), Len (p', q'), Len (r, t), Len (r', t') -> (Len (p +. p', q +. q'), Len (r +. r', t +. t'))
+        | _ -> (a, b) in
+      let len args = match length ctx args with Some (Len _ as l) -> l | _ -> zero in
+      let total = List.fold_left (fun acc c -> match c with
+          | Func (("translatex"), args) -> add acc (len args, zero)
+          | Func ("translatey", args) -> add acc (zero, len args)
+          | Func (("translate" | "translate3d"), args) ->
+            (match split_commas args with
+             | x :: y :: _ -> add acc (len x, len y)
+             | [ x ] -> add acc (len x, zero)
+             | [] -> acc)
+          | _ -> acc) (zero, zero) v in
+      s.shift <- (if total = (zero, zero) then None else Some total)
+    end
+  | "translate" ->
+    (match List.map (fun p -> Option.value (length ctx p) ~default:(Len (0., 0.))) (parts v) with
+     | [ x ] -> s.shift <- Some (x, Len (0., 0.))
+     | x :: y :: _ -> s.shift <- Some (x, y)
+     | [] -> ())
   | "mask-image" | "-webkit-mask-image" ->
     s.masked <- ident v <> Some "none";
     layer_image s.mask v

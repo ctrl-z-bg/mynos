@@ -1,0 +1,7 @@
+title: Events
+# Events
+Count 0 clicks
+A link its script stops
+a box: off
+ticks: 0
+Click this paragraph.
