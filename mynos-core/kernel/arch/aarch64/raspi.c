@@ -83,10 +83,16 @@ void raspi_detect(void)
 
 /* mapPhysical's devices (arch.h): the VideoCore's memory past the ARM's
    (its framebuffer), and the peripherals (a Pi 3's local ones too) */
+extern int raspi_pcie_up;
 int raspi_device_ok(unsigned long p, unsigned long n)
 {
   unsigned long end = p + (n << 12);
   if (end < p || p < ((unsigned long)__total_phy_pages << 12)) return 0;
+  /* a Pi 4's PCIe, only once up (pcie4.c): its bridge's registers (with
+     nothing behind them, QEMU's raspi4b, an access never ends), its
+     window */
+  if (p < 0xFD510000UL && end > 0xFD500000UL) return raspi_pcie_up && end <= 0xFD510000UL;
+  if (raspi_pcie_up && p >= 0x600000000UL && end <= 0x640000000UL) return 1;
   if (end <= (raspi_pi4 ? 0x40000000UL : 0x40040000UL)) return 1;
   return raspi_pi4 && p >= 0xFC000000UL && end <= 0x100000000UL;
 }
@@ -232,9 +238,9 @@ static const signed char lines[16] = { -1, 57, 62, 56, 9, -1, -1, -1,
                                   -1, -1, -1, -1, -1, -1, -1, -1 };
 static uint32_t lines_on;
 /* a Pi 4's lines: the GIC's interrupt of each, -1 none. 1 the UART
-   (SPI 121), 2 the SD card's EMMC2 (SPI 126), 4 PCIe's INTA (SPI 143:
+   (SPI 121), 2 the SD card's EMMC2 (SPI 126), 4 PCIe's INTA (SPI 147:
    the USB's xHCI), 5 the Ethernet's GENET (SPI 157) */
-static const short lines4[16] = { -1, 153, 158, -1, 175, 189, -1, -1,
+static const short lines4[16] = { -1, 153, 158, -1, 179, 189, -1, -1,
                                   -1, -1, -1, -1, -1, -1, -1, -1 };
 static uint32_t last_iar[4];
 

@@ -2081,3 +2081,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   boots it too. The SD card image has the Pi 4's and 400's firmware.
   USB (PCIe, xHCI) and Ethernet (GENET) are next, on the board (QEMU's
   model has none).
+- **2026-11-27** — The Pi 4's PCIe (mynos-btq.8.1, not yet tried on a
+  board): the kernel brings up the BCM2711's root complex when the
+  firmware's device tree has it (`pcie4.c`: the link, the windows, the
+  VL805 on bus 1 given its memory, the firmware told to load its
+  firmware), and only then lets a driver map the bridge and the window;
+  libmynos's PCI functions reach bus 0 and 1 through the bridge. QEMU's
+  `raspi4b` has no PCIe: nothing is touched there.

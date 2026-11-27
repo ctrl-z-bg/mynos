@@ -4341,3 +4341,27 @@ within 0.1 s is still Escape.
 **Lesson.** Count an escape sequence's bytes, don't guess them; and
 code that assumes "a read ends with a whole key" holds for one source
 (consoled's keyboard) and not for another (a terminal's bytes).
+
+## 2026-11-27 — The Pi 4's PCIe, first part
+
+**What was done.** The BCM2711's PCIe bring-up in the kernel, as Linux's
+`pcie-brcmstb.c` does it, from the Pi 400's device tree's own numbers
+(its `ranges`: the CPU's 0x6_0000_0000 is PCI's 0xC000_0000, 1 GB; its
+`dma-ranges`: PCI 0 is RAM's 0, 3 GB; its interrupt, SPI 147, not the
+143 first guessed). Only when the firmware's device tree has the
+controller: QEMU's `raspi4b` has nothing at 0xFD500000.
+
+**Finding.** libmynos's PCI functions, once taught the Pi 4's bridge,
+hung every PCI driver on QEMU's `raspi4b` (consoled, vblkd, netd,
+displayd never answered): the bridge's registers lie inside the
+BCM2711's peripherals' range, which `mapPhysical` allowed, and an
+access with nothing behind it never ended. The bridge is now mapped
+only once the kernel has brought the link up.
+
+**Also.** Ctrl-Alt-End failed once in the lane on the emulated Pi 3:
+the terminal's ESC and the rest of the sequence came in two pieces
+more than 0.1 s apart through the emulated UART. displayd now waits
+0.3 s after a lone ESC, 1 s after a begun sequence (ncurses waits 1 s).
+
+**Lesson.** "The platform's device range" is too coarse once a device
+inside it may be absent: such a device gets its own gate.

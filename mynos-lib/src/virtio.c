@@ -29,11 +29,33 @@
 
 static volatile unsigned int * ecam;
 
+/* ---- a Raspberry Pi 4's PCIe (btq.8.1): its bridge's registers, which
+   the kernel lets a driver map once the link is up (arch/aarch64/
+   pcie4.c). Bus 0 is the root port, the bridge's own registers; bus 1
+   (the VL805, the USB's xHCI: device 0 only, a link has one) through
+   an index (0x9000) and a data window (0x8000): two accesses, which
+   one driver at a time makes (the USB's) ---- */
+
+#define PI4_PCIE 0xFD500000UL
+
+static volatile unsigned int * pi4;
+static int pi4_tried;
+
+static volatile unsigned int * pi4_reg(int bus, int dev, int fn, int reg)
+{
+  if (!pi4_tried) { pi4_tried = 1; pi4 = mynos_mapPhysical(PI4_PCIE, 16); }
+  if (!pi4 || dev != 0 || fn != 0 || bus > 1) return 0;
+  if (bus == 0) return pi4 + ((reg & 0xFFC) >> 2);
+  pi4[0x9000 / 4] = 1u << 20;
+  return pi4 + ((0x8000 + (reg & 0xFFC)) >> 2);
+}
+
 static volatile unsigned int * pci_reg(int bus, int dev, int fn, int reg)
 {
+  static int ecam_tried;
+  if (!ecam_tried) { ecam_tried = 1; ecam = mynos_mapPhysical(ECAM_BASE, 256); }
+  if (!ecam) return pi4_reg(bus, dev, fn, reg);
   if (bus != 0) return 0;
-  if (!ecam) ecam = mynos_mapPhysical(ECAM_BASE, 256);
-  if (!ecam) return 0;
   return ecam + (((dev << 15) | (fn << 12) | (reg & 0xFFC)) >> 2);
 }
 

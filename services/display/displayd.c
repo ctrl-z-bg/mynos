@@ -1549,7 +1549,7 @@ static void * keys_thread(void * arg)
 {
   struct termios saved, t;
   unsigned char buf[256];
-  int pend = 0;
+  int pend = 0, waits = 0;
   (void)arg;
   tcgetattr(0, &saved);
   t = saved;
@@ -1570,16 +1570,20 @@ static void * keys_thread(void * arg)
     while (n > 0 && i < n) {
       struct event e;
       int len = key_length(buf + i, n - i);
-      /* unfinished (ESC alone, or ESC [ without its final byte), and more
-         came just now: kept, to be whole after the next read; if nothing
-         more comes (0.1 s), it is what it is (ESC alone: Escape) */
-      if (got > 0 && buf[i] == 0x1B && i + len == n && n - i < 16 &&
+      /* unfinished (ESC alone, or ESC [ without its final byte): kept,
+         to be whole after the next reads; if nothing more comes, it is
+         what it is (ESC alone: Escape) after 0.3 s, a sequence begun
+         after 1 s (a terminal's bytes, through an emulated UART, came
+         in two pieces more than 0.1 s apart; ncurses waits 1 s too) */
+      if (buf[i] == 0x1B && i + len == n && n - i < 16 &&
           (n - i == 1 || (buf[i + 1] == '[' &&
-                          !(buf[n - 1] >= 0x40 && buf[n - 1] <= 0x7E && n - i > 2)))) {
+                          !(buf[n - 1] >= 0x40 && buf[n - 1] <= 0x7E && n - i > 2))) &&
+          (got > 0 ? (waits = 0, 1) : ++waits < (n - i == 1 ? 3 : 10))) {
         pend = n - i;
         memmove(buf, buf + i, pend);
         break;
       }
+      waits = 0;
       /* Ctrl-Alt-End (consoled's, a terminal's ESC [ 1 ; 7 F): the
          session ends, as the menu's last item (a screen without a
          mouse: a Raspberry Pi's, for now) */

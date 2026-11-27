@@ -27,6 +27,9 @@
 #include "multiboot.h"
 #include "mem/mem.h"
 #include "kutils.h"
+#ifdef MYNOS_RASPI
+extern int raspi_pcie_present;
+#endif
 
 int _asm_global_mem_size;
 int _asm_first_free_physical_page_address = 0x400000;
@@ -86,6 +89,11 @@ static void read_fdt(const uint8_t * fdt, uint64_t * mem, uint64_t * rd_start,
       if (in_memory && streq(pname, "reg") && acells <= 2 && scells >= 1 && scells <= 2 &&
           len >= 4 * (acells + scells))
         *mem = be_cells(v + 4 * acells, 4 * scells);
+#ifdef MYNOS_RASPI
+      if (streq(pname, "compatible") && len >= 17 &&
+          !kmemcmp((char *)v, "brcm,bcm2711-pcie", 17))
+        raspi_pcie_present = 1;                    /* a Pi 4's PCIe (pcie4.c) */
+#endif
       if (in_chosen && streq(pname, "linux,initrd-start"))
         *rd_start = be_cells(v, len);
       if (in_chosen && streq(pname, "linux,initrd-end"))
