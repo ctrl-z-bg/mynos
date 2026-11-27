@@ -1906,3 +1906,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   (a game, MIT). The suite drives the Spectrum through emu/1 (lane c,
   `tests/emu`). Published (mynos-packages 20d0caf: zxspectrum 1.0,
   glazx 1.0).
+- **2026-11-27** — The applications' journal: `doc/JOURNAL-apps.md`,
+  for the packages and their shared libraries (the Spectrum's entries
+  moved there); `doc/JOURNAL.md` keeps the kernel, the services, the
+  system's libraries and the toolchain. The book (`doc/book`) is frozen
+  until the next version.
