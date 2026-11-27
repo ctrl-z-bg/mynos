@@ -627,8 +627,18 @@ hubs (a Pi 4's and 400's devices all sit behind the VL805's own hub);
 its log names each by where it is (`port 5.1`: port 1 of the hub on
 root port 5). Those that
 speak HID's boot protocol, keyboards and mice, become keys for `keys`
+(a mouse in its report protocol when its report descriptor is
+understood: its wheel too)
 (a held key repeated: 500 ms, then 30 a second) and reports for
 `pointer`. Without an xHCI it ends at once.
+
+**wifid** (the Wi-Fi, `services/wifi/`, being written: btq.9,
+`doc/decisions/wifi.md`) drives a Raspberry Pi 4's or 400's Cypress
+chip on SDIO (the Arasan SDHCI, GPIO 34-39): it powers it through the
+firmware, loads its firmware and NVRAM from `/disk/wifi` (put there by
+`tools/make-sd-raspi.sh`), starts it and logs its version and MAC
+address. Elsewhere, or when the device tree has no Wi-Fi, it ends at
+once.
 
 ## E.15 soundd: sound
 

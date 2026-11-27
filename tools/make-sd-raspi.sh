@@ -13,7 +13,14 @@
 #   - config.txt: 64 bits, kernel8.img, the modules' archive (mynos.mod,
 #     tools/mkmodules.py: the modules run-demo.sh gives) at 64 MB, where
 #     the kernel looks, the UART on;
-#   - kernel8.img (tools/build-aarch64.sh), README.TXT.
+#   - kernel8.img (tools/build-aarch64.sh), README.TXT;
+#   - wifi/: the Pi 400's Wi-Fi chip's (CYW43456) firmware, its CLM and
+#     its board's NVRAM, for wifid (btq.9), from github.com/RPi-Distro/
+#     firmware-nonfree at WIFI_COMMIT, checked against the sums below,
+#     kept in build/raspi-firmware/wifi-WIFI_COMMIT. Synaptics's licence
+#     (that repository's debian/copyright, "Synaptics"): reproduced and
+#     distributed in object code only, for use with its chips: on this
+#     card, for the Pi's own chip; never in MyNOS's repository.
 # Never the developer's system/disk.img (it holds llm.env): /disk starts
 # empty but for these files.
 #
@@ -36,6 +43,9 @@ tree=$root/build/aarch64/tree
 out=${1:-$root/tmp/mynos-raspi.img}
 FW_TAG=1.20260915
 fw=$root/build/raspi-firmware/$FW_TAG
+WIFI_COMMIT=b1833f18a816cf8fd73ca86e27f9eecea11bf991
+wifi=$root/build/raspi-firmware/wifi-$WIFI_COMMIT
+wifi_files="brcmfmac43456-sdio.bin brcmfmac43456-sdio.txt brcmfmac43456-sdio.clm_blob"
 files="bootcode.bin start.elf fixup.dat bcm2710-rpi-3-b.dtb bcm2710-rpi-3-b-plus.dtb
 bcm2710-rpi-zero-2-w.dtb start4.elf fixup4.dat bcm2711-rpi-4-b.dtb bcm2711-rpi-400.dtb
 overlays/disable-bt.dtbo"
@@ -66,6 +76,19 @@ d181d5055daebac22513d6904fa9ce21d1e99b852cc391af095ade6f0b45c400  fixup4.dat
 d750046f964db97ded3bffccafcc30f96336da7cf9f2e8b6575aef45c73ee3d2  bcm2711-rpi-400.dtb
 ea69d22dedc607fee75eec57d8a4cc0f0eab93cd75393e61a64c49fbac912d02  overlays/disable-bt.dtbo
 SUMS
+mkdir -p "$wifi"
+for f in $wifi_files; do
+    [ -s "$wifi/$f" ] && continue
+    echo "make-sd-raspi.sh: downloading $f (RPi-Distro firmware-nonfree)" >&2
+    curl -fsSL -o "$wifi/$f.part" \
+        "https://raw.githubusercontent.com/RPi-Distro/firmware-nonfree/$WIFI_COMMIT/debian/added-firmware/brcm/$f"
+    mv "$wifi/$f.part" "$wifi/$f"
+done
+(cd "$wifi" && sha256sum -c --quiet) <<'SUMS'
+dc4429f13b59f8c271e940c28b2a197455a8e02270fcc7a2f9036aa1e4c739fb  brcmfmac43456-sdio.bin
+44e0bb322dc1f39a4b0a89f30ffdd28bc93f7d7aaf534d06d229fe56f6198194  brcmfmac43456-sdio.txt
+2dbd7d22fc9af0eb560ceab45b19646d211bc7b34a1dd00c6bfac5dd6ba25e8a  brcmfmac43456-sdio.clm_blob
+SUMS
 
 # (the work in the repository's tmp/: the build container sees it)
 mkdir -p "$root/tmp"
@@ -95,6 +118,8 @@ if [ -d "$out" ]; then
         { echo "make-sd-raspi.sh: $out is not a MyNOS card's partition" >&2; exit 1; }
     mkdir -p "$out/overlays"
     for f in $files; do [ -f "$out/$f" ] || cp "$fw/$f" "$out/$f"; done
+    mkdir -p "$out/wifi"
+    for f in $wifi_files; do cmp -s "$wifi/$f" "$out/wifi/$f" || cp "$wifi/$f" "$out/wifi/$f"; done
     cp "$tree/build/aarch64/kernel8.img" "$out/kernel8.img"
     cp "$w/mynos.mod" "$w/config.txt" "$w/README.TXT" "$out/"
     sync
@@ -125,6 +150,8 @@ PY
 mt mkfs.fat -F 32 -n MYNOS --offset 2048 "$out" $(((size_mb - 1) * 1024)) >/dev/null
 img="$out@@1M"
 mt mmd -i "$img" ::/overlays
+mt mmd -i "$img" ::/wifi
+for f in $wifi_files; do mt mcopy -i "$img" "$wifi/$f" "::/wifi/$f"; done
 for f in $files; do mt mcopy -i "$img" "$fw/$f" "::/$f"; done
 mt mcopy -i "$img" "$tree/build/aarch64/kernel8.img" ::/kernel8.img
 mt mcopy -i "$img" "$w/mynos.mod" "$w/config.txt" "$w/README.TXT" ::/

@@ -324,6 +324,7 @@ The native calls:
 | 103 | `pciConfig`: on the PC, a register of PCI's configuration space read or written, the address (port 0xCF8) and the data (0xCFC) together: another driver's address cannot come in between (`io` only; libmynos's `pci_read32`, `pci_write32`) | — |
 | 104 | `piScreen`: on a Raspberry Pi, the screen: op 0 a framebuffer of w x h x 32 bits for the graphical session (its address, size and pitch), the kernel's text console no more drawn; op 1 the screen back to the console; op 2 whether there is a screen (`io` only; `mynos_piScreen`, displayd) | — |
 | 105 | `piFirmware`: on a Raspberry Pi, a property request (up to 256 bytes: its size, a code, the tags, the end tag) handed to the firmware's mailbox, its answer copied back: the board's MAC address, the GPIO expander (`io` only; `mynos_piFirmware`, netd's GENET) | — |
+| 106 | `piDevices`: on a Raspberry Pi, what its firmware's device tree has: 1 the PCIe, 2 the GENET, 4 the Wi-Fi (on the Arasan SDHCI, which QEMU's raspi4b gives the SD card instead) (`mynos_piDevices`: sdhcid, wifid) | — |
 | 200, 201, 202 | `createThread`, `exitThread`, `selfThread` | A.4 |
 | 300 | `setTimer` | A.5 |
 | 400 | `stats`: counters for `free` and the System window | — |

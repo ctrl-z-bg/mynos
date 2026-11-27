@@ -87,6 +87,18 @@ void raspi_detect(void)
    (its framebuffer), and the peripherals (a Pi 3's local ones too) */
 extern int raspi_pcie_up;
 int raspi_genet_present;                  /* the device tree says so (dtb.c) */
+int raspi_wifi_present;                   /* (dtb.c) */
+extern int raspi_pcie_present;
+
+/* piDevices (106): what the firmware's device tree has, for drivers that
+   share a controller or must not touch an absent device: 1 the PCIe, 2
+   the GENET, 4 the Wi-Fi (on the Arasan SDHCI, which QEMU's raspi4b
+   gives the SD card instead) */
+long raspi_devices_call(void)
+{
+  return (raspi_pcie_present ? 1 : 0) | (raspi_genet_present ? 2 : 0) |
+         (raspi_wifi_present ? 4 : 0);
+}
 int raspi_device_ok(unsigned long p, unsigned long n)
 {
   unsigned long end = p + (n << 12);

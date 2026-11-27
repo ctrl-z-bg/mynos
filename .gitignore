@@ -54,7 +54,9 @@ services/virtio/vblkd
 services/sd/sdhcid
 system/sdhcid
 services/usb/usbd
+services/wifi/wifid
 system/usbd
+system/wifid
 services/net/netd
 tests/net/sockets
 tests/net/netd

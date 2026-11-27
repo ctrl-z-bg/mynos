@@ -2175,3 +2175,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   to the LAN, an address from its router's DHCP, ping 1-2 ms, MyNOS's
   httpd reachable from the LAN. The time from the network is its own
   bead now. Next: the Wi-Fi (btq.9, priority raised: the user wants it).
+- **2026-11-27** — The Wi-Fi begun (mynos-btq.9, doc/decisions/wifi.md):
+  `wifid` (`services/wifi/`) powers the Pi 400's CYW43456 (the
+  firmware's GPIO expander), brings up its SDIO on the Arasan SDHCI,
+  reads its cores, loads its firmware and NVRAM, starts it and asks its
+  version and MAC address; first try on the board pending.
+  `make-sd-raspi.sh` puts the chip's firmware (Synaptics's licence: not
+  in MyNOS's repository) in the card's `/wifi`. Native call 106
+  (`mynos_piDevices`): what the device tree has, so that wifid and
+  sdhcid share the Arasan controller rightly (QEMU's `raspi4b` has its
+  SD card there). A USB mouse's wheel works (btq.8.7: report protocol,
+  its report descriptor parsed).

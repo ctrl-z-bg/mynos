@@ -110,6 +110,7 @@ make -C services/display
 make -C services/sound
 make -C services/sd
 make -C services/usb
+make -C services/wifi
 make -C gui
 make -C graphics
 make -C tests/net

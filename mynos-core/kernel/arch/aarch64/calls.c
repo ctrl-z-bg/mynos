@@ -88,12 +88,14 @@ static long native_fb(long op, long w, long h, long out)
 {
   return raspi_fb_call(op, w, h, (unsigned long *)out);
 }
-/* the firmware's mailbox (105): raspi.c */
+/* the firmware's mailbox (105), the device tree's devices (106): raspi.c */
 long raspi_firmware_call(uint32_t * buf, long len);
 static long native_firmware(long buf, long len)
 {
   return raspi_firmware_call((uint32_t *)buf, len);
 }
+long raspi_devices_call(void);
+static long native_devices(void) { return raspi_devices_call(); }
 #else
 static long native_fb(long op, long w, long h, long out)
 {
@@ -105,6 +107,7 @@ static long native_firmware(long buf, long len)
   (void)buf; (void)len;
   return MYNOS_ERR_INVALID;
 }
+static long native_devices(void) { return 0; }
 #endif
 
 static long native_threadExit(long r) { __OS_threadExit((void *)r); return 0; }
@@ -127,7 +130,7 @@ static const struct { int n; call_t f; int wide; } natives[] = {
   { 36, C(_mynos_syscall_faults) }, { 37, C(_mynos_syscall_pager) },
   { 38, C(_mynos_syscall_procstat) }, { 39, C(_mynos_syscall_dmaAlloc), 1 },
   { 100, C(_mynos_syscall_enableIrq) }, { 101, C(_mynos_syscall_disableIrq) },
-  { 102, C(native_portio) }, { 104, C(native_fb), 1 }, { 105, C(native_firmware) },
+  { 102, C(native_portio) }, { 104, C(native_fb), 1 }, { 105, C(native_firmware) }, { 106, C(native_devices) },
   { 200, C(__OS_threadCreate) }, { 201, C(native_threadExit), 1 },
   { 202, C(__OS_threadSelf) }, { 300, C(_mynos_syscall_setTimer) },
   { 400, C(native_fillStats), 1 },

@@ -362,11 +362,16 @@ int main(void)
   int port;
 #ifdef __aarch64__
   /* a Pi 4's EMMC2; else its Arasan SDHCI, where QEMU's raspi4b puts the
-     card (a real Pi 4's has its Wi-Fi there: tried only without a card in
-     the EMMC2); else a Pi 3's (the kernel maps only its own Pi's) */
+     card (a real Pi 4's has its Wi-Fi there, wifid's: never tried when
+     the device tree says so); else a Pi 3's (the kernel maps only its own
+     Pi's) */
   if ((emmc = mynos_mapPhysical(EMMC2_PHYS, 1))) {
     pi4 = 1;
     if (card_init() < 0) {
+      if (mynos_piDevices() & MYNOS_PI_WIFI) {
+        mynos_log("sdhcid: no SD card\n");
+        return 0;
+      }
       emmc = mynos_mapPhysical(EMMC4_PHYS, 1);
       gpio = mynos_mapPhysical(GPIO4_PHYS, 1);
       if (emmc && gpio) pins_to_sdhci();

@@ -235,6 +235,11 @@ struct dev {
   int halted;                         /* intr's last transfer failed: its code */
   int errors;                         /* how many have */
   int hub_change;                     /* a hub's ports changed: its report */
+  /* a mouse's reports, from its report descriptor (report protocol: the
+     boot protocol's have no wheel); m_ok 0: the boot protocol's three
+     bytes. Offsets in bits from the report's start (its id's byte
+     included) */
+  int m_ok, m_id, m_btn, m_nbtn, m_x, m_xs, m_y, m_ys, m_w, m_ws;
 };
 
 #define MAXDEV 16
@@ -472,21 +477,99 @@ static void repeat_keys(void)
 
 static int pointer_port = -1;
 
-static void mouse_report(const unsigned char * r, int len)
+/* size bits of a report from bit off, sign-extended (0 if past len bytes) */
+static int bits(const unsigned char * r, int len, int off, int size)
+{
+  unsigned int v = 0;
+  int i;
+  if (size <= 0 || size > 32 || off + size > len * 8) return 0;
+  for (i = 0; i < size; i++)
+    if (r[(off + i) / 8] & (1 << ((off + i) % 8))) v |= 1u << i;
+  if (size < 32 && (v & (1u << (size - 1)))) v |= ~0u << size;
+  return (int)v;
+}
+
+/* a mouse's report descriptor (HID 1.11, 6.2.2): where its buttons, X, Y
+   and wheel are, in the report that has X; 0, or -1 */
+static int mouse_layout(struct dev * d, const unsigned char * p, int len)
+{
+  int page = 0, size = 0, count = 0, id = 0, off = 0, i, n, umin = 0, umax = -1, nu = 0;
+  int usages[16];
+  unsigned int v;
+  d->m_ok = 0;
+  while (len > 0) {
+    int b = p[0], sz = (b & 3) == 3 ? 4 : b & 3, type = (b >> 2) & 3, tag = b >> 4;
+    if (b == 0xFE) {                  /* a long item: skipped */
+      n = len > 1 ? p[1] + 3 : len;
+      p += n; len -= n;
+      continue;
+    }
+    if (1 + sz > len) break;
+    for (v = 0, i = 0; i < sz; i++) v |= (unsigned int)p[1 + i] << (8 * i);
+    if (type == 1) {                  /* global */
+      if (tag == 0) page = (int)v;
+      else if (tag == 7) size = (int)v;
+      else if (tag == 9) count = (int)v;
+      else if (tag == 8) {           /* a report id: its own offsets, after its byte */
+        if (d->m_ok) break;          /* (X found in the one before: done) */
+        id = (int)v;
+        off = 8;
+        d->m_nbtn = d->m_ys = d->m_ws = 0;   /* (the report before had no X) */
+      }
+    } else if (type == 2) {           /* local */
+      if (tag == 0 && nu < 16) usages[nu++] = (int)(sz == 4 ? v & 0xFFFF : v);
+      else if (tag == 1) umin = (int)v;
+      else if (tag == 2) umax = (int)v;
+    } else if (type == 0) {           /* main */
+      if (tag == 8) {                 /* an input */
+        for (i = 0; i < count; i++) {
+          int u = i < nu ? usages[i] : nu ? usages[nu - 1] : umin + i;
+          int at = off + i * size;
+          if (v & 1) continue;        /* a constant: padding */
+          if (page == 9 && u >= 1 && (umax < 0 || u <= umax)) {
+            if (d->m_nbtn == 0) d->m_btn = at;
+            if (d->m_nbtn < 3) d->m_nbtn++;
+          } else if (page == 1 && u == 0x30) { d->m_x = at; d->m_xs = size; d->m_ok = 1; d->m_id = id; }
+          else if (page == 1 && u == 0x31) { d->m_y = at; d->m_ys = size; }
+          else if (page == 1 && u == 0x38) { d->m_w = at; d->m_ws = size; }
+        }
+        off += count * size;
+      }
+      nu = 0; umin = 0; umax = -1;    /* (the locals end with a main item) */
+    }
+    p += 1 + sz;
+    len -= 1 + sz;
+  }
+  return d->m_ok && d->m_ys ? 0 : -1;
+}
+
+static void mouse_report(struct dev * d, const unsigned char * r, int len)
 {
   wire_writer w;
-  int ch;
+  int ch, dx, dy, b, wh;
   mynos_msg_t * reply;
-  if (len < 3) return;
+  if (d->m_ok) {
+    if (d->m_id && (len < 1 || r[0] != d->m_id)) return;   /* another report */
+    dx = bits(r, len, d->m_x, d->m_xs);
+    dy = bits(r, len, d->m_y, d->m_ys);
+    wh = bits(r, len, d->m_w, d->m_ws);
+    b = d->m_nbtn ? bits(r, len, d->m_btn, d->m_nbtn) & ((1 << d->m_nbtn) - 1) : 0;
+  } else {
+    if (len < 3) return;
+    dx = (signed char)r[1];
+    dy = (signed char)r[2];
+    b = r[0] & 7;
+    wh = len > 3 ? (signed char)r[3] : 0;
+  }
   if (pointer_port < 0) pointer_port = mynos_registryLookUp("pointer");
   if (pointer_port < 0) return;       /* no display server (yet) */
   wire_writer_init(&w);
   wire_put_cstring(&w, "pointer/1");
   wire_put_int(&w, 0);
-  wire_put_int(&w, (signed char)r[1]);
-  wire_put_int(&w, (signed char)r[2]);
-  wire_put_int(&w, r[0] & 7);
-  wire_put_int(&w, len > 3 ? (signed char)r[3] : 0);
+  wire_put_int(&w, dx);
+  wire_put_int(&w, dy);
+  wire_put_int(&w, b);
+  wire_put_int(&w, wh);
   ch = w.error ? -1 : mynos_connectToPort(pointer_port);
   if (ch < 0) pointer_port = -1;
   else {
@@ -523,7 +606,7 @@ static void handle_transfer(struct event * e)
     }
     cache_drop(d->report, d->intr_len);
     if (d->kind == 1) keyboard_report(d, d->report);
-    else if (d->kind == 2) mouse_report(d->report, d->intr_len - (int)(e->status & 0xFFFFFF));
+    else if (d->kind == 2) mouse_report(d, d->report, d->intr_len - (int)(e->status & 0xFFFFFF));
     else { d->hub_change = 1; return; }   /* a hub's: its ports looked at by main */
     queue_report(d);
     return;
@@ -566,7 +649,7 @@ static void attach(int port, unsigned int route, int speed, struct dev * hub, in
 {
   struct dev * d;
   int slot = 0, cc, n, i, cfg_len, config, iface = -1, proto = 0, ep_addr = 0, ep_len = 0,
-      ep_int = 10, mps, kind = 0;
+      ep_int = 10, mps, kind = 0, rd_len = 0;
   volatile unsigned int * c;
   unsigned char * p;
   if (ndevs == MAXDEV) return;
@@ -645,6 +728,8 @@ static void attach(int port, unsigned int route, int speed, struct dev * hub, in
       kind = p[5] == 9 ? 9 : proto;
     } else if (p[1] == 4 && iface >= 0 && !ep_addr)
       break;                          /* the next interface: none found in it */
+    else if (p[1] == 0x21 && iface >= 0 && !ep_addr && p[0] >= 9 && p[6] == 0x22)
+      rd_len = p[7] | p[8] << 8;      /* (HID: its report descriptor's length) */
     else if (p[1] == 5 && iface >= 0 && !ep_addr && (p[2] & 0x80) && (p[3] & 3) == 3) {
       ep_addr = p[2];
       ep_len = p[4] | (p[5] & 7) << 8;
@@ -665,7 +750,14 @@ static void attach(int port, unsigned int route, int speed, struct dev * hub, in
     d->ttt = speed == 3 ? (ctl_buf[3] >> 5) & 3 : 0;
     d->power_ms = ctl_buf[5] * 2;
   } else {
-    control(d, 0x21, 0x0B, 0, iface, 0);                        /* SET_PROTOCOL: boot */
+    /* a mouse: its report descriptor understood, the report protocol
+       (the wheel); else, and a keyboard, the boot protocol */
+    if (proto == 2 && rd_len > 0 && rd_len <= PAGE &&
+        control(d, 0x81, 6, 0x2200, iface, rd_len) == rd_len &&
+        mouse_layout(d, ctl_buf, rd_len) == 0)
+      control(d, 0x21, 0x0B, 1, iface, 0);                      /* SET_PROTOCOL: report */
+    else
+      control(d, 0x21, 0x0B, 0, iface, 0);                      /* SET_PROTOCOL: boot */
     control(d, 0x21, 0x0A, 0, iface, 0);                        /* SET_IDLE: only changes */
   }
   /* its interrupt endpoint: configured, then read */
@@ -696,7 +788,8 @@ static void attach(int port, unsigned int route, int speed, struct dev * hub, in
     queue_report(d);                  /* its ports' changes, from now on */
     return;
   }
-  mynos_log("usbd: port %s: a %s\n", d->loc, proto == 1 ? "keyboard" : "mouse");
+  mynos_log("usbd: port %s: a %s%s\n", d->loc, proto == 1 ? "keyboard" : "mouse",
+            proto == 2 ? (d->m_ok ? (d->m_ws ? ", with a wheel" : ", no wheel") : ", boot protocol") : "");
   for (i = 0; i < 8; i++) d->last[i] = 0;
   queue_report(d);
 }

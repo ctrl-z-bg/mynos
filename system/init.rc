@@ -26,3 +26,5 @@ driver sdhcid
 # the USB (usbd: keyboards and mice on an xHCI; a Pi 4's or 400's, QEMU's
 # qemu-xhci), after consoled's keys service
 driver usbd
+# a Raspberry Pi 4's or 400's Wi-Fi (wifid: its firmware from /disk/wifi)
+driver wifid

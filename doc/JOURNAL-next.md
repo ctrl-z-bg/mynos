@@ -853,3 +853,31 @@ another computer: `log > /disk/web/log.txt` on the Pi.
 **Lesson.** Where two drivers that work disagree on nothing, copy what
 they agree on (here: every descriptor to one ring) rather than the
 cleverer layout.
+
+## 2026-11-27 — wifid broke the emulated Pi 4's SD card (one controller, two owners)
+
+**Symptom.** With wifid added (btq.9, its first step), lane j's Pi 4 on
+QEMU failed to write its SD card: `sh: /disk/r4.txt: Invalid argument`,
+while wifid was still trying its SDIO card.
+
+**Cause.** The same controller has a different owner on each machine. A
+real Pi 4's Arasan SDHCI (0xFE300000) is the Wi-Fi's, its SD card on
+EMMC2; QEMU's `raspi4b` puts the SD card on the Arasan controller (and
+has no Wi-Fi), which sdhcid knows ("tries both"). wifid reset that
+controller and sent CMD0 under sdhcid's card.
+
+**Fix.** The firmware's device tree decides: the kernel notes `wifi@1`
+(`brcm,bcm4329-fmac`) as it notes the PCIe and the GENET, and a native
+call, 106 (`mynos_piDevices`), tells drivers. wifid runs only if the
+device tree has a Wi-Fi; sdhcid leaves the Arasan controller alone if it
+does. On QEMU (no device tree from a firmware) nothing changes for
+sdhcid, and wifid ends at once.
+
+**Also.** The Pi 400's mouse's wheel (btq.8.7): usbd set every mouse to
+HID's boot protocol, whose three bytes have no wheel. A mouse now keeps
+the report protocol when its report descriptor is understood (its
+buttons, X, Y and wheel found, report id included); else the boot
+protocol as before. QEMU's mouse reports its wheel that way.
+
+**Lesson.** "This controller is the Wi-Fi's" is a fact of a board, not
+of a chip: ask the board's description, not the address.
