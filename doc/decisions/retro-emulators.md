@@ -101,7 +101,11 @@ T-states, the interrupt at the start, no memory contention (later, if a
 game needs it). `.tap` loaded through a trap on LD-BYTES (0x0556):
 instant. The game, a package of data as `tobutobugirl`: GLAZX (Eugeny
 Novikov, 2019, MIT), two players at one keyboard, which exercises keys
-held together.
+held together. (Changed afterwards, 2026-11-27: the test games come in
+the emulator's package, `games/`, named without a path, `zxspectrum
+glazx`; a user's own ROMs and tapes in `/disk/roms/<machine>/`, each
+README naming the proprietary ROMs a machine can use. The MSX comes
+with C-BIOS and one game.)
 
 Keys: Shift and a letter give CAPS SHIFT and the letter, Ctrl and a letter
 SYMBOL SHIFT and the letter. Shift or Ctrl alone do not reach a window

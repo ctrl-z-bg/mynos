@@ -20,7 +20,8 @@
 # DEPENDS, the packages it needs; RUN,
 # the window the Packages window starts, and its arguments; DOC, its
 # documentation (a file, kept as README.md); EXTRA, other files (its
-# licence, data).
+# licence, data), each at the package's top, or where SOURCE:PATH says
+# (third_party/glazx/glazx48.tap:games/glazx.tap).
 #
 # OUTDIR/docs/NAME.md is a package's DOC, for the repository's page; a
 # package with pictures (SRC/images, made by tools/pkg-shots.sh) has a
@@ -70,7 +71,12 @@ for spec in packages/*/spec; do
     # a source may be another package's (../view/png.ml): kept by its name
     for f in $SOURCES; do cp "$SRC/$f" "$d/src/"; done
     names_only=$(for f in $SOURCES; do basename "$f"; done | tr '\n' ' ')
-    for f in $EXTRA; do cp -r "$f" "$d/"; done
+    for f in $EXTRA; do
+        case $f in
+            *:*) mkdir -p "$d/$(dirname "${f#*:}")"; cp "${f%%:*}" "$d/${f#*:}" ;;
+            *) cp -r "$f" "$d/" ;;
+        esac
+    done
     # its documentation: in the archive, and beside the index (the
     # repository's page links it)
     if [ -n "$DOC" ]; then

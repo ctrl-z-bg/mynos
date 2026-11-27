@@ -4,7 +4,8 @@ GLAZX, a small game for the ZX Spectrum 48K in classic arcade style, by
 Eugeny Novikov (2019, MIT licence: LICENSE), from
 https://github.com/EugenyN/GLAZX (release v1.0, `glazx48.tap`,
 SHA-256 c061b25a9b776641f413eddc920c575b1558102e986a301154208b29dde47947),
-unchanged. Played in MyNOS by the package zxspectrum: type `glazx`.
+unchanged. Comes with MyNOS's zxspectrum package (`games/glazx.tap`): type
+`zxspectrum glazx`.
 
 Two glazes on a grid shoot deadly rays at each other; walls stop rays and
 moves; boxes give lives, ammunition, ghost time and a rocket sight. For

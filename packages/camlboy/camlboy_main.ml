@@ -48,12 +48,40 @@ let parse_keys s =
       List.map key_of_name (String.split_on_char '+' keys), max 1 n)
     (List.filter (( <> ) "") (String.split_on_char ' ' s))
 
+(* a game the package brings (/disk/pkg/camlboy/games): named without its
+   directory or its extension, [camlboy tobutobugirl] *)
+let games_dir () =
+  let beside = Filename.concat (Filename.dirname Sys.argv.(0)) "games" in
+  if Sys.file_exists beside then beside else "/disk/pkg/camlboy/games"
+
+let games () =
+  match Sys.readdir (games_dir ()) with
+  | names ->
+    List.sort compare (List.filter_map (fun n ->
+        if Filename.check_suffix n ".gb" then Some (Filename.remove_extension n) else None)
+        (Array.to_list names))
+  | exception Sys_error _ -> []
+
+let resolve f =
+  if Sys.file_exists f then f
+  else
+    match List.find_opt Sys.file_exists
+            (List.map (fun e -> Filename.concat (games_dir ()) (f ^ e)) [ ""; ".gb" ]) with
+    | Some g -> g
+    | None ->
+      Printf.eprintf "camlboy: %s: no such file, nor a game of the package's (%s)\n" f
+        (String.concat ", " (games ()));
+      exit 2
+
 let () =
   let args = List.tl (Array.to_list Sys.argv) in
   let headless = List.mem "--headless" args in
   let rom = match List.filter (( <> ) "--headless") args with
-    | r :: _ -> r
-    | [] -> prerr_endline "usage: camlboy [--headless] ROM.gb"; exit 2 in
+    | r :: _ -> resolve r
+    | [] ->
+      Printf.eprintf "usage: camlboy [--headless] ROM.gb (or a game of the package's: %s)\n"
+        (String.concat ", " (games ()));
+      exit 2 in
   let rom_bytes = match Read_rom_file.f rom with
     | b -> b
     | exception Sys_error m -> prerr_endline ("camlboy: " ^ m); exit 1 in

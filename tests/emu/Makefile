@@ -41,11 +41,12 @@ emu.img: zxspectrum.byte emutest.byte camlboy.byte emutest_gb.byte ../../package
   ../../third_party/glazx/glazx48.tap ../../third_party/tobutobugirl/tobutobugirl.gb
 	rm -f $@
 	mkfs.fat -C -F 32 $@ 65536 >/dev/null
-	mmd -i $@ ::/zx
-	mcopy -i $@ zxspectrum.byte emutest.byte ../../packages/zxspectrum/48.rom \
-	  ../../third_party/glazx/glazx48.tap ::/zx/
-	mmd -i $@ ::/gb
-	mcopy -i $@ camlboy.byte emutest_gb.byte ../../third_party/tobutobugirl/tobutobugirl.gb ::/gb/
+	mmd -i $@ ::/zx ::/zx/games
+	mcopy -i $@ zxspectrum.byte emutest.byte ../../packages/zxspectrum/48.rom ::/zx/
+	mcopy -i $@ ../../third_party/glazx/glazx48.tap ::/zx/games/glazx.tap
+	mmd -i $@ ::/gb ::/gb/games
+	mcopy -i $@ camlboy.byte emutest_gb.byte ::/gb/
+	mcopy -i $@ ../../third_party/tobutobugirl/tobutobugirl.gb ::/gb/games/
 
 clean:
 	rm -rf zx et cb eg zxspectrum.byte emutest.byte camlboy.byte emutest_gb.byte emu.img

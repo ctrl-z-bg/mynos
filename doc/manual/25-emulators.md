@@ -29,8 +29,10 @@ camlboy ROM.gb                a window
 camlboy --headless ROM.gb
 ```
 
-(`pkg install zxspectrum`, `pkg install camlboy`; `glazx` and
-`tobutobugirl` bring one with a game.) The window's status line says
+(`pkg install zxspectrum`, `pkg install camlboy`; each comes with games:
+`zxspectrum glazx`, `zxspectrum snake`, `camlboy tobutobugirl`. Your own
+tapes and cartridges go in `/disk/roms/zx`, `/disk/roms/gb`: the
+packages' READMEs say which ROMs a machine can use.) The window's status line says
 the service's name. A program finds the emulators running with
 `Emu_proto.find`, which lists the registered names made of a prefix and
 digits only:

@@ -317,8 +317,9 @@ if [ -f tests/emu/emu.img ] && [ -f system/ramdisk.dsk ]; then
     while [ $i -lt 120 ] && ! grep -aq 'emu: all checks passed\|emu: some checks FAILED\|PANIC' "$tmp/logemu"; do
         sleep 1; i=$((i + 1))
     done
-    # camlboy too: the Game Boy through the same protocol
-    tools/type-keys.py "$tmp/mon-emu" '/disk/gb/camlboy.byte --headless /disk/gb/tobutobugirl.gb &\n'
+    # camlboy too: the Game Boy through the same protocol, its game named
+    # as a user names it (found in games/, beside the program)
+    tools/type-keys.py "$tmp/mon-emu" '/disk/gb/camlboy.byte --headless tobutobugirl &\n'
     i=0
     while [ $i -lt 60 ] && ! grep -aq 'camlboy: camlboy' "$tmp/logemu"; do sleep 1; i=$((i + 1)); done
     sleep 1

@@ -226,7 +226,8 @@ All services are linked statically against `libmynos` and placed at
   `manual` (the manual's chapters, `man NAME`, a window to read them),
   `scheme` (OCS, R5RS, `third_party/ocs`), `camlboy` (CAMLBOY, a Game
   Boy emulator in OCaml, `third_party/camlboy`: 60 frames a second under
-  KVM) with `tobutobugirl`, `zork1`, `zork2`, `zork3` (Infocom's story
+  KVM; it comes with Tobu Tobu Girl), `zxspectrum` (MyNOS's ZX Spectrum
+  48K, with GLAZX and Snake), `zork1`, `zork2`, `zork3` (Infocom's story
   files, MIT since 2025, `third_party/zork`), `minotaur` (an original text adventure
   inside MyNOS). A package may give the agent
   a tool (`tool.json`: `wikipedia`, `calculate`) (mynos-vws).
@@ -1919,7 +1920,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   `examples/25/hello_zx.ml`, built by `tools/build-examples.sh` and run
   in MyNOS), and appendix E.18. After the printed edition: the book is
   frozen.
-- **2026-11-27** — zxsnake 1.0 (package, branch `retro`): Snake for the
-  ZX Spectrum 48K (David Crespo, 2020, MIT), for one player, played by
-  zxspectrum; loads at once (its loader and code through the ROM's
-  LD-BYTES).
+- **2026-11-27** — Snake for the ZX Spectrum 48K (David Crespo, 2020,
+  MIT), a game for one player (`third_party/zxsnake`): it loads at once
+  (its loader and code through the ROM's LD-BYTES).
+- **2026-11-27** — The games come with the emulators, not as packages
+  of their own: zxspectrum 1.1 brings GLAZX and Snake, camlboy 1.3 Tobu
+  Tobu Girl, in the package's `games/`, named without a path
+  (`zxspectrum snake`, `camlboy tobutobugirl`); the packages `glazx` and
+  `tobutobugirl` are gone from the repository. A user's own tapes,
+  cartridges and ROMs go in `/disk/roms/<machine>/` (`/disk/pkg/<name>`
+  is emptied by `pkg` at each update); each emulator's README says which
+  ROMs it can use. `tools/pkg-build.sh`'s EXTRA takes SOURCE:PATH;
+  sec_emu starts camlboy by its game's name.

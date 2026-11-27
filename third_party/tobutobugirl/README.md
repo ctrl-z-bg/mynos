@@ -9,3 +9,5 @@ licence (`LICENSE`), its art and music under CC BY 4.0
 `tobutobugirl.gb` is the ROM as CAMLBOY's repository ships it
 (`resource/games/tobu.gb`, https://github.com/linoscope/CAMLBOY),
 unchanged.
+It comes with MyNOS's camlboy package (`games/tobutobugirl.gb`): type
+`camlboy tobutobugirl`.

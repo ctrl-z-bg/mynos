@@ -25,6 +25,31 @@ let rom_path () =
   let beside = Filename.concat (Filename.dirname Sys.argv.(0)) "48.rom" in
   if Sys.file_exists beside then beside else "/disk/pkg/zxspectrum/48.rom"
 
+(* a game the package brings (/disk/pkg/zxspectrum/games): named without
+   its directory or its extension, [zxspectrum glazx] *)
+let games_dir () =
+  let beside = Filename.concat (Filename.dirname Sys.argv.(0)) "games" in
+  if Sys.file_exists beside then beside else "/disk/pkg/zxspectrum/games"
+
+let games () =
+  match Sys.readdir (games_dir ()) with
+  | names ->
+    List.sort compare (List.filter_map (fun n ->
+        if List.exists (Filename.check_suffix n) [ ".tap"; ".z80"; ".sna" ]
+        then Some (Filename.remove_extension n) else None) (Array.to_list names))
+  | exception Sys_error _ -> []
+
+let resolve f =
+  if Sys.file_exists f then f
+  else
+    let candidates = List.map (fun e -> Filename.concat (games_dir ()) (f ^ e)) [ ""; ".tap"; ".z80"; ".sna" ] in
+    match List.find_opt Sys.file_exists candidates with
+    | Some g -> g
+    | None ->
+      Printf.eprintf "zxspectrum: %s: no such file, nor a game of the package's (%s)\n" f
+        (String.concat ", " (games ()));
+      exit 2
+
 let read_file f =
   let ic = open_in_bin f in
   Fun.protect ~finally:(fun () -> close_in ic) (fun () -> really_input_string ic (in_channel_length ic))
@@ -235,7 +260,7 @@ let make ?(service = true) file =
              watch_map = Bytes.make 0x10000 '\000'; waiters = []; key_waiters = [];
              last_stop = Emu_proto.Running } in
   (match file with
-   | Some f -> st.loaded <- Spectrum.load m f;
+   | Some f -> st.loaded <- Spectrum.load m (resolve f);
      Tracer.mark (Printf.sprintf "%s: loaded %s" (Emu_service.name st.svc) st.loaded)
    | None -> ());
   st

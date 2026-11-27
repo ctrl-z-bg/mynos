@@ -112,3 +112,34 @@ interrupt calls, reached by `resume` and `wait`.
 
 **Lesson.** An example in a manual is a test that nobody runs: this one
 runs (built by `tools/build-examples.sh`, its output pasted from MyNOS).
+
+## 2026-11-27 — The games go into the emulators' packages
+
+**Symptom.** Each game was a package of its own (`glazx`,
+`tobutobugirl`, then `zxsnake`): a package of a few kilobytes of data and
+a command, and the emulator to install first. The index grew by one for
+each game, and nothing said where a user's own ROMs should go.
+
+**Decision.** (Cesare's.) The games for trying an emulator come with it:
+zxspectrum 1.1 brings GLAZX and Snake, camlboy 1.3 Tobu Tobu Girl, in
+the package's `games/`; the emulator takes a name without a path
+(`zxspectrum snake`) and, when a name is neither a file nor a game,
+says which games it has. The packages `glazx` and `tobutobugirl` are
+taken out of the repository's index (`zxsnake` was never published).
+
+**Where a user's files go.** Not into `/disk/pkg/<name>`: `pkg install`
+removes that directory before unpacking a new version (`pkg.ml`,
+`rm_rf dir`), so a ROM copied there would go at the next update. They go
+in `/disk/roms/<machine>/` (`zx`, `gb`, `msx`), and each emulator's
+README says which proprietary ROMs it can use: none for the Spectrum
+(its ROM may be given away), none for the Game Boy (no boot ROM needed),
+for the MSX a real BIOS in place of C-BIOS, for MSX-BASIC.
+
+**How.** `tools/pkg-build.sh`'s EXTRA takes `SOURCE:PATH`, a file put
+somewhere in the package other than its top (`games/glazx.tap`): the
+sources in `third_party` keep their names and the archive has the
+names a user types. The suite's sec_emu starts camlboy by its game's
+name, so the lookup is tested.
+
+**Lesson.** Before choosing where a user puts files, read what the
+package manager does to its own directories.
