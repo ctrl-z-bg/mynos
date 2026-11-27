@@ -1,0 +1,11 @@
+# The package bench (tools/pkg-build.sh): how fast this MyNOS is
+NAME=bench
+VERSION=1.0
+DESCRIPTION='How fast this MyNOS is: the processor (OCaml), the system (system calls, IPC, threads, programs, files), the network and, in a window, the drawing; each measure in its unit and as a score (1000: the reference PC under KVM); runs kept and compared; type bench, or bench -t in the terminal'
+LICENSE=GPL-2.0-or-later
+LIBRARIES=threads
+SRC=packages/bench
+SOURCES=bench.ml
+RUN=bench
+DOC=packages/bench/README.md
+EXTRA=packages/bench/tool.json

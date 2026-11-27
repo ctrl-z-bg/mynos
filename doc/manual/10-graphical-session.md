@@ -372,6 +372,10 @@ window, each with its description: a click starts it. Among the
 packages, `studio` is an IDE for OCaml inside MyNOS (MyNOS Studio: build
 and run, completion from the running services, an agent that edits
 through Studio's own protocol); its page is on the packages' repository.
+`bench` measures how fast this MyNOS is (the processor, system calls,
+IPC, threads, files, the network, the drawing) and gives a score, 1000
+being MyNOS under KVM on the PC it is developed on; `bench -t` does the
+same in a terminal, and the agent can run it (its tool `benchmark`).
 
 ## 10.15 Graphical programs outside the session
 

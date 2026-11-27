@@ -228,7 +228,8 @@ All services are linked statically against `libmynos` and placed at
   Boy emulator in OCaml, `third_party/camlboy`: 60 frames a second under
   KVM; it comes with Tobu Tobu Girl), `zxspectrum` (MyNOS's ZX Spectrum
   48K, with GLAZX and Snake), `msx` (MyNOS's MSX1, C-BIOS, with Westen
-  House), `zork1`, `zork2`, `zork3` (Infocom's story
+  House), `bench` (how fast MyNOS is, a score; a tool for the agent),
+  `zork1`, `zork2`, `zork3` (Infocom's story
   files, MIT since 2025, `third_party/zork`), `minotaur` (an original text adventure
   inside MyNOS). A package may give the agent
   a tool (`tool.json`: `wikipedia`, `calculate`) (mynos-vws).
@@ -1955,3 +1956,18 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   under QEMU (`tools/pkg-shots.sh`, a throwaway script): 60 and 50
   frames a second, keys, the PSG's and the beeper's sound. Lane c green.
   Published to mynos-packages (baa65b1), built from a05f58d.
+- **2026-11-27** — bench 1.0 (package, mynos-dbt): how fast this MyNOS
+  is. 27 measures in four groups: cpu (OCaml: integers, floats, the GC,
+  strings, sorting, memory, MD5), system (getpid, IPC round trips,
+  thread switch, a program started, files on /tmp and /disk), net (netd,
+  ping, TCP to ourselves; DNS and an HTTP fetch unscored), graphics (in
+  a window: fill, blit, lines, text, frames composed). Each in its unit
+  and as a score, 1000 = the mean of three runs under KVM on the
+  development PC; group scores and a total (cpu, system, net) by
+  geometric mean; runs kept in /disk/bench/history.json and compared.
+  A window in the session (pictures, `packages/bench/shots.sh`), `-t`
+  in the terminal, `--quick`; a tool for the agent (`benchmark`).
+  Under KVM: an IPC round trip 3.4 µs, a thread switch 1.1 µs, a
+  program started 5.6 ms. Found on the way: /disk writes at 0.63 MB/s
+  (mynos-ro7), an HTTP fetch from the host takes 1.5 s (mynos-yxl).
+  Not published yet.

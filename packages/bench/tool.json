@@ -1,0 +1,9 @@
+{
+  "name": "benchmark",
+  "description": "Measures how fast this MyNOS is, in about half a minute: the processor (OCaml), the system (a system call, IPC round trips, thread switches, starting a program, files), the network. Each measure in its unit, a score per group and a total (1000: MyNOS in QEMU with KVM on the reference PC; more is faster), and the change since the last run.",
+  "parameters": {
+    "groups": "the groups to measure, among cpu, system, net; or all"
+  },
+  "command": [ "bench", "-t", "--no-save", "{groups}" ],
+  "safe": true
+}

@@ -254,3 +254,44 @@ two copies drift, and the drift (here, `reset`) is found only by
 putting them side by side. And a window's keys are events, not a state
 sampled at the machine's pace: an event shorter than a frame must still
 make a frame.
+
+## 2026-11-27 — bench: measuring with a clock of 10 ms, on 31-bit integers
+
+**What.** A benchmark package (mynos-dbt): the processor through OCaml,
+the system, the network, the drawing; each measure in its unit and as a
+score against a reference run under KVM.
+
+**The clock.** `Mynos.uptime` is `clock_gettime(CLOCK_MONOTONIC)`, and
+MyNOS's answers in the PIT's ticks of 10 ms (`time_now` in
+`kernel/time.c`): a measure of 50 ms could be off by a fifth. Each
+measure waits for the clock to move (a tick's edge), runs a number of
+operations grown until they take 0.3 s, three times, the median kept.
+Two runs in a row then agree within 6%, most measures within 2%.
+
+**A crash in the sieve.** The first run in MyNOS ended at the first
+measure: `process 19 killed: invalid memory access`. The sieve marks
+multiples from `i * i`; on the i386 OCaml's integers have 31 bits, and
+for `i` above 46340 `i * i` wraps to a negative number: `while !j <= n`
+held, and `Bytes.unsafe_set` wrote far before the buffer. On a 64-bit
+host it never shows. **Fix**: `i * i` only while `i <= n / i`. The same
+line of thought for the pseudo-random generator, whose multiplier did
+not even compile (1103515245 is above the 31-bit range): 69069.
+
+**The window went blank while measuring.** A measure ran inside `Gui`'s
+frame, after `Gui` had filled the window's buffer with the background
+and before the program drew: the buffer is shared with displayd, which
+shows it as it is when it composes, so a measure of a second showed a
+blank window. **Fix**: draw first, measure at the end of the frame.
+
+**Frames.** `Display.damage` is answered before displayd composes, so a
+loop of damages could seem to measure only messages; but displayd is one
+thread, and the next damage waits for the last composition: about
+17,000 frames of 270 x 200 a second under KVM, the composition's rate.
+
+**Found in the system.** Writing 1 MB to `/disk` takes 1.6 s (0.63
+MB/s) when reading it back takes 3 ms (mynos-ro7); fetching a 13 KB file
+over HTTP from the host takes 1.5 s every time (mynos-yxl).
+
+**Lesson.** On the i386, an OCaml program's arithmetic is 31-bit: a
+product of two numbers above 46340 must be guarded, and code that works
+on the host proves nothing about it.
