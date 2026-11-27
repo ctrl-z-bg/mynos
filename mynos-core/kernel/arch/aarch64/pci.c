@@ -21,6 +21,8 @@
    processor; the mouse then wrote its events where nobody expected
    them (heaps corrupted in displayd and in its clients). */
 
+#ifndef MYNOS_RASPI   /* a Pi 3 has no PCI: raspi.c */
+
 #include "global.h"
 #include "layout.h"
 
@@ -62,3 +64,5 @@ void arch_pci_assign(void)
     *reg(dev, 0x04) |= 0x2;                     /* memory space on */
   }
 }
+
+#endif

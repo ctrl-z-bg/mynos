@@ -28,8 +28,15 @@
  * by Dark Fiber
  * taken from alt.os.development FAQ
  */
+#ifdef ARCH_TEXT_ON_FB
+void arch_text_sync(const unsigned char * cells, int row, int col);
+#endif
 static void update_cursor(uint32_t row, uint32_t col)
 {
+#ifdef ARCH_TEXT_ON_FB
+  /* no text mode: the cells drawn on a framebuffer (a Raspberry Pi's) */
+  arch_text_sync((const unsigned char *)BASE_VIDEO, (int)row, (int)col);
+#endif
   ushort16_t position=(row*80) + col;
   
   // cursor LOW port to vga INDEX register
@@ -221,6 +228,16 @@ static unsigned char glyph_of(ulong32_t u)
   case 0x2713: case 0x2714: return 0xFB;    /* check marks: the root */
   }
   return '?';
+}
+
+/* the character a slot's glyph draws (the drawing of the console on a
+   framebuffer: arch/aarch64/fbcon.c) */
+ulong32_t video_glyph_char(unsigned char slot)
+{
+  if (slot >= 0x80) return cp437_high[slot - 0x80];
+  if (slot < 0x20) return cp437_low[slot];
+  if (slot == 0x7F) return 0x2302;
+  return slot;
 }
 
 /* the UTF-8 decoder of programs' output */

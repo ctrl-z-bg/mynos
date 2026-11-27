@@ -81,6 +81,21 @@ static long native_portio(long op, long port, long value)
   return MYNOS_ERR_INVALID;
 }
 
+/* the screen of a Raspberry Pi (104): fbcon.c */
+#ifdef MYNOS_RASPI
+long raspi_fb_call(long op, long w, long h, unsigned long * out);
+static long native_fb(long op, long w, long h, long out)
+{
+  return raspi_fb_call(op, w, h, (unsigned long *)out);
+}
+#else
+static long native_fb(long op, long w, long h, long out)
+{
+  (void)op; (void)w; (void)h; (void)out;
+  return MYNOS_ERR_INVALID;
+}
+#endif
+
 static long native_threadExit(long r) { __OS_threadExit((void *)r); return 0; }
 static long native_fillStats(long p) { __OS_fillStats((void *)p); return 0; }
 
@@ -101,7 +116,7 @@ static const struct { int n; call_t f; int wide; } natives[] = {
   { 36, C(_mynos_syscall_faults) }, { 37, C(_mynos_syscall_pager) },
   { 38, C(_mynos_syscall_procstat) }, { 39, C(_mynos_syscall_dmaAlloc), 1 },
   { 100, C(_mynos_syscall_enableIrq) }, { 101, C(_mynos_syscall_disableIrq) },
-  { 102, C(native_portio) },
+  { 102, C(native_portio) }, { 104, C(native_fb), 1 },
   { 200, C(__OS_threadCreate) }, { 201, C(native_threadExit), 1 },
   { 202, C(__OS_threadSelf) }, { 300, C(_mynos_syscall_setTimer) },
   { 400, C(native_fillStats), 1 },

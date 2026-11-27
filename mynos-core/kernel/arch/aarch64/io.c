@@ -27,13 +27,18 @@
  *     control register (0xCF9): PSCI's SYSTEM_OFF and SYSTEM_RESET, through
  *     the hypervisor call QEMU virt answers;
  *   - the rest (the VGA's registers, the 8259's EOI): nothing.
- * QEMU virt's addresses; a Raspberry Pi has its own (btq.7).
+ * QEMU virt's addresses; a Raspberry Pi's (MYNOS_RASPI, raspi.c): its
+ * PL011, no clock, the watchdog for both.
  */
 
 #include "global.h"
 #include "io.h"
 
+#ifdef MYNOS_RASPI
+#define UART      0x3F201000UL          /* a Pi's PL011 (raspi.c) */
+#else
 #define UART      0x09000000UL          /* PL011 */
+#endif
 #define UART_DR   0x00
 #define UART_FR   0x18                  /* bit 4: nothing received, 5: transmit FIFO full */
 #define UART_IMSC 0x38                  /* interrupt mask: bit 4 receive, 6 receive timeout */
@@ -42,6 +47,13 @@
 
 #define REG32(BASE, OFF) (*(volatile uint32_t *)DEVICE((BASE) + (OFF)))
 
+#ifdef MYNOS_RASPI
+/* a Pi: no PSCI, the power manager's watchdog (raspi.c) */
+void raspi_reset(int halt);
+#define PSCI_SYSTEM_OFF   1
+#define PSCI_SYSTEM_RESET 0
+static void psci(unsigned long fn) { raspi_reset((int)fn); }
+#else
 /* PSCI (QEMU virt without EL2: its conduit is hvc) */
 static void psci(unsigned long fn)
 {
@@ -50,6 +62,7 @@ static void psci(unsigned long fn)
 }
 #define PSCI_SYSTEM_OFF   0x84000008UL
 #define PSCI_SYSTEM_RESET 0x84000009UL
+#endif
 
 static void uart_putc(unsigned char c)
 {
@@ -64,7 +77,15 @@ static unsigned char cmos_index;
 static unsigned char cmos_value(unsigned char reg)
 {
   static const unsigned char mdays[12] = { 31,28,31,30,31,30,31,31,30,31,30,31 };
-  uint32_t t = REG32(RTC, 0), days = t / 86400, s = t % 86400, y = 1970, m = 0;
+#ifdef MYNOS_RASPI
+  /* a Pi has no clock: the time its kernel was built from (the last
+     commit's, tools/build-kernel-aarch64.sh), not 1970, which the
+     kernel's reading of the CMOS would take for 2070 */
+  uint32_t t = MYNOS_EPOCH;
+#else
+  uint32_t t = REG32(RTC, 0);
+#endif
+  uint32_t days = t / 86400, s = t % 86400, y = 1970, m = 0;
   for (;;) {
     uint32_t n = (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) ? 366 : 365;
     if (days < n) break;

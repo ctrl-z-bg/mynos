@@ -35,6 +35,11 @@ void * mynos_mapPhysical(unsigned long phys, int npages) {
   return r >= (unsigned long)-4096 ? NULL : (void *)r;
 }
 
+/* piScreen (104): mynos.h */
+int mynos_piScreen(int op, int w, int h, unsigned long * out) {
+  return (int)__mynos_syscall(104, op, w, h, (long)out, 0);
+}
+
 /* dmaArea (29): the DMA area mapped here, its physical address in *phys;
    NULL without one (or without the io privilege) */
 void * mynos_dmaArea(unsigned long * phys) {

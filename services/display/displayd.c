@@ -272,6 +272,45 @@ static void vgpu_off(void)
   gpu_command(48, scanout, 12);
 }
 
+/* ---- a Raspberry Pi's screen (btq.7): the VideoCore's framebuffer,
+   which the kernel gets from the firmware and lends for the session
+   (native call 104, arch/aarch64/fbcon.c): at W x H, its address mapped
+   here, the picture drawn straight in it; given back at the end, the
+   kernel's text console drawn again ---- */
+
+static int pifb = 0;                     /* the screen is a Pi's */
+#ifdef __aarch64__
+static unsigned long pifb_phys, pifb_bytes;
+static unsigned int * pifb_map;
+
+static int pifb_present(void) { return mynos_piScreen(2, 0, 0, NULL) == 0; }
+
+static int pifb_mode(void)
+{
+  unsigned long out[3];
+  if (mynos_piScreen(0, W, H, out) != 0) return -1;
+  if (out[2] != (unsigned long)W * 4) {    /* rows padded: not this simple drawing */
+    mynos_piScreen(1, 0, 0, NULL);
+    return -1;
+  }
+  if (out[0] != pifb_phys || out[1] > pifb_bytes || !pifb_map) {
+    void * m = mynos_mapPhysical(out[0], (out[1] + 4095) / 4096);
+    if (!m) { mynos_piScreen(1, 0, 0, NULL); return -1; }
+    pifb_map = m;
+    pifb_phys = out[0];
+    pifb_bytes = out[1];
+  }
+  return 0;
+}
+
+static void pifb_off(void) { mynos_piScreen(1, 0, 0, NULL); }
+#else
+static int pifb_present(void) { return 0; }
+static int pifb_mode(void) { return -1; }
+static void pifb_off(void) { }
+static unsigned int * pifb_map;
+#endif
+
 /* ---- the font (PSF 1, with a Unicode table) ---- */
 
 static unsigned char glyphs[2][512 * 16];
@@ -967,7 +1006,7 @@ static const char * size_refused(int w, int h)
 {
   unsigned long rows;
   if (w < 800 || h < 600 || w > 4096 || h > 4096 || w % 8) return "from 800x600, a width multiple of 8";
-  rows = vgpu ? 0 : (FB_SKIP + w * 4 - 1) / (w * 4);
+  rows = vgpu || pifb ? 0 : (FB_SKIP + w * 4 - 1) / (w * 4);
   if ((rows + h) * (unsigned long)w * 4 > vram) return "more than the video memory holds";
   return NULL;
 }
@@ -989,6 +1028,12 @@ static void start_session(int w, int h)
       return;
     }
     fb = gpu_fb;
+  } else if (pifb) {
+    if (pifb_mode() < 0) {
+      mynos_log("displayd: the Pi's firmware refused %dx%d\n", W, H);
+      return;
+    }
+    fb = pifb_map;
   } else {
     mode_graphics();
     fb = vram_base + fb_rows_skipped * W;
@@ -1007,7 +1052,7 @@ static void end_session(void)
   if (!active) return;
   for (i = 0; i < MAXWIN; i++) if (win[i].used) remove_window(i);
   active = 0;
-  if (vgpu) vgpu_off(); else mode_text();
+  if (vgpu) vgpu_off(); else if (pifb) pifb_off(); else mode_text();
   for (i = 0; i < nwaiters; i++) reply_unit(waiters[i]);
   nwaiters = 0;
 }
@@ -1930,8 +1975,12 @@ int main(void)
     vgpu = 1;
     lfb = 0;
     vram = 16UL << 20;          /* what dmaAlloc gives in one piece */
+  } else if (pifb_present()) {
+    pifb = 1;
+    lfb = 0;
+    vram = 64UL << 20;          /* (the firmware says no if it has less) */
   } else {
-    mynos_log("displayd: no Bochs VGA (QEMU's standard VGA), no virtio GPU: no graphics\n");
+    mynos_log("displayd: no Bochs VGA (QEMU's standard VGA), no virtio GPU, no Pi's screen: no graphics\n");
     return 0;                 /* by choice: init does not start it again */
   }
   back = malloc(W * H * 4);
@@ -1973,7 +2022,7 @@ int main(void)
     return 1;
   }
   mynos_log("displayd: %dx%d (up to %lu MB of video memory), %s, %s%s%s\n",
-            W, H, vram >> 20, vgpu ? "virtio GPU" : "Bochs VGA",
+            W, H, vram >> 20, vgpu ? "virtio GPU" : pifb ? "a Pi's framebuffer" : "Bochs VGA",
 	    vmmouse ? "vmmouse (absolute)" : sem >= 0 ? "PS/2 mouse" : "no PS/2 mouse",
 	    packet == 4 ? ", wheel" : "", vptr_kind ? vptr_kind : "");
 

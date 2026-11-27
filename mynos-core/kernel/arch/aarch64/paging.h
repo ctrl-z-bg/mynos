@@ -24,15 +24,30 @@
 typedef uint64_t pte_t;
 
 /* RAM's real physical base: QEMU virt's 1 GB (bit 30, at most 1 GB of
-   RAM: an OR is exact) */
+   RAM: an OR is exact); a Raspberry Pi's 0 (btq.7) */
+#ifdef MYNOS_RASPI
+#define ARCH_RAM_BASE    0x0UL
+#else
 #define ARCH_RAM_BASE    0x40000000UL
+#endif
 #define ARCH_RAM_BIT     ARCH_RAM_BASE
+
+/* a device's page: device memory; on a Pi, the VideoCore's memory (the
+   framebuffer, below the peripherals) normal non-cacheable memory
+   (MAIR's 2: start.S), where programs' copies may be unaligned (device
+   memory faults them) */
+#ifdef MYNOS_RASPI
+#define ARCH_DEVICE_ATTR(E) (((E) & PTE_ADDR) < 0x3F000000UL ? PTE_ATTR_NC : PTE_ATTR_DEVICE)
+#else
+#define ARCH_DEVICE_ATTR(E) PTE_ATTR_DEVICE
+#endif
 
 /* the hardware's bits (ptebits.h has MyNOS's) */
 #define PTE_VALID        0x1UL
 #define PTE_PAGE         0x2UL          /* level 3: a page; levels 0-2: a table */
 #define PTE_ATTR_NORMAL  (0UL << 2)     /* MAIR index 0: write-back */
 #define PTE_ATTR_DEVICE  (1UL << 2)     /* MAIR index 1: device nGnRE */
+#define PTE_ATTR_NC      (2UL << 2)     /* MAIR index 2: normal non-cacheable */
 #define PTE_AP_RO        (1UL << 7)
 #define PTE_SH_INNER     (3UL << 8)
 #define PTE_AF           (1UL << 10)
@@ -74,7 +89,7 @@ static inline pte_t pte_hw(pte_t v)
   if (!(v & PTE_VALID)) return v;
   v |= PTE_PAGE | PTE_AF;
   if (v & (1UL << 59))                              /* PF_DEVICE */
-    v = (v & ~(7UL << 2)) | PTE_ATTR_DEVICE | PTE_PXN | PTE_UXN;
+    v = (v & ~(7UL << 2)) | ARCH_DEVICE_ATTR(v) | PTE_PXN | PTE_UXN;
   else
     v |= PTE_SH_INNER | ARCH_RAM_BIT;
   if (v & (1UL << 55)) v &= ~PTE_AP_RO;             /* PF_READWRITE */

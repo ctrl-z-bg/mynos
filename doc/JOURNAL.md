@@ -4245,3 +4245,37 @@ never from the program's live pixels.
 
 **Lesson.** Two processors drawing in and reading from one buffer need
 a hand-over: here the copy taken at the program's word.
+
+## 2026-11-27 — MyNOS on a Raspberry Pi 3 (QEMU raspi3b)
+
+**Goal.** The Raspberry Pis' common base (btq.7) on QEMU `raspi3b`,
+the Pi 3's and Zero 2 W's chip.
+
+**What the machine does.** A probe of a few instructions showed it: a
+raw image (`kernel8.img`, as the Pi's firmware wants) starts at 0x80000,
+at EL2, x0 zero (the real firmware gives the device tree there), the
+other three processors waiting in the firmware's spin tables; an ELF
+image instead starts at EL3 with all four processors. The PL011 prints
+only once its control register turns it on (the firmware does that on
+a real Pi).
+
+**Choices.** One kernel per platform (`MYNOS_RASPI`): RAM's base is
+part of the kernel's numbering (0x40000000 on `virt`, 0 on a Pi). The
+image moves itself to 2 MB, where it is linked. The RAM's maps stop at
+the peripherals: a normal-memory map over device registers lets the
+processor read them speculatively. The kernel keeps the GIC's
+interrupt numbers, and the Pi's two controllers translate into them.
+
+**Findings.** Every driver started at boot: those that look for PCI
+(`vblkd`, `netd`, `displayd`) would have mapped QEMU `virt`'s ECAM, an
+address with nothing behind it on a Pi (an external abort).
+`mapPhysical` now maps only the platform's own device ranges, and the
+drivers, told no, end as on a machine without the card. A Pi has no
+real-time clock: the CMOS emulation's 1970 became 2070 in the kernel's
+reading (two-digit years are 20xx); the time starts at the build's
+commit instead. The framebuffer, mapped as device memory, would fault on
+the unaligned copies of programs' `memcpy`: the VideoCore's memory is
+mapped normal non-cacheable for programs.
+
+**Lesson.** A new board is mostly "what does the firmware leave, and
+where": a probe of ten instructions answered it before any code.

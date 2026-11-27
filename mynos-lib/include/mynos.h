@@ -235,6 +235,12 @@ int mynos_processInfo(int pid);
 /* a device's memory (not RAM: a frame buffer), npages from physical
    address phys, mapped here (drivers only): its address, or NULL */
 void * mynos_mapPhysical(unsigned long phys, int npages);
+/* a Raspberry Pi's screen (native call 104; drivers only: displayd):
+   op 0, a framebuffer of w x h x 32 bits for the graphical session, its
+   physical address, size and pitch (bytes) in out[0..2], the kernel's
+   text console no more drawn; op 1, the screen back to the console;
+   op 2, whether there is a screen. 0, or an error (elsewhere: always) */
+int mynos_piScreen(int op, int w, int h, unsigned long * out);
 /* the DMA area: MYNOS_DMA_AREA_SIZE bytes of RAM below 16 MB, on a 64 KB
    boundary, chosen by the kernel at boot, for ISA DMA (a sound card's),
    mapped here: its address, its physical address in *phys (the DMA

@@ -80,6 +80,8 @@ static void read_fdt(const uint8_t * fdt, uint64_t * mem, uint64_t * rd_start,
       const uint8_t * v = s + 8;
       if (in_memory && streq(pname, "reg") && len >= 16)
         *mem = be_cells(v + 8, 8);
+      else if (in_memory && streq(pname, "reg") && len == 8)
+        *mem = be32(v + 4);                        /* one cell each (a Pi's) */
       if (in_chosen && streq(pname, "linux,initrd-start"))
         *rd_start = be_cells(v, len);
       if (in_chosen && streq(pname, "linux,initrd-end"))
@@ -96,12 +98,29 @@ static void read_fdt(const uint8_t * fdt, uint64_t * mem, uint64_t * rd_start,
 }
 
 void arch_pci_assign(void);
+#ifdef MYNOS_RASPI
+void raspi_uart_init(void);
+unsigned long raspi_ram_size(void);
+void raspi_fb_init(void);
+#endif
 
-void arch_boot(void)
+/* [dtb]: x0 at the entry, the device tree's real address (a Pi's
+   firmware; QEMU virt's is at RAM's start) */
+void arch_boot(uint64_t dtb)
 {
   const uint8_t * fdt = PHYS_TO_VIRT(0);
   uint64_t mem = 0, rd_start = 0, rd_end = 0;
+#ifdef MYNOS_RASPI
+  raspi_uart_init();
+  fdt = dtb && dtb < 0x3F000000UL ? PHYS_TO_VIRT(dtb) : 0;
+  if (fdt && be32(fdt) == 0xd00dfeed) read_fdt(fdt, &mem, &rd_start, &rd_end);
+  if (mem == 0) mem = raspi_ram_size();     /* QEMU's raspi3b: no device tree */
+  if (mem == 0) mem = 0x3B400000UL;         /* (948 MB: a Pi 3's, gpu_mem=76) */
+  raspi_fb_init();                          /* the screen's text (fbcon.c) */
+#else
+  (void)dtb;
   if (be32(fdt) == 0xd00dfeed) read_fdt(fdt, &mem, &rd_start, &rd_end);
+#endif
   if (mem == 0 || mem > 0x40000000UL) mem = 0x40000000UL;   /* at most 1 GB (paging.h) */
   _asm_global_mem_size = mem >> 20;
 

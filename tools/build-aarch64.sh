@@ -12,6 +12,10 @@ mkdir -p "$tree"
 (cd "$root" && git ls-files -z) | (cd "$root" && rsync -a --from0 --files-from=- ./ "$tree/")
 version=$("$root/tools/version.sh")
 [ "$(cat "$tree/VERSION" 2>/dev/null)" = "$version" ] || echo "$version" > "$tree/VERSION"
+# (a Raspberry Pi has no clock: its kernel's time starts at the last
+# commit's, tools/build-kernel-aarch64.sh)
+epoch=$(git -C "$root" log -1 --format=%ct 2>/dev/null || echo 0)
+[ "$(cat "$tree/EPOCH" 2>/dev/null)" = "$epoch" ] || echo "$epoch" > "$tree/EPOCH"
 # what to run there: the arguments, or the whole build of build-all.sh
 # (its commands, but the kernel's: tools/build-kernel-aarch64.sh's), with
 # the cross toolchain's strip for the programs

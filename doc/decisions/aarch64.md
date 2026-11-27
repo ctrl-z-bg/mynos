@@ -141,6 +141,42 @@ restart it, which `init` uses (ACPI's sleep state 5 at 0x604, the reset
 control register 0xCF9), are PSCI's `SYSTEM_OFF` and `SYSTEM_RESET` in the
 kernel's port table; its CMOS clock is a PC's (BCD).
 
+**11. The Raspberry Pis' base (btq.7).** The same sources make a second
+kernel, `kernel8.img` (`MYNOS_RASPI`: `tools/build-kernel-aarch64.sh`
+builds both), for the Pi 3 and the Zero 2 W (BCM2837), on QEMU `raspi3b`
+(`MACHINE=raspi3b` for `run-qemu.sh`). One image per platform rather than
+one that finds out: RAM's base is a constant of the kernel's numbering
+(choice 3), 0 on a Pi. What differs, in `raspi.c` and `fbcon.c`:
+
+- the firmware starts the image's bytes where it put them (0x80000), at
+  EL2, the device tree in x0; the image moves itself to 2 MB, where it is
+  linked. The RAM's size comes from the device tree or the mailbox. The
+  RAM's maps (the direct map, the boot's kernel gigabyte) stop at the
+  peripherals (0x3F000000): no normal memory over device registers;
+- the interrupts: each processor's local controller (its timer, its
+  mailbox 0 as the IPI, the GPU's interrupts routed to processor 0) and
+  the BCM2835's, behind the GIC's names and numbers (`pic.h`); MyNOS's
+  line 1 is the UART again (consoled as on `virt`);
+- the other processors: the firmware's spin tables, not PSCI;
+- restart and power off: the watchdog (power off as Linux does, the
+  firmware's halt partition; QEMU ends);
+- no real-time clock: the time starts at the build's last commit;
+- `mapPhysical` maps only the platform's device ranges (on `virt` too):
+  a driver looking for the other platform's devices (PCI on a Pi) is
+  told no and ends, rather than faulting on an address with nothing;
+- the screen: the VideoCore's framebuffer, from the mailbox. The
+  kernel's terminal keeps its cells as on the PC and draws them
+  (Terminus 8x16, 640 x 400, the firmware scales it); `displayd` asks
+  for a framebuffer of its size with native call 104 (`piScreen`) and
+  draws in it directly, mapped normal non-cacheable (device memory
+  faults unaligned copies); the console is drawn again when the session
+  ends.
+
+The SD card (next) goes on the SDHCI controller, whose driver the Pi 4
+(EMMC2) and the Wi-Fi (SDIO, btq.9) want too; on the Zero 2 W, the
+Wi-Fi's SDIO then wants the SDHCI, and the SD card would move to the
+Broadcom SDHOST.
+
 ## Risks
 
 - **The amount**: the plan's estimate is 15-25 days for `virt` and the

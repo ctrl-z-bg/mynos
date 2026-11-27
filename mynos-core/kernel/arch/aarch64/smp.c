@@ -35,8 +35,8 @@ void kernel_exit(void)
 
 /* ---- the other processors (doc/decisions/smp.md, doc/decisions/aarch64.md) ----
 
-   Started by PSCI's CPU_ON (QEMU virt: a hypervisor call), before the
-   first process (main.c). Each has its GIC interface (its banked
+   Started by PSCI's CPU_ON (QEMU virt: a hypervisor call), or a Pi's
+   spin tables (raspi.c), before the first process (main.c). Each has its GIC interface (its banked
    registers: the software interrupts, the timer), its generic timer (a
    time slice every 10 ms, as x86-64's LAPIC timer), its idle thread.
    Device interrupts stay on processor 0 (the distributor's targets). A
@@ -65,6 +65,9 @@ extern void ap_timer_start(void);
 uint64_t ap_stack_top, ap_ttbr0;
 static volatile int ap_started;
 
+#ifdef MYNOS_RASPI
+void raspi_start_cpu(uint32_t n, unsigned long entry);
+#else
 static long psci(unsigned long fn, unsigned long a1, unsigned long a2, unsigned long a3)
 {
   register unsigned long x0 __asm__("x0") = fn;
@@ -75,6 +78,7 @@ static long psci(unsigned long fn, unsigned long a1, unsigned long a2, unsigned 
   return (long)x0;
 }
 #define PSCI_CPU_ON 0xC4000003UL
+#endif
 
 static uint64_t counter(void)
 {
@@ -107,9 +111,16 @@ void arch_smp_start(void)
     ap_stack_top = (uint64_t)stack + KERNEL_STACK_NPAGES * PAGE_SIZE;
     ap_ttbr0 = kernel_pml4 | ARCH_RAM_BIT;            /* as arch_switch_space */
     __atomic_store_n(&ap_started, 0, __ATOMIC_SEQ_CST);
+#ifdef MYNOS_RASPI
+    /* a Pi's four, from the firmware's spin tables (raspi.c) */
+    if (n >= 4) break;
+    raspi_start_cpu(n, (uint64_t)_start_secondary + ARCH_RAM_BASE);
+    r = 0;
+#else
     /* its MPIDR (QEMU virt: affinity 0 is its number, up to 8), where to
        start (a physical address), its number in x0 */
     r = psci(PSCI_CPU_ON, n, (uint64_t)_start_secondary + ARCH_RAM_BASE, n);
+#endif
     if (r != 0) break;                  /* no such processor: the last one (its
                                            stack, 16 KB, left: once, at boot) */
     t = counter();

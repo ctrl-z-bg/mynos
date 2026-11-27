@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-25
+Last updated: 2026-11-27
 
 ---
 
@@ -2048,3 +2048,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   processors). On
   AArch64, programs start slower only because the processor is emulated
   (GavML: 2.7 s; x86-64 emulated 3.0 s, under KVM 0.7 s).
+- **2026-11-27** — The Raspberry Pis' base begun (mynos-btq.7.1, .7.2;
+  doc/decisions/aarch64.md, choice 11): a second AArch64 kernel,
+  `kernel8.img` (`MYNOS_RASPI`), boots on QEMU `raspi3b`
+  (`MACHINE=raspi3b tools/run-qemu.sh`) to the shell on the UART, with
+  four processors (spin tables, local mailboxes as IPIs), the BCM2836 and
+  BCM2835 interrupt controllers, the watchdog to restart and power off,
+  the console drawn on the mailbox's framebuffer, and `gui` on it
+  (displayd's third screen, native call 104). The PCI drivers end
+  cleanly: `mapPhysical` maps only the platform's devices. No SD card,
+  network, keyboard or mouse yet (btq.7.3, btq.10). JOURNAL.

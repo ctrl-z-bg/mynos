@@ -20,7 +20,13 @@
 /* the machine, as uname says it */
 #define ARCH_MACHINE "aarch64"
 /* the boot's messages: what plays the PC's 8259 and 8253 */
+#ifdef MYNOS_RASPI
+/* no text mode: the console drawn on the framebuffer (fbcon.c) */
+#define ARCH_TEXT_ON_FB
+#define ARCH_PIC_NAME   "the BCM2836 and BCM2835 interrupt controllers"
+#else
 #define ARCH_PIC_NAME   "the GICv2 interrupt controller"
+#endif
 #define ARCH_TIMER_NAME "the generic timer (virtual, 1000 Hz)"
 
 /* page table entries with ARM's bits (ptebits.h, paging.h's pte_set) */
@@ -29,12 +35,21 @@
 #define ARCH_NO_ISA_DMA
 /* a device's view of RAM (DMA, mem.c's allocDma): the real address */
 #define ARCH_BUS_ADDR(P) ((P) + ARCH_RAM_BASE)
-/* mapPhysical's devices: real addresses, outside the real RAM, within
-   48 bits (paging.h's ARCH_RAM_BASE; mem.c) */
+/* mapPhysical's devices: real addresses, outside the real RAM, where
+   the platform has its devices, so that a driver looking for another
+   platform's (PCI on a Pi) is told no rather than faulting (mem.c).
+   QEMU virt: its devices, its PCI window and memory (0x08000000 to RAM's
+   start), PCI's configuration space (ECAM). A Pi: the VideoCore's
+   memory (its framebuffer), the peripherals, the local ones */
+#ifdef MYNOS_RASPI
 #define ARCH_DEVICE_PHYS_OK(P, N) \
-  ((((P) + ((unsigned long)(N) << 12) <= ARCH_RAM_BASE) || \
-    (P) >= ARCH_RAM_BASE + ((unsigned long)__total_phy_pages << 12)) && \
-   (((P) + ((unsigned long)(N) << 12)) >> 48) == 0)
+  ((P) >= ((unsigned long)__total_phy_pages << 12) && \
+   (P) + ((unsigned long)(N) << 12) <= 0x40040000UL)
+#else
+#define ARCH_DEVICE_PHYS_OK(P, N) \
+  ((((P) >= 0x08000000UL && (P) + ((unsigned long)(N) << 12) <= ARCH_RAM_BASE) || \
+    ((P) >= 0x4010000000UL && (P) + ((unsigned long)(N) << 12) <= 0x4020000000UL)))
+#endif
 
 /* ---- interrupts (IRQ: PSTATE.I) ---- */
 

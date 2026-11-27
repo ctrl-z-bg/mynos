@@ -11,6 +11,8 @@
 
 /* A GICv2 (QEMU virt's), in the 8259's place (pic.h). */
 
+#ifndef MYNOS_RASPI   /* a Pi's controllers: raspi.c */
+
 #include "global.h"
 #include "pic.h"
 
@@ -94,3 +96,5 @@ void disable_all_irqs()
 
 uint32_t gic_ack(void) { return C(GICC_IAR); }
 void gic_eoi(uint32_t iar) { C(GICC_EOIR) = iar; }
+
+#endif
