@@ -1,11 +1,18 @@
 (* The document's tree: see dom.mli. *)
 
+type ns = Html | Svg | Mathml
+type attr_ns = No_ns | Xlink | Xml | Xmlns
+type attr = { name : string; value : string; ans : attr_ns }
+type quirks = No_quirks | Quirks | Limited_quirks
+
 type kind =
-  | Document
+  | Document of { mutable quirks : quirks }
+  | Fragment
   | Doctype of { name : string; public_id : string; system_id : string }
-  | Element of { name : string; mutable attrs : (string * string) list }
+  | Element of { name : string; ns : ns; mutable attrs : attr list }
   | Text of { mutable data : string }
   | Comment of { mutable data : string }
+  | Pi of { target : string; mutable data : string }   (* a processing instruction *)
 
 type node = {
   id : int;
@@ -15,6 +22,7 @@ type node = {
   mutable last_child : node option;
   mutable prev : node option;
   mutable next : node option;
+  mutable content : node option;
 }
 
 let next_id = ref 0
@@ -22,14 +30,19 @@ let next_id = ref 0
 let make kind =
   incr next_id;
   { id = !next_id; kind; parent = None; first_child = None; last_child = None;
-    prev = None; next = None }
+    prev = None; next = None; content = None }
 
-let document () = make Document
-let element ?(attrs = []) name = make (Element { name; attrs })
+let document () = make (Document { quirks = No_quirks })
+let fragment () = make Fragment
+let element_with ns name attrs = make (Element { name; ns; attrs })
+let element ?(ns = Html) ?(attrs = []) name =
+  element_with ns name (List.map (fun (name, value) -> { name; value; ans = No_ns }) attrs)
 let text data = make (Text { data })
 let comment data = make (Comment { data })
+let pi target data = make (Pi { target; data })
 let doctype ?(public_id = "") ?(system_id = "") name =
   make (Doctype { name; public_id; system_id })
+let set_content t f = t.content <- Some f
 
 let remove n =
   (match n.parent with
@@ -55,9 +68,20 @@ let insert_before parent child reference =
 
 let append parent child = insert_before parent child None
 
-let name n = match n.kind with Element e -> e.name | _ -> ""
+let set_attrs n a = match n.kind with Element e -> e.attrs <- a | _ -> ()
+let set_quirks n q = match n.kind with Document d -> d.quirks <- q | _ -> ()
 
-let attr n a = match n.kind with Element e -> List.assoc_opt a e.attrs | _ -> None
+let name n = match n.kind with Element e -> e.name | _ -> ""
+let ns n = match n.kind with Element e -> Some e.ns | _ -> None
+let is_html n nm = match n.kind with Element e -> e.ns = Html && e.name = nm | _ -> false
+
+let attrs n = match n.kind with Element e -> e.attrs | _ -> []
+
+let attr n a =
+  match n.kind with
+  | Element e -> (match List.find_opt (fun (x : attr) -> x.name = a) e.attrs with
+      | Some x -> Some x.value | None -> None)
+  | _ -> None
 
 let children n =
   let rec go acc = function None -> List.rev acc | Some c -> go (c :: acc) c.next in

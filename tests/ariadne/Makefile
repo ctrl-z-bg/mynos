@@ -7,7 +7,8 @@ STRIP ?= strip
 
 ARIADNE = ../../ariadne
 OCAMLC = ocamlc -use-prims ../../mynos-runtime/primitives -I $(ARIADNE)
-CORE = $(addprefix $(ARIADNE)/, url.cmo dom.cmo html.cmo text.cmo pages.cmo expected.cmo)
+CORE = $(addprefix $(ARIADNE)/, url.cmo encoding.cmo entities_data.cmo tokenizer.cmo dom.cmo \
+	treebuilder.cmo html.cmo text.cmo pages.cmo expected.cmo)
 
 all: ramdisk.dsk
 

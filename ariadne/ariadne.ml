@@ -4,8 +4,9 @@
      ariadne --dump URL      the page as text, and its links
      ariadne --time URL      the time of each stage
 
-   M0, the skeleton: a page is loaded (Loader), parsed (Html, into Dom)
-   and read as text (Text); the window shows that text. *)
+   A page is loaded (Loader), decoded (Encoding), parsed by the HTML
+   Standard's parser (Html: Tokenizer and Treebuilder, into Dom) and read
+   as text (Text); the window shows that text, until the layout (M3). *)
 
 let usage () =
   prerr_endline "usage: ariadne [URL] | ariadne --dump URL | ariadne --time URL";
@@ -19,7 +20,7 @@ type loaded = {
 
 let load url =
   let response = Loader.load (Url.of_typed url) in
-  let doc = Html.parse (Loader.to_html response) in
+  let doc = Html.parse (fst (Loader.document response)) in
   { response; doc; page = Text.of_dom doc }
 
 (* ---- --dump and --time ---- *)
@@ -38,13 +39,16 @@ let time url =
   let t0 = now () in
   let r = Loader.load (Url.of_typed url) in
   let t1 = now () in
-  let doc = Html.parse (Loader.to_html r) in
+  let text, encoding = Loader.document r in
+  let t2a = now () in
+  let doc = Html.parse text in
   let t2 = now () in
   let page = Text.of_dom doc in
   let t3 = now () in
   Printf.printf "ariadne: %s (%s)\n" r.url r.status;
   Printf.printf "  load  %6.0f ms  %d bytes\n" (ms t0 t1) (String.length r.body);
-  Printf.printf "  parse %6.0f ms  %d nodes\n" (ms t1 t2) (Dom.count doc);
+  Printf.printf "  decode %5.0f ms  %s\n" (ms t1 t2a) encoding;
+  Printf.printf "  parse %6.0f ms  %d nodes\n" (ms t2a t2) (Dom.count doc);
   Printf.printf "  text  %6.0f ms  %d blocks\n" (ms t2 t3) (List.length page.blocks);
   Printf.printf "  total %6.0f ms\n" (ms t0 t3)
 

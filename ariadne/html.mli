@@ -1,15 +1,14 @@
-(** HTML to a {!Dom} tree.
-
-    M0: a small tolerant parser, enough to show a page's text. M1
-    replaces it with the WHATWG tokenizer and tree builder, behind this
-    same interface. *)
+(** HTML to a {!Dom} tree: the HTML Standard's parser ({!Encoding},
+    {!Tokenizer}, {!Treebuilder}). *)
 
 val parse : string -> Dom.node
-(** The document (a {!Dom.Document} node) of a page in UTF-8. *)
+(** A document (a {!Dom.Document} node) from its text in UTF-8. *)
 
-val decode_entities : string -> string
-(** [&amp;], [&lt;], [&#233;], [&#xE9;]... as UTF-8 (M0: the common named
-    ones only). *)
+val parse_bytes : ?charset:string -> string -> Dom.node * Encoding.t
+(** A document from its bytes: the encoding found (the byte order mark,
+    the HTTP header's [charset], a [<meta>], or a guess) and used. *)
 
-val utf8_of_code : Buffer.t -> int -> unit
-(** A code point, as UTF-8. *)
+val parse_fragment : context:Dom.node -> string -> Dom.node
+(** The fragment parsing algorithm ([innerHTML]): the nodes, in a
+    {!Dom.Fragment}, that the text makes inside an element like
+    [context]. *)

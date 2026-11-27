@@ -48,13 +48,31 @@ let urls () =
   check "url: what was typed" (Url.of_typed "example.com" = "https://example.com"
                                && Url.of_typed "/disk/a.html" = "file:/disk/a.html")
 
+(* the bytes' encoding, found and decoded *)
+let encodings () =
+  let enc ?transport s = fst (Encoding.sniff ?transport s) in
+  check "encoding: a byte order mark" (enc "\xEF\xBB\xBFx" = Encoding.Utf8 && enc "\xFF\xFEx\000" = Encoding.Utf16le);
+  check "encoding: the HTTP header's charset" (enc ~transport:"ISO-8859-1" "caf\xC3\xA9" = Encoding.Windows_1252);
+  check "encoding: <meta charset>" (enc "<html><meta charset=\"latin1\">caf\xC3\xA9" = Encoding.Windows_1252);
+  check "encoding: <meta http-equiv>"
+    (enc "<meta http-equiv=Content-Type content='text/html; charset=windows-1252'>" = Encoding.Windows_1252);
+  check "encoding: a <meta> inside a comment is not read"
+    (enc "<!-- <meta charset=latin1> -->caf\xC3\xA9" = Encoding.Utf8);
+  check "encoding: valid UTF-8 guessed, else windows-1252"
+    (enc "caf\xC3\xA9" = Encoding.Utf8 && enc "caf\xE9" = Encoding.Windows_1252);
+  check "encoding: windows-1252 decoded" (snd (Encoding.to_utf8 "\x80 caf\xE9") = "\xE2\x82\xAC caf\xC3\xA9");
+  check "encoding: bad UTF-8 becomes U+FFFD"
+    (Encoding.decode Encoding.Utf8 "a\xC3(\xF0\x9F\x98" = "a\xEF\xBF\xBD(\xEF\xBF\xBD");
+  check "encoding: UTF-16 with a surrogate pair"
+    (Encoding.decode Encoding.Utf16le "A\000\x3D\xD8\x00\xDE" = "A\xF0\x9F\x98\x80")
+
 (* rule 3: a tree far deeper than any stack would allow a recursion *)
 let deep () =
   let depth = 5000 in
   let html = String.concat "" (List.init depth (fun _ -> "<div>")) ^ "deep" in
   let doc = Html.parse html in
   check (Printf.sprintf "dom: %d nested elements, walked in a loop" depth)
-    (Dom.count doc = depth + 2 && Dom.text_content doc = "deep");
+    (Dom.count doc = depth + 5 && Dom.text_content doc = "deep")   (* the document, html, head, body, the text *);
   check "text: the deep tree's text" ((Text.of_dom doc).blocks = Text.[ { kind = Paragraph; text = "deep" } ])
 
 let dom () =
@@ -75,6 +93,7 @@ let () =
   | _ ->
     dom ();
     urls ();
+    encodings ();
     deep ();
     pages ();
     if !failures = 0 then print_endline "ariadne: all checks passed"

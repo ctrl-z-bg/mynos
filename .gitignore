@@ -77,6 +77,10 @@ llm.env
 /VERSION
 
 
-# Ariadne: the test pages and expected texts, as OCaml (ariadne/gen-strings.sh)
+# Ariadne: generated OCaml (the test pages, their expected texts, the named
+# character references) and the test runner's copy of Json
 ariadne/pages.ml
 ariadne/expected.ml
+ariadne/entities_data.ml
+ariadne/tests/json.ml
+ariadne/tests/json.mli

@@ -46,14 +46,21 @@ Found in M0, for later:
 
 ## M1: the HTML parser and the DOM
 
-- [ ] The DOM's types: document, element, text, comment, doctype; attributes; parents and children without deep recursion
-- [ ] The decoding: UTF-8, windows-1252, ISO-8859-1; the BOM, `<meta charset>`, the HTTP header
-- [ ] The tokenizer: every state of the WHATWG specification
-- [ ] Named character references (the full table, about 2,200)
-- [ ] The tree builder: the insertion modes, the adoption agency, foster parenting, the implied ends
-- [ ] html5lib-tests copied into the repository (MIT); tokenizer and tree construction tests run on the host
-- [ ] The pass rate recorded below
-- [ ] `--dump` reads the test pages from the DOM
+- [x] The DOM's types: document (with its quirks mode), fragment, doctype, element (namespace, namespaced attributes), text, comment, processing instruction; template contents; parents and children without deep recursion (`dom.ml`)
+- [x] The decoding: UTF-8 (invalid bytes as U+FFFD), windows-1252 and its labels (ISO-8859-1, ASCII...), UTF-16; the BOM, the HTTP header, the `<meta>` prescan, else UTF-8 if valid, windows-1252 if not (`encoding.ml`)
+- [ ] Other encodings (ISO-8859-15, Shift_JIS, GBK...): read as windows-1252 for now
+- [x] The tokenizer: every state of the HTML Standard, with its processing instructions (`tokenizer.ml`)
+- [x] Named character references: the full table (2,231), generated from the Standard's `entities.json` at build time
+- [x] The tree builder: every insertion mode, the adoption agency, foster parenting, templates, SVG and MathML, fragments; scripting off (`treebuilder.ml`)
+- [x] html5lib-tests' tokenizer tests (MIT) and WPT's tree construction tests (BSD) in `third_party/`, run on the host by `make -C ariadne test`, which fails under 99.9%
+- [x] The pass rate recorded below: 8,775 of 8,779
+- [ ] `<selectedcontent>` filled from the selected `<option>`: DOM behaviour, not the parser's; the 4 tests that fail (M6, with the DOM's API)
+- [x] `--dump` reads the test pages from the DOM; `--time` adds the decoding
+
+Found in M1:
+
+- The Standard changed in 2025–26 since the parser was first written from memory: processing instructions (`<?target data>`) are nodes, no longer bogus comments; the customizable `<select>` removed the "in select" modes (`select` is now a scope boundary, and `option`, `optgroup`, `hr`, `input` have new rules in "in body"); "parsing template contents" replaced "a template on the stack" for forms; an implied `<body>` leaves frameset-ok "ok". The tests caught each one; the rules were read from the Standard's text (13.2), not guessed.
+- Speed (bytecode): the parser is about twice M0's tag soup. The time is spread over the tokenizer's ~130,000 steps per large page and the tree builder's per-token work, with no hotspot (`ocamlprof`). Valid UTF-8 is now checked, not copied; runs of text and attribute values are copied at once. `tests/bench.ml` times the stages on saved pages.
 
 ## M2: fonts
 
@@ -128,8 +135,11 @@ time apart. Until M3 the Layout column is the text's reading (`Text`).
 | Date | Milestone | Page | Size | Parse | Cascade | Layout | Paint | Network |
 |---|---|---|---|---|---|---|---|---|
 | 2026-11-27 | M0 | en.wikipedia.org/wiki/Ariadne | 375 KB, 8,256 nodes | 110 ms | — | 80 ms | — | 5.4 s |
+| 2026-11-27 | M1 | en.wikipedia.org/wiki/Ariadne | 375 KB, 8,253 nodes | 281 ms, then about 235 ms (host) after the fast paths; decoding 50 ms, then 9 ms | — | 100 ms | — | 5.3 s |
+| 2026-11-27 | M1 | www.repubblica.it | 478 KB, 10,241 nodes | 355 ms | — | 67 ms | — | 7.5 s |
 
 html5lib-tests pass rate:
 
 | Date | Tokenizer | Tree construction |
 |---|---|---|
+| 2026-11-27 | 6,820 of 6,820 | 1,955 of 1,959 (4: `<selectedcontent>`); 14 skipped (scripting on) |

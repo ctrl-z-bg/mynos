@@ -1,0 +1,9 @@
+The HTML parser's tree construction tests, from web-platform-tests
+(https://github.com/web-platform-tests/wpt, html/syntax/parsing/resources/*.dat),
+under the 3-Clause BSD licence (LICENSE.md), at commit
+0291d7707f9bff124661c07f4cebec92d08afb49 (2026-11-27), unchanged. They were
+html5lib-tests' tree-construction/ directory, now maintained in WPT; the
+format is html5lib-tests' (tree-construction/README.md there).
+
+Ariadne's HTML parser (ariadne/, doc/decisions/browser.md) is checked
+against them on the host: tools/test-ariadne.sh.

@@ -1,0 +1,8 @@
+The HTML Standard's named character references
+(https://html.spec.whatwg.org/entities.json, fetched 2026-11-27), unchanged.
+The HTML Standard is by WHATWG (Apple, Google, Mozilla, Microsoft), under
+the Creative Commons Attribution 4.0 International License
+(https://creativecommons.org/licenses/by/4.0/).
+
+Ariadne's tokenizer (ariadne/) turns it into an OCaml table when it is
+built (ariadne/gen-entities.sh).

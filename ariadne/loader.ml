@@ -96,12 +96,18 @@ let load url =
     | None -> go (Url.of_typed url) redirects in
   go url 0
 
-(* the response as HTML: text as preformatted, anything else said in words *)
-let to_html r =
+(* the response as HTML in UTF-8, and the encoding its bytes were in:
+   HTML decoded by its byte order mark, the HTTP header's charset, a <meta>
+   or a guess (Encoding); text the same way, as preformatted text; anything
+   else said in words *)
+let document r =
   let ct = String.lowercase_ascii r.content_type in
+  let charset = Encoding.charset_of_content_type r.content_type in
   if ct = "" || String.starts_with ~prefix:"text/html" ct || String.starts_with ~prefix:"application/xhtml" ct
-  then r.body
-  else if String.starts_with ~prefix:"text/" ct then "<pre>" ^ escape r.body ^ "</pre>"
-  else message "Not a page"
-      (Printf.sprintf "This is %s, %d bytes: Ariadne shows only pages for now." r.content_type
-         (String.length r.body))
+  then let e, text = Encoding.to_utf8 ?transport:charset r.body in (text, Encoding.name e)
+  else if String.starts_with ~prefix:"text/" ct then
+    let e, text = Encoding.to_utf8 ?transport:charset r.body in
+    ("<pre>" ^ escape text ^ "</pre>", Encoding.name e)
+  else (message "Not a page"
+          (Printf.sprintf "This is %s, %d bytes: Ariadne shows only pages for now." r.content_type
+             (String.length r.body)), "UTF-8")
