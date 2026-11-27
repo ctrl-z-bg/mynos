@@ -307,7 +307,11 @@ if [ -f tests/emu/emu.img ] && [ -f system/ramdisk.dsk ]; then
         sleep 1; i=$((i + 1))
     done
     tools/type-keys.py "$tmp/mon-emu" '/disk/zx/zxspectrum.byte --headless &\n'
-    sleep 2
+    # (its line, then the next command: typed sooner, on a loaded machine,
+    # the shell lost its first keys)
+    i=0
+    while [ $i -lt 60 ] && ! grep -aq 'zxspectrum: zx' "$tmp/logemu"; do sleep 1; i=$((i + 1)); done
+    sleep 1
     tools/type-keys.py "$tmp/mon-emu" '/disk/zx/emutest.byte\n'
     i=0
     while [ $i -lt 120 ] && ! grep -aq 'emu: all checks passed\|emu: some checks FAILED\|PANIC' "$tmp/logemu"; do
@@ -315,7 +319,9 @@ if [ -f tests/emu/emu.img ] && [ -f system/ramdisk.dsk ]; then
     done
     # camlboy too: the Game Boy through the same protocol
     tools/type-keys.py "$tmp/mon-emu" '/disk/gb/camlboy.byte --headless /disk/gb/tobutobugirl.gb &\n'
-    sleep 2
+    i=0
+    while [ $i -lt 60 ] && ! grep -aq 'camlboy: camlboy' "$tmp/logemu"; do sleep 1; i=$((i + 1)); done
+    sleep 1
     tools/type-keys.py "$tmp/mon-emu" '/disk/gb/emutest_gb.byte\n'
     i=0
     while [ $i -lt 120 ] && ! grep -aq 'emu-gb: all checks passed\|emu-gb: some checks FAILED\|PANIC' "$tmp/logemu"; do
