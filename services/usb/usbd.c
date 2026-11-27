@@ -39,7 +39,9 @@
  * before the controller reads them and dropped from them before the
  * processor reads what it wrote (a Pi 4's PCIe is not coherent with the
  * caches; elsewhere this costs nothing that matters). The devices are
- * found once, when usbd starts: none plugged in later yet.
+ * found once, when usbd starts: none plugged in later yet (a port's
+ * changes are logged). An interrupt endpoint halted by a failed transfer
+ * is reset and read again.
  */
 
 #include <string.h>
@@ -148,6 +150,8 @@ struct trb { unsigned long param; unsigned int status, control; };
 #define T_ADDRESS_DEVICE  11
 #define T_CONFIGURE_EP    12
 #define T_EVALUATE_CTX    13
+#define T_RESET_EP        14
+#define T_SET_TR_DEQ      16
 #define T_EV_TRANSFER     32
 #define T_EV_COMMAND      33
 #define T_EV_PORT         34
@@ -227,6 +231,10 @@ struct dev {
   unsigned long report_bus;
   unsigned char last[8];              /* a keyboard's last report */
   int pending;                        /* a transfer queued on intr */
+  int ep_addr;                        /* intr's endpoint address */
+  int halted;                         /* intr's last transfer failed: its code */
+  int errors;                         /* how many have */
+  int hub_change;                     /* a hub's ports changed: its report */
 };
 
 #define MAXDEV 16
@@ -507,12 +515,16 @@ static void handle_transfer(struct event * e)
     struct dev * d = &devs[i];
     if (d->slot != slot || d->intr_dci != dci) continue;
     d->pending = 0;
-    if (cc == 1 || cc == 13) {
-      cache_drop(d->report, d->intr_len);
-      if (d->kind == 1) keyboard_report(d, d->report);
-      else if (d->kind == 2) mouse_report(d->report, d->intr_len - (int)(e->status & 0xFFFFFF));
-      else return;                    /* a hub's port changes: not read again yet */
+    if (cc != 1 && cc != 13) {        /* recovered, then read again, by main */
+      d->halted = cc;
+      if (d->errors++ < 5 || d->errors % 100 == 0)
+        mynos_log("usbd: port %s: a transfer failed (%d), %d so far\n", d->loc, cc, d->errors);
+      return;
     }
+    cache_drop(d->report, d->intr_len);
+    if (d->kind == 1) keyboard_report(d, d->report);
+    else if (d->kind == 2) mouse_report(d->report, d->intr_len - (int)(e->status & 0xFFFFFF));
+    else { d->hub_change = 1; return; }   /* a hub's: its ports looked at by main */
     queue_report(d);
     return;
   }
@@ -658,6 +670,7 @@ static void attach(int port, unsigned int route, int speed, struct dev * hub, in
   }
   /* its interrupt endpoint: configured, then read */
   d->kind = kind;
+  d->ep_addr = ep_addr;
   d->intr_dci = (ep_addr & 0xF) * 2 + 1;
   d->intr_len = ep_len;               /* (a boot report: its first 8 bytes) */
   d->report = dma(1, &d->report_bus);
@@ -680,6 +693,7 @@ static void attach(int port, unsigned int route, int speed, struct dev * hub, in
   if (kind == 9) {
     mynos_log("usbd: port %s: a hub, %d ports\n", d->loc, d->hub_ports);
     hub_scan(d);
+    queue_report(d);                  /* its ports' changes, from now on */
     return;
   }
   mynos_log("usbd: port %s: a %s\n", d->loc, proto == 1 ? "keyboard" : "mouse");
@@ -730,6 +744,45 @@ static void hub_scan(struct dev * h)
     mynos_sleep(20000);               /* the device's recovery after the reset */
     attach(h->port, h->route | (unsigned int)n << (4 * h->depth), speed, h, n);
   }
+}
+
+/* an interrupt endpoint whose transfer failed: if the controller halted
+   it (a stall, a transaction error), reset (keeping the data toggle,
+   but for a stall, which the device's halt cleared resets too) and its
+   ring's dequeue moved past the failed TRB; then read again */
+static void recover(struct dev * d)
+{
+  int cc = d->halted, state;
+  unsigned int ep = (unsigned int)d->intr_dci << 16 | (unsigned int)d->slot << 24;
+  d->halted = 0;
+  cache_drop(d->out_ctx, PAGE);
+  state = ctx(d->out_ctx, d->intr_dci)[0] & 7;
+  if (state == 2) {                   /* Halted */
+    command(0, 0, TRB_TYPE(T_RESET_EP) | ep | (cc == 6 ? 0 : 1u << 9), NULL);
+    if (cc == 6) control(d, 0x02, 1, 0, d->ep_addr, 0);   /* CLEAR_FEATURE(ENDPOINT_HALT) */
+    command((d->intr.bus + (unsigned long)d->intr.i * 16) | (unsigned long)d->intr.cycle, 0,
+            TRB_TYPE(T_SET_TR_DEQ) | ep, NULL);
+  }
+  queue_report(d);
+}
+
+/* a hub's ports changed (its status change endpoint's bitmap): each
+   port's status logged, its changes acknowledged */
+static void hub_changes(struct dev * h)
+{
+  unsigned int bits = h->report[0] | (h->intr_len > 1 ? h->report[1] << 8 : 0);
+  int n, st, f;
+  h->hub_change = 0;
+  for (n = 1; n <= h->hub_ports; n++) {
+    if (!(bits & (1u << n))) continue;
+    st = hub_port_status(h, n);
+    if (st < 0) continue;
+    mynos_log("usbd: port %s.%d: changed (status %04x, changes %04x)\n", h->loc, n,
+              st & 0xFFFF, (st >> 16) & 0xFFFF);
+    for (f = 0; f < 5; f++)          /* C_PORT_CONNECTION, ENABLE, SUSPEND, OVER_CURRENT, RESET */
+      if (st & (1 << (16 + f))) HUB_CLEAR_FEATURE(h, 16 + f, n);
+  }
+  queue_report(h);
 }
 
 /* a root port's device: the port reset (a USB 2 port's; a USB 3 one's
@@ -847,8 +900,21 @@ int main(void)
   mynos_sleep(100000);                /* the ports' connections seen */
   for (n = 1; n <= (int)max_ports; n++) port_scan(n);
   for (;;) {
-    while (next_event(&e))
+    while (next_event(&e)) {
       if (TRB_GET_TYPE(e.control) == T_EV_TRANSFER) handle_transfer(&e);
+      else if (TRB_GET_TYPE(e.control) == T_EV_PORT) {   /* a root port changed */
+        int p = (int)(e.param >> 24 & 0xFF);
+        unsigned int v = p >= 1 && p <= (int)max_ports ? R32(op, PORTSC(p)) : 0;
+        if (v) {
+          mynos_log("usbd: port %d: changed (%08x)\n", p, v);
+          R32(op, PORTSC(p)) = PS_PP | (v & PS_CHANGES);
+        }
+      }
+    }
+    for (n = 0; n < ndevs; n++) {
+      if (devs[n].halted) recover(&devs[n]);
+      if (devs[n].hub_change) hub_changes(&devs[n]);
+    }
     repeat_keys();
     mynos_sleep(5000);
   }
