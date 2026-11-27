@@ -136,6 +136,67 @@ let body_end s =
          | None -> Some `Close)
       | _ -> Some `Close
 
+(* connections kept open after an answer whose end was known, for the
+   next request to the same server: a TLS handshake costs about a second
+   in netd, which makes them one at a time. So, per server, at most
+   [per_server] connections, and one handshake at a time: a request
+   without a free connection opens one if it may, else waits for one. A
+   program's threads share them; netd closes those of a program that has
+   ended *)
+type key = bool * string * int
+type kept = { kn : Net.t; ks : int; key : key }
+type server = { mutable count : int; mutable opening : bool }   (* open (or opening) connections *)
+
+let pool : kept list ref = ref []         (* idle, the most recent first *)
+let servers : (key, server) Hashtbl.t = Hashtbl.create 8
+let pool_lock = Mutex.create ()
+let changed = Condition.create ()
+let max_kept = 8
+let per_server = 2
+
+let server key = match Hashtbl.find_opt servers key with
+  | Some sv -> sv
+  | None -> let sv = { count = 0; opening = false } in Hashtbl.replace servers key sv; sv
+
+(* a connection gone (under pool_lock) *)
+let gone key = let sv = server key in sv.count <- max 0 (sv.count - 1); Condition.broadcast changed
+
+let close_kept k =
+  (try Net.call k.kn (Net.Close k.ks) with _ -> ());
+  Mutex.protect pool_lock (fun () -> gone k.key)
+
+(* an idle connection to the server, or the right to open one *)
+let acquire key =
+  Mutex.protect pool_lock (fun () ->
+      let rec loop () =
+        match List.partition (fun k -> k.key = key) !pool with
+        | k :: others, rest -> pool := others @ rest; `Idle k
+        | [], _ ->
+          let sv = server key in
+          if not sv.opening && sv.count < per_server then begin
+            sv.opening <- true; sv.count <- sv.count + 1; `Open
+          end else (Condition.wait changed pool_lock; loop ()) in
+      loop ())
+
+let opened key ~ok =
+  Mutex.protect pool_lock (fun () ->
+      let sv = server key in
+      sv.opening <- false;
+      if not ok then sv.count <- max 0 (sv.count - 1);
+      Condition.broadcast changed)
+
+let give_back k =
+  let dropped = Mutex.protect pool_lock (fun () ->
+      let l = k :: !pool in
+      let drop = if List.length l > max_kept then List.filteri (fun i _ -> i >= max_kept) l else [] in
+      pool := List.filteri (fun i _ -> i < max_kept) l;
+      Condition.broadcast changed;
+      drop) in
+  List.iter close_kept dropped
+
+(* a reused connection the server had closed: tried again on a new one *)
+exception Stale
+
 let request ?net ?meth ?(headers = []) ?body ?(timeout = 30000) url =
   let tls, host, port, path = parse_url url in
   let meth = match meth, body with
@@ -147,7 +208,6 @@ let request ?net ?meth ?(headers = []) ?body ?(timeout = 30000) url =
                  else Printf.sprintf "%s:%d" host port) in
   if not (has "host") then Printf.bprintf b "Host: %s\r\n" default;
   if not (has "user-agent") then Buffer.add_string b "User-Agent: MyNOS\r\n";
-  if not (has "connection") then Buffer.add_string b "Connection: close\r\n";
   (match body with
    | Some d when not (has "content-length") ->
      Printf.bprintf b "Content-Length: %d\r\n" (String.length d)
@@ -155,35 +215,78 @@ let request ?net ?meth ?(headers = []) ?body ?(timeout = 30000) url =
   List.iter (fun (k, v) -> Printf.bprintf b "%s: %s\r\n" k v) headers;
   Buffer.add_string b "\r\n";
   Option.iter (Buffer.add_string b) body;
-  let n = match net with Some n -> n | None -> Net.connect () in
-  let call r = try Net.call n r with Ipc.Remote_error (_, m) -> raise (Error m) in
-  let s =
-    if tls then call (Net.Connect_tls (host, port))
-    else call (Net.Connect (call (Net.Resolve host), port)) in
-  Fun.protect ~finally:(fun () -> try Net.call n (Net.Close s) with _ -> ())
-    (fun () ->
-       call (Net.Set_timeout (s, timeout));
-       ignore (call (Net.Send (s, Buffer.contents b)));
-       let answer = Buffer.create 4096 in
-       (* the body's end, worked out once the head is in: not the whole
-          answer parsed again after every piece (quadratic on large ones) *)
-       let ending = ref None in
-       let rec read () =
-         match call (Net.Recv (s, 16384)) with
-         | "" -> ()
-         | data ->
-           Buffer.add_string answer data;
-           if !ending = None then ending := body_end (Buffer.contents answer);
-           let n = Buffer.length answer in
-           let finished = match !ending with
-             | None | Some `Close -> false
-             | Some (`Length total) -> n >= total
-             | Some `Chunked ->
-               n >= 5 && Buffer.sub answer (n - 5) 5 = "0\r\n\r\n"
-               && complete (Buffer.contents answer) in
-           if not finished then read () in
-       read ();
-       parse_response (Buffer.contents answer))
+  let asked_close = List.exists (fun (k, v) -> lower k = "connection" && lower (String.trim v) = "close") headers in
+  let key = (tls, host, port) in
+  (* a new connection, its place among the server's already taken *)
+  let fresh () =
+    match
+      let n = match net with Some n -> n | None -> Net.connect () in
+      let call r = try Net.call n r with Ipc.Remote_error (_, m) -> raise (Error m) in
+      let s =
+        if tls then call (Net.Connect_tls (host, port))
+        else call (Net.Connect (call (Net.Resolve host), port)) in
+      { kn = n; ks = s; key }
+    with
+    | k -> opened key ~ok:true; k
+    | exception e -> opened key ~ok:false; raise e in
+  (* one exchange on a connection: the answer, and whether the connection
+     may serve again *)
+  let exchange k ~reused =
+    let call r = try Net.call k.kn r with Ipc.Remote_error (_, m) -> raise (Error m) in
+    let answer = Buffer.create 4096 in
+    let recv () =
+      match call (Net.Recv (k.ks, 16384)) with
+      | "" when reused && Buffer.length answer = 0 -> raise Stale
+      | d -> d
+      | exception Error _ when reused && Buffer.length answer = 0 -> raise Stale in
+    (match call (Net.Set_timeout (k.ks, timeout)); call (Net.Send (k.ks, Buffer.contents b)) with
+     | _ -> ()
+     | exception Error _ when reused -> raise Stale);
+    (* the body's end, worked out once the head is in: not the whole
+       answer parsed again after every piece (quadratic on large ones) *)
+    let ending = ref None in
+    let rec read () =
+      match recv () with
+      | "" -> ()
+      | data ->
+        Buffer.add_string answer data;
+        if !ending = None then
+          ending := (match body_end (Buffer.contents answer) with
+              | Some (`Length _ | `Chunked | `Close) as e ->
+                (* no body: a HEAD, 204, 304 *)
+                let s = Buffer.contents answer in
+                (match split_head s with
+                 | Some (head, _) ->
+                   (match parse_head head with
+                    | st, _, _ when meth = "HEAD" || st = 204 || st = 304 ->
+                      Some (`Length (String.length head + 4))
+                    | _ -> e
+                    | exception Error _ -> e)
+                 | None -> e)
+              | None -> None);
+        let n = Buffer.length answer in
+        let finished = match !ending with
+          | None | Some `Close -> false
+          | Some (`Length total) -> n >= total
+          | Some `Chunked ->
+            n >= 5 && Buffer.sub answer (n - 5) 5 = "0\r\n\r\n"
+            && complete (Buffer.contents answer) in
+        if not finished then read () in
+    read ();
+    let r = parse_response (Buffer.contents answer) in
+    let again = (match !ending with Some (`Length _ | `Chunked) -> true | _ -> false)
+                && not asked_close
+                && (match header "connection" r with Some c -> lower (String.trim c) <> "close" | None -> true) in
+    (r, again) in
+  let run k ~reused =
+    match exchange k ~reused with
+    | r, again -> if again then give_back k else close_kept k; r
+    | exception e -> close_kept k; raise e in
+  let rec go () =
+    match acquire key with
+    | `Idle k -> (try run k ~reused:true with Stale -> go ())
+    | `Open -> run (fresh ()) ~reused:false in
+  go ()
 
 let get ?net ?headers ?timeout url = request ?net ?headers ?timeout url
 
