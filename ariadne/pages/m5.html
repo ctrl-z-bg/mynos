@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<title>Floats, flexbox, grid, positioning</title>
+<style>
+body { margin: 0 }
+.float { float: right; width: 120px; height: 60px; background: #eee; margin: 0 0 8px 8px }
+.clear { clear: both }
+.row { display: flex; gap: 10px; background: #f0f0ff }
+.row > div { background: #ddf }
+.grow { flex: 1 }
+.end { display: flex; justify-content: space-between }
+.grid { display: grid; grid-template-columns: 100px 1fr; grid-template-areas: "side main" "foot foot"; gap: 4px }
+.side { grid-area: side; background: #fdd } .main { grid-area: main; background: #dfd } .foot { grid-area: foot; background: #ddd }
+.rel { position: relative; height: 40px; background: #ffd }
+.abs { position: absolute; right: 0; top: 10px; width: 50px }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0) }
+.clipped { width: 60px; height: 20px; overflow: hidden; white-space: nowrap }
+.ib { display: inline-block; width: 40px; border: 1px solid #000 }
+</style>
+<div class="float">Floated</div>
+<p>Text beside the float wraps on its left, until the float ends, then it takes the whole width again, as in a newspaper.</p>
+<p class="clear">Cleared.</p>
+<div class="row"><div>One</div><div class="grow">Grows</div><div>Three</div></div>
+<div class="end"><span>Left</span><span>Right</span></div>
+<div class="grid"><div class="side">Side</div><div class="main">Main column</div><div class="foot">Footer across</div></div>
+<div class="rel">Relative<span class="abs">Abs</span><span class="sr">Screen reader only</span></div>
+<div class="clipped">Clipped after sixty pixels</div>
+<p>Inline <span class="ib">box</span> blocks.</p>
+<table border=1><tr><td colspan=2>Spans two</td></tr><tr><td>a</td><td>b</td></tr></table>

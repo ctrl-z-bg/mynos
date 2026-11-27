@@ -24,14 +24,17 @@ let message title text =
 
 let start_page = {|<title>Ariadne</title>
 <h1>Ariadne</h1>
-<p>MyNOS's new browser, in OCaml (doc/decisions/browser.md). This is
-milestone M0, the skeleton: it shows a page's text. Type an address above
-and press Enter.</p>
+<p>MyNOS's new browser, in OCaml (doc/decisions/browser.md,
+BROWSER-TODO.md). It parses pages with the HTML Standard's parser, applies
+their CSS and lays them out: blocks and lines, floats, positioning,
+flexbox, grid and tables. Pictures, real fonts and JavaScript are still to
+come. Type an address above and press Enter.</p>
 <h2>Try</h2>
 <ul>
 <li><a href="about:tests">about:tests</a>: the test pages, built into Ariadne</li>
 <li><a href="file:/disk/">file:/disk/</a>: the disk</li>
-<li><a href="https://en.m.wikipedia.org/wiki/Ariadne">https://en.m.wikipedia.org/wiki/Ariadne</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Ariadne">https://en.wikipedia.org/wiki/Ariadne</a></li>
+<li><a href="https://news.ycombinator.com/">https://news.ycombinator.com/</a></li>
 </ul>|}
 
 let tests_page () =

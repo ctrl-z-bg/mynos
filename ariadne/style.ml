@@ -58,6 +58,37 @@ type t = {
   mutable visible : bool;
   mutable list_style : string;
   mutable custom : (string * cv list) list;
+  (* M5: floats, positioning, overflow *)
+  mutable clear : string;
+  mutable inset : length array;       (* top right bottom left; Auto when not given *)
+  mutable overflow_clip : bool;       (* hidden or clip: the content is clipped *)
+  mutable overflow_bfc : bool;        (* anything but visible: a new formatting context *)
+  mutable clipped : bool;             (* clip: rect(...), clip-path: inset(50%): not shown *)
+  mutable vertical_align : string;
+  (* flexbox *)
+  mutable flex_direction : string;
+  mutable flex_wrap : bool;
+  mutable justify : string;           (* justify-content *)
+  mutable align_items : string;
+  mutable align_self : string;
+  mutable flex_grow : float;
+  mutable flex_shrink : float;
+  mutable flex_basis : length;        (* Auto: from width, else the content *)
+  mutable order : int;
+  mutable row_gap : length;
+  mutable column_gap : length;
+  (* grid *)
+  mutable grid_columns : cv list;
+  mutable grid_rows : cv list;
+  mutable grid_areas : string list list;
+  mutable grid_area : cv list;
+  mutable grid_column : cv list;
+  mutable grid_row : cv list;
+  (* tables *)
+  mutable border_spacing : float;
+  mutable border_collapse : bool;
+  mutable masked : bool;              (* a mask-image: its background is not painted (no masks yet) *)
+  mutable transparent : bool;         (* opacity: 0 here or on an ancestor: nothing painted *)
 }
 
 let initial () = {
@@ -69,7 +100,14 @@ let initial () = {
   border_width = Array.make 4 3.; border_style = Array.make 4 false; border_color = Array.make 4 (-1);
   width = Auto; height = Auto; min_width = Len (0., 0.); max_width = Auto;
   min_height = Len (0., 0.); max_height = Auto; border_box = false; visible = true;
-  list_style = "disc"; custom = [] }
+  list_style = "disc"; custom = [];
+  clear = "none"; inset = Array.make 4 Auto; overflow_clip = false; overflow_bfc = false;
+  clipped = false; vertical_align = "baseline";
+  flex_direction = "row"; flex_wrap = false; justify = "normal"; align_items = "normal";
+  align_self = "auto"; flex_grow = 0.; flex_shrink = 1.; flex_basis = Auto; order = 0;
+  row_gap = Len (0., 0.); column_gap = Len (0., 0.);
+  grid_columns = []; grid_rows = []; grid_areas = []; grid_area = []; grid_column = []; grid_row = [];
+  border_spacing = 0.; border_collapse = false; masked = false; transparent = false }
 
 (* a child's start: the inherited properties from its parent, the others initial *)
 let inherit_from p =
@@ -79,6 +117,9 @@ let inherit_from p =
   s.text_align <- p.text_align; s.text_indent <- p.text_indent; s.white_space <- p.white_space;
   s.transform <- p.transform; s.visible <- p.visible; s.list_style <- p.list_style;
   s.custom <- p.custom;
+  s.border_spacing <- p.border_spacing;
+  s.border_collapse <- p.border_collapse;
+  s.transparent <- p.transparent;
   (* text decorations are drawn through descendants: inherited here *)
   s.underline <- p.underline; s.line_through <- p.line_through; s.overline <- p.overline;
   s
@@ -444,7 +485,7 @@ let set_border_style s i v =
   | None -> ()
 
 let set_border_color s i v =
-  match color ~current:s.color v with Some c -> s.border_color.(i) <- c land 0xFFFFFF | None -> ()
+  match color ~current:s.color v with Some c -> s.border_color.(i) <- c | None -> ()
 
 (* a border shorthand: its parts in any order *)
 let border_shorthand ctx s sides v =
@@ -601,6 +642,101 @@ let rec apply ctx (s : t) (parent : t) name (v : cv list) =
     (match ident v with
      | Some "visible" -> s.visible <- true | Some ("hidden" | "collapse") -> s.visible <- false | _ -> ())
   | "list-style-type" -> Option.iter (fun t -> s.list_style <- t) (ident v)
+  | "clear" -> Option.iter (fun c -> s.clear <- c) (ident v)
+  | "top" | "right" | "bottom" | "left" -> len (fun l -> s.inset.(side_index name) <- l)
+  | "inset" ->
+    (match four (List.map (length ctx) (parts v)) with
+     | Some ls when Array.for_all Option.is_some ls -> s.inset <- Array.map Option.get ls
+     | _ -> ())
+  | "overflow" | "overflow-x" | "overflow-y" ->
+    let ids = idents v in
+    let any k = List.exists (fun i -> List.mem i k) ids in
+    if any [ "hidden"; "clip" ] then (s.overflow_clip <- true; s.overflow_bfc <- true)
+    else if any [ "auto"; "scroll"; "overlay" ] then s.overflow_bfc <- true
+    else if ids = [ "visible" ] && name = "overflow" then (s.overflow_clip <- false; s.overflow_bfc <- false)
+  | "clip" ->
+    (match v with
+     | [ Func ("rect", _) ] -> s.clipped <- true
+     | _ -> if ident v = Some "auto" then s.clipped <- false)
+  | "clip-path" ->
+    (match List.filter (fun c -> c <> Tok Whitespace) v with
+     | [ Func ("inset", [ Tok (Percentage p) ]) ] when p >= 50. -> s.clipped <- true
+     | [ Func ("inset", _) ] -> ()
+     | _ -> if ident v = Some "none" then s.clipped <- false)
+  | "vertical-align" ->
+    (match ident v with Some a -> s.vertical_align <- a | None -> ())
+  | "flex-direction" -> Option.iter (fun d -> s.flex_direction <- d) (ident v)
+  | "flex-wrap" -> Option.iter (fun w -> s.flex_wrap <- w <> "nowrap") (ident v)
+  | "flex-flow" ->
+    List.iter (fun i ->
+        if List.mem i [ "row"; "row-reverse"; "column"; "column-reverse" ] then s.flex_direction <- i
+        else if List.mem i [ "wrap"; "wrap-reverse" ] then s.flex_wrap <- true
+        else if i = "nowrap" then s.flex_wrap <- false) (idents v)
+  | "justify-content" ->
+    (match List.rev (idents v) with i :: _ -> s.justify <- i | [] -> ())
+  | "align-items" ->
+    (match List.rev (idents v) with i :: _ -> s.align_items <- i | [] -> ())
+  | "align-self" ->
+    (match List.rev (idents v) with i :: _ -> s.align_self <- i | [] -> ())
+  | "place-items" ->
+    (match idents v with i :: _ -> s.align_items <- i | [] -> ())
+  | "place-content" ->
+    (match idents v with
+     | [ a ] -> s.justify <- a | [ _; j ] -> s.justify <- j | _ -> ())
+  | "flex-grow" -> (match v with [ Tok (Number (g, _)) ] -> s.flex_grow <- g | _ -> ())
+  | "flex-shrink" -> (match v with [ Tok (Number (g, _)) ] -> s.flex_shrink <- g | _ -> ())
+  | "flex-basis" ->
+    (match ident v with
+     | Some ("auto" | "content") -> s.flex_basis <- Auto
+     | _ -> len (fun l -> s.flex_basis <- l))
+  | "flex" ->
+    (match List.filter (fun c -> c <> Tok Whitespace) v with
+     | [ Tok (Ident n) ] when String.lowercase_ascii n = "none" ->
+       s.flex_grow <- 0.; s.flex_shrink <- 0.; s.flex_basis <- Auto
+     | [ Tok (Ident n) ] when String.lowercase_ascii n = "auto" ->
+       s.flex_grow <- 1.; s.flex_shrink <- 1.; s.flex_basis <- Auto
+     | [ Tok (Ident n) ] when String.lowercase_ascii n = "initial" ->
+       s.flex_grow <- 0.; s.flex_shrink <- 1.; s.flex_basis <- Auto
+     | parts ->
+       let nums = List.filter_map (function Tok (Number (g, _)) -> Some g | _ -> None) parts in
+       let basis = List.find_map (fun c -> match c with
+           | Tok (Number _) -> None
+           | c -> length ctx [ c ]) parts in
+       (match nums with
+        | g :: rest -> s.flex_grow <- g; s.flex_shrink <- (match rest with sh :: _ -> sh | [] -> 1.);
+          s.flex_basis <- (match basis with Some b -> b | None -> Len (0., 0.))
+        | [] -> (match basis with Some b -> s.flex_grow <- 1.; s.flex_shrink <- 1.; s.flex_basis <- b | None -> ())))
+  | "order" -> (match v with [ Tok (Number (o, _)) ] -> s.order <- int_of_float o | _ -> ())
+  | "gap" | "grid-gap" ->
+    (match List.map (length ctx) (parts v) with
+     | [ Some a ] -> s.row_gap <- a; s.column_gap <- a
+     | [ Some a; Some b ] -> s.row_gap <- a; s.column_gap <- b
+     | _ -> ())
+  | "row-gap" | "grid-row-gap" -> len (fun l -> s.row_gap <- l)
+  | "column-gap" | "grid-column-gap" -> len (fun l -> s.column_gap <- l)
+  | "grid-template-columns" -> s.grid_columns <- v
+  | "grid-template-rows" -> s.grid_rows <- v
+  | "grid-template-areas" ->
+    s.grid_areas <- List.filter_map (function
+        | Tok (String row) -> Some (List.filter (fun x -> x <> "") (String.split_on_char ' ' row))
+        | _ -> None) v
+  | "grid-template" -> ()
+  | "grid-area" -> s.grid_area <- v
+  | "grid-column" -> s.grid_column <- v
+  | "grid-row" -> s.grid_row <- v
+  | "grid-column-start" -> s.grid_column <- v
+  | "grid-row-start" -> s.grid_row <- v
+  | "opacity" ->
+    (match v with
+     | [ Tok (Number (a, _)) ] -> if a <= 0.01 then s.transparent <- true
+     | [ Tok (Percentage a) ] -> if a <= 1. then s.transparent <- true
+     | _ -> ())
+  | "mask" | "mask-image" | "-webkit-mask" | "-webkit-mask-image" ->
+    s.masked <- ident v <> Some "none"
+  | "border-collapse" -> Option.iter (fun c -> s.border_collapse <- c = "collapse") (ident v)
+  | "border-spacing" ->
+    (match List.map (length ctx) (parts v) with
+     | Some (Len (p, _)) :: _ -> s.border_spacing <- p | _ -> ())
   | "list-style" ->
     List.iter (fun i -> if not (List.mem i [ "inside"; "outside" ]) then s.list_style <- i) (idents v)
   | _ -> ()
@@ -840,6 +976,12 @@ mark { background: yellow; color: black }
 center { text-align: center }
 th { text-align: center }
 td, th { padding: 1px }
+table { border-spacing: 2px; box-sizing: border-box }
+thead, tbody, tfoot, tr { vertical-align: middle }
+td, th { vertical-align: inherit }
+sub { vertical-align: sub } sup { vertical-align: super }
+img, svg, video, canvas, iframe, input, button, select, textarea { display: inline-block }
+input, button, select, textarea { overflow: hidden }
 caption { text-align: center }
 a:link, a:visited { color: linktext; text-decoration: underline }
 abbr[title], acronym[title] { text-decoration: underline }
@@ -1036,6 +1178,9 @@ let compute ~width ~height sheets (doc : Dom.node) =
         | "height" -> s.height <- src.height
         | "max-width" -> s.max_width <- src.max_width
         | "position" -> s.position <- src.position
+        | "vertical-align" -> s.vertical_align <- src.vertical_align
+        | "float" -> s.float_ <- src.float_
+        | "overflow" -> s.overflow_clip <- src.overflow_clip; s.overflow_bfc <- src.overflow_bfc
         | _ -> () in
       List.iter (fun d ->
           if d.name = "font-size" || d.name = "font" then

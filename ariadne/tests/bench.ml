@@ -41,7 +41,11 @@ let () =
               | Style.Linked _ -> []) (Style.sources doc)
           @ List.map (fun f -> Style.parse_sheet (read f)) css) in
       let rules = List.fold_left (fun a (s : Style.sheet) -> a + List.length s.rules) 0 sheets in
-      let styles, t_cascade = time (fun () -> Style.compute ~width:880 ~height:600 sheets doc) in
-      let p, t_layout = time (fun () -> Layout.layout ~width:880 ~height:600 styles doc) in
+      let styles, t_cascade = time (fun () -> Style.compute ~width:866 ~height:600 sheets doc) in
+      let p, t_layout = time (fun () -> Layout.layout ~width:866 ~height:600 styles doc) in
       Printf.printf "  css    %5.0f ms (%d sheets, %d rules)\n  cascade %4.0f ms\n  layout %5.0f ms (%d items)\n%!"
-        t_css (List.length sheets) rules t_cascade t_layout (Array.length p.Layout.items)) pages
+        t_css (List.length sheets) rules t_cascade t_layout (Array.length p.Layout.items);
+      (* BENCH_DUMP=file: the display list, written there *)
+      match Sys.getenv_opt "BENCH_DUMP" with
+      | Some f -> Out_channel.with_open_bin f (fun oc -> output_string oc (Layout.dump p))
+      | None -> ()) pages

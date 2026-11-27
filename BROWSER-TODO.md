@@ -89,7 +89,7 @@ Found in M1:
 - [x] Scrolling, hit testing, links (in-page `#anchors` too), history (back, forward), `<base href>`
 - [ ] URLs (the WHATWG parser): still M0's resolver
 - [x] https through `Http`
-- [x] A Wikipedia article reads well; its timings recorded below
+- [x] A Wikipedia article's text is legible, in order; its timings recorded below. (Written first as "reads well": an overstatement. The page took Wikipedia's shape only with M5's floats, flexbox, grid, tables and positioning; its fonts come with M2, its pictures with M4.)
 - [x] `ariadne --layout URL [WIDTH]`: the display list; the test pages' display lists checked (`tests/expected-layout/`), on the host and in MyNOS
 
 Found in M3:
@@ -111,14 +111,29 @@ Found in M3:
 
 ## M5: the rest of the layout, and forms
 
-- [ ] Floats and `clear`
-- [ ] `position`: relative, absolute, fixed; `z-index` and stacking contexts
-- [ ] `overflow`; list markers
-- [ ] Tables (automatic layout)
-- [ ] Flexbox
-- [ ] Forms without JavaScript: text fields, buttons, checkboxes, `select`; GET and POST
+Done before M2, at the owner's choice (2026-11-27): what gives pages their shape.
+
+- [x] Floats (left, right) in their block formatting context: lines and new formatting contexts shortened beside them, the context's height holding them; `clear`
+- [x] `position`: relative (offsets), absolute (in the nearest positioned ancestor, insets, static position), fixed (as absolute in the page; it does not stay on screen yet), sticky (as static)
+- [ ] `z-index` and stacking contexts (today: positioned boxes are painted after the flow)
+- [x] `overflow: hidden` and `clip` clip to the padding box; other values make a new formatting context; `clip: rect()` and `clip-path: inset(50%)` (screen-reader text) hide
+- [x] `opacity: 0` hides; an element with `mask-image` paints no background (icons, until masks)
+- [x] Tables: automatic layout (columns from their cells' minimum and maximum widths), `colspan`, `rowspan`, `thead` before and `tfoot` after, captions, `border-spacing`, `border-collapse` (as no spacing), cells' `vertical-align`, row backgrounds, the `width` of tables and cells
+- [x] Flexbox: rows and columns (and reversed), wrapping, `flex-grow`, `flex-shrink`, `flex-basis`, `min-width: auto`, `order`, `gap`, `justify-content`, `align-items`, `align-self`, auto margins
+- [x] Grid: `grid-template-columns` (px, `fr`, `minmax`, `auto`, `min-content`, `max-content`, `fit-content`, `repeat` with `auto-fill`), `grid-template-areas` and `grid-area`, `grid-column` and `grid-row` (lines, spans), auto-placement, `gap`, rows sized to their items
+- [ ] Grid: `grid-template-rows` in px or `fr`, named lines, `grid-auto-flow: column`, `justify-items`
+- [x] `inline-block`, `inline-flex`, `inline-grid` as boxes in the line, shrink-to-fit
+- [x] Margins collapsing through a parent's top and bottom (and out of the root)
+- [x] Boxes measured "dry" (nothing drawn), cached by element and width; min- and max-content widths cached by element
+- [ ] Forms without JavaScript: text fields, buttons, checkboxes, `select`; GET and POST (today: frames with their values)
 - [ ] New generic `Gfx` primitives if painting needs them (alpha blit, scaled blit)
-- [ ] The test pages match their reference renderings
+- [ ] The test pages match their reference renderings (a browser's screenshots: not yet; the display lists are checked)
+- [x] A test page for floats, flexbox, grid, positioning, clipping, inline-blocks and spans (`pages/m5.html`)
+
+Found in M5:
+
+- Wikipedia's skin builds its page with grid and flexbox: until both existed, everything stacked. Its icons are backgrounds shown through masks, its menu toggles checkboxes made invisible with `opacity: 0`, its buttons have transparent borders: each showed as black until handled.
+- Laying out by measuring first costs: Wikipedia's layout went from 47 ms to 141 ms in MyNOS. Caching the measurements by element and width keeps nested flex containers from multiplying it.
 
 ## M6: JavaScript
 
@@ -150,6 +165,7 @@ time apart. Until M3 the Layout column is the text's reading (`Text`); from M3 i
 | 2026-11-27 | M1 | www.repubblica.it | 478 KB, 10,241 nodes | 355 ms | — | 67 ms | — | 7.5 s |
 | 2026-11-27 | M3 | en.wikipedia.org/wiki/Ariadne | 375 KB, 8,253 nodes, 2,132 rules | 251 ms | 5,672 ms, then 402 ms | 47 ms | — | 3.8 s, and 3.6 s for its style sheets |
 | 2026-11-27 | M3 | news.ycombinator.com | 32 KB, 1,213 nodes, 125 rules | 29 ms | 63 ms | 9 ms | — | 3.5 s, and 2.0 s for its style sheet |
+| 2026-11-27 | M5 | en.wikipedia.org/wiki/Ariadne | 375 KB, 8,253 nodes, 2,132 rules | 191 ms | 410 ms | 141 ms | — | 3.6 s, and 3.6 s for its style sheets |
 
 html5lib-tests pass rate:
 

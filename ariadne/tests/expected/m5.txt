@@ -1,0 +1,16 @@
+title: Floats, flexbox, grid, positioning
+Floated
+Text beside the float wraps on its left, until the float ends, then it takes the whole width again, as in a newspaper.
+Cleared.
+One
+Grows
+Three
+LeftRight
+Side
+Main column
+Footer across
+RelativeAbsScreen reader only
+Clipped after sixty pixels
+Inline box blocks.
+Spans two
+a | b

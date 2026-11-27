@@ -1,24 +1,24 @@
-fill 0,0 800x226 #ffffff
-text 8,40 bold #000000 Pre
-text 8,89 #000000 let rec fact n =
-text 8,108 #000000   if n = 0 then 1
-text 8,127 #000000   else n * fact (n - 1)   (* <- recursion *)
-text 8,162 #000000 A
-text 24,162 #000000 comment
-text 88,162 #000000 is
-text 112,162 #000000 not
-text 144,162 #000000 shown,
-text 200,162 #000000 nor
-text 232,162 #000000 .
-text 8,181 #000000 No
-text 32,181 #000000 script:
-text 96,181 #000000 shown,
-text 152,181 #000000 since
-text 200,181 #000000 Ariadne
-text 264,181 #000000 has
-text 296,181 #000000 no
-text 320,181 #000000 JavaScript
-text 408,181 #000000 yet.
-text 8,200 #000000 The
-text 40,200 #000000 end.
-height 226
+fill 0,21 800x189 #ffffff
+text 8,32 bold #000000 Pre
+text 8,81 #000000 let rec fact n =
+text 8,100 #000000   if n = 0 then 1
+text 8,119 #000000   else n * fact (n - 1)   (* <- recursion *)
+text 8,154 #000000 A
+text 24,154 #000000 comment
+text 88,154 #000000 is
+text 112,154 #000000 not
+text 144,154 #000000 shown,
+text 200,154 #000000 nor
+text 232,154 #000000 .
+text 8,173 #000000 No
+text 32,173 #000000 script:
+text 96,173 #000000 shown,
+text 152,173 #000000 since
+text 200,173 #000000 Ariadne
+text 264,173 #000000 has
+text 296,173 #000000 no
+text 320,173 #000000 JavaScript
+text 408,173 #000000 yet.
+text 8,192 #000000 The
+text 40,192 #000000 end.
+height 218

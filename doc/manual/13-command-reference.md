@@ -162,9 +162,10 @@ ariadne --time URL
 (`doc/decisions/browser.md`, `BROWSER-TODO.md`); the older `browser`
 package stays. It parses pages with the HTML Standard's parser, applies
 their CSS (style sheets, selectors, the cascade, `@media`, custom
-properties) and lays them out in blocks and lines, in the window's font;
-pictures show as their words or a frame, there is no JavaScript, and
-floats, positioning, tables and flexbox are still simple (milestone M5).
+properties) and lays them out: blocks and lines, floats, positioning,
+flexbox, grid and tables, in the window's font (real fonts: milestone
+M2); pictures show as their words or a frame (M4), there is no
+JavaScript (M6).
 Without an option it opens a window: Back and Forward, Reload, an
 address field (Enter or Go loads), and the page, which scrolls (the
 wheel, Page Up, Page Down, the arrows, Home, End); a click follows a
