@@ -51,6 +51,8 @@ system/soundd
 services/sound/soundd
 system/vblkd
 services/virtio/vblkd
+services/sd/sdhcid
+system/sdhcid
 services/net/netd
 tests/net/sockets
 tests/net/netd

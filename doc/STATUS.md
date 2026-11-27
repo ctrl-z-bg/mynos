@@ -2058,3 +2058,13 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   (displayd's third screen, native call 104). The PCI drivers end
   cleanly: `mapPhysical` maps only the platform's devices. No SD card,
   network, keyboard or mouse yet (btq.7.3, btq.10). JOURNAL.
+- **2026-11-27** — The Raspberry Pi's SD card (mynos-btq.7.3): `sdhcid`
+  drives the SDHCI controller (the block service `sd0`), and fatfs takes
+  the first FAT partition of a partition table (a real card's).
+  `tools/make-sd-raspi.sh` makes a card image for a real Pi 3 or Zero 2 W
+  (the firmware at a fixed version, checked; `config.txt`, the kernel,
+  the archive; one FAT32 partition, also `/disk`); `MACHINE=raspi3b`'s
+  `DISK` is its SD card. The suite's lane j (AArch64) boots QEMU
+  `raspi3b`: the UART, the SD card, the console and the graphical
+  session on the framebuffer, the power off (mynos-btq.7.4). A rare
+  crash of the stress test on `virt` under the suites' load is mynos-4dz.

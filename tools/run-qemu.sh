@@ -23,7 +23,7 @@
 #            dev-aarch64 container's (no window from there)
 #   MACHINE  aarch64: virt (the default) or raspi3b, QEMU's Raspberry Pi 3
 #            (btq.7: build/aarch64/kernel8.img, the archive at 64 MB, its
-#            1 GB, its four processors; the UART only: no network, no
+#            1 GB, its four processors; DISK its SD card; no network,
 #            keyboard or mouse yet)
 #   KERNEL   kernel image (default: mynos-core/kernel/kernel.elf; for
 #            x86_64 build/x86_64/kernel.elf)
@@ -104,7 +104,7 @@ esac
 # virt always has here (keyboard, tablet, GPU) are not added twice
 if [ "${ARCH:-i386}" = aarch64 ]; then
     VIRTIO=1 audio= KVM= rom=,romfile=     # (no network boot ROM: no firmware)
-    [ "${MACHINE:-virt}" = raspi3b ] && NET= DISK=   # (a Pi 3's network is USB's, its disk an SD card: not yet)
+    [ "${MACHINE:-virt}" = raspi3b ] && NET=    # (a Pi 3's network is USB's: not yet)
     n=0
     for a; do [ "$a" = -serial ] && n=$((n + 1)); done
     drop=$((n >= 2)) skip= prev=
@@ -124,8 +124,12 @@ if [ "${ARCH:-i386}" = aarch64 ]; then
     done
 fi
 
-# the disk and the network card: virtio devices, or the PC's IDE and NE2000
-if [ -n "${VIRTIO:-}" ]; then
+# the disk and the network card: virtio devices, or the PC's IDE and NE2000;
+# a Raspberry Pi's disk is its SD card (sdhcid; QEMU wants its size a
+# power of 2)
+if [ "${ARCH:-i386}" = aarch64 ] && [ "${MACHINE:-virt}" = raspi3b ]; then
+    disk_if=sd disk_dev=
+elif [ -n "${VIRTIO:-}" ]; then
     disk_if=none,id=vd disk_dev="-device virtio-blk-pci,drive=vd"
     net_dev=virtio-net-pci,netdev=n0${rom:-}
 else

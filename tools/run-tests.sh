@@ -14,9 +14,11 @@
 #      coming back, the disk's reads, the serial terminal
 #   i  the graphical session again: Graphics, keys, resizing, Packages,
 #      Text, Studio
+#   j  (AArch64) a Raspberry Pi 3: its UART, SD card, screen, power off
 # Environment: WAIT seconds to let the system run (default 10); SHOTS a
 # directory where the graphical session's screens are kept; LANES the
-# lanes to run (default "a b c d e f g h i": the checks of the others fail);
+# lanes to run (default "a b c d e f g h i", and j on AArch64: the checks
+# of the others fail);
 # KEEP keeps the temporary files (logs, screens) and says where
 set -eu
 
@@ -31,6 +33,10 @@ case ${ARCH:-i386} in
     aarch64) pc= disk_drv=vblkd slow=2 ;;    # (emulated: some waits doubled)
     *)       pc=yes disk_drv=ata slow=1 ;;
 esac
+# AArch64: a Raspberry Pi 3 too (lane j), if its kernel is built
+raspi=
+[ "${ARCH:-i386}" = aarch64 ] && [ -f build/aarch64/kernel8.img ] && raspi=yes
+lanes_all="a b c d e f g h i${raspi:+ j}"
 tmp=$(mktemp -d)
 if [ -n "${KEEP:-}" ]; then echo "run-tests.sh: files kept in $tmp" >&2
 else trap 'rm -rf "$tmp"' EXIT; fi
@@ -42,7 +48,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="virtio_disk virtio_net virtio_gui disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload sound_ok edit_utf8 log_shown"
+results="virtio_disk virtio_net virtio_gui raspi_disk raspi_fb raspi_gui raspi_text raspi_off disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload sound_ok edit_utf8 log_shown"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -51,7 +57,10 @@ save_results() {
 }
 
 sec_first() {
-timeout "${WAIT:-10}" tools/run-qemu.sh \
+# (until abi has said its last word, at most 3 x WAIT: a fixed WAIT ended
+# it midway on a machine loaded by three suites at once)
+: > "$log"
+timeout $((3 * ${WAIT:-10})) tools/run-qemu.sh \
     "$ocamlrun" \
     tests/hello/hello.byte \
     services/registry/registry \
@@ -60,7 +69,16 @@ timeout "${WAIT:-10}" tools/run-qemu.sh \
     services/serial/seriald \
     "tests/abi/abi one two" \
     tests/ramdisk/ramdisk.dsk \
-    -- -display none -serial null -serial "file:$log" || true
+    -- -display none -serial null -serial "file:$log" &
+qemu=$!
+i=0
+while [ $i -lt $((3 * ${WAIT:-10})) ] &&
+      ! grep -aq 'abi: all checks passed\|abi: SOME CHECKS FAILED\|PANIC' "$log" 2>/dev/null; do
+    sleep 1; i=$((i + 1))
+done
+sleep 2                     # (the other modules' last lines)
+kill $qemu 2>/dev/null || true
+wait $qemu 2>/dev/null || true
 }
 
 sec_effects() {
@@ -286,14 +304,25 @@ if [ -f system/ramdisk.dsk ]; then
         system/ramdisk.dsk \
         -- -no-reboot -display none -serial null -monitor "unix:$tmp/mon-nc,server,nowait" &
     qemu=$!
-    sleep 5
-    tools/type-keys.py "$tmp/mon-nc" 'X=ok; echo nocom2-$X\n'
-    sleep 3
-    printf 'xp /2000hx 0xb8000\n' | socat - "UNIX-CONNECT:$tmp/mon-nc" |
-        grep -o ' 0x[0-9a-f]\{4\}' | python3 -c '
+    # the text screen (VGA's memory, through the monitor): does it show $1
+    # (waited for, not slept: a loaded machine, three suites at once,
+    # took longer than the 5 s once given)
+    screen_has() {
+        printf 'xp /2000hx 0xb8000\n' | socat - "UNIX-CONNECT:$tmp/mon-nc" |
+            grep -o ' 0x[0-9a-f]\{4\}' | python3 -c '
 import sys
 s = bytes(int(x, 16) & 0xFF for x in sys.stdin.read().split())
-sys.exit(0 if b"nocom2-ok" in s else 1)' && nocom2=yes
+sys.exit(0 if sys.argv[1].encode() in s else 1)' "$1"
+    }
+    i=0
+    while [ $i -lt 30 ] && ! screen_has 'mynos:/$'; do sleep 1; i=$((i + 1)); done
+    tools/type-keys.py "$tmp/mon-nc" 'X=ok; echo nocom2-$X\n'
+    i=0
+    while [ $i -lt 10 ]; do
+        sleep 1
+        screen_has nocom2-ok && { nocom2=yes; break; }
+        i=$((i + 1))
+    done
     # restarting: init resets the machine (QEMU, with -no-reboot, ends)
     tools/type-keys.py "$tmp/mon-nc" 'shutdown -r\n'
     i=0
@@ -382,6 +411,95 @@ PY
         virtio_disk=yes
     cat "$tmp/logv" >> "$part"
     rm -f tests/fat/run-virtio.img
+fi
+}
+
+sec_raspi() {
+# a Raspberry Pi 3 (QEMU raspi3b, mynos-btq.7; AArch64 only): kernel8.img,
+# the UART the terminal (no keyboard: the keys come through it), an SD
+# card with a partition table (fatfs's /disk on its first partition: a
+# file written there is on the image the host reads), the console drawn
+# on the framebuffer, the graphical session on it and back, then the
+# watchdog's power off ending QEMU
+raspi_disk= raspi_fb= raspi_gui= raspi_text= raspi_off=
+if [ "${ARCH:-i386}" = aarch64 ] && [ -f build/aarch64/kernel8.img ] &&
+   [ -f system/sdhcid ] && [ -f tests/fat/fat16.img ]; then
+    python3 - tests/fat/fat16.img tests/fat/run-raspi.img <<'PY'
+import struct, sys
+data = open(sys.argv[1], 'rb').read()
+mbr = bytearray(512)
+mbr[446:462] = struct.pack('<B3sB3sII', 0, b'\xfe\xff\xff', 0x06, b'\xfe\xff\xff', 2048, len(data) // 512)
+mbr[510:512] = b'\x55\xaa'
+img = bytes(mbr) + bytes(2048 * 512 - 512) + data
+open(sys.argv[2], 'wb').write(img + bytes(32 * 1024 * 1024 - len(img)))
+PY
+    : > "$tmp/logpi"
+    MACHINE=raspi3b tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        system/ramdisk.dsk \
+        -- -display none -monitor "unix:$tmp/mon-pi,server,nowait" \
+           -chardev "socket,id=ru,host=127.0.0.1,port=47190,server=on,wait=off,logfile=$tmp/logpi" \
+           -serial null -serial chardev:ru \
+           -drive "file=tests/fat/run-raspi.img,format=raw,if=sd" &
+    qemu=$!
+    # the terminal: a line typed a key at a time (the UART has no FIFO's
+    # patience for a burst while the shell starts)
+    rtype() { python3 - "$1" <<'PY'
+import socket, sys, time
+s = socket.create_connection(("127.0.0.1", 47190))
+for ch in sys.argv[1].replace("\\n", "\r"):
+    s.send(ch.encode()); time.sleep(0.05)
+s.close()
+PY
+    }
+    # the screen: its size, and whether it shows what is asked
+    rshot() {
+        printf 'screendump %s\n' "$tmp/pi.ppm" | socat - "UNIX-CONNECT:$tmp/mon-pi" >/dev/null; sleep 1
+        python3 - "$tmp/pi.ppm" "$1" <<'PY'
+import sys
+d = open(sys.argv[1], "rb").read()
+parts = d.split(b"\n", 3)
+w, h = map(int, parts[1].split())
+pix = parts[3]
+def px(x, y):
+    i = (y * w + x) * 3
+    return (pix[i] << 16) | (pix[i + 1] << 8) | pix[i + 2]
+if sys.argv[2] == "text":       # 80 x 25 cells: some light grey (programs' text)
+    ok = (w, h) == (640, 400) and any(px(x, y) == 0xAAAAAA for y in range(0, 400, 2) for x in range(0, 640, 2))
+else:                           # the session: its top bar
+    ok = (w, h) == (1024, 768) and px(500, 5) != 0 and px(500, 5) == px(600, 5)
+sys.exit(0 if ok else 1)
+PY
+    }
+    i=0
+    while [ $i -lt 90 ] && ! grep -aq 'mynos:/' "$tmp/logpi" 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    rtype 'X=ok; echo raspi-$X > /disk/r.txt; cat /disk/r.txt\n'; sleep 5
+    rshot text && raspi_fb=yes
+    rtype 'gui &\n'
+    i=0
+    while [ $i -lt 30 ]; do sleep 3; rshot gui && { raspi_gui=yes; break; }; i=$((i + 1)); done
+    sleep 3
+    rtype 'gui stop\n'
+    i=0
+    while [ $i -lt 20 ]; do sleep 3; rshot text && { raspi_text=yes; break; }; i=$((i + 1)); done
+    # (with gui in the background, sh and displayd's keys read the console
+    # together: the line after the session may go to displayd, which then
+    # ends; shutdown is typed again until QEMU ends)
+    i=0
+    while [ $i -lt 60 ] && kill -0 $qemu 2>/dev/null; do
+        [ $((i % 20)) -eq 0 ] && rtype 'shutdown\n'
+        sleep 1; i=$((i + 1))
+    done
+    if kill -0 $qemu 2>/dev/null; then
+        printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-pi" >/dev/null || true
+    else raspi_off=yes; fi
+    wait $qemu || true
+    [ "$(tools/in-container.sh dev mtype -i tests/fat/run-raspi.img@@1M ::/r.txt 2>/dev/null)" = raspi-ok ] &&
+        raspi_disk=yes
+    cat "$tmp/logpi" >> "$part"
+    rm -f tests/fat/run-raspi.img
 fi
 }
 
@@ -1284,7 +1402,7 @@ timed() {
 
 for v in $results; do eval "$v="; done   # a lane not run finds nothing
 pids=
-for lane in ${LANES:-a b c d e f g h i}; do
+for lane in ${LANES:-$lanes_all}; do
     (
         trap - EXIT
         part=$tmp/part-$lane
@@ -1299,6 +1417,7 @@ for lane in ${LANES:-a b c d e f g h i}; do
             f) timed sec_seventh_b ;;
             g) timed sec_seventh_c ;;
             h) timed sec_seventh_d ;;
+            j) timed sec_raspi ;;
         esac
         save_results "$lane"
     ) &
@@ -1691,6 +1810,21 @@ if [ -f tests/console/echo.byte ] && [ -f services/console/consoled ]; then
     expect 'console: line 4: "xabcy"'
     expect 'console: line 5: "013"'
     expect "console: end of input after 5 lines"
+fi
+if [ -n "$raspi" ]; then
+    expect "Initializing the BCM2836 and BCM2835 interrupt controllers... done."
+    expect "sdhcid: SDSC card, 65536 sectors, as sd0"
+    expect "raspi-ok"
+    if [ -n "$raspi_fb" ]; then echo "ok    raspi: the console drawn on a Raspberry Pi's framebuffer"
+    else echo "FAIL  raspi: the console drawn on a Raspberry Pi's framebuffer"; fail=1; fi
+    if [ -n "$raspi_gui" ]; then echo "ok    raspi: the graphical session on a Raspberry Pi's framebuffer"
+    else echo "FAIL  raspi: the graphical session on a Raspberry Pi's framebuffer"; fail=1; fi
+    if [ -n "$raspi_text" ]; then echo "ok    raspi: the console drawn again after the session"
+    else echo "FAIL  raspi: the console drawn again after the session"; fail=1; fi
+    if [ -n "$raspi_disk" ]; then echo "ok    raspi: a file written on an SD card's partition, read by the host"
+    else echo "FAIL  raspi: a file written on an SD card's partition, read by the host"; fail=1; fi
+    if [ -n "$raspi_off" ]; then echo "ok    raspi: turned off by the watchdog (QEMU ended)"
+    else echo "FAIL  raspi: turned off by the watchdog (QEMU ended)"; fail=1; fi
 fi
 reject "PANIC"
 reject "page fault (?)"

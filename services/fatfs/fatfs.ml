@@ -39,15 +39,19 @@ let set_u32 b i v = set_u16 b i (v land 0xFFFF); set_u16 b (i + 2) (v lsr 16)
 
 (* ---- the volume ---- *)
 
-(* the disk: ata's (ata0), or a virtio disk's (vblk0, vblkd) *)
+(* the disk: ata's (ata0), a virtio disk's (vblk0, vblkd) or a
+   Raspberry Pi's SD card (sd0, sdhcid) *)
 let rec device tries =
   match Block.connect () with
   | d -> d
   | exception Mynos.Error _ ->
     match Block.connect ~service:"vblk0" () with
     | d -> d
-    | exception (Mynos.Error _ as e) ->
-      if tries > 0 then (Mynos.sleep 0.1; device (tries - 1)) else raise e
+    | exception Mynos.Error _ ->
+      match Block.connect ~service:"sd0" () with
+      | d -> d
+      | exception (Mynos.Error _ as e) ->
+        if tries > 0 then (Mynos.sleep 0.1; device (tries - 1)) else raise e
 
 (* no block service after 10 s: no disk (ata found none, or is not there).
    Ending with 0 says so to init, which then does not start fatfs again
@@ -59,7 +63,23 @@ let dev =
     Mynos.log "fatfs: no disk (no block service): no /disk\n";
     exit 0
 
-let boot = Bytes.of_string (Block.read dev 0 1)
+(* where the volume starts: sector 0 if the disk is the volume (mkfs.fat
+   on the whole disk: MyNOS's disk images), else the first FAT
+   partition of its partition table (an MBR: a real SD card's, which a
+   Raspberry Pi's firmware wants) *)
+let base =
+  let s0 = Bytes.of_string (Block.read dev 0 1) in
+  let volume = u16 s0 11 = 512 && List.mem (u8 s0 13) [1; 2; 4; 8; 16; 32; 64; 128]
+               && (u8 s0 16 = 1 || u8 s0 16 = 2) in
+  let rec first i =
+    if i = 4 then 0
+    else
+      let e = 446 + 16 * i in
+      if List.mem (u8 s0 (e + 4)) [0x01; 0x04; 0x06; 0x0B; 0x0C; 0x0E] then u32 s0 (e + 8)
+      else first (i + 1) in
+  if volume || u16 s0 510 <> 0xAA55 then 0 else first 0
+
+let boot = Bytes.of_string (Block.read dev base 1)
 let bps = u16 boot 11
 let spc = u8 boot 13
 let reserved = u16 boot 14
@@ -112,7 +132,7 @@ let read_sectors lba n =
       (* the run of missing sectors from here: one request *)
       let j = ref (!i + 1) in
       while !j < n && !j - !i < 64 && not (Hashtbl.mem cache (lba + !j)) do incr j done;
-      let data = Block.read dev (lba + !i) (!j - !i) in
+      let data = Block.read dev (base + lba + !i) (!j - !i) in
       cache_misses := !cache_misses + (!j - !i);
       for k = !i to !j - 1 do
         let b = Bytes.of_string (String.sub data ((k - !i) * bps) bps) in
@@ -124,7 +144,7 @@ let read_sectors lba n =
   out
 
 let write_sectors lba b =
-  Block.write dev lba (Bytes.to_string b);
+  Block.write dev (base + lba) (Bytes.to_string b);
   for k = 0 to Bytes.length b / bps - 1 do
     cache_put (lba + k) (Bytes.sub b (k * bps) bps)
   done
@@ -132,7 +152,7 @@ let write_sectors lba b =
 (* ---- the FAT ---- *)
 
 (* kept whole in memory: read once, not through the cache *)
-let fat = Bytes.of_string (Block.read dev reserved fat_size)
+let fat = Bytes.of_string (Block.read dev (base + reserved) fat_size)
 let fat_version = ref 0                 (* changes with every change of the FAT *)
 let dirty = Array.make fat_size false
 

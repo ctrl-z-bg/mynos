@@ -107,6 +107,7 @@ make -C agent
 make -C services/display
 make -C services/sound
 make -C services/virtio
+make -C services/sd
 make -C gui
 make -C graphics
 make -C tests/net

@@ -172,10 +172,23 @@ one that finds out: RAM's base is a constant of the kernel's numbering
   faults unaligned copies); the console is drawn again when the session
   ends.
 
-The SD card (next) goes on the SDHCI controller, whose driver the Pi 4
-(EMMC2) and the Wi-Fi (SDIO, btq.9) want too; on the Zero 2 W, the
-Wi-Fi's SDIO then wants the SDHCI, and the SD card would move to the
-Broadcom SDHOST.
+The SD card is driven through the SDHCI controller (`sdhcid`, the block
+service `sd0`), whose driver the Pi 4 (EMMC2) and the Wi-Fi (SDIO,
+btq.9) want too; on the Zero 2 W, the Wi-Fi's SDIO then wants the
+SDHCI, and the SD card would move to the Broadcom SDHOST. The card's
+pins are given to the SDHCI (the firmware leaves them to the SDHOST);
+sectors move by the CPU, polled (no DMA, no interrupt: no cache
+maintenance to get wrong on real hardware). A real card has a partition
+table: fatfs takes the first FAT partition of an MBR (MyNOS's own
+images stay whole-disk volumes).
+
+For a real Pi, `tools/make-sd-raspi.sh` makes a card: the Pi's firmware
+at a fixed version (downloaded once, its files' SHA-256 checked),
+`config.txt` (64 bits, the archive loaded at 64 MB with `initramfs`,
+the PL011 on GPIO 14 and 15), the kernel and the archive, on one FAT32
+partition that is also `/disk`. QEMU checks what it can of that path:
+the firmware's device tree (`-dtb`), the archive as the device tree's
+initrd, the card's partition.
 
 ## Risks
 

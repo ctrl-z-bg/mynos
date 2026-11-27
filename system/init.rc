@@ -20,3 +20,6 @@ start llmd.byte
 start httpd.byte
 start pkg.byte boot
 respawn sh.byte
+# a Raspberry Pi's SD card (sd0, fatfs's /disk): last, so that the other
+# programs keep their pids everywhere (fatfs waits for a disk up to 10 s)
+driver sdhcid

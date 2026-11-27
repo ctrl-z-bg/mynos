@@ -158,6 +158,9 @@ each in its own copy of the sources, so that objects never mix:
 
 Each runs `build-all.sh`'s list in its container, with its own kernel
 build (`tools/build-kernel-x86_64.sh`, `tools/build-kernel-aarch64.sh`).
+AArch64's kernel build makes two kernels: `build/aarch64/kernel.elf` for
+QEMU's `virt`, and `build/aarch64/kernel8.img` for a Raspberry Pi 3 or
+Zero 2 W (the same sources, `MYNOS_RASPI`); the programs are the same.
 
 ## H.5 The two disks
 
@@ -215,6 +218,17 @@ machine's one UART (which plays COM2: the log and a terminal's keys);
 `gui` starts. QEMU's AArch64 emulator is the host's if it has one
 (Debian and Ubuntu: the package `qemu-system-arm`), else the
 `dev-aarch64` container's (without a window).
+
+**A Raspberry Pi.** `ARCH=aarch64 MACHINE=raspi3b tools/run-demo.sh`
+runs `kernel8.img` on QEMU's Raspberry Pi 3: its four processors, its
+1 GB, the console on the screen (the framebuffer) and the terminal (the
+UART), the disk on its SD card. It has no network, keyboard or mouse
+yet: the terminal is the keyboard. `tools/make-sd-raspi.sh` makes an SD
+card image for a real Pi 3 or Zero 2 W (`tmp/mynos-raspi.img`): the
+Pi's firmware (downloaded once, at a fixed version, checked), its
+`config.txt`, the kernel and the modules, on one FAT32 partition that is
+also `/disk`. Written to a card (`dd`), it boots on the Pi; its terminal
+is the UART on GPIO 14 (TX) and 15 (RX), 115200 baud, 3.3 V.
 
 **A release.** `tools/make-release.sh` makes
 `tmp/release/mynos-VERSION.tar.gz` and its `.sha256`, for people who

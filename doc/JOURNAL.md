@@ -4279,3 +4279,43 @@ mapped normal non-cacheable for programs.
 
 **Lesson.** A new board is mostly "what does the firmware leave, and
 where": a probe of ten instructions answered it before any code.
+
+## 2026-11-27 — The Raspberry Pi's SD card
+
+**What was done.** `sdhcid`, the SD card's driver through the SDHCI
+controller (Arasan's on the BCM2837), and a card image for a real Pi.
+
+**Findings.**
+- The card's size came out 480 MB for a 64 MB card: the CSD's
+  version-1 `C_SIZE` (bits 73:62) was taken from the wrong bits. The
+  response registers hold the CSD without its CRC, each bit 8 places
+  lower: the field spans RESP1's top 10 bits and RESP2's bottom 2.
+- QEMU wants an SD card's image a power of 2 in size; MyNOS's disk
+  images are (64 MB).
+- On `raspi3b` the first `-serial` is the PL011: a manual run with
+  `-serial null -serial file:...` put the output on the mini UART and
+  looked like a dead kernel (run-qemu.sh keeps the caller's second).
+- With `gui &` the shell and displayd's keys thread read the console
+  together: after the session ends, displayd's pending read may take
+  the next line. Not seen with `gui` in the foreground; the suite types
+  `shutdown` again until QEMU ends.
+
+**Real hardware, not yet tried.** The BCM2835's controller loses a
+register write that follows another closer than two of the card's clock
+periods (Linux's `sdhci-iproc.c`): `sdhcid` waits 10 µs after each while
+the clock is 400 kHz. A real card has a partition table: fatfs now
+looks for an MBR's first FAT partition.
+
+- The suite's new lane j passed alone and failed in the whole suite:
+  its log and monitor socket were `$tmp/logr` and `$tmp/mon-r`, the
+  names lane c's restarts already used. Two lanes wrote one log and
+  talked to one monitor. Renamed (`logpi`, `mon-pi`).
+- With three suites and one more emulated machine at once, two checks
+  that slept a fixed time failed on x86-64: the boot without COM2 typed
+  after 5 s and looked once 3 s later; the first boot was killed at
+  10 s, before `abi` ended. Both now wait for what they look for (the
+  prompt, then the answer; `abi`'s last line), with a cap.
+
+**Lesson.** A field read from a register dump needs its bit positions
+written down beside the code: the arithmetic is easy to get wrong. And
+lanes that share a directory need names of their own.

@@ -38,8 +38,8 @@
 /* mapPhysical's devices: real addresses, outside the real RAM, where
    the platform has its devices, so that a driver looking for another
    platform's (PCI on a Pi) is told no rather than faulting (mem.c).
-   QEMU virt: its devices, its PCI window and memory (0x08000000 to RAM's
-   start), PCI's configuration space (ECAM). A Pi: the VideoCore's
+   QEMU virt: its devices, its PCI window and ports (0x08000000 to
+   0x3F000000), PCI's configuration space (ECAM). A Pi: the VideoCore's
    memory (its framebuffer), the peripherals, the local ones */
 #ifdef MYNOS_RASPI
 #define ARCH_DEVICE_PHYS_OK(P, N) \
@@ -47,7 +47,7 @@
    (P) + ((unsigned long)(N) << 12) <= 0x40040000UL)
 #else
 #define ARCH_DEVICE_PHYS_OK(P, N) \
-  ((((P) >= 0x08000000UL && (P) + ((unsigned long)(N) << 12) <= ARCH_RAM_BASE) || \
+  ((((P) >= 0x08000000UL && (P) + ((unsigned long)(N) << 12) <= 0x3F000000UL) || \
     ((P) >= 0x4010000000UL && (P) + ((unsigned long)(N) << 12) <= 0x4020000000UL)))
 #endif
 
