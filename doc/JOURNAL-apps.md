@@ -68,3 +68,26 @@ after it went off by itself.
 
 **Lesson.** A threshold copied from another machine is a fraction of
 that machine's rate: write it as one.
+
+## 2026-11-27 — camlboy serves emu/1
+
+**What was done.** The Game Boy gets the protocol the Spectrum has
+(`camlboy<pid>`), with `packages/retro`'s service: what drives one drives
+the other; `info` says which.
+
+**What a Game Boy could not give.** CAMLBOY keeps its CPU's PC and SP in
+a record of its own and its bus behind a functor: four small changes
+(MYNOS.md) expose them. Requests the machine has no answer for say so
+with an error rather than an empty reply: `screen_text` (no text mode:
+`screenshot` instead), `disasm` (no LR35902 disassembler yet), watchpoints
+(they would need a bus that checks, inside CAMLBOY's functor), saved
+states, `load` of another cartridge (the cartridge's type picks the
+emulator's module at start).
+
+**Test.** `tests/emu/emutest_gb.ml`, in the suite after the Spectrum's:
+the cartridge's entry read, a breakpoint on the VBlank interrupt's
+vector (0x0040) hit by `frames`, buttons, a screenshot, the refusals.
+
+**Lesson.** A protocol shared by machines that cannot all do everything
+is honest when a request a machine cannot serve fails with the reason:
+a caller (the agent) learns from the error what to ask instead.

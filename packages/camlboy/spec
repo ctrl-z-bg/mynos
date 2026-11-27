@@ -1,12 +1,12 @@
 # The package camlboy (tools/pkg-build.sh): CAMLBOY, a Game Boy emulator
 # in OCaml (third_party/camlboy, MIT), with a window of MyNOS's
 NAME=camlboy
-VERSION=1.1
-DESCRIPTION='A Game Boy, in a window: CAMLBOY, the emulator in OCaml by linoscope; full speed under KVM or on a PC, a third of it in QEMU without KVM'
+VERSION=1.2
+DESCRIPTION='A Game Boy, in a window and as a service (emu/1: camlboy<pid>): CAMLBOY, the emulator in OCaml by linoscope; full speed under KVM or on a PC, a third of it in QEMU without KVM'
 LICENSE=MIT
 LIBRARIES=threads
 SRC=third_party/camlboy/src
 # in the order ocamldep -sort gives
-SOURCES='color_id.mli bigstringaf.ml cartridge_type.ml color_id.ml gpu_mode.ml uints_intf.ml uints.mli registers.mli read_rom_file.mli instruction.mli cartridge_header.mli bit_util.mli cartridge_header.ml read_rom_file.ml uints.ml registers.ml instruction.ml inst_info.ml bit_util.ml addressable_intf.ml tile_map.mli tile_data.mli ram.mli pallete.mli oam_table.mli mmap_register.mli lcd_stat.mli lcd_position.mli lcd_control.mli interrupt_controller.mli gpu.mli joypad.mli serial_port.mli shadow_ram.mli timer.mli cartridge_intf.ml interrupt_controller.ml joypad.ml lcd_position.ml lcd_stat.ml mmap_register.ml oam_table.ml pallete.ml ram.ml serial_port.ml shadow_ram.ml tile_data.ml tile_map.ml timer.ml word_addressable_intf.ml lcd_control.ml gpu.ml apu.mli apu.ml camlboy_intf.ml rom_only.mli mbc3.mli mbc2.mli mbc1.mli fetch_and_decode.mli detect_cartridge.mli cpu.mli camlboy.mli bus.mli bus.ml fetch_and_decode.ml mbc1.ml mbc2.ml mbc3.ml rom_only.ml detect_cartridge.ml cpu.ml camlboy.ml ../../../packages/camlboy/camlboy_main.ml'
+SOURCES='color_id.mli bigstringaf.ml cartridge_type.ml color_id.ml gpu_mode.ml uints_intf.ml uints.mli registers.mli read_rom_file.mli instruction.mli cartridge_header.mli bit_util.mli cartridge_header.ml read_rom_file.ml uints.ml registers.ml instruction.ml inst_info.ml bit_util.ml addressable_intf.ml tile_map.mli tile_data.mli ram.mli pallete.mli oam_table.mli mmap_register.mli lcd_stat.mli lcd_position.mli lcd_control.mli interrupt_controller.mli gpu.mli joypad.mli serial_port.mli shadow_ram.mli timer.mli cartridge_intf.ml interrupt_controller.ml joypad.ml lcd_position.ml lcd_stat.ml mmap_register.ml oam_table.ml pallete.ml ram.ml serial_port.ml shadow_ram.ml tile_data.ml tile_map.ml timer.ml word_addressable_intf.ml lcd_control.ml gpu.ml apu.mli apu.ml camlboy_intf.ml rom_only.mli mbc3.mli mbc2.mli mbc1.mli fetch_and_decode.mli detect_cartridge.mli cpu.mli camlboy.mli bus.mli bus.ml fetch_and_decode.ml mbc1.ml mbc2.ml mbc3.ml rom_only.ml detect_cartridge.ml cpu.ml camlboy.ml ../../../packages/retro/png.ml ../../../packages/retro/emu_proto.mli ../../../packages/retro/emu_proto.ml ../../../packages/retro/emu_service.mli ../../../packages/retro/emu_service.ml ../../../packages/camlboy/camlboy_main.ml'
 EXTRA='third_party/camlboy/LICENSE third_party/camlboy/MYNOS.md'
 DOC=packages/camlboy/README.md

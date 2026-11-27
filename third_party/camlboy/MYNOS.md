@@ -27,3 +27,11 @@ and runs it with the CPU's cycles, `camlboy_intf.ml` adds
 Its cost, measured as above on the host: 329 frames a second without
 it, 273 with it.
 
+## emu/1: MyNOS's (2026-11-27)
+
+`camlboy` serves emu/1 (`camlboy<pid>`, doc/decisions/retro-emulators.md):
+`packages/camlboy/camlboy_main.ml` with `packages/retro`'s service. Four
+small changes to CAMLBOY's files make room for it: `cpu.ml`/`cpu.mli`
+give the PC, SP, HALT and IME; `camlboy.ml` keeps the bus and the
+registers in its record; `camlboy_intf.ml` adds `registers`, `pc`,
+`peek`, `poke`.

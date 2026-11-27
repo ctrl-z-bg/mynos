@@ -1911,3 +1911,6 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   moved there); `doc/JOURNAL.md` keeps the kernel, the services, the
   system's libraries and the toolchain. The book (`doc/book`) is frozen
   until the next version.
+- **2026-11-27** — camlboy 1.2 serves emu/1 (`camlboy<pid>`): registers,
+  memory, screenshots, breakpoints on the PC, frames, buttons; the
+  suite's lane c drives it after the Spectrum (`tests/emu`).

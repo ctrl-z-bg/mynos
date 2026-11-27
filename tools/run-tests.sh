@@ -313,6 +313,14 @@ if [ -f tests/emu/emu.img ] && [ -f system/ramdisk.dsk ]; then
     while [ $i -lt 120 ] && ! grep -aq 'emu: all checks passed\|emu: some checks FAILED\|PANIC' "$tmp/logemu"; do
         sleep 1; i=$((i + 1))
     done
+    # camlboy too: the Game Boy through the same protocol
+    tools/type-keys.py "$tmp/mon-emu" '/disk/gb/camlboy.byte --headless /disk/gb/tobutobugirl.gb &\n'
+    sleep 2
+    tools/type-keys.py "$tmp/mon-emu" '/disk/gb/emutest_gb.byte\n'
+    i=0
+    while [ $i -lt 120 ] && ! grep -aq 'emu-gb: all checks passed\|emu-gb: some checks FAILED\|PANIC' "$tmp/logemu"; do
+        sleep 1; i=$((i + 1))
+    done
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-emu" >/dev/null || true
     wait $qemu || true
     cat "$tmp/logemu" >> "$part"
@@ -1402,6 +1410,8 @@ if [ -f tests/emu/emu.img ]; then
     expect "emu: break 02BF, frames 5: hit there                            ok"
     expect "emu: watch write 5C78, wait: hit                                ok"
     expect "emu: all checks passed"
+    expect "emu-gb: break 0040, frames 10: the VBlank interrupt        ok"
+    expect "emu-gb: all checks passed"
 fi
 reject "PANIC"
 reject "page fault (?)"

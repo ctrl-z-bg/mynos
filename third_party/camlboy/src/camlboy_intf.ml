@@ -19,6 +19,13 @@ module type S = sig
 
   val set_audio : t -> bool -> unit
 
+  (** MyNOS's (emu/1, packages/camlboy): the CPU's registers by name, its
+      PC, and memory as the CPU sees it (a byte; 0..0xFFFF) *)
+  val registers : t -> (string * int) list
+  val pc : t -> int
+  val peek : t -> int -> int
+  val poke : t -> int -> int -> unit
+
   module For_tests : sig
     val prev_inst : t -> Instruction.t
 

@@ -77,3 +77,5 @@ tests/emu/emutest.byte
 tests/emu/emu.img
 tests/emu/_b/
 tests/z80/_*/
+tests/emu/camlboy.byte
+tests/emu/emutest_gb.byte
