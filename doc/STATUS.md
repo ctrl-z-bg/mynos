@@ -1954,4 +1954,4 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   between two frames is held for two, not lost. Both windows looked at
   under QEMU (`tools/pkg-shots.sh`, a throwaway script): 60 and 50
   frames a second, keys, the PSG's and the beeper's sound. Lane c green.
-  Not published yet.
+  Published to mynos-packages (baa65b1), built from a05f58d.
