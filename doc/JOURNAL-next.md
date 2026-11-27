@@ -789,3 +789,26 @@ board with no serial cable.
 
 **Lesson.** On `virt` the PCI bus's addresses and the processor's are
 the same: a driver tried only there never learns that they are two.
+
+## 2026-11-27 — The Pi 400's mouse: a moment, then nothing
+
+**Symptom.** With the VL805 mapped right (9401496), the Pi 400's own
+keyboard typed into the shell and `gui` started; a USB mouse moved the
+pointer for a fraction of a second, then never again.
+
+**Diagnosis.** On a failed interrupt transfer (a stall, a transaction
+error: likelier for a low-speed mouse reached through the hub's
+transaction translator, many reports a second) the xHCI halts the
+endpoint. usbd queued the next transfer as after a good one; a halted
+endpoint takes it and does nothing: the mouse was never read again.
+On QEMU no transfer ever fails.
+
+**Fix.** A failed transfer is logged; if the endpoint's context says
+Halted, usbd sends Reset Endpoint (keeping the data toggle, but for a
+stall, which `CLEAR_FEATURE(ENDPOINT_HALT)` clears on the device too)
+and Set TR Dequeue Pointer past the failed TRB, then reads again. The
+ports' changes, the root's and the hubs' (their status change
+endpoints now read), are logged and acknowledged. The mouse works.
+
+**Lesson.** An error path that "goes on as before" is a path never
+tried: on real hardware it is the first one taken.

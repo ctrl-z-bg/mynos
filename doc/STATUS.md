@@ -2159,3 +2159,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
 - **2026-11-27** — `tools/make-sd-raspi.sh DIR`: a MyNOS card's
   partition, mounted, brought up to date in seconds (kernel8.img,
   mynos.mod, config.txt) instead of a 2 GB `dd` at every try.
+- **2026-11-27** — The USB works on a Pi 400 (btq.8.1-3, .8.5 closed):
+  its own keyboard and a USB mouse, in the shell and the graphical
+  session, through the kernel's PCIe, the VL805 and its hub. A halted
+  interrupt endpoint is now reset and read again (the mouse stopped at
+  its first failed transfer). Next: the network, GENET (btq.8.4), then
+  the Wi-Fi (btq.9).
