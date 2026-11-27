@@ -2213,3 +2213,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   over WPA2. httpd had given up meanwhile (netd's service came after 5 s
   of waiting for the cable's link): on a Pi with a Wi-Fi netd now
   registers its service first.
+- **2026-11-27** — The Pi 400's Wi-Fi carries TCP: HTTP to and from the
+  Pi over WPA2 (a 256 KB file sent and read back, the log read
+  remotely); the AP still deauthenticates now and then (reason 3), the
+  firmware joins again by itself (link events now timed). USB devices
+  behind a hub may be unplugged and plugged again (the mouse had
+  reconnected by itself and was never configured again).

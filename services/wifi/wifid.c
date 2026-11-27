@@ -575,6 +575,16 @@ static void scan_result(const unsigned char * d, int n)
   }
 }
 
+/* seconds since wifid started (for the log of the link's events) */
+static long secs(void)
+{
+  static struct timespec t0;
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  if (!t0.tv_sec && !t0.tv_nsec) t0 = t;
+  return (long)(t.tv_sec - t0.tv_sec);
+}
+
 static void on_event(const unsigned char * p, int len)
 {
   const unsigned char * eth, * ev;
@@ -600,14 +610,14 @@ static void on_event(const unsigned char * p, int len)
     break;
   case E_LINK:
     link_up = flags & 1;
-    mynos_log("wifid: link %s (reason %u)\n", link_up ? "up" : "down", reason);
+    mynos_log("wifid: [%lds] link %s (reason %u)\n", secs(), link_up ? "up" : "down", reason);
     if (!link_up) keyed = 0;
     break;
   case E_PSK_SUP:
     mynos_log("wifid: the firmware's supplicant: state %u, reason %u\n", status, reason);
     break;
   case E_DEAUTH: case E_DEAUTH_IND: case E_DISASSOC: case E_DISASSOC_IND:
-    mynos_log("wifid: disconnected (event %u, reason %u)\n", type, reason);
+    mynos_log("wifid: [%lds] disconnected (event %u, reason %u)\n", secs(), type, reason);
     break;
   case E_AUTH: case E_ASSOC:
     if (status) mynos_log("wifid: %s failed (status %u, reason %u)\n",
@@ -977,7 +987,7 @@ static int board_type(void)
 
 int main(void)
 {
-  int type = board_type(), nvlen = 0, n;
+  int type = (secs(), board_type()), nvlen = 0, n;
   unsigned int id, ramsize, rambase = 0x198000, rstvec, i;
   long fwlen, txtlen;
   unsigned char * fw, * txt, * nv, check[64];

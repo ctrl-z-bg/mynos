@@ -147,6 +147,7 @@ struct trb { unsigned long param; unsigned int status, control; };
 #define T_STATUS          4
 #define T_LINK            6
 #define T_ENABLE_SLOT     9
+#define T_DISABLE_SLOT    10
 #define T_ADDRESS_DEVICE  11
 #define T_CONFIGURE_EP    12
 #define T_EVALUATE_CTX    13
@@ -240,6 +241,10 @@ struct dev {
      bytes. Offsets in bits from the report's start (its id's byte
      included) */
   int m_ok, m_id, m_btn, m_nbtn, m_x, m_xs, m_y, m_ys, m_w, m_ws;
+  struct dev * hub;                   /* the hub it is on (NULL: a root port) */
+  int hub_port;                       /* its port there */
+  int gone;                           /* unplugged (or never attached): its entry free */
+  int fails;                          /* failed transfers in a row */
 };
 
 #define MAXDEV 16
@@ -596,14 +601,16 @@ static void handle_transfer(struct event * e)
   int slot = e->control >> 24, dci = (e->control >> 16) & 0x1F, i, cc = e->status >> 24;
   for (i = 0; i < ndevs; i++) {
     struct dev * d = &devs[i];
-    if (d->slot != slot || d->intr_dci != dci) continue;
+    if (d->gone || d->slot != slot || d->intr_dci != dci) continue;
     d->pending = 0;
     if (cc != 1 && cc != 13) {        /* recovered, then read again, by main */
       d->halted = cc;
+      d->fails++;
       if (d->errors++ < 5 || d->errors % 100 == 0)
         mynos_log("usbd: port %s: a transfer failed (%d), %d so far\n", d->loc, cc, d->errors);
       return;
     }
+    d->fails = 0;
     cache_drop(d->report, d->intr_len);
     if (d->kind == 1) keyboard_report(d, d->report);
     else if (d->kind == 2) mouse_report(d, d->report, d->intr_len - (int)(e->status & 0xFFFFFF));
@@ -652,9 +659,14 @@ static void attach(int port, unsigned int route, int speed, struct dev * hub, in
       ep_int = 10, mps, kind = 0, rd_len = 0;
   volatile unsigned int * c;
   unsigned char * p;
-  if (ndevs == MAXDEV) return;
-  d = &devs[ndevs];
+  int idx;
+  for (idx = 0; idx < ndevs && !devs[idx].gone; idx++) ;   /* an unplugged one's entry */
+  if (idx == MAXDEV) return;
+  d = &devs[idx];
   memset(d, 0, sizeof *d);
+  d->gone = 1;                        /* (until addressed) */
+  d->hub = hub;
+  d->hub_port = hub_port;
   d->port = port;
   d->route = route;
   d->speed = speed;
@@ -696,11 +708,12 @@ static void attach(int port, unsigned int route, int speed, struct dev * hub, in
     mynos_log("usbd: port %s: no address (%d)\n", d->loc, cc);
     return;
   }
-  ndevs++;
+  d->gone = 0;
+  if (idx == ndevs) ndevs++;
   /* the device descriptor's first 8 bytes: its endpoint 0's size */
   if (control(d, 0x80, 6, 0x100, 0, 8) < 0) {
     mynos_log("usbd: port %s: no descriptor\n", d->loc);
-    ndevs--;
+    d->gone = 1;
     return;
   }
   if (speed == 1 && ctl_buf[7] != mps && ctl_buf[7] >= 8) {
@@ -710,7 +723,7 @@ static void attach(int port, unsigned int route, int speed, struct dev * hub, in
     cache_clean(d->in_ctx, PAGE);
     command(d->in_bus, 0, TRB_TYPE(T_EVALUATE_CTX) | (unsigned int)slot << 24, NULL);
   }
-  if (control(d, 0x80, 6, 0x100, 0, 18) < 18) { ndevs--; return; }
+  if (control(d, 0x80, 6, 0x100, 0, 18) < 18) { d->gone = 1; return; }
   mynos_log("usbd: port %s: %s speed, %04x:%04x, class %d\n", d->loc, speed_name(speed),
             ctl_buf[8] | ctl_buf[9] << 8, ctl_buf[10] | ctl_buf[11] << 8, ctl_buf[4]);
   /* the configuration: its interfaces, the first HID boot one's (or a
@@ -809,11 +822,32 @@ static int hub_port_status(struct dev * h, int n)
 #define F_C_CONNECTION   16
 #define F_C_RESET        20
 
+/* a hub's port with a device: reset, the device attached */
+static void hub_port_attach(struct dev * h, int n)
+{
+  int ms, st, speed;
+  HUB_CLEAR_FEATURE(h, F_C_CONNECTION, n);
+  HUB_SET_FEATURE(h, F_PORT_RESET, n);
+  for (ms = 0, st = -1; ms < 500; ms += 10) {
+    mynos_sleep(10000);
+    st = hub_port_status(h, n);
+    if (st >= 0 && (st & (0x10 << 16))) break;     /* C_PORT_RESET */
+  }
+  if (st < 0 || !(st & 2)) {
+    mynos_log("usbd: port %s.%d: not enabled (%08x)\n", h->loc, n, st);
+    return;
+  }
+  HUB_CLEAR_FEATURE(h, F_C_RESET, n);
+  speed = (st & 0x200) ? 2 : (st & 0x400) ? 3 : 1;   /* low, high, full */
+  mynos_sleep(20000);                 /* the device's recovery after the reset */
+  attach(h->port, h->route | (unsigned int)n << (4 * h->depth), speed, h, n);
+}
+
 /* a USB 2 hub's ports (USB 2.0, chapter 11.24): powered, those with a
    device reset, each device attached */
 static void hub_scan(struct dev * h)
 {
-  int n, ms, st, speed;
+  int n, st;
   if (h->depth >= 5) return;          /* the route string's five tiers */
   for (n = 1; n <= h->hub_ports; n++) HUB_SET_FEATURE(h, F_PORT_POWER, n);
   /* power good, then the connections seen (at least 100 ms) */
@@ -821,22 +855,30 @@ static void hub_scan(struct dev * h)
   for (n = 1; n <= h->hub_ports; n++) {
     st = hub_port_status(h, n);
     if (st < 0 || !(st & 1)) continue;             /* nothing connected */
-    HUB_CLEAR_FEATURE(h, F_C_CONNECTION, n);
-    HUB_SET_FEATURE(h, F_PORT_RESET, n);
-    for (ms = 0; ms < 500; ms += 10) {
-      mynos_sleep(10000);
-      st = hub_port_status(h, n);
-      if (st >= 0 && (st & (0x10 << 16))) break;   /* C_PORT_RESET */
-    }
-    if (st < 0 || !(st & 2)) {
-      mynos_log("usbd: port %s.%d: not enabled (%08x)\n", h->loc, n, st);
-      continue;
-    }
-    HUB_CLEAR_FEATURE(h, F_C_RESET, n);
-    speed = (st & 0x200) ? 2 : (st & 0x400) ? 3 : 1;   /* low, high, full */
-    mynos_sleep(20000);               /* the device's recovery after the reset */
-    attach(h->port, h->route | (unsigned int)n << (4 * h->depth), speed, h, n);
+    hub_port_attach(h, n);
   }
+}
+
+/* a device unplugged (or come again: its old self): its slot disabled,
+   its entry free; a hub's devices with it */
+static void detach(struct dev * d)
+{
+  int i;
+  if (d->gone) return;
+  d->gone = 1;
+  for (i = 0; i < ndevs; i++)
+    if (devs[i].hub == d) detach(&devs[i]);
+  if (d->slot) {
+    command(0, 0, TRB_TYPE(T_DISABLE_SLOT) | (unsigned int)d->slot << 24, NULL);
+    dcbaa[d->slot] = 0;
+    cache_clean(&dcbaa[d->slot], 8);
+    d->slot = 0;
+  }
+  if (d->kind == 1) {                 /* (no key left held) */
+    held_code = 0;
+    memset(d->last, 0, sizeof d->last);
+  }
+  mynos_log("usbd: port %s: gone\n", d->loc);
 }
 
 /* an interrupt endpoint whose transfer failed: if the controller halted
@@ -848,6 +890,10 @@ static void recover(struct dev * d)
   int cc = d->halted, state;
   unsigned int ep = (unsigned int)d->intr_dci << 16 | (unsigned int)d->slot << 24;
   d->halted = 0;
+  if (d->fails > 20) {                /* not there any more: until its port changes */
+    if (d->fails == 21) mynos_log("usbd: port %s: no answer, left alone\n", d->loc);
+    return;
+  }
   cache_drop(d->out_ctx, PAGE);
   state = ctx(d->out_ctx, d->intr_dci)[0] & 7;
   if (state == 2) {                   /* Halted */
@@ -874,6 +920,17 @@ static void hub_changes(struct dev * h)
               st & 0xFFFF, (st >> 16) & 0xFFFF);
     for (f = 0; f < 5; f++)          /* C_PORT_CONNECTION, ENABLE, SUSPEND, OVER_CURRENT, RESET */
       if (st & (1 << (16 + f))) HUB_CLEAR_FEATURE(h, 16 + f, n);
+    /* a connection changed (unplugged, plugged, or a device that reset
+       itself): the old one gone, the new one attached */
+    if (st & (1 << 16)) {
+      int i;
+      for (i = 0; i < ndevs; i++)
+        if (!devs[i].gone && devs[i].hub == h && devs[i].hub_port == n) detach(&devs[i]);
+      if (st & 1) {
+        mynos_sleep(100000);          /* (the connection settled) */
+        hub_port_attach(h, n);
+      }
+    }
   }
   queue_report(h);
 }
@@ -1005,6 +1062,7 @@ int main(void)
       }
     }
     for (n = 0; n < ndevs; n++) {
+      if (devs[n].gone) continue;
       if (devs[n].halted) recover(&devs[n]);
       if (devs[n].hub_change) hub_changes(&devs[n]);
     }

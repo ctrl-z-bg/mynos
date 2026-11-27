@@ -971,3 +971,26 @@ after 300 ms and every second, and the answer awaited up to 5 s.
 
 **Lesson.** A retry is not harmless when the command has a state: a key
 is not a question.
+
+## 2026-11-27 — The Pi 400's mouse stops: it had come again, and nobody asked
+
+**Symptom.** After a while in the graphical session the USB mouse
+stopped, its light off (the first try's stop, unexplained then).
+
+**Diagnosis** (usbd's log, read over the Wi-Fi). The hub said `port 1.3:
+changed (status 0301, changes 0001)`: a connection change, the mouse now
+connected, powered, low speed, but not enabled. It had gone and come
+again by itself (a glitch, or the mouse resetting itself). usbd only
+logged it, and went on asking the old device's endpoint: 8700 transfers
+failed with code 36 (split transaction error, the hub's TT finding
+nobody), the mouse never configured again, its light off.
+
+**Fix.** A hub port's connection change is now a plug: the old device
+detached (Disable Slot, its entry free, a hub's devices with it), and if
+something is connected, the port reset and the device attached again.
+After 20 failed transfers in a row a device is left alone until its
+port changes. Tried on QEMU (a mouse behind the hub removed and added
+again from the monitor: gone, then a mouse again; the keyboard types on).
+
+**Lesson.** On real hardware "plugged at boot" is not "plugged for
+ever": a device may come back as a new one without anybody touching it.
