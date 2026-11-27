@@ -27,30 +27,27 @@
 
 open Style
 
-(* ---- text metrics: the window's font until M2 ---- *)
+(* ---- text metrics: the fonts (M2) ---- *)
 
 module Metrics = struct
-  let char_w = 8
-  let glyph_h = 16
-  let cells s =
-    let n = ref 0 in
-    String.iter (fun c -> if Char.code c land 0xC0 <> 0x80 then incr n) s;
-    !n
-  let width (_ : Style.t) s = cells s * char_w
-  let space (_ : Style.t) = char_w
-  let line_height (s : Style.t) =
-    let h = match s.line_height with
-      | Lh_normal -> s.font_size *. 1.2
-      | Lh_px p -> p
-      | Lh_factor f -> f *. s.font_size in
-    max glyph_h (int_of_float (Float.round h))
+  (* the font a style's text is in *)
+  let font (st : Style.t) =
+    Fonts.get ~family:(Fonts.family_of st.font_family) ~bold:(st.font_weight >= 600) ~italic:st.italic
+      ~size:(max 1 (int_of_float (Float.round st.font_size)))
+  let width st s = Fonts.width (font st) s
+  let line_height (st : Style.t) =
+    max 1 (match st.line_height with
+        | Lh_normal -> (font st).line
+        | Lh_px p -> int_of_float (Float.round p)
+        | Lh_factor f -> int_of_float (Float.round (f *. st.font_size)))
 end
 
 (* ---- the display list ---- *)
 
 type item =
   | Fill of { x : int; y : int; w : int; h : int; color : int }
-  | Text of { x : int; y : int; s : string; color : int; bold : bool; italic : bool }
+  | Text of { x : int; y : int; s : string; color : int; font : Fonts.font }
+      (** [y]: the baseline *)
 
 type link = { lx : int; ly : int; lw : int; lh : int; href : string }
 
@@ -108,8 +105,9 @@ let emit o it =
          let x = max f.x x0 and y = max f.y y0 and x2 = min (f.x + f.w) x1 and y2 = min (f.y + f.h) y1 in
          if x2 > x && y2 > y then Dynarray.add_last o.items_ (Fill { f with x; y; w = x2 - x; h = y2 - y })
        | Text t ->
-         let w = Metrics.cells t.s * Metrics.char_w in
-         if t.y + Metrics.glyph_h > y0 && t.y < y1 && t.x < x1 && t.x + w > x0 then Dynarray.add_last o.items_ it)
+         let w = Fonts.width t.font t.s in
+         if t.y + t.font.descent > y0 && t.y - t.font.ascent < y1 && t.x < x1 && t.x + w > x0 then
+           Dynarray.add_last o.items_ it)
 
 let add_link o l =
   if o.dry = 0 then
@@ -181,14 +179,15 @@ type atom_kind =
   | Float of Dom.node                                                    (* a float met in a line *)
   | Abs of Dom.node                                                      (* where its static position is *)
 
-type atom = { kind : atom_kind; st : Style.t; link : string option; bg : int }
+type atom = { kind : atom_kind; st : Style.t; font : Fonts.font; link : string option; bg : int;
+              dy : int }   (* raised (negative) or lowered by vertical-align *)
 
 type piece =
   | P_block of Dom.node * Style.t
   | P_float of Dom.node * Style.t
   | P_abs of Dom.node * Style.t
   | P_atom of atom
-  | P_text of string * Style.t * string option * int
+  | P_text of string * Style.t * string option * int * int
   | P_space of int * Style.t
 
 let block_level = function
@@ -218,35 +217,55 @@ let atomic (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
   match Dom.name n with
   | "img" ->
     let alt = Option.value (a "alt") ~default:"" in
-    (match st.width, st.height with
-     | Auto, Auto -> if alt = "" then None else Some (Word ("[" ^ alt ^ "]"))
-     | _ -> let w, h = size 0 Metrics.glyph_h in
-       Some (Box { w; h; label = alt; frame = true }))
+    (* the width and height attributes give the ratio (HTML's mapping to
+       aspect-ratio): one given in CSS, the other follows *)
+    let num k = Option.bind (a k) (fun v -> float_of_string_opt (String.trim v)) in
+    let ratio = match num "width", num "height" with
+      | Some w, Some h when w > 0. && h > 0. -> Some (h /. w) | _ -> None in
+    (* max-width: a length always; a percentage only once the container's
+       width is known (not while measuring natural widths, at 0) *)
+    let clamp_w w = match st.max_width with
+      | Len (p, 0.) -> min w (int_of_float p)
+      | Len (_, _) as l when cw > 0 -> min w (px l ~of_:cw)
+      | _ -> w in
+    (match st.width, st.height, ratio with
+     | Auto, Auto, None -> if alt = "" then None else Some (Word ("[" ^ alt ^ "]"))
+     | w, Auto, Some r when not (is_auto w) ->
+       let w = clamp_w (px w ~of_:cw) in
+       Some (Box { w; h = int_of_float (float w *. r); label = alt; frame = true })
+     | Auto, h, Some r when not (is_auto h) ->
+       let h = px h ~of_:cw in
+       Some (Box { w = clamp_w (int_of_float (float h /. r)); h; label = alt; frame = true })
+     | Auto, Auto, Some r ->
+       let w = clamp_w (int_of_float (Option.get (num "width"))) in
+       Some (Box { w; h = int_of_float (float w *. r); label = alt; frame = true })
+     | _ -> let w, h = size 0 (Metrics.line_height st) in
+       Some (Box { w = clamp_w w; h; label = alt; frame = true }))
   | "input" ->
     (match String.lowercase_ascii (Option.value (a "type") ~default:"text") with
      | "hidden" -> None
      | "checkbox" | "radio" -> Some (Box { w = 13; h = 13; label = (if a "checked" <> None then "x" else ""); frame = true })
      | "submit" | "button" | "reset" ->
        let label = Option.value (a "value") ~default:(if a "type" = Some "reset" then "Reset" else "Submit") in
-       let w, h = size (Metrics.cells label * Metrics.char_w + 16) 20 in
+       let w, h = size (Metrics.width st label + 16) (Metrics.line_height st + 4) in
        Some (Box { w; h; label; frame = true })
      | _ ->
        let label = match a "value" with Some v -> v | None -> Option.value (a "placeholder") ~default:"" in
-       let w, h = size 160 20 in
+       let w, h = size 160 (Metrics.line_height st + 4) in
        Some (Box { w; h; label; frame = true }))
   | "button" ->
     let label = String.trim (Dom.text_content n) in
-    let w, h = size (Metrics.cells label * Metrics.char_w + 16) 20 in
+    let w, h = size (Metrics.width st label + 16) (Metrics.line_height st + 4) in
     Some (Box { w; h; label; frame = true })
   | "select" ->
     let first = Dom.find (fun o -> Dom.is_html o "option") n in
     let label = match first with Some o -> String.trim (Dom.text_content o) ^ " v" | None -> "v" in
-    let w, h = size (Metrics.cells label * Metrics.char_w + 16) 20 in
+    let w, h = size (Metrics.width st label + 16) (Metrics.line_height st + 4) in
     Some (Box { w; h; label; frame = true })
   | "textarea" ->
     let cols = Option.value (Option.bind (a "cols") int_of_string_opt) ~default:20 in
     let rows = Option.value (Option.bind (a "rows") int_of_string_opt) ~default:2 in
-    let w, h = size (cols * Metrics.char_w + 8) (rows * Metrics.glyph_h + 4) in
+    let w, h = size (cols * Metrics.width st "n" + 8) (rows * Metrics.line_height st + 4) in
     Some (Box { w; h; label = Dom.text_content n; frame = true })
   | "iframe" | "video" | "canvas" | "embed" | "object" | "audio" ->
     let w, h = size 300 150 in
@@ -265,20 +284,27 @@ let atomic (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
    boxes to lay out *)
 let pieces o (container : Dom.node) ~cw ~depth =
   let out = ref [] in
-  let links = ref [] and bgs = ref [] in
+  let links = ref [] and bgs = ref [] and shifts = ref [ 0 ] in
   let add p = out := p :: !out in
+  let dy () = List.hd !shifts in
   let top_link () = match !links with l :: _ -> l | [] -> None in
   let flows_inline (n : Dom.node) (st : Style.t) =
     not (st.display = None_ || st.clipped || positioned st || st.float_ <> "none"
          || Dom.is_html n "br" || (block_level st.display && depth < max_depth)
          || is_atomic n || (inline_box st.display && depth < max_depth) || st.display = Table_column) in
+  (* an element's ::before or ::after, as text in the line *)
+  let generated (n : Dom.node) which =
+    match Style.pseudo o.styles n which with
+    | Some (ps, text) ->
+      add (P_text (text, ps, top_link (), (match !bgs with b :: _ -> b | [] -> 0), dy ()))
+    | None -> () in
   let enter (n : Dom.node) =
-    if n == container then true
+    if n == container then (generated n "before"; true)
     else match n.kind with
       | Text { data } ->
         (match Option.bind n.parent (fun p -> Style.get o.styles p) with
          | Some st when st.display <> None_ ->
-           add (P_text (data, st, top_link (), (match !bgs with b :: _ -> b | [] -> 0)))
+           add (P_text (data, st, top_link (), (match !bgs with b :: _ -> b | [] -> 0), dy ()))
          | _ -> ());
         false
       | Element _ ->
@@ -288,33 +314,42 @@ let pieces o (container : Dom.node) ~cw ~depth =
            if st.display = None_ || st.clipped || st.display = Table_column then false
            else if positioned st then (add (P_abs (n, st)); false)
            else if st.float_ <> "none" then (add (P_float (n, st)); false)
-           else if Dom.is_html n "br" then (add (P_atom { kind = Break; st; link = None; bg = 0 }); false)
+           else if Dom.is_html n "br" then (add (P_atom { kind = Break; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }); false)
            else if block_level st.display && depth < max_depth then (add (P_block (n, st)); false)
            else if is_atomic n then begin
              (match atomic n st ~cw with
-              | Some kind -> add (P_atom { kind; st; link = top_link (); bg = 0 })
+              | Some kind -> add (P_atom { kind; st; font = Metrics.font st; link = top_link (); bg = 0; dy = dy () })
               | None -> ());
              false
            end else if inline_box st.display && depth < max_depth then begin
-             add (P_atom { kind = Ibox { node = n; bw = 0; bh = 0; ml = 0; mr = 0 }; st; link = top_link (); bg = 0 });
+             add (P_atom { kind = Ibox { node = n; bw = 0; bh = 0; ml = 0; mr = 0 }; st; font = Metrics.font st;
+                           link = top_link (); bg = 0; dy = dy () });
              false
            end else begin
              let href = if Dom.is_html n "a" then Dom.attr n "href" else None in
              links := (match href with Some h -> Some h | None -> top_link ()) :: !links;
              bgs := (if visible_color st.background then st.background else (match !bgs with b :: _ -> b | [] -> 0)) :: !bgs;
+             shifts := (dy () + (match st.vertical_align with
+                 | "super" -> - int_of_float (st.font_size *. 0.45)
+                 | "sub" -> int_of_float (st.font_size *. 0.25)
+                 | _ -> 0)) :: !shifts;
              if st.display <> Contents then begin
                let left = px st.margin.(3) ~of_:cw + int_of_float (border st 3) + px st.padding.(3) ~of_:cw in
                if left > 0 then add (P_space (left, st))
              end;
+             generated n "before";
              true
            end)
       | _ -> false in
   let leave (n : Dom.node) =
-    if n != container then
+    if n == container then generated n "after"
+    else
       match n.kind, Style.get o.styles n with
       | Element _, Some st when flows_inline n st ->
+        generated n "after";
         links := (match !links with _ :: r -> r | [] -> []);
         bgs := (match !bgs with _ :: r -> r | [] -> []);
+        shifts := (match !shifts with _ :: (_ :: _ as r) -> r | l -> l);
         if st.display <> Contents then begin
           let right = px st.margin.(1) ~of_:cw + int_of_float (border st 1) + px st.padding.(1) ~of_:cw in
           if right > 0 then add (P_space (right, st))
@@ -332,12 +367,13 @@ let atoms_of pieces =
   let add a = out := a :: !out in
   List.iter (function
       | P_atom a -> add a; prev_space := (a.kind = Break)
-      | P_space (w, st) -> add { kind = Box { w; h = 0; label = ""; frame = false }; st; link = None; bg = 0 }
-      | P_float (n, st) -> add { kind = Float n; st; link = None; bg = 0 }
-      | P_abs (n, st) -> add { kind = Abs n; st; link = None; bg = 0 }
+      | P_space (w, st) -> add { kind = Box { w; h = 0; label = ""; frame = false }; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
+      | P_float (n, st) -> add { kind = Float n; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
+      | P_abs (n, st) -> add { kind = Abs n; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
       | P_block _ -> ()
-      | P_text (data, st, link, bg) ->
-        let mk kind = { kind; st; link; bg } in
+      | P_text (data, st, link, bg, dy) ->
+        let font = Metrics.font st in
+        let mk kind = { kind; st; font; link; bg; dy } in
         (match st.white_space with
          | Pre | Pre_wrap ->
            let lines = String.split_on_char '\n' data in
@@ -371,33 +407,25 @@ let atoms_of pieces =
 
 let atom_width a =
   match a.kind with
-  | Word w -> Metrics.width a.st w
-  | Space -> Metrics.space a.st
+  | Word w -> Fonts.width a.font w
+  | Space -> Fonts.width a.font " "
   | Break | Float _ | Abs _ -> 0
   | Box { w; _ } -> w
   | Ibox { bw; ml; mr; _ } -> ml + bw + mr
 
 let cut_word a avail =
   match a.kind with
-  | Word w when atom_width a > avail && avail >= Metrics.char_w ->
-    let per = max 1 (avail / Metrics.char_w) in
-    let chars = ref [] in
-    let n = String.length w in
-    let i = ref 0 in
-    while !i < n do
-      let len = let b = Char.code w.[!i] in if b < 0x80 then 1 else if b < 0xE0 then 2 else if b < 0xF0 then 3 else 4 in
-      let len = min len (n - !i) in
-      chars := String.sub w !i len :: !chars; i := !i + len
-    done;
-    let chars = Array.of_list (List.rev !chars) in
-    let parts = ref [] in
-    let k = ref 0 in
-    while !k < Array.length chars do
-      let m = min per (Array.length chars - !k) in
-      parts := { a with kind = Word (String.concat "" (Array.to_list (Array.sub chars !k m))) } :: !parts;
-      k := !k + m
-    done;
-    List.rev !parts
+  | Word w when atom_width a > avail && avail > 0 ->
+    (* the longest prefixes that fit, one after the other *)
+    let rec cut w acc =
+      if w = "" then List.rev acc
+      else
+        let pw = Fonts.prefix_widths a.font w in
+        let pre = match List.rev (List.filter (fun (_, wd) -> wd <= avail) pw) with
+          | (p, _) :: _ -> p
+          | [] -> fst (List.hd pw) in
+        cut (String.sub w (String.length pre) (String.length w - String.length pre)) ({ a with kind = Word pre } :: acc) in
+    cut w []
   | _ -> [ a ]
 
 let list_marker (n : Dom.node) (st : Style.t) =
@@ -680,14 +708,13 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
   if st.display = List_item && st.visible && not st.transparent && o.dry = 0 then begin
     match list_marker n st with
     | Some mk ->
-      let lh = Metrics.line_height st in
+      let lh = Metrics.line_height st and f = Metrics.font st in
       let first_text_y =
         let rec find i = if i >= Dynarray.length o.items_ then None
           else match Dynarray.get o.items_ i with Text t -> Some t.y | _ -> find (i + 1) in
         find first_item in
-      let ty = Option.value first_text_y ~default:(cy + (lh - Metrics.glyph_h) / 2) in
-      emit o (Text { x = cx - Metrics.width st mk - Metrics.char_w; y = ty; s = mk; color = st.color;
-                     bold = false; italic = false })
+      let ty = Option.value first_text_y ~default:(cy + (lh - f.ascent - f.descent) / 2 + f.ascent) in
+      emit o (Text { x = cx - Metrics.width st mk - Metrics.width st " "; y = ty; s = mk; color = st.color; font = f })
     | None -> ()
   end;
   (* the absolutely positioned descendants, now that this box's size is known *)
@@ -801,33 +828,37 @@ and inline_layout o ~bfc (container : Style.t) atoms ~x ~y ~w ~depth =
     let lw = r - l in
     let width = List.fold_left (fun acc a -> acc + atom_width a) 0 line in
     let indent = if !first_line then px container.text_indent ~of_:w else 0 in
-    let lh = List.fold_left (fun m a ->
-        match a.kind with
-        | Box { h; _ } -> max m h
-        | Ibox { bh; _ } -> max m bh
-        | Word _ | Space -> max m (Metrics.line_height a.st)
-        | _ -> m) strut line in
+    (* above and below the baseline: each text's ascent and descent with its
+       half of the leading; boxes sit on the baseline; the strut is the
+       container's own *)
+    let parts (f : Fonts.font) lh = let half = (lh - f.ascent - f.descent) / 2 in (f.ascent + half, lh - f.ascent - half) in
+    let sa, sb = parts (Metrics.font container) strut in
+    let above, below = List.fold_left (fun (a, b) at ->
+        match at.kind with
+        | Word _ | Space -> let x, y = parts at.font (Metrics.line_height at.st) in (max a x, max b y)
+        | Box { h; _ } -> (max a h, b)
+        | Ibox { bh; _ } -> (max a bh, b)
+        | _ -> (a, b)) (sa, sb) line in
+    let lh = above + below in
     let shift = match container.text_align with
       | Center -> max 0 ((lw - indent - width) / 2)
       | Right -> max 0 (lw - indent - width)
       | Left | Justify -> 0 in
     let cx = ref (l + indent + shift) in
     let line_y = !y in
-    let text_y = line_y + (lh - Metrics.glyph_h) / 2 in
+    let baseline = line_y + above in
     List.iter (fun a ->
         let aw = atom_width a in
         let st = a.st in
-        let ty = match st.vertical_align with
-          | "super" -> text_y - 5 | "sub" -> text_y + 4 | _ -> text_y in
+        let f = a.font in
+        let ty = baseline + a.dy in
         if st.visible && not st.transparent then begin
           if a.bg <> 0 && aw > 0 then
-            emit o (Fill { x = !cx; y = ty - 1; w = aw; h = Metrics.glyph_h + 2; color = rgb a.bg });
+            emit o (Fill { x = !cx; y = ty - f.ascent - 1; w = aw; h = f.ascent + f.descent + 2; color = rgb a.bg });
           (match a.kind with
-           | Word s ->
-             emit o (Text { x = !cx; y = ty; s; color = st.color; bold = st.font_weight >= 600; italic = st.italic })
+           | Word s -> emit o (Text { x = !cx; y = ty; s; color = st.color; font = f })
            | Box { w = bw; h = bh; label; frame } ->
-             let by = if bh >= lh then line_y else line_y + lh - bh - (lh - Metrics.glyph_h) / 2 in
-             let by = max line_y (min by (line_y + lh - bh)) in
+             let by = max line_y (baseline - bh) in
              if frame && bw > 0 && bh > 0 then begin
                let c = 0xA0A8B0 in
                emit o (Fill { x = !cx; y = by; w = bw; h = 1; color = c });
@@ -835,22 +866,18 @@ and inline_layout o ~bfc (container : Style.t) atoms ~x ~y ~w ~depth =
                emit o (Fill { x = !cx; y = by; w = 1; h = bh; color = c });
                emit o (Fill { x = !cx + bw - 1; y = by; w = 1; h = bh; color = c })
              end;
-             if label <> "" && bw > 2 * Metrics.char_w then begin
-               let room = (bw - 8) / Metrics.char_w in
-               let shown = if Metrics.cells label > room then
-                   let b = Buffer.create room and k = ref 0 in
-                   String.iter (fun c -> if Char.code c land 0xC0 <> 0x80 then incr k;
-                                 if !k <= room then Buffer.add_char b c) label;
-                   Buffer.contents b
-                 else label in
-               emit o (Text { x = !cx + 4; y = by + max 0 ((bh - Metrics.glyph_h) / 2); s = shown;
-                              color = 0x50585F; bold = false; italic = false })
+             if label <> "" && bw > 16 then begin
+               (* the label's first characters that fit *)
+               let shown = match List.rev (List.filter (fun (_, w) -> w <= bw - 8) (Fonts.prefix_widths f label)) with
+                 | (p, _) :: _ -> p | [] -> "" in
+               emit o (Text { x = !cx + 4; y = by + (bh + f.ascent - f.descent) / 2; s = shown;
+                              color = 0x50585F; font = f })
              end
            | Ibox { node; bw; bh; ml; _ } ->
              let by = match st.vertical_align with
-               | "middle" -> line_y + (lh - bh) / 2
+               | "middle" -> baseline - f.ascent / 3 - bh / 2
                | "top" | "text-top" -> line_y
-               | _ -> line_y + lh - bh - max 0 ((lh - Metrics.glyph_h) / 2 - 2) in
+               | _ -> baseline - bh in
              let by = max line_y (min by (line_y + lh - bh)) in
              ignore (block o ~force_w:bw ~bfc:{ floats = [] } node { st with margin = zero_margins }
                        ~x:(!cx + ml) ~y:by ~cw:bw ~depth:(depth + 1))
@@ -858,9 +885,10 @@ and inline_layout o ~bfc (container : Style.t) atoms ~x ~y ~w ~depth =
            | Float _ | Space | Break -> ());
           (match a.kind with
            | Word _ | Space when aw > 0 ->
-             if st.underline then emit o (Fill { x = !cx; y = ty + 14; w = aw; h = 1; color = st.color });
-             if st.line_through then emit o (Fill { x = !cx; y = ty + 8; w = aw; h = 1; color = st.color });
-             if st.overline then emit o (Fill { x = !cx; y = ty; w = aw; h = 1; color = st.color })
+             let t = max 1 (f.size / 14) in
+             if st.underline then emit o (Fill { x = !cx; y = ty + max 1 (f.descent / 3); w = aw; h = t; color = st.color });
+             if st.line_through then emit o (Fill { x = !cx; y = ty - f.ascent * 3 / 10; w = aw; h = t; color = st.color });
+             if st.overline then emit o (Fill { x = !cx; y = ty - f.ascent; w = aw; h = t; color = st.color })
            | _ -> ())
         end;
         (match a.link with
@@ -947,7 +975,7 @@ and item_intrinsic o it =
     let m = hframe cst ~cw:0 ~margins:true - hframe cst ~cw:0 ~margins:false in
     (a + m, b + m)
   | Txt (data, st) ->
-    let atoms = atoms_of [ P_text (data, st, None, 0) ] in
+    let atoms = atoms_of [ P_text (data, st, None, 0, 0) ] in
     (List.fold_left (fun m a -> max m (atom_width a)) 0 atoms,
      List.fold_left (fun s a -> s + atom_width a) 0 atoms)
 
@@ -963,14 +991,14 @@ and lay_item o it ~ix ~iy ~bw ?bh ~depth () =
     ignore (block o ~force_w:bw ?force_h:bh ~bfc:{ floats = [] } c { cst with margin = zero_margins }
               ~x:ix ~y:iy ~cw:bw ~depth:(depth + 1))
   | Txt (data, tst) ->
-    ignore (inline_layout o ~bfc:{ floats = [] } tst (atoms_of [ P_text (data, tst, None, 0) ]) ~x:ix ~y:iy ~w:bw ~depth)
+    ignore (inline_layout o ~bfc:{ floats = [] } tst (atoms_of [ P_text (data, tst, None, 0, 0) ]) ~x:ix ~y:iy ~w:bw ~depth)
 
 and item_height o it ~bw ~depth =
   match it with
   | Item (c, cst) -> snd (measure_forced o c { cst with margin = zero_margins } ~bw)
   | Txt (data, tst) ->
     o.dry <- o.dry + 1;
-    let y' = inline_layout o ~bfc:{ floats = [] } tst (atoms_of [ P_text (data, tst, None, 0) ]) ~x:0 ~y:0 ~w:bw ~depth in
+    let y' = inline_layout o ~bfc:{ floats = [] } tst (atoms_of [ P_text (data, tst, None, 0, 0) ]) ~x:0 ~y:0 ~w:bw ~depth in
     o.dry <- o.dry - 1;
     y'
 
@@ -1352,8 +1380,14 @@ and table_columns o (cells, _, ncols, _) ~avail =
         let have_min = List.fold_left (fun s k -> s + mins.(k)) 0 span in
         let have_max = List.fold_left (fun s k -> s + maxs.(k)) 0 span in
         let k = List.length span in
-        if k > 0 && mn > have_min then List.iter (fun j -> mins.(j) <- mins.(j) + (mn - have_min) / k) span;
-        if k > 0 && mx > have_max then List.iter (fun j -> maxs.(j) <- maxs.(j) + (mx - have_max) / k) span
+        (* what the spanning cell needs more: to its columns, in proportion
+           to their own widths (evenly if they have none) *)
+        let share arr have need =
+          if k > 0 && need > have then
+            List.iter (fun j ->
+                arr.(j) <- arr.(j) + (if have > 0 then (need - have) * arr.(j) / have else (need - have) / k)) span in
+        share mins have_min mn;
+        share maxs have_max mx
       end) sizes;
   Array.iteri (fun i m -> if maxs.(i) < m then maxs.(i) <- m) mins;
   (mins, maxs)
@@ -1362,10 +1396,12 @@ and table o (n : Dom.node) (st : Style.t) ~x ~y ~cw ~depth =
   let ((cells, row_nodes, ncols, captions) as t) = table_grid o n in
   let sp = table_spacing st in
   let cur_y = ref y in
-  List.iter (fun (c, cst) ->
+  let lay_captions cs = List.iter (fun (c, cst) ->
       let r = block o ~bfc:{ floats = [] } c cst ~x ~y:!cur_y ~cw ~depth:(depth + 1) in
-      cur_y := !cur_y + r.mt + r.h + r.mb) captions;
-  if ncols = 0 then !cur_y - y
+      cur_y := !cur_y + r.mt + r.h + r.mb) cs in
+  let below, above = List.partition (fun (_, (cst : Style.t)) -> cst.caption_bottom) captions in
+  lay_captions above;
+  if ncols = 0 then (lay_captions below; !cur_y - y)
   else begin
     let mins, maxs = table_columns o t ~avail:(Some cw) in
     let avail = cw - sp * (ncols + 1) in
@@ -1415,7 +1451,9 @@ and table o (n : Dom.node) (st : Style.t) ~x ~y ~cw ~depth =
           ignore (block o ~force_w:w ~force_h:rh ~valign ~bfc:{ floats = [] } c cst ~x:col_x.(col) ~y:row_y.(r)
                     ~cw:w ~depth:(depth + 1))
         end) measured;
-    row_y.(nrows) - y
+    cur_y := row_y.(nrows);
+    lay_captions below;
+    !cur_y - y
   end
 
 (* ---- the page ---- *)
@@ -1449,7 +1487,7 @@ let layout ~width ~height (styles : Style.styles) (doc : Dom.node) =
     | None -> (match bg_of (Dom.find (fun n -> Dom.is_html n "body") doc) with Some c -> c | None -> 0xFFFFFF) in
   (* positioned boxes may reach below the flow *)
   let bottom = Dynarray.fold_left (fun m it -> match it with
-      | Fill f -> max m (f.y + f.h) | Text t -> max m (t.y + Metrics.glyph_h)) total o.items_ in
+      | Fill f -> max m (f.y + f.h) | Text t -> max m (t.y + t.font.descent)) total o.items_ in
   { items = Dynarray.to_array o.items_; links = Dynarray.to_array o.links_; height = max total bottom; background;
     anchors = o.anchors_ }
 
@@ -1459,9 +1497,8 @@ let dump p =
   let b = Buffer.create 4096 in
   Array.iter (function
       | Fill { x; y; w; h; color } -> Printf.bprintf b "fill %d,%d %dx%d #%06x\n" x y w h color
-      | Text { x; y; s; color; bold; italic } ->
-        Printf.bprintf b "text %d,%d%s%s #%06x %s\n" x y (if bold then " bold" else "")
-          (if italic then " italic" else "") color s) p.items;
+      | Text { x; y; s; color; font } ->
+        Printf.bprintf b "text %d,%d %s #%06x %s\n" x y font.key color s) p.items;
   Array.iter (fun l -> Printf.bprintf b "link %d,%d %dx%d %s\n" l.lx l.ly l.lw l.lh l.href) p.links;
   Printf.bprintf b "height %d\n" p.height;
   Buffer.contents b

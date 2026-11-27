@@ -1,43 +1,43 @@
-fill 0,21 800x288 #ffffff
-text 8,32 bold #000000 Tag
-text 40,32 bold #000000 soup
-text 8,81 #000000 A
-text 24,81 #000000 paragraph
-text 104,81 #000000 never
-text 152,81 #000000 closed
-text 8,116 #000000 Another,
-text 80,116 #000000 with
-text 120,116 #000000 a
-text 136,116 bold #000000 bold
-text 176,116 bold italic #000000 and
-text 208,116 bold italic #000000 italic
-text 264,116 italic #000000 mix
-text 288,116 #000000 .
-text 8,151 #000000 Stray
-text 56,151 #000000 end
-text 88,151 #000000 tags
-text 128,151 #000000 above
-text 176,151 #000000 are
-text 208,151 #000000 ignored.
-text 8,186 #000000 A
-text 24,186 #000000 div
-text 8,221 #000000 with
-text 48,221 #000000 a
-text 64,221 #000000 paragraph
-text 8,256 #000000 after
-text 56,256 #000000 it.
-text 8,291 #000000 Unquoted
-text 80,291 #000000 attributes:
-text 176,291 #0000ee here
-fill 176,305 32x1 #0000ee
-text 208,291 #000000 ;
-text 224,291 #000000 a
-text 240,291 #000000 lone
-text 280,291 #000000 &
-text 296,291 #000000 and
-text 328,291 #000000 <
-text 344,291 #000000 a
-text 360,291 #000000 less-than
-text 440,291 #000000 sign.
-link 176,290 32x19 soup.html
-height 325
+fill 0,21 800x280 #ffffff
+text 8,50 serif-bold 32 #000000 Tag
+text 66,50 serif-bold 32 #000000 soup
+text 8,94 serif 16 #000000 A
+text 24,94 serif 16 #000000 paragraph
+text 92,94 serif 16 #000000 never
+text 132,94 serif 16 #000000 closed
+text 8,128 serif 16 #000000 Another,
+text 68,128 serif 16 #000000 with
+text 100,128 serif 16 #000000 a
+text 111,128 serif-bold 16 #000000 bold
+text 145,128 serif-bold-italic 16 #000000 and
+text 174,128 serif-bold-italic 16 #000000 italic
+text 211,128 serif-italic 16 #000000 mix
+text 234,128 serif 16 #000000 .
+text 8,162 serif 16 #000000 Stray
+text 46,162 serif 16 #000000 end
+text 73,162 serif 16 #000000 tags
+text 103,162 serif 16 #000000 above
+text 145,162 serif 16 #000000 are
+text 169,162 serif 16 #000000 ignored.
+text 8,196 serif 16 #000000 A
+text 24,196 serif 16 #000000 div
+text 8,230 serif 16 #000000 with
+text 40,230 serif 16 #000000 a
+text 51,230 serif 16 #000000 paragraph
+text 8,264 serif 16 #000000 after
+text 41,264 serif 16 #000000 it.
+text 8,298 serif 16 #000000 Unquoted
+text 75,298 serif 16 #000000 attributes:
+text 143,298 serif 16 #0000ee here
+fill 143,299 28x1 #0000ee
+text 171,298 serif 16 #000000 ;
+text 179,298 serif 16 #000000 a
+text 190,298 serif 16 #000000 lone
+text 222,298 serif 16 #000000 &
+text 238,298 serif 16 #000000 and
+text 265,298 serif 16 #000000 <
+text 278,298 serif 16 #000000 a
+text 289,298 serif 16 #000000 less-than
+text 350,298 serif 16 #000000 sign.
+link 143,283 28x18 soup.html
+height 317

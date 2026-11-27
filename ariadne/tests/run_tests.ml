@@ -86,6 +86,25 @@ let encodings () =
   check "encoding: UTF-16 with a surrogate pair"
     (Encoding.decode Encoding.Utf16le "A\000\x3D\xD8\x00\xDE" = "A\xF0\x9F\x98\x80")
 
+(* the fonts: values checked against fontTools *)
+let fonts () =
+  match Fonts.face "LiberationSans-Regular.ttf" with
+  | None -> check "fonts: LiberationSans-Regular.ttf found" false
+  | Some t ->
+    let gi c = Ttf.glyph_index t c in
+    check "ttf: cmap (A, e acute, alpha)" (gi 0x41 = 36 && gi 0xE9 = 171 && gi 0x3B1 = 867);
+    check "ttf: advances" (Ttf.advance t 36 = 1366 && Ttf.advance t 68 = 1139);
+    check "ttf: kerning (A V)" (Ttf.kern t 36 57 = -152);
+    check "ttf: a composite glyph has contours" (Ttf.contours t 171 <> []);
+    let b = Ttf.rasterize t 36 ~size:16 in
+    let inked = String.fold_left (fun k c -> if Char.code c < 128 then k + 1 else k) 0 b.grey in
+    check "ttf: A at 16 px is 11 x 12 (its top: 11.008 px), partly inked" (b.width = 11 && b.height = 12 && inked > 10 && inked < 100);
+    let f = Fonts.get ~family:Fonts.Sans ~bold:false ~italic:false ~size:16 in
+    check "fonts: AV at 16 px, kerned" (Fonts.width f "AV" = 20);
+    check "fonts: families" (Fonts.family_of "Arial, sans-serif" = Fonts.Sans
+                             && Fonts.family_of "'Linux Libertine','Georgia',serif" = Fonts.Serif
+                             && Fonts.family_of "monospace" = Fonts.Mono)
+
 (* rule 3: a tree far deeper than any stack would allow a recursion *)
 let deep () =
   let depth = 5000 in
@@ -118,6 +137,7 @@ let () =
     dom ();
     urls ();
     encodings ();
+    fonts ();
     deep ();
     pages ();
     layouts ();

@@ -89,6 +89,8 @@ type t = {
   mutable border_collapse : bool;
   mutable masked : bool;              (* a mask-image: its background is not painted (no masks yet) *)
   mutable transparent : bool;         (* opacity: 0 here or on an ancestor: nothing painted *)
+  mutable content : cv list option;   (* a ::before's or ::after's content *)
+  mutable caption_bottom : bool;      (* caption-side: bottom *)
 }
 
 let initial () = {
@@ -107,7 +109,8 @@ let initial () = {
   align_self = "auto"; flex_grow = 0.; flex_shrink = 1.; flex_basis = Auto; order = 0;
   row_gap = Len (0., 0.); column_gap = Len (0., 0.);
   grid_columns = []; grid_rows = []; grid_areas = []; grid_area = []; grid_column = []; grid_row = [];
-  border_spacing = 0.; border_collapse = false; masked = false; transparent = false }
+  border_spacing = 0.; border_collapse = false; masked = false; transparent = false;
+  content = None; caption_bottom = false }
 
 (* a child's start: the inherited properties from its parent, the others initial *)
 let inherit_from p =
@@ -120,6 +123,7 @@ let inherit_from p =
   s.border_spacing <- p.border_spacing;
   s.border_collapse <- p.border_collapse;
   s.transparent <- p.transparent;
+  s.caption_bottom <- p.caption_bottom;
   (* text decorations are drawn through descendants: inherited here *)
   s.underline <- p.underline; s.line_through <- p.line_through; s.overline <- p.overline;
   s
@@ -507,6 +511,8 @@ let rec apply ctx (s : t) (parent : t) name (v : cv list) =
   let len f = match length ctx v with Some l -> f l | None -> () in
   match name with
   | "display" ->
+    (* flow-root: a block with a formatting context of its own *)
+    if List.mem "flow-root" (idents v) then s.overflow_bfc <- true;
     (match idents v with
      | [ d ] -> Option.iter (fun d -> s.display <- d) (display_of d)
      | [ "block"; "flow-root" ] | [ "block"; "flow" ] -> s.display <- Block
@@ -726,6 +732,8 @@ let rec apply ctx (s : t) (parent : t) name (v : cv list) =
   | "grid-row" -> s.grid_row <- v
   | "grid-column-start" -> s.grid_column <- v
   | "grid-row-start" -> s.grid_row <- v
+  | "content" -> s.content <- Some v
+  | "caption-side" -> Option.iter (fun c -> s.caption_bottom <- c = "bottom") (ident v)
   | "opacity" ->
     (match v with
      | [ Tok (Number (a, _)) ] -> if a <= 0.01 then s.transparent <- true
@@ -883,6 +891,7 @@ type rule = {
   decls : decl list;
   media : cv list list;         (* the conditions it sits in: all must hold *)
   origin : origin;
+  pseudo : string option;       (* "before", "after": a pseudo-element's rule *)
 }
 
 type sheet = { rules : rule list; imports : (string * cv list) list }
@@ -897,10 +906,11 @@ let flatten ~origin ?(media = []) rules_in =
       (match Selector.parse_list prelude with
        | Some sels ->
          List.iter (fun sel ->
-             if Selector.pseudo_element sel = None then begin
+             let pseudo = Selector.pseudo_element sel in
+             if pseudo = None || pseudo = Some "before" || pseudo = Some "after" then begin
                incr counter;
                out := { sel; anc = Selector.ancestor_keys sel; spec = Selector.specificity sel;
-                        order = !counter; decls; media; origin } :: !out
+                        order = !counter; decls; media; origin; pseudo } :: !out
              end) sels
        | None -> ());
       go media rest
@@ -1063,12 +1073,13 @@ type index = {
   mutable any : rule list;
 }
 
-let build_index ~width ~height sheets =
+(* the elements' rules, or (with [~pseudo:true]) the pseudo-elements' *)
+let build_index ?(pseudo = false) ~width ~height sheets =
   let ix = { by_id = Hashtbl.create 256; by_class = Hashtbl.create 1024; by_tag = Hashtbl.create 64; any = [] } in
   let add tbl k r = Hashtbl.replace tbl k (r :: Option.value (Hashtbl.find_opt tbl k) ~default:[]) in
   List.iter (fun sh ->
       List.iter (fun r ->
-          if List.for_all (media_ok ~width ~height) r.media then
+          if (r.pseudo <> None) = pseudo && List.for_all (media_ok ~width ~height) r.media then
             match Selector.key r.sel with
             | Selector.K_id i -> add ix.by_id i r
             | Selector.K_class c -> add ix.by_class c r
@@ -1076,9 +1087,16 @@ let build_index ~width ~height sheets =
             | Selector.K_any -> ix.any <- r :: ix.any) sh.rules) sheets;
   ix
 
-type styles = { table : (int, t) Hashtbl.t; root : t }
+type styles = {
+  table : (int, t) Hashtbl.t;
+  pseudos : (int * string, t * string) Hashtbl.t;    (* an element's ::before, ::after: style, text *)
+  root : t;
+}
 
 let get st (n : Dom.node) = Hashtbl.find_opt st.table n.id
+
+(* an element's ::before or ::after, if it has one: its style and its text *)
+let pseudo st (n : Dom.node) which = Hashtbl.find_opt st.pseudos (n.id, which)
 
 let classes = Dom.classes
 
@@ -1101,10 +1119,11 @@ let may_match (f : filter) r = List.for_all (fun k -> Hashtbl.mem f k) r.anc
 (* the declarations that apply to an element, from the lowest priority to
    the highest: the browser's, the hints, the author's, the style
    attribute; then the important ones *)
-let declarations_for ?(filter = Hashtbl.create 1) ix (n : Dom.node) =
+let declarations_for ?(filter = Hashtbl.create 1) ?pseudo ix (n : Dom.node) =
   let candidates = ref [] in
   let take l = List.iter (fun r ->
-      if may_match filter r && Selector.matches r.sel n then candidates := r :: !candidates) l in
+      if (pseudo = None || r.pseudo = pseudo) && may_match filter r && Selector.matches r.sel n then
+        candidates := r :: !candidates) l in
   take ix.any;
   (match Dom.attr n "id" with Some i -> take (Option.value (Hashtbl.find_opt ix.by_id i) ~default:[]) | None -> ());
   List.iter (fun c -> take (Option.value (Hashtbl.find_opt ix.by_class c) ~default:[])) (List.sort_uniq compare (classes n));
@@ -1114,28 +1133,47 @@ let declarations_for ?(filter = Hashtbl.create 1) ix (n : Dom.node) =
       !candidates in
   let ua = List.filter (fun r -> r.origin = User_agent) matched
   and author = List.filter (fun r -> r.origin = Author) matched in
-  let inline = match Dom.attr n "style" with Some s -> Css.parse_declarations s | None -> [] in
+  let inline = match Dom.attr n "style", pseudo with Some s, None -> Css.parse_declarations s | _ -> [] in
   let normal ds = List.filter (fun d -> not d.important) ds
   and important ds = List.filter (fun d -> d.important) ds in
   let all_of rules = List.concat_map (fun r -> r.decls) rules in
-  normal (all_of ua) @ hints n @ normal (all_of author) @ normal inline
+  normal (all_of ua) @ (if pseudo = None then hints n else []) @ normal (all_of author) @ normal inline
   @ important (all_of author) @ important inline @ important (all_of ua)
+
+(* a ::before's or ::after's content, as text: strings, attr(), quotes;
+   None for none, normal, or nothing to show *)
+let content_text (n : Dom.node) (v : cv list) =
+  match List.filter (fun c -> c <> Tok Whitespace) v with
+  | [ Tok (Ident ("none" | "normal")) ] -> None
+  | parts ->
+    let b = Buffer.create 16 in
+    List.iter (function
+        | Tok (String s) -> Buffer.add_string b s
+        | Func ("attr", args) ->
+          (match Css.trim args with
+           | Tok (Ident a) :: _ -> Buffer.add_string b (Option.value (Dom.attr n (String.lowercase_ascii a)) ~default:"")
+           | _ -> ())
+        | Tok (Ident "open-quote") -> Buffer.add_string b "\xe2\x80\x9c"
+        | Tok (Ident "close-quote") -> Buffer.add_string b "\xe2\x80\x9d"
+        | _ -> ()) parts;
+    let t = Buffer.contents b in
+    if t = "" then None else Some t
 
 let compute ~width ~height sheets (doc : Dom.node) =
   let quirks = match doc.kind with Document { quirks = Dom.Quirks; _ } -> true | _ -> false in
   let sheets = Lazy.force ua_sheet :: (if quirks then [ Lazy.force ua_quirks ] else []) @ sheets in
   let ix = build_index ~width ~height sheets in
-  let table = Hashtbl.create 4096 in
+  let pix = build_index ~pseudo:true ~width ~height sheets in
+  let has_pseudo = pix.any <> [] || Hashtbl.length pix.by_id > 0 || Hashtbl.length pix.by_class > 0
+                   || Hashtbl.length pix.by_tag > 0 in
+  let table = Hashtbl.create 4096 and pseudos = Hashtbl.create 256 in
   let root_style = initial () in
   let root_fs = ref 16. in
   (* the parents' styles, as the walk goes down *)
   let stack = ref [ root_style ] in
   let filter : filter = Hashtbl.create 256 in
-  let enter (n : Dom.node) =
-    match n.kind with
-    | Element _ ->
-      let parent = List.hd !stack in
-      let decls = declarations_for ~filter ix n in
+  (* a style from its parent's and the declarations that apply *)
+  let cascade ~is_root parent decls =
       let s = inherit_from parent in
       let ctx0 = { vw = float width; vh = float height; root_fs = !root_fs; fs = parent.font_size;
                    parent_fs = parent.font_size } in
@@ -1188,13 +1226,31 @@ let compute ~width ~height sheets (doc : Dom.node) =
             | Some k -> reset d k
             | None -> Option.iter (fun v -> apply ctx0 s parent d.name v) (value d)) decls;
       let ctx = { ctx0 with fs = s.font_size } in
-      if (match n.parent with Some { kind = Document _; _ } -> true | _ -> false) then root_fs := s.font_size;
+      if is_root then root_fs := s.font_size;
       List.iter (fun d ->
           if d.name <> "font-size" && d.name <> "font" && not (String.length d.name > 2 && String.sub d.name 0 2 = "--") then
             match keyword d.value with
             | Some k -> reset d k
             | None -> Option.iter (fun v -> apply ctx s parent d.name v) (value d)) decls;
+      s in
+  let enter (n : Dom.node) =
+    match n.kind with
+    | Element _ ->
+      let parent = List.hd !stack in
+      let decls = declarations_for ~filter ix n in
+      let is_root = match n.parent with Some { kind = Document _; _ } -> true | _ -> false in
+      let s = cascade ~is_root parent decls in
       Hashtbl.replace table n.id s;
+      (* its ::before and ::after *)
+      if has_pseudo && s.display <> None_ then
+        List.iter (fun which ->
+            match declarations_for ~filter ~pseudo:which pix n with
+            | [] -> ()
+            | pdecls ->
+              let ps = cascade ~is_root:false s pdecls in
+              match Option.bind ps.content (content_text n) with
+              | Some text when ps.display <> None_ -> Hashtbl.replace pseudos (n.id, which) (ps, text)
+              | _ -> ()) [ "before"; "after" ];
       stack := s :: !stack;
       filter_add filter n 1;
       s.display <> None_
@@ -1205,7 +1261,7 @@ let compute ~width ~height sheets (doc : Dom.node) =
     | Element _ -> stack := List.tl !stack; filter_add filter n (-1)
     | _ -> () in
   Dom.walk ~enter ~leave doc;
-  { table; root = root_style }
+  { table; pseudos; root = root_style }
 
 (* ---- the style sheets of a document: <style> and <link rel=stylesheet> ---- *)
 

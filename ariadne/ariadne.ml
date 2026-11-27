@@ -227,10 +227,18 @@ let window first =
                 let yy = top + y in
                 if yy + h > box_y && yy < box_y + box_h && w > 0 && h > 0 then
                   Gfx.fill g (box_x + x) yy w h color
-              | Text { x; y; s; color; bold; _ } ->
+              | Text { x; y; s; color; font } ->
+                (* y is the baseline: each glyph's mask, from the fonts *)
                 let yy = top + y in
-                if yy + Layout.Metrics.glyph_h > box_y && yy < box_y + box_h then
-                  ignore (Gui.text ~bold ui (box_x + x) yy s color)) page.items;
+                if yy + font.descent > box_y && yy - font.ascent < box_y + box_h then begin
+                  match font.ttf with
+                  | Some _ ->
+                    List.iter (fun (dx, dy, (b : Ttf.bitmap)) ->
+                        Gfx.draw_mask g (box_x + x + dx) (yy + dy)
+                          { Gfx.mask_width = b.width; mask_height = b.height; grey = b.grey } color)
+                      (Fonts.glyphs font s)
+                  | None -> ignore (Gfx.text g (box_x + x) (yy - font.ascent) s color)
+                end) page.items;
           page.height);
       (* a link under the pointer: shown below; a click follows it *)
       let link_at mx my =

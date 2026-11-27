@@ -1,35 +1,35 @@
-fill 0,21 800x300 #ffffff
-text 8,32 bold #000000 Lists
-text 48,81 #000000 One
-text 32,81 #000000 •
-text 48,100 #000000 Two,
-text 88,100 #000000 with
-text 128,100 #000000 an
-text 152,100 #000000 implied
-text 216,100 #000000 end
-text 32,100 #000000 •
-text 48,119 #000000 Three,
-text 104,119 #000000 with
-text 144,119 #000000 a
-text 160,119 #000000 list:
-text 88,138 #000000 three
-text 136,138 #000000 point
-text 184,138 #000000 one
-text 64,138 #000000 1.
-text 88,157 #000000 three
-text 136,157 #000000 point
-text 184,157 #000000 two
-text 64,157 #000000 2.
-text 32,119 #000000 •
-text 48,176 #000000 Four
-text 32,176 #000000 •
-text 8,211 #000000 Term
-text 48,230 #000000 Its
-text 80,230 #000000 definition
-text 8,249 #000000 Another
-text 48,268 #000000 Another
-text 112,268 #000000 definition
-text 8,303 #000000 After
-text 56,303 #000000 the
-text 88,303 #000000 lists.
-height 337
+fill 0,21 800x288 #ffffff
+text 8,50 serif-bold 32 #000000 Lists
+text 48,94 serif 16 #000000 One
+text 38,94 serif 16 #000000 •
+text 48,112 serif 16 #000000 Two,
+text 84,112 serif 16 #000000 with
+text 116,112 serif 16 #000000 an
+text 135,112 serif 16 #000000 implied
+text 188,112 serif 16 #000000 end
+text 38,112 serif 16 #000000 •
+text 48,130 serif 16 #000000 Three,
+text 93,130 serif 16 #000000 with
+text 125,130 serif 16 #000000 a
+text 136,130 serif 16 #000000 list:
+text 88,148 serif 16 #000000 three
+text 124,148 serif 16 #000000 point
+text 161,148 serif 16 #000000 one
+text 72,148 serif 16 #000000 1.
+text 88,166 serif 16 #000000 three
+text 124,166 serif 16 #000000 point
+text 161,166 serif 16 #000000 two
+text 72,166 serif 16 #000000 2.
+text 38,130 serif 16 #000000 •
+text 48,184 serif 16 #000000 Four
+text 38,184 serif 16 #000000 •
+text 8,218 serif 16 #000000 Term
+text 48,236 serif 16 #000000 Its
+text 68,236 serif 16 #000000 definition
+text 8,254 serif 16 #000000 Another
+text 48,272 serif 16 #000000 Another
+text 104,272 serif 16 #000000 definition
+text 8,306 serif 16 #000000 After
+text 46,306 serif 16 #000000 the
+text 70,306 serif 16 #000000 lists.
+height 325

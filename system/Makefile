@@ -42,6 +42,7 @@ FILES = ../init/init.byte ../init/shutdown.byte init.rc ocamlrun consoled kilo n
 	../gui/agent_window.byte ../gui/ask.byte ../gui/text.byte ../gui/recordings.byte ../gui/system.byte ../gui/files.byte \
 	../gui/tour.byte ../gui/tour.txt \
 	../third_party/fonts/terminus16.psf ../third_party/fonts/terminus16-bold.psf \
+	$(wildcard ../third_party/liberation-fonts/*.ttf) \
 	../gui/mynos-logo.pgm ../gui/mynos-logo-2x.pgm \
 	../trace/trace.byte ../fetch/fetch.byte ../llm/llm.byte ../agent/agent.byte \
 	../ariadne/ariadne.byte \

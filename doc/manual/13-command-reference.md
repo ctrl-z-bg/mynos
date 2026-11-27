@@ -163,9 +163,9 @@ ariadne --time URL
 package stays. It parses pages with the HTML Standard's parser, applies
 their CSS (style sheets, selectors, the cascade, `@media`, custom
 properties) and lays them out: blocks and lines, floats, positioning,
-flexbox, grid and tables, in the window's font (real fonts: milestone
-M2); pictures show as their words or a frame (M4), there is no
-JavaScript (M6).
+flexbox, grid and tables, in the Liberation fonts (Sans, Serif, Mono,
+from the page's font-family); pictures show as their words or a frame
+(milestone M4), there is no JavaScript (M6).
 Without an option it opens a window: Back and Forward, Reload, an
 address field (Enter or Go loads), and the page, which scrolls (the
 wheel, Page Up, Page Down, the arrows, Home, End); a click follows a

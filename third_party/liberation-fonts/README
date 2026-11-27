@@ -1,0 +1,13 @@
+The Liberation fonts 2.1.5 (https://github.com/liberationfonts/liberation-fonts),
+under the SIL Open Font License 1.1 (LICENSE; authors in AUTHORS): the
+TrueType files of liberation-fonts-ttf-2.1.5.tar.gz (sha256
+7191c669bf38899f73a2094ed00f7b800553364f90e2637010a69c0e268f25d0), unchanged.
+
+  LiberationSans-*.ttf    metrics of Arial (and Helvetica)
+  LiberationSerif-*.ttf   metrics of Times New Roman
+  LiberationMono-*.ttf    metrics of Courier New
+
+each Regular, Bold, Italic and BoldItalic. They cover Latin, Greek and
+Cyrillic. MyNOS's browser, Ariadne (ariadne/fonts.ml, ariadne/ttf.ml),
+reads them from the system RAM disk (doc/decisions/browser.md, M2); the
+window's own font stays Terminus (third_party/fonts).

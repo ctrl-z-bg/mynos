@@ -1,24 +1,24 @@
-fill 0,21 800x189 #ffffff
-text 8,32 bold #000000 Pre
-text 8,81 #000000 let rec fact n =
-text 8,100 #000000   if n = 0 then 1
-text 8,119 #000000   else n * fact (n - 1)   (* <- recursion *)
-text 8,154 #000000 A
-text 24,154 #000000 comment
-text 88,154 #000000 is
-text 112,154 #000000 not
-text 144,154 #000000 shown,
-text 200,154 #000000 nor
-text 232,154 #000000 .
-text 8,173 #000000 No
-text 32,173 #000000 script:
-text 96,173 #000000 shown,
-text 152,173 #000000 since
-text 200,173 #000000 Ariadne
-text 264,173 #000000 has
-text 296,173 #000000 no
-text 320,173 #000000 JavaScript
-text 408,173 #000000 yet.
-text 8,192 #000000 The
-text 40,192 #000000 end.
-height 218
+fill 0,21 800x182 #ffffff
+text 8,50 serif-bold 32 #000000 Pre
+text 8,93 mono 16 #000000 let rec fact n =
+text 8,111 mono 16 #000000   if n = 0 then 1
+text 8,129 mono 16 #000000   else n * fact (n - 1)   (* <- recursion *)
+text 8,164 serif 16 #000000 A
+text 24,164 serif 16 #000000 comment
+text 88,164 serif 16 #000000 is
+text 103,164 serif 16 #000000 not
+text 127,164 serif 16 #000000 shown,
+text 177,164 serif 16 #000000 nor
+text 202,164 serif 16 #000000 .
+text 8,182 serif 16 #000000 No
+text 32,182 serif 16 #000000 script:
+text 76,182 serif 16 #000000 shown,
+text 126,182 serif 16 #000000 since
+text 163,182 serif 16 #000000 Ariadne
+text 219,182 serif 16 #000000 has
+text 244,182 serif 16 #000000 no
+text 264,182 serif 16 #000000 JavaScript
+text 335,182 serif 16 #000000 yet.
+text 8,200 serif 16 #000000 The
+text 37,200 serif 16 #000000 end.
+height 211

@@ -15,11 +15,12 @@ Taken (the owner, 2026-11-27):
 - [x] C only in services for specific jobs: QuickJS in `jsd`; generic `Gfx` primitives
 - [x] A new program; `packages/browser` stays as it is
 - [x] Its name: Ariadne, `ariadne`
+- [x] The fonts: Liberation 2.1.5 (Sans, Serif, Mono; SIL OFL 1.1), on the RAM disk (2026-11-27)
+- [x] Pages compared with a reference browser's rendering (headless Chrome) at each step, side by side, rather than judged from memory (2026-11-27, after two overstatements)
 - [x] MyNOS first, in this repository, on the `browser` branch (from `next`); the host is a test bench
 
 Open:
 
-- [ ] The scalable fonts on the RAM disk, and their licence (DejaVu, Noto, Liberation...)
 - [ ] In the image, or a package (`doc/decisions/packages.md`)
 - [ ] The target sites: which real pages must read well for it to count as usable
 - [ ] Review and accept `doc/decisions/browser.md`
@@ -64,14 +65,26 @@ Found in M1:
 
 ## M2: fonts
 
-- [ ] TrueType: `cmap`, `glyf`, `loca`, `hmtx`, `head`, `hhea`, `maxp`; kerning (`kern`, then simple `GPOS`)
-- [ ] The rasterizer: outlines to coverage, antialiased, as a grey mask for `Gfx.draw_mask`
-- [ ] The glyph cache: per font, size and glyph
-- [ ] Measuring text: advance widths, ascent, descent, line gap
-- [ ] Choosing a font: family, weight, style; a fallback glyph for missing characters
-- [ ] The fonts chosen, on the RAM disk, with their licence
-- [ ] A library usable by every GUI program, not only `ariadne`
-- [ ] A paragraph in a window: several sizes, bold, italic
+- [x] TrueType: `cmap` (formats 4, 12), `glyf` (simple and composite glyphs), `loca`, `hmtx`, `head`, `hhea`, `maxp`; kerning from `kern` (`ttf.ml`, checked against fontTools)
+- [ ] Kerning from `GPOS`; ligatures (`GSUB`); hinting
+- [x] The rasterizer: outlines to coverage by signed-area accumulation (as font-rs), antialiased, a grey mask for `Gfx.draw_mask`
+- [x] The glyph cache: per font, size and glyph; measured widths and glyph runs cached too (`fonts.ml`)
+- [x] Measuring text: advances, kerning, ascent, descent, line gap; lines on a baseline with CSS's half-leading
+- [x] Choosing a font: `font-family` mapped to Sans, Serif or Mono (Arial, Helvetica, Georgia, Times, Courier, generic names...), weight, style
+- [ ] A fallback for characters Liberation lacks (CJK, many symbols): today the font's empty box
+- [x] The fonts on the RAM disk (and the test boot's), with their licence (`third_party/liberation-fonts`)
+- [ ] A library usable by every GUI program, not only `ariadne` (`ttf.ml` is self-contained; `fonts.ml` would move to `mynos-lib`)
+- [x] Text in a window: sizes, bold, italic, serif and sans (Wikipedia's article, in MyNOS)
+- [ ] Selecting and copying text in Ariadne's window (lost: the window no longer draws with `Gui.text`)
+- [x] `tests/render.ml`: a page rendered to an image on the host, as the window paints it, to compare with a reference browser's screenshot
+
+Found in M2, by comparing with Chrome at the same width:
+
+- Images keep the ratio of their `width` and `height` attributes when CSS says `height: auto`; a percentage `max-width` does not apply while natural widths are measured.
+- Wikipedia's headings are `display: flow-root`: a formatting context of their own, beside floats.
+- A cell spanning columns gives them its extra width in proportion to their own.
+- `vertical-align: super` raises the text of the element's inline descendants too (the footnotes' `<a>` in `<sup>`).
+- `::before` and `::after` with text content (`[ edit ]`), `caption-side: bottom` (figures).
 
 ## M3: CSS and the first layout
 
@@ -166,6 +179,7 @@ time apart. Until M3 the Layout column is the text's reading (`Text`); from M3 i
 | 2026-11-27 | M3 | en.wikipedia.org/wiki/Ariadne | 375 KB, 8,253 nodes, 2,132 rules | 251 ms | 5,672 ms, then 402 ms | 47 ms | — | 3.8 s, and 3.6 s for its style sheets |
 | 2026-11-27 | M3 | news.ycombinator.com | 32 KB, 1,213 nodes, 125 rules | 29 ms | 63 ms | 9 ms | — | 3.5 s, and 2.0 s for its style sheet |
 | 2026-11-27 | M5 | en.wikipedia.org/wiki/Ariadne | 375 KB, 8,253 nodes, 2,132 rules | 191 ms | 410 ms | 141 ms | — | 3.6 s, and 3.6 s for its style sheets |
+| 2026-11-27 | M2 | en.wikipedia.org/wiki/Ariadne | 375 KB, 8,253 nodes, 2,288 rules (with `::before`/`::after`) | 215 ms | 574 ms | 399 ms (text measured in its fonts) | glyphs rasterized once, drawn as masks | 3.8 s, and 3.6 s for its style sheets |
 
 html5lib-tests pass rate:
 

@@ -18,7 +18,7 @@ EXPECTED_LAYOUT = $(sort $(wildcard tests/expected-layout/*.txt))
 # the engine's core: no input or output (the plan's rule 5), so it is
 # built and checked on the host too
 CORE = url.cmo encoding.cmo entities_data.cmo tokenizer.cmo dom.cmo treebuilder.cmo \
-	html.cmo text.cmo css.cmo selector.cmo style.cmo layout.cmo pages.cmo
+	html.cmo text.cmo css.cmo selector.cmo style.cmo ttf.cmo fonts.cmo layout.cmo pages.cmo
 
 all: ariadne.byte
 
@@ -61,7 +61,8 @@ text.cmo: text.cmi
 css.cmo: encoding.cmo
 selector.cmo: css.cmo dom.cmi
 style.cmo: css.cmo selector.cmo dom.cmi
-layout.cmo: style.cmo dom.cmi
+fonts.cmo: ttf.cmo
+layout.cmo: style.cmo fonts.cmo dom.cmi
 
 # the checks, on the host's ocamlrun: the core's (tests/run_tests.ml), and
 # html5lib-tests (tests/html5lib.ml, with a copy of MyNOS's Json)
@@ -75,6 +76,11 @@ tests/json.mli: ../mynos-lib/ocaml/json.mli
 tests/html5lib.byte: $(CORE) tests/json.ml tests/json.mli tests/html5lib.ml
 	ocamlc -I . -I tests -c tests/json.mli
 	ocamlc -I . -I tests -o $@ $(CORE) tests/json.ml tests/html5lib.ml
+
+# a page rendered to an image, as the window paints it (for comparing with
+# a reference browser): ocamlrun tests/render.byte OUT.ppm W H FILE.html [CSS...]
+tests/render.byte: $(CORE) tests/render.ml
+	ocamlc -I . -o $@ $(CORE) tests/render.ml
 
 # the stages timed on saved pages: ocamlrun tests/bench.byte FILE...
 tests/bench.byte: $(CORE) tests/bench.ml

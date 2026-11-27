@@ -8,7 +8,7 @@ STRIP ?= strip
 ARIADNE = ../../ariadne
 OCAMLC = ocamlc -use-prims ../../mynos-runtime/primitives -I $(ARIADNE)
 CORE = $(addprefix $(ARIADNE)/, url.cmo encoding.cmo entities_data.cmo tokenizer.cmo dom.cmo \
-	treebuilder.cmo html.cmo text.cmo css.cmo selector.cmo style.cmo layout.cmo pages.cmo expected.cmo expected_layout.cmo)
+	treebuilder.cmo html.cmo text.cmo css.cmo selector.cmo style.cmo ttf.cmo fonts.cmo layout.cmo pages.cmo expected.cmo expected_layout.cmo)
 
 all: ramdisk.dsk
 
@@ -23,8 +23,11 @@ init.byte: $(ARIADNE)/tests/run_tests.ml $(CORE) ../../mynos-runtime/primitives
 ocamlrun: ../../mynos-runtime/ocamlrun
 	$(STRIP) -o $@ $<
 
-ramdisk.dsk: init.byte ocamlrun
-	../../services/fs/memrofs/tool/createDisk init.byte ocamlrun >/dev/null
+# the fonts too: the layout's checks measure text with them
+FONTS = $(wildcard ../../third_party/liberation-fonts/*.ttf)
+
+ramdisk.dsk: init.byte ocamlrun $(FONTS)
+	../../services/fs/memrofs/tool/createDisk init.byte ocamlrun $(FONTS) >/dev/null
 
 clean:
 	rm -f *.cm[io] *.byte run_tests.ml ocamlrun ramdisk.dsk

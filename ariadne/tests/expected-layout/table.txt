@@ -1,22 +1,22 @@
-fill 0,21 800x188 #ffffff
-text 8,32 bold #000000 Processors
-text 11,84 bold #000000 Architecture
-text 111,84 bold #000000 Bits
-text 151,84 bold #000000 Since
-text 11,107 #000000 i386
-text 111,107 #000000 32
-text 147,107 #000000 2002
-text 11,130 #000000 x86-64
-text 111,130 #000000 64
-text 147,130 #000000 2026
-text 11,153 #000000 AArch64
-text 111,153 #000000 64
-text 147,153 #000000 2026
-text 8,191 #000000 [The Minotaur]
-text 128,191 #000000 and
-text 160,191 #000000 an
-text 184,191 #000000 image
-text 232,191 #000000 without
-text 296,191 #000000 words:
-text 352,191 #000000 .
-height 225
+fill 0,21 800x182 #ffffff
+text 8,50 serif-bold 32 #000000 Processors
+text 11,97 serif-bold 16 #000000 Architecture
+text 101,97 serif-bold 16 #000000 Bits
+text 134,97 serif-bold 16 #000000 Since
+text 11,119 serif 16 #000000 i386
+text 101,119 serif 16 #000000 32
+text 132,119 serif 16 #000000 2002
+text 11,141 serif 16 #000000 x86-64
+text 101,141 serif 16 #000000 64
+text 132,141 serif 16 #000000 2026
+text 11,163 serif 16 #000000 AArch64
+text 101,163 serif 16 #000000 64
+text 132,163 serif 16 #000000 2026
+text 8,200 serif 16 #000000 [The Minotaur]
+text 111,200 serif 16 #000000 and
+text 138,200 serif 16 #000000 an
+text 157,200 serif 16 #000000 image
+text 200,200 serif 16 #000000 without
+text 253,200 serif 16 #000000 words:
+text 301,200 serif 16 #000000 .
+height 219

@@ -1,90 +1,90 @@
-fill 0,21 800x333 #ffffff
-text 8,32 bold #ff0000 Ariadne's
-text 88,32 bold #ff0000 thread
-text 8,81 #ff0000 Minos
-text 56,81 #ff0000 had
-text 88,81 #ff0000 a
-text 104,81 #ff0000 labyrinth
-text 184,81 #ff0000 built,
-text 240,81 #ff0000 and
-text 272,81 bold #ff0000 Ariadne
-text 336,81 #ff0000 gave
-text 376,81 italic #ff0000 Theseus
-text 440,81 #ff0000 a
-text 456,81 #ff0000 thread.
-text 8,116 #ff0000 Entities:
-text 88,116 #ff0000 &
-text 104,116 #ff0000 <tag>
-text 152,116 #ff0000 "quoted"
-text 224,116 #ff0000 café
-text 264,116 #ff0000 é
-text 280,116 #ff0000 é
-text 296,116 #ff0000 €
-text 312,116 #ff0000 ©
-text 328,116 #ff0000 a b
-text 360,116 #ff0000 &unknown;
-text 440,116 #ff0000 AT&T
-text 8,160 bold #ff0000 Lines
-text 8,204 #ff0000 One
-text 40,204 #ff0000 line
-text 8,223 #ff0000 another
-text 72,223 #ff0000 line
-text 8,242 #ff0000 and
-text 40,242 #ff0000 a
-text 56,242 #ff0000 third.
-text 8,277 #ff0000 Links:
-text 64,277 #0000ee the
-fill 64,291 24x1 #0000ee
-fill 88,291 8x1 #0000ee
-text 96,277 #0000ee lists
-fill 96,291 40x1 #0000ee
-text 136,277 #ff0000 ,
-text 152,277 #0000ee the
-fill 152,291 24x1 #0000ee
-fill 176,291 8x1 #0000ee
-text 184,277 #0000ee top
-fill 184,291 24x1 #0000ee
-text 208,277 #ff0000 ,
-text 224,277 #0000ee an
-fill 224,291 16x1 #0000ee
-fill 240,291 8x1 #0000ee
-text 248,277 #0000ee absolute
-fill 248,291 64x1 #0000ee
-fill 312,291 8x1 #0000ee
-text 320,277 #0000ee one
-fill 320,291 24x1 #0000ee
-text 344,277 #ff0000 ,
-text 360,277 #ff0000 and
-text 392,277 #0000ee the
-fill 392,291 24x1 #0000ee
-fill 416,291 8x1 #0000ee
-text 424,277 #0000ee lists
-fill 424,291 40x1 #0000ee
-fill 464,291 8x1 #0000ee
-text 472,277 #0000ee again
-fill 472,291 40x1 #0000ee
-text 512,277 #ff0000 .
-fill 8,311 784x1 #808080
-fill 8,312 784x1 #808080
-fill 8,311 1x2 #808080
-fill 791,311 1x2 #808080
-text 8,338 bold #ff0000 A
-text 24,338 bold #ff0000 small
-text 72,338 bold #ff0000 heading
-link 64,276 24x19 lists.html
-link 88,276 8x19 lists.html
-link 96,276 40x19 lists.html
-link 152,276 24x19 #top
-link 176,276 8x19 #top
-link 184,276 24x19 #top
-link 224,276 16x19 https://example.com/a/b
-link 240,276 8x19 https://example.com/a/b
-link 248,276 64x19 https://example.com/a/b
-link 312,276 8x19 https://example.com/a/b
-link 320,276 24x19 https://example.com/a/b
-link 392,276 24x19 lists.html
-link 416,276 8x19 lists.html
-link 424,276 40x19 lists.html
-link 464,276 8x19 lists.html
-link 472,276 40x19 lists.html
-height 379
+fill 0,21 800x322 #ffffff
+text 8,50 serif-bold 32 #ff0000 Ariadne's
+text 149,50 serif-bold 32 #ff0000 thread
+text 8,94 serif 16 #ff0000 Minos
+text 53,94 serif 16 #ff0000 had
+text 80,94 serif 16 #ff0000 a
+text 91,94 serif 16 #ff0000 labyrinth
+text 153,94 serif 16 #ff0000 built,
+text 190,94 serif 16 #ff0000 and
+text 217,94 serif-bold 16 #ff0000 Ariadne
+text 277,94 serif 16 #ff0000 gave
+text 311,94 serif-italic 16 #ff0000 Theseus
+text 367,94 serif 16 #ff0000 a
+text 378,94 serif 16 #ff0000 thread.
+text 8,128 serif 16 #ff0000 Entities:
+text 65,128 serif 16 #ff0000 &
+text 81,128 serif 16 #ff0000 <tag>
+text 123,128 serif 16 #ff0000 "quoted"
+text 184,128 serif 16 #ff0000 café
+text 215,128 serif 16 #ff0000 é
+text 226,128 serif 16 #ff0000 é
+text 237,128 serif 16 #ff0000 €
+text 249,128 serif 16 #ff0000 ©
+text 265,128 serif 16 #ff0000 a b
+text 288,128 serif 16 #ff0000 &unknown;
+text 368,128 serif 16 #ff0000 AT&T
+text 8,173 serif-bold 24 #ff0000 Lines
+text 8,214 serif 16 #ff0000 One
+text 39,214 serif 16 #ff0000 line
+text 8,232 serif 16 #ff0000 another
+text 60,232 serif 16 #ff0000 line
+text 8,250 serif 16 #ff0000 and
+text 35,250 serif 16 #ff0000 a
+text 46,250 serif 16 #ff0000 third.
+text 8,284 serif 16 #ff0000 Links:
+text 53,284 serif 16 #0000ee the
+fill 53,285 20x1 #0000ee
+fill 73,285 4x1 #0000ee
+text 77,284 serif 16 #0000ee lists
+fill 77,285 26x1 #0000ee
+text 103,284 serif 16 #ff0000 ,
+text 111,284 serif 16 #0000ee the
+fill 111,285 20x1 #0000ee
+fill 131,285 4x1 #0000ee
+text 135,284 serif 16 #0000ee top
+fill 135,285 20x1 #0000ee
+text 155,284 serif 16 #ff0000 ,
+text 163,284 serif 16 #0000ee an
+fill 163,285 15x1 #0000ee
+fill 178,285 4x1 #0000ee
+text 182,284 serif 16 #0000ee absolute
+fill 182,285 53x1 #0000ee
+fill 235,285 4x1 #0000ee
+text 239,284 serif 16 #0000ee one
+fill 239,285 23x1 #0000ee
+text 262,284 serif 16 #ff0000 ,
+text 270,284 serif 16 #ff0000 and
+text 297,284 serif 16 #0000ee the
+fill 297,285 20x1 #0000ee
+fill 317,285 4x1 #0000ee
+text 321,284 serif 16 #0000ee lists
+fill 321,285 26x1 #0000ee
+fill 347,285 4x1 #0000ee
+text 351,284 serif 16 #0000ee again
+fill 351,285 35x1 #0000ee
+text 386,284 serif 16 #ff0000 .
+fill 8,303 784x1 #808080
+fill 8,304 784x1 #808080
+fill 8,303 1x2 #808080
+fill 791,303 1x2 #808080
+text 8,340 serif-bold 11 #ff0000 A
+text 19,340 serif-bold 11 #ff0000 small
+text 47,340 serif-bold 11 #ff0000 heading
+link 53,269 20x18 lists.html
+link 73,269 4x18 lists.html
+link 77,269 26x18 lists.html
+link 111,269 20x18 #top
+link 131,269 4x18 #top
+link 135,269 20x18 #top
+link 163,269 15x18 https://example.com/a/b
+link 178,269 4x18 https://example.com/a/b
+link 182,269 53x18 https://example.com/a/b
+link 235,269 4x18 https://example.com/a/b
+link 239,269 23x18 https://example.com/a/b
+link 297,269 20x18 lists.html
+link 317,269 4x18 lists.html
+link 321,269 26x18 lists.html
+link 347,269 4x18 lists.html
+link 351,269 35x18 lists.html
+height 368

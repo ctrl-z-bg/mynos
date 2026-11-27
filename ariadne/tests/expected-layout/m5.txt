@@ -1,64 +1,65 @@
-fill 0,16 800x346 #ffffff
+fill 0,16 800x341 #ffffff
 fill 680,16 120x60 #eeeeee
-text 680,17 #000000 Floated
-text 0,17 #000000 Text
-text 40,17 #000000 beside
-text 96,17 #000000 the
-text 128,17 #000000 float
-text 176,17 #000000 wraps
-text 224,17 #000000 on
-text 248,17 #000000 its
-text 280,17 #000000 left,
-text 328,17 #000000 until
-text 376,17 #000000 the
-text 408,17 #000000 float
-text 456,17 #000000 ends,
-text 504,17 #000000 then
-text 544,17 #000000 it
-text 568,17 #000000 takes
-text 616,17 #000000 the
-text 0,36 #000000 whole
-text 48,36 #000000 width
-text 96,36 #000000 again,
-text 152,36 #000000 as
-text 176,36 #000000 in
-text 200,36 #000000 a
-text 216,36 #000000 newspaper.
-text 0,85 #000000 Cleared.
-fill 0,119 800x19 #f0f0ff
-fill 0,119 24x19 #ddddff
-text 0,120 #000000 One
-fill 34,119 716x19 #ddddff
-text 34,120 #000000 Grows
-fill 760,119 40x19 #ddddff
-text 760,120 #000000 Three
-text 0,139 #000000 Left
-text 760,139 #000000 Right
-fill 0,157 100x19 #ffdddd
-text 0,158 #000000 Side
-fill 104,157 696x19 #ddffdd
-text 104,158 #000000 Main
-text 144,158 #000000 column
-fill 0,180 800x19 #dddddd
-text 0,181 #000000 Footer
-text 56,181 #000000 across
-fill 0,199 800x40 #ffffdd
-text 0,200 #000000 Relative
-text 750,210 #000000 Abs
-text 0,240 #000000 Clipped
-text 0,277 #000000 Inline
-text 57,277 #000000 box
-fill 56,275 42x1 #000000
-fill 56,295 42x1 #000000
-fill 56,275 1x21 #000000
-fill 97,275 1x21 #000000
-text 106,277 #000000 blocks.
-text 4,317 #000000 Spans
-text 52,317 #000000 two
-text 4,340 #000000 a
-text 43,340 #000000 b
-fill 0,312 82x1 #808080
-fill 0,361 82x1 #808080
-fill 0,312 1x50 #808080
-fill 81,312 1x50 #808080
-height 362
+text 680,31 serif 16 #000000 Floated
+text 0,31 serif 16 #000000 Text
+text 32,31 serif 16 #000000 beside
+text 77,31 serif 16 #000000 the
+text 101,31 serif 16 #000000 float
+text 134,31 serif 16 #000000 wraps
+text 176,31 serif 16 #000000 on
+text 196,31 serif 16 #000000 its
+text 215,31 serif 16 #000000 left,
+text 244,31 serif 16 #000000 until
+text 277,31 serif 16 #000000 the
+text 301,31 serif 16 #000000 float
+text 334,31 serif 16 #000000 ends,
+text 371,31 serif 16 #000000 then
+text 403,31 serif 16 #000000 it
+text 416,31 serif 16 #000000 takes
+text 453,31 serif 16 #000000 the
+text 477,31 serif 16 #000000 whole
+text 520,31 serif 16 #000000 width
+text 560,31 serif 16 #000000 again,
+text 603,31 serif 16 #000000 as
+text 620,31 serif 16 #000000 in
+text 636,31 serif 16 #000000 a
+text 0,49 serif 16 #000000 newspaper.
+text 0,99 serif 16 #000000 Cleared.
+fill 0,118 800x18 #f0f0ff
+fill 0,118 27x18 #ddddff
+text 0,133 serif 16 #000000 One
+fill 37,118 716x18 #ddddff
+text 37,133 serif 16 #000000 Grows
+fill 763,118 37x18 #ddddff
+text 763,133 serif 16 #000000 Three
+text 0,151 serif 16 #000000 Left
+text 764,151 serif 16 #000000 Right
+fill 0,154 100x18 #ffdddd
+text 0,169 serif 16 #000000 Side
+fill 104,154 696x18 #ddffdd
+text 104,169 serif 16 #000000 Main
+text 142,169 serif 16 #000000 column
+fill 0,176 800x18 #dddddd
+text 0,191 serif 16 #000000 Footer
+text 46,191 serif 16 #000000 across
+fill 0,194 800x40 #ffffdd
+text 0,209 serif 16 #000000 Relative
+text 750,219 serif 16 #000000 Abs
+text 0,249 serif 16 #000000 Clipped
+text 55,249 serif 16 #000000 after
+text 0,290 serif 16 #000000 Inline
+text 42,286 serif 16 #000000 box
+fill 41,270 42x1 #000000
+fill 41,289 42x1 #000000
+fill 41,270 1x20 #000000
+fill 82,270 1x20 #000000
+text 87,290 serif 16 #000000 blocks.
+text 4,328 serif 16 #000000 Spans
+text 46,328 serif 16 #000000 two
+text 4,350 serif 16 #000000 a
+text 38,350 serif 16 #000000 b
+fill 0,309 75x1 #808080
+fill 0,356 75x1 #808080
+fill 0,309 1x48 #808080
+fill 74,309 1x48 #808080
+height 357

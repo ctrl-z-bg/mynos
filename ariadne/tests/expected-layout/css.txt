@@ -1,83 +1,85 @@
-fill 0,0 800x383 #ffffff
-fill 188,0 424x383 #f8f8f8
-text 200,23 bold #cc0000 Styled
-text 200,61 #008000 Note
-text 240,61 #008000 in
-text 264,61 #008000 green
-text 312,61 #008000 (the
-text 352,61 #008000 id
-text 376,61 #008000 rule
-text 416,61 #008000 wins).
-text 200,88 #0000ff Blue:
-text 248,88 #0000ff important
-text 328,88 #0000ff beats
-text 376,88 #0000ff the
-text 408,88 #0000ff style
-text 456,88 #0000ff attribute.
-text 240,123 bold #222222 First,
-text 296,123 bold #222222 bold
-text 224,123 #222222 •
-text 240,142 #808080 Second,
-text 304,142 #808080 gray
-text 224,142 #808080 •
-text 240,161 #222222 Third
-text 224,161 #222222 •
-text 344,196 bold #222222 Centered,
-text 424,196 bold #222222 bold
-text 228,223 #222222 A
-text 244,223 #222222 box
-text 276,223 #222222 half
-text 316,223 #222222 as
-text 340,223 #222222 wide,
-text 228,242 #222222 minus
-text 276,242 #222222 20px,
-text 324,242 #222222 with
-text 364,242 #222222 a
-text 228,261 #222222 blue
-text 268,261 #222222 left
-text 308,261 #222222 border.
-fill 220,222 4x57 #0088ff
-text 200,288 #222222 A
-text 216,288 #222222 long
-text 256,288 #222222 paragraph
-text 336,288 #222222 that
-text 376,288 #222222 wraps
-text 424,288 #222222 over
-text 464,288 #222222 several
-text 528,288 #222222 lines
-text 200,307 #222222 because
-text 264,307 #222222 the
-text 296,307 #222222 column
-text 352,307 #222222 is
-text 376,307 #222222 only
-text 416,307 #222222 four
-text 456,307 #222222 hundred
-text 520,307 #222222 pixels
-text 200,326 #222222 wide,
-text 248,326 #222222 so
-text 272,326 #222222 the
-text 304,326 #222222 words
-text 352,326 #222222 go
-text 376,326 #222222 on
-text 400,326 #222222 the
-text 432,326 #222222 next
-text 472,326 #222222 line,
-text 520,326 #0000ee with
-fill 520,340 32x1 #0000ee
-fill 552,340 8x1 #0000ee
-text 560,326 #0000ee a
-fill 560,340 8x1 #0000ee
-text 200,345 #0000ee link
-fill 200,359 32x1 #0000ee
-text 240,345 #222222 at
-text 264,345 #222222 the
-text 296,345 #222222 end.
+fill 0,0 800x351 #ffffff
+fill 188,0 424x351 #f8f8f8
+text 200,41 serif-bold 32 #cc0000 Styled
+text 200,74 serif 16 #008000 Note
+text 235,74 serif 16 #008000 in
+text 251,74 serif 16 #008000 green
+text 291,74 serif 16 #008000 (the
+text 320,74 serif 16 #008000 id
+text 336,74 serif 16 #008000 rule
+text 365,74 serif 16 #008000 wins).
+text 200,100 serif 16 #0000ff Blue:
+text 239,100 serif 16 #0000ff important
+text 305,100 serif 16 #0000ff beats
+text 342,100 serif 16 #0000ff the
+text 366,100 serif 16 #0000ff style
+text 400,100 serif 16 #0000ff attribute.
+text 240,134 serif-bold 16 #222222 First,
+text 281,134 serif-bold 16 #222222 bold
+text 230,134 serif-bold 16 #222222 •
+text 240,152 serif 16 #808080 Second,
+text 295,152 serif 16 #808080 gray
+text 230,152 serif 16 #808080 •
+text 240,170 serif 16 #222222 Third
+text 230,170 serif 16 #222222 •
+text 349,204 serif-bold 16 #222222 Centered,
+text 420,204 serif-bold 16 #222222 bold
+text 228,230 serif 16 #222222 A
+text 244,230 serif 16 #222222 box
+text 272,230 serif 16 #222222 half
+text 301,230 serif 16 #222222 as
+text 318,230 serif 16 #222222 wide,
+text 357,230 serif 16 #222222 minus
+text 228,248 serif 16 #222222 20px,
+text 268,248 serif 16 #222222 with
+text 300,248 serif 16 #222222 a
+text 311,248 serif 16 #222222 blue
+text 343,248 serif 16 #222222 left
+text 228,266 serif 16 #222222 border.
+fill 220,215 4x54 #0088ff
+text 200,292 serif 16 #222222 A
+text 216,292 serif 16 #222222 long
+text 248,292 serif 16 #222222 paragraph
+text 316,292 serif 16 #222222 that
+text 344,292 serif 16 #222222 wraps
+text 386,292 serif 16 #222222 over
+text 418,292 serif 16 #222222 several
+text 467,292 serif 16 #222222 lines
+text 501,292 serif 16 #222222 because
+text 556,292 serif 16 #222222 the
+text 200,310 serif 16 #222222 column
+text 252,310 serif 16 #222222 is
+text 267,310 serif 16 #222222 only
+text 299,310 serif 16 #222222 four
+text 330,310 serif 16 #222222 hundred
+text 386,310 serif 16 #222222 pixels
+text 428,310 serif 16 #222222 wide,
+text 467,310 serif 16 #222222 so
+text 485,310 serif 16 #222222 the
+text 509,310 serif 16 #222222 words
+text 552,310 serif 16 #222222 go
+text 572,310 serif 16 #222222 on
+text 200,328 serif 16 #222222 the
+text 224,328 serif 16 #222222 next
+text 256,328 serif 16 #222222 line,
+text 288,328 serif 16 #0000ee with
+fill 288,329 28x1 #0000ee
+fill 316,329 4x1 #0000ee
+text 320,328 serif 16 #0000ee a
+fill 320,329 7x1 #0000ee
+fill 327,329 4x1 #0000ee
+text 331,328 serif 16 #0000ee link
+fill 331,329 25x1 #0000ee
+text 360,328 serif 16 #222222 at
+text 376,328 serif 16 #222222 the
+text 400,328 serif 16 #222222 end.
 fill 188,0 424x2 #cccccc
-fill 188,381 424x2 #cccccc
-fill 188,0 2x383 #cccccc
-fill 610,0 2x383 #cccccc
-link 520,325 32x19 #main
-link 552,325 8x19 #main
-link 560,325 8x19 #main
-link 200,344 32x19 #main
-height 383
+fill 188,349 424x2 #cccccc
+fill 188,0 2x351 #cccccc
+fill 610,0 2x351 #cccccc
+link 288,313 28x18 #main
+link 316,313 4x18 #main
+link 320,313 7x18 #main
+link 327,313 4x18 #main
+link 331,313 25x18 #main
+height 351
