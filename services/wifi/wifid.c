@@ -274,6 +274,8 @@ static unsigned char tx_seq, tx_max = 4;
 static unsigned short reqid;
 static unsigned char frame[FRAME + 512];
 static int events;
+/* what came while a command waited (logged when its answer does not) */
+static int seen_ctl, seen_ev, seen_data, seen_other, seen_ids[4][3];
 static void on_event(const unsigned char * p, int len);
 static int handle_frames(int want_id, unsigned char * out, int max, int * status);
 
@@ -385,7 +387,15 @@ static int handle_frames(int want_id, unsigned char * out, int max, int * status
     if (ch == 0 && len >= off + 16) {
       unsigned int flags = get32(p + 8);
       int n = (int)get32(p + 4);
-      if (want_id < 0 || (int)(flags >> 16) != want_id) continue;
+      if (want_id < 0 || (int)(flags >> 16) != want_id) {
+        if (seen_ctl < 4) {
+          seen_ids[seen_ctl][0] = (int)get32(p);
+          seen_ids[seen_ctl][1] = (int)(flags >> 16);
+          seen_ids[seen_ctl][2] = (int)get32(p + 12);
+        }
+        seen_ctl++;
+        continue;
+      }
       *status = (int)get32(p + 12);
       if (flags & 1) { r = -1; continue; }
       if (n > len - off - 16) n = len - off - 16;
@@ -394,15 +404,20 @@ static int handle_frames(int want_id, unsigned char * out, int max, int * status
       r = n > 0 ? n : 0;
     } else if (ch == 1) {
       events++;
+      seen_ev++;
       on_event(p, len - off);
     } else if (ch == 2 && len - off > 4 + p[3] * 4 + 14) {
       /* data: BDC's header, an Ethernet frame; EAPOL's kept */
       const unsigned char * eth = p + 4 + p[3] * 4;
       int n = len - off - 4 - p[3] * 4;
+      seen_data++;
       if (eth[12] == 0x88 && eth[13] == 0x8E && neapol < 4 && n <= 600) {
         memcpy(eapol[neapol], eth, (size_t)n);
         eapol_len[neapol++] = n;
       }
+    } else {
+      if (seen_other++ < 3)
+        mynos_log("wifid: a frame on channel %d, %d bytes (flags %02x)\n", ch, len, frame[5]);
     }
   }
   return r;
@@ -413,21 +428,28 @@ static int handle_frames(int want_id, unsigned char * out, int max, int * status
 static int dcmd(unsigned int cmd, int set, const void * data, int len, void * reply, int max)
 {
   unsigned char * p = frame + 12;
-  int i, r, status = 0;
+  int i, r, status = 0, attempt;
   if (len > FRAME - 64) return -1;
-  put32(p, cmd);
-  put32(p + 4, (unsigned int)len);
-  put32(p + 8, (unsigned int)++reqid << 16 | (set ? 2u : 0));
-  put32(p + 12, 0);
-  memcpy(p + 16, data, (size_t)len);
-  if (send_frame(0, 16 + len) < 0) { mynos_log("wifid: a command not sent\n"); return -1; }
-  for (i = 0; i < 2000; i++) {
-    r = handle_frames(reqid, reply, max, &status);
-    if (r >= 0) return r;
-    if (r == -1) { mynos_log("wifid: command %u failed (%d)\n", cmd, status); return -1; }
-    mynos_sleep(1000);
+  for (attempt = 0; attempt < 2; attempt++) {
+    unsigned char seq = tx_seq;
+    put32(p, cmd);
+    put32(p + 4, (unsigned int)len);
+    put32(p + 8, (unsigned int)++reqid << 16 | (set ? 2u : 0));
+    put32(p + 12, 0);
+    memcpy(p + 16, data, (size_t)len);
+    seen_ctl = seen_ev = seen_data = seen_other = 0;
+    if (send_frame(0, 16 + len) < 0) { mynos_log("wifid: a command not sent\n"); return -1; }
+    for (i = 0; i < 2000; i++) {
+      r = handle_frames(reqid, reply, max, &status);
+      if (r >= 0) return r;
+      if (r == -1) { mynos_log("wifid: command %u failed (%d)\n", cmd, status); return -1; }
+      mynos_sleep(1000);
+    }
+    mynos_log("wifid: command %u (id %u, seq %u, window %u): no answer; meanwhile %d control"
+              " (%d %d %d, %d %d %d), %d events, %d data\n", cmd, reqid, seq, tx_max, seen_ctl,
+              seen_ids[0][0], seen_ids[0][1], seen_ids[0][2],
+              seen_ids[1][0], seen_ids[1][1], seen_ids[1][2], seen_ev, seen_data);
   }
-  mynos_log("wifid: command %u: no answer\n", cmd);
   return -1;
 }
 
