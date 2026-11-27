@@ -93,6 +93,7 @@ make -C services/pager
 make -C tests/libs
 make -C services/ata
 make -C services/fatfs
+make -C services/virtio
 make -C tests/storage
 make -C tests/fat
 make -C services/net
@@ -106,7 +107,6 @@ make -C llm
 make -C agent
 make -C services/display
 make -C services/sound
-make -C services/virtio
 make -C gui
 make -C graphics
 make -C tests/net
