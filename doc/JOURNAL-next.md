@@ -995,23 +995,40 @@ again from the monitor: gone, then a mouse again; the keyboard types on).
 **Lesson.** On real hardware "plugged at boot" is not "plugged for
 ever": a device may come back as a new one without anybody touching it.
 
-## 2026-11-27 — The Pi 400 at a twentieth of a PC: its clock never raised
+## 2026-11-27 — The Pi 400 at a twentieth of a PC: not its clock
 
 **Symptom.** The `bench` package on the Pi 400 scored 81 (1000: MyNOS in
-QEMU with KVM on the reference PC): the processor's measures at 3 to 6 %
-of the PC's, memory copies 1.1 GB/s, drawing 2 %. A Cortex-A72 at
-1.8 GHz should be about a fifth of a recent PC's core, not a twentieth.
+QEMU with KVM on the reference PC, an i7-12650H): the processor's
+measures at 3 to 6 % of the PC's, memory copies 1.1 GB/s, drawing 2 %.
+The emulators follow: the MSX under 10 frames a second, the Spectrum 20
+(on the PC, unthrottled, 212 and 330: a twentieth of each).
 
-**Cause** (probable: the next try's numbers will say). The Pi's firmware
-starts the ARM at its lowest clock (600 MHz on a Pi 3 and 4) and raises
-it only when the system asks through the mailbox, as Linux's cpufreq
-driver does. MyNOS never asked. (The framebuffer was not the cause: it
-is already mapped as normal non-cacheable memory, write-combining.)
+**Diagnosis.** First suspect, the clock: the firmware answers
+`GET_CLOCK_RATE` (clock 3, the ARM) with 600 MHz, its minimum, and Linux
+raises it through the mailbox (cpufreq). The kernel asked for the
+maximum at boot (`SET_CLOCK_RATE`, 1800 MHz): the answers made no sense
+(500 MHz once, below the minimum; then no answer at all), and the
+firmware's `GET_CLOCK_RATE_MEASURED` answered nothing. So the kernel now
+measures the clock itself: the processor's cycles (`PMCCNTR_EL0`) in
+10 ms of the generic timer. On the Pi 400: `ARM clock: 600 MHz (measured
+1799), asked 1800: answered 0, now 1800 (measured 1800, ...)`, not
+throttled. The ARM was at 1.8 GHz from the start, whatever the firmware
+said.
 
-**Fix.** At boot the kernel asks the firmware for the ARM's maximum
-clock and sets it (`GET_MAX_CLOCK_RATE`, `SET_CLOCK_RATE`, clock 3), and
-logs `ARM clock: was -> now MHz`; the firmware still lowers it when the
-chip is too hot. QEMU's Pis say 700 MHz and keep it.
+**Not the cause either.** The caches (MAIR 0 write-back, SCTLR's C and
+I, RAM's pages normal and inner shareable, MyNOS's page flags clear of
+the attribute index); the bytecode interpreter's compilation (the
+AArch64 runtime's `libcamlrun.a` is built `-O2`, as on x86); idle
+processors (they wait with `wfi`); the drivers' polling (usbd and wifid
+sleep 5 ms between rounds).
 
-**Lesson.** On a board whose firmware owns the clocks, "the processor's
-speed" is a request, not a fact.
+**Where it stands.** No fault found: the Pi's processor runs OCaml's
+bytecode at about a twentieth of the PC's, where a factor of 8 to 10
+was expected (an A72 at 1.8 GHz against a core at 4.7 GHz). The rest is
+not explained; a comparison with Raspberry Pi OS on the same board
+(`ocamlrun` and the same tests) would say whether it is MyNOS's or the
+chip's. The request for the maximum stays, harmless, and the measured
+clock is logged.
+
+**Lesson.** On a board whose firmware owns the clocks, what the
+firmware says the clock is and what it is are two things: measure it.

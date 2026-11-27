@@ -15,7 +15,7 @@ found along the way, bug by bug, is in `doc/JOURNAL.md` (shared with
 ports, SMP, the Raspberry Pis) and `doc/JOURNAL-apps.md` (the
 applications, from `main`).
 
-Last updated: 2026-11-27
+Last updated: 2026-11-28
 
 ---
 
@@ -2225,3 +2225,7 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   now asks for the maximum at boot (`ARM clock: ... MHz`). The Wi-Fi's
   AP deauthenticates about 150 s after joining (reason 3); the firmware
   joins again in 3 s (btq.9.3).
+- **2026-11-28** — The Pi 400's clock measured (cycles against the
+  timer, logged at boot): 1.8 GHz from the start, though the firmware
+  says 600 MHz; the bench's twentieth of the PC is not the clock, nor
+  the caches, nor the interpreter's build (doc/JOURNAL-next.md).
