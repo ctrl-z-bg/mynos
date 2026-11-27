@@ -205,7 +205,9 @@ again with an empty disk, delete it and build. It is not in git (`*.img`).
 ## H.6 Running
 
 **Other architectures.** `ARCH=x86_64 tools/run-demo.sh` runs the
-x86-64 build, with four processors (`SMP=N` for another number);
+x86-64 build, with four processors (`SMP=N` for another number) and
+virtio's disk and network card (`VIRTIO=0` for the PC's IDE disk and
+NE2000, on which network packets arrive hundreds of milliseconds late);
 `ARCH=aarch64 tools/run-demo.sh` the AArch64 one, four processors too,
 on QEMU's `virt`
 machine, with virtio's disk, network card, keyboard, tablet and GPU.

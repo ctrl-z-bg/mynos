@@ -17,7 +17,11 @@
 # scrollback and fonts; QEMU's window shows the same. Ctrl-C goes to MyNOS:
 # close the window, or type Ctrl-A then X, to stop QEMU.
 # VIRTIO=1 gives MyNOS virtio devices (a virtio disk, a virtio network
-# card) instead of the PC's IDE disk and NE2000 (doc/decisions/virtio.md).
+# card) instead of the PC's IDE disk and NE2000 (doc/decisions/virtio.md):
+# the default on x86-64, where VIRTIO=0 gives the IDE disk and NE2000
+# (with QEMU's NE2000, packets reach MyNOS hundreds of ms late: a TLS
+# connection takes about a second, against 0.1 s with virtio; see
+# BROWSER-TODO.md, "Network speed").
 # PKG=local serves the packages just built (tmp/packages) to MyNOS from
 # this machine, and MyNOS upgrades the installed ones at boot: packages
 # tried before they are published.
@@ -39,6 +43,10 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 if [ "${ARCH:-i386}" = x86_64 ] && [ -d "$root/build/x86_64/tree/tools" ]; then
     cd "$root/build/x86_64/tree" && exec tools/run-demo.sh "$@"
 fi
+# virtio by default on x86-64; VIRTIO=0: the IDE disk and the NE2000
+if [ "${ARCH:-i386}" = x86_64 ]; then VIRTIO=${VIRTIO-1}; fi
+if [ "${VIRTIO:-}" = 0 ]; then VIRTIO=; fi
+export VIRTIO
 if [ "${ARCH:-i386}" = aarch64 ]; then
     if [ ! -d "$root/build/aarch64/tree/tools" ] && [ ! -f "$root/build/aarch64/kernel.elf" ]; then
         echo "run-demo.sh: no AArch64 build: tools/build-aarch64.sh first" >&2

@@ -126,10 +126,23 @@ Decoding is in C, at the owner's choice (2026-11-27): `imaged` (services/image) 
 - [ ] `srcset` and `<picture>`: the best source for the size (today: `src`)
 - [ ] `background-image` (url, repeat, position, size), and `mask-image` as an alpha mask in the text's colour (Wikipedia's icons)
 - [ ] gzip in `Http` (`Accept-Encoding`)
-- [ ] Pictures fetched in the order they appear on screen; a cache across pages
+- [x] Pictures on screen fetched before the others (then the rest in the page's order); pixels for the screen before any fetch
+- [ ] A cache of pictures across pages
+- [x] `Http` keeps connections open and reuses them (per server: at most 2, one TLS handshake at a time; at most 8 idle): a picture on an open connection takes 0.1–0.3 s instead of about 1.1 s
+- [x] The first page laid out once, at the window's width (it was laid out twice: 1.1 s)
+- [x] `ARIADNE_DEBUG`: the page's stages, the pictures' fetches and decodings, slow frames, in the kernel log (ms since the start)
 - [ ] Shared pages for the pixels instead of a copy in the reply (if large pictures make it slow)
 - [ ] A check of `imaged` in MyNOS (tools/run-tests.sh): a PNG, a JPEG, an SVG decoded, compared at sample pixels
 - [ ] Measurements: time from page shown to pictures drawn
+
+## Network speed (netd)
+
+Measured 2026-11-27 under KVM (`netbench`, a throwaway program, and `ARIADNE_DEBUG`): an HTTPS GET of a 22 KB picture from upload.wikimedia.org takes about 1.1 s in MyNOS against 0.2 s on the host, and the TLS handshake is 860–1010 ms of it (about 50 ms on the host); request to first byte 80–150 ms, DNS 1 ms once cached. Three handshakes at once take as long as three in a row (3.1 s against 3.3 s).
+
+- [x] Why a TLS handshake costs about 0.9 s: not netd. Each handshake step and frame timed in netd (2026-11-27): the handshake's computation is about 35 ms in all, netd sends each packet within a few ms; the time is between a packet out and the answer in, with QEMU's NE2000 (SYN to SYN-ACK 270 ms, ClientHello to the server's answer 502 ms). With a virtio card (`VIRTIO=1`) the same handshake takes 94–125 ms, and Wikipedia's Ariadne page shows in 1.4 s (7.9 s with the NE2000), all its 30 pictures in 5.0 s (about 16 s).
+- [ ] The NE2000's delay: QEMU's NE2000 holding received packets (it refuses them while it thinks its ring is busy, and QEMU retries later?), or how netd's driver (ne2k.c) empties the ring. Meanwhile: virtio by default for x86-64 (`tools/run-demo.sh`), the NE2000 for i386 and PCs without virtio
+- [ ] Handshakes in parallel: netd runs lwIP (NO_SYS) and every connection's TLS in its one main loop, so their cryptography takes turns on one processor. TLS (mbedTLS) in threads of its own, the loop passing them the bytes, would let them use the other processors.
+- [ ] Style sheets fetched in parallel (today one after the other: 13 sheets, 2.9 s on a reused connection)
 
 ## M5: the rest of the layout, and forms
 
