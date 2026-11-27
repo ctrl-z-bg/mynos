@@ -174,6 +174,40 @@ long raspi_firmware_call(uint32_t * buf, long len)
   return 0;
 }
 
+/* the ARM's clock: the firmware starts it at its lowest (600 MHz on a
+   Pi 3 or 4) and raises it only when the system asks, as Linux's cpufreq
+   does: asked for its maximum (the firmware lowers it by itself when the
+   chip is too hot) */
+#define ARM_CLOCK 3
+
+static uint32_t clock_tag(uint32_t tag, uint32_t rate)
+{
+  mbox_buf[0] = 9 * 4;
+  mbox_buf[1] = 0;
+  mbox_buf[2] = tag;
+  mbox_buf[3] = 12;
+  mbox_buf[4] = rate ? 12 : 4;
+  mbox_buf[5] = ARM_CLOCK;
+  mbox_buf[6] = rate;
+  mbox_buf[7] = 0;                          /* (set: the turbo's settings too) */
+  mbox_buf[8] = 0;
+  if (raspi_mbox(mbox_buf) != 0 || !(mbox_buf[4] & 0x80000000u) || mbox_buf[5] != ARM_CLOCK)
+    return 0;
+  return mbox_buf[6];
+}
+
+void raspi_cpu_clock(void)
+{
+  uint32_t was = clock_tag(0x00030002, 0), max = clock_tag(0x00030004, 0), now;
+  if (!was || !max) return;                 /* (QEMU: no such clock) */
+  now = max > was ? clock_tag(0x00038002, max) : was;
+  printk("ARM clock: ");
+  print_ulong(was / 1000000);
+  printk(" -> ");
+  print_ulong((now ? now : was) / 1000000);
+  printk(" MHz\n");
+}
+
 /* the ARM's RAM, from the firmware: its size (the rest, up to the
    peripherals, is the VideoCore's) */
 unsigned long raspi_ram_size(void)

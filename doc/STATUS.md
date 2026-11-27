@@ -2219,3 +2219,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   firmware joins again by itself (link events now timed). USB devices
   behind a hub may be unplugged and plugged again (the mouse had
   reconnected by itself and was never configured again).
+- **2026-11-27** — `bench` on the Pi 400: 81 (1000 is QEMU with KVM on
+  the reference PC), the processor at a twentieth of the PC's: the
+  firmware leaves the ARM at its lowest clock until asked. The kernel
+  now asks for the maximum at boot (`ARM clock: ... MHz`). The Wi-Fi's
+  AP deauthenticates about 150 s after joining (reason 3); the firmware
+  joins again in 3 s (btq.9.3).

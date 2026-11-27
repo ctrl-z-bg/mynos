@@ -994,3 +994,24 @@ again from the monitor: gone, then a mouse again; the keyboard types on).
 
 **Lesson.** On real hardware "plugged at boot" is not "plugged for
 ever": a device may come back as a new one without anybody touching it.
+
+## 2026-11-27 — The Pi 400 at a twentieth of a PC: its clock never raised
+
+**Symptom.** The `bench` package on the Pi 400 scored 81 (1000: MyNOS in
+QEMU with KVM on the reference PC): the processor's measures at 3 to 6 %
+of the PC's, memory copies 1.1 GB/s, drawing 2 %. A Cortex-A72 at
+1.8 GHz should be about a fifth of a recent PC's core, not a twentieth.
+
+**Cause** (probable: the next try's numbers will say). The Pi's firmware
+starts the ARM at its lowest clock (600 MHz on a Pi 3 and 4) and raises
+it only when the system asks through the mailbox, as Linux's cpufreq
+driver does. MyNOS never asked. (The framebuffer was not the cause: it
+is already mapped as normal non-cacheable memory, write-combining.)
+
+**Fix.** At boot the kernel asks the firmware for the ARM's maximum
+clock and sets it (`GET_MAX_CLOCK_RATE`, `SET_CLOCK_RATE`, clock 3), and
+logs `ARM clock: was -> now MHz`; the firmware still lowers it when the
+chip is too hot. QEMU's Pis say 700 MHz and keep it.
+
+**Lesson.** On a board whose firmware owns the clocks, "the processor's
+speed" is a request, not a fact.

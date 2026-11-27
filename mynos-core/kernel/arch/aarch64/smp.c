@@ -68,6 +68,7 @@ static volatile int ap_started;
 #ifdef MYNOS_RASPI
 void raspi_start_cpu(uint32_t n, unsigned long entry);
 void raspi_pcie_init(void);
+void raspi_cpu_clock(void);
 #else
 static long psci(unsigned long fn, unsigned long a1, unsigned long a2, unsigned long a3)
 {
@@ -101,6 +102,7 @@ void arch_smp_start(void)
   uint64_t f = counter_freq();
 #ifdef MYNOS_RASPI
   kernel_enter();
+  raspi_cpu_clock();                    /* the ARM at its full speed (raspi.c) */
   raspi_pcie_init();                    /* a Pi 4's PCIe, its USB (pcie4.c) */
   kernel_exit();
 #endif
