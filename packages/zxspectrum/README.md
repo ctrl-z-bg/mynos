@@ -21,7 +21,8 @@ keys at once, held as long as they are held. Page Up pauses, Page Down
 turns the sound on and off (off at the start), Escape quits.
 
 **Sound.** The beeper, through the sound service when there is a sound
-card; below 50 frames a second for a few seconds it turns itself off.
+card (Page Down turns it on); below 45 frames a second for a few seconds
+it turns itself off, and Page Down tries again.
 
 **A service.** Each zxspectrum registers `zx<pid>` and serves emu/1: its
 registers, memory, a disassembly, the screen as text or as a PNG; pause,

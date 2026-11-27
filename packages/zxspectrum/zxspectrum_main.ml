@@ -337,7 +337,11 @@ let windowed file =
            | "\027[5~" ->
              if st.paused then st.paused <- false else pause st;
              start := now; done_frames := 0; audio ()
-           | "\027[6~" -> muted := not !muted; audio ()
+           | "\027[6~" ->
+             (* on again, even if it went off by itself: tried anew *)
+             if !too_slow then begin too_slow := false; slow_windows := 0; muted := false end
+             else muted := not !muted;
+             audio ()
            | _ -> ()) ui.Gui.keys;
        (* the keys held: the Spectrum's down and up as they change *)
        let now_down = List.sort_uniq compare
@@ -361,7 +365,9 @@ let windowed file =
          if now -. !since >= 2. then begin
            st.fps <- float !frames /. (now -. !since); frames := 0; since := now;
            incr windows;
-           if !windows > 1 && not st.paused && st.fps < 50. then incr slow_windows else slow_windows := 0;
+           (* below 45 (the Spectrum's 50 measured a little under it is
+              not slow: 50 there turned the sound off at 49.8) *)
+           if !windows > 1 && not st.paused && st.fps < 45. then incr slow_windows else slow_windows := 0;
            if !slow_windows >= 2 && not !too_slow then begin too_slow := true; audio () end
          end;
          draw ()
