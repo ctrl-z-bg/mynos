@@ -16,6 +16,7 @@ driver pagerd.byte
 driver netd
 driver displayd
 driver soundd
+start imaged
 start llmd.byte
 start httpd.byte
 start pkg.byte boot

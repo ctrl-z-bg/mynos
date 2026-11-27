@@ -109,6 +109,7 @@ make -C llm
 make -C agent
 make -C services/display
 make -C services/sound
+make -C services/image
 make -C gui
 make -C graphics
 make -C tests/net

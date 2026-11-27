@@ -49,6 +49,9 @@ system/displayd
 services/display/displayd
 system/soundd
 services/sound/soundd
+system/imaged
+services/image/imaged
+services/image/picture
 system/vblkd
 services/virtio/vblkd
 services/net/netd

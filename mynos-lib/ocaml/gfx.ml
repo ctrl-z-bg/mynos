@@ -18,6 +18,8 @@ external get : t -> int -> int -> int = "caml_gfx_get"
 external send_shared : int -> t -> unit = "caml_gfx_send_shared"
 external draw_mask_raw : t -> int -> int -> string -> int -> int -> int -> int -> unit
   = "caml_gfx_draw_mask_byte" "caml_gfx_draw_mask"
+external draw_image_raw : t -> int -> int -> string -> int -> int -> int -> unit
+  = "caml_gfx_draw_image_byte" "caml_gfx_draw_image"
 external set_clip : int -> int -> int -> int -> unit = "caml_gfx_set_clip"
 external no_clip : unit -> unit = "caml_gfx_no_clip"
 
@@ -117,3 +119,9 @@ let load_mask path = mask_of_pgm (In_channel.with_open_bin path In_channel.input
 let draw_mask ?(opacity = 255) g x y m colour =
   draw_mask_raw g x y m.grey m.mask_width m.mask_height colour (max 0 (min 255 opacity))
 
+
+(* pictures: 4 bytes a pixel, blue, green, red, alpha *)
+type image = { image_width : int; image_height : int; bgra : string }
+
+let draw_image ?(opacity = 255) g x y i =
+  draw_image_raw g x y i.bgra i.image_width i.image_height (max 0 (min 255 opacity))

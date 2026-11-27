@@ -1,0 +1,4 @@
+NanoSVG (nanosvg.h, nanosvgrast.h), from https://github.com/memononen/nanosvg
+at commit 239e102ec2c691f2902e20ace2ed36ee4a35cfe6, unchanged: Mikko Mononen's SVG parser and
+rasterizer, under the zlib licence (LICENSE.txt). MyNOS's picture service,
+imaged (services/image), draws SVG pictures with it.

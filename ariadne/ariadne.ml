@@ -15,6 +15,17 @@ let usage () =
   prerr_endline "usage: ariadne [URL] | ariadne --dump URL | ariadne --layout URL [WIDTH] | ariadne --time URL";
   exit 2
 
+(* ---- pictures ---- *)
+
+(* a picture of a page: its bytes, its own size (from imaged), and its
+   pixels at the sizes it is drawn at (the last two) *)
+type pic = { data : string; nw : int; nh : int; mutable scaled : ((int * int) * Gfx.image) list;
+             mutable asked : (int * int) list }
+
+(* the pictures, by URL (None: not a picture, or not fetched); one lock
+   for them all, the window's thread and the workers' *)
+let pics_lock = Mutex.create ()
+
 (* ---- a page and its style sheets ---- *)
 
 type loaded = {
@@ -24,6 +35,10 @@ type loaded = {
   sheets : Style.sheet list;
   title : string;
   mutable laid : (int * Layout.page) option;      (* for a width *)
+  mutable styled : (int * Style.styles) option;   (* for a width *)
+  pics : (string, pic option) Hashtbl.t;          (* under pics_lock *)
+  mutable sized : int;                            (* pictures whose size arrived (pics_lock) *)
+  mutable laid_sized : int;                       (* ... when laid out *)
   times : (string * float) list;       (* the stages' times, in ms *)
 }
 
@@ -70,17 +85,108 @@ let load url =
   let title = match Dom.find (fun n -> Dom.is_html n "title") doc with
     | Some t -> String.trim (Text.collapse (Dom.text_content t)) | None -> "" in
   let ms a b = (b -. a) *. 1000. in
-  { response; doc; base; sheets; title; laid = None;
+  { response; doc; base; sheets; title; laid = None; styled = None; pics = Hashtbl.create 16;
+    sized = 0; laid_sized = 0;
     times = [ "load", ms t0 t1; "decode", ms t1 t2; "parse", ms t2 t3; "css", ms t3 t4 ] }
+
+(* a picture's own size, if it has arrived *)
+let pic_size l src =
+  let u = Url.resolve l.base src in
+  Mutex.protect pics_lock (fun () -> match Hashtbl.find_opt l.pics u with
+      | Some (Some p) -> Some (p.nw, p.nh) | _ -> None)
 
 let layout_at l ~width ~height =
   match l.laid with
   | Some (w, p) when w = width -> p
   | _ ->
-    let styles = Style.compute ~width ~height l.sheets l.doc in
-    let p = Layout.layout ~width ~height styles l.doc in
+    let styles = match l.styled with
+      | Some (w, s) when w = width -> s
+      | _ -> let s = Style.compute ~width ~height l.sheets l.doc in l.styled <- Some (width, s); s in
+    l.laid_sized <- Mutex.protect pics_lock (fun () -> l.sized);
+    let p = Layout.layout ~image:(pic_size l) ~width ~height styles l.doc in
     l.laid <- Some (width, p);
     p
+
+(* the pictures' work, in threads of their own: fetching a page's
+   pictures and asking imaged their size, then their pixels at the sizes
+   they are drawn at *)
+type job = Fetch of loaded * string | Scale of pic * int * int
+
+let jobs : job Queue.t = Queue.create ()
+let jobs_ready = Condition.create ()
+let workers = ref false
+
+let max_pics = 300
+
+let worker () =
+  let images = lazy (try Some (Images.connect ()) with _ -> None) in
+  let rec loop () =
+    let job = Mutex.protect pics_lock (fun () ->
+        while Queue.is_empty jobs do Condition.wait jobs_ready pics_lock done;
+        Queue.pop jobs) in
+    (match job, Lazy.force images with
+     | Fetch (l, url), Some images ->
+       let p =
+         try
+           let r = Loader.load url in
+           if String.length r.Loader.status > 0 && (r.status.[0] = '2' || r.status = "a file") then
+             let nw, nh = Images.size ~images r.body in
+             Some { data = r.body; nw; nh; scaled = []; asked = [] }
+           else None
+         with _ -> None in
+       Mutex.protect pics_lock (fun () ->
+           Hashtbl.replace l.pics url p;
+           if p <> None then l.sized <- l.sized + 1)
+     | Scale (p, w, h), Some images ->
+       (match Images.decode ~images ~width:w ~height:h p.data with
+        | d -> Mutex.protect pics_lock (fun () ->
+            p.scaled <- ((w, h), d.image) :: (match p.scaled with x :: _ -> [ x ] | [] -> []))
+        | exception _ -> ())
+     | _, None -> ());
+    loop () in
+  loop ()
+
+let enqueue job =
+  Mutex.protect pics_lock (fun () ->
+      Queue.push job jobs;
+      Condition.signal jobs_ready);
+  if not !workers then begin
+    workers := true;
+    for _ = 1 to 3 do ignore (Thread.create worker ()) done
+  end
+
+(* a page's pictures, fetched: those of its img elements, in order *)
+let fetch_pictures l =
+  let n = ref 0 in
+  Dom.walk ~leave:ignore l.doc ~enter:(fun node ->
+      (if Dom.is_html node "img" && !n < max_pics then
+         match Dom.attr node "src" with
+         | Some src when String.trim src <> "" ->
+           let u = Url.resolve l.base (String.trim src) in
+           let fresh = Mutex.protect pics_lock (fun () ->
+               if Hashtbl.mem l.pics u then false else (Hashtbl.replace l.pics u None; true)) in
+           if fresh then (incr n; enqueue (Fetch (l, u)))
+         | _ -> ());
+      true)
+
+(* a picture's pixels at w x h: drawn now if there, asked for if not *)
+let pic_image l src w h =
+  let u = Url.resolve l.base src in
+  let ask = ref None in
+  let r = Mutex.protect pics_lock (fun () ->
+      match Hashtbl.find_opt l.pics u with
+      | Some (Some p) ->
+        (match List.assoc_opt (w, h) p.scaled with
+         | Some _ as i -> i
+         | None ->
+           if not (List.mem (w, h) p.asked) then begin
+             p.asked <- (w, h) :: (match p.asked with x :: _ -> [ x ] | [] -> []);
+             ask := Some p
+           end;
+           None)
+      | _ -> None) in
+  (match !ask with Some p -> enqueue (Scale (p, w, h)) | None -> ());
+  r
 
 (* ---- --dump, --layout, --time ---- *)
 
@@ -132,6 +238,7 @@ type st = {
 }
 
 let offset = ref 0          (* how far the page is scrolled, as last drawn *)
+let last_relayout = ref 0.
 
 let window first =
   let lock = Mutex.create () in
@@ -164,6 +271,7 @@ let window first =
        | Some (n, l) when (match st.loading with Some (_, m) -> m = n | None -> false) ->
          let asked = match st.loading with Some (u, _) -> u | None -> l.response.url in
          st.shown <- l; st.loading <- None;
+         fetch_pictures l;
          st.address <- l.response.url ^ (match snd (Url.strip_fragment asked) with
              | Some f -> "#" ^ f | None -> "");
          if st.want_scroll = None then st.want_scroll <- Some 0
@@ -197,6 +305,14 @@ let window first =
       let box_x = 4 and box_y = 44 and box_h = height - 44 - 24 in
       let box_w = width - 8 in
       page_width := box_w - 14;
+      (* pictures whose size the layout waited for: laid out again, at
+         most every second *)
+      let l = st.shown in
+      (match l.laid with
+       | Some (_, p) when p.unsized <> [] && now () -. !last_relayout > 1.
+                          && Mutex.protect pics_lock (fun () -> l.sized) <> l.laid_sized ->
+         last_relayout := now (); l.laid <- None
+       | _ -> ());
       let page = layout_at st.shown ~width:!page_width ~height:box_h in
       (match st.want_scroll with
        | Some s ->
@@ -238,7 +354,18 @@ let window first =
                           { Gfx.mask_width = b.width; mask_height = b.height; grey = b.grey } color)
                       (Fonts.glyphs font s)
                   | None -> ignore (Gfx.text g (box_x + x) (yy - font.ascent) s color)
-                end) page.items;
+                end
+              | Image { x; y; w; h; src; clip } ->
+                let yy = top + y in
+                if yy + h > box_y && yy < box_y + box_h then
+                  match pic_image st.shown src w h with
+                  | Some img ->
+                    (match clip with
+                     | Some (x0, y0, x1, y1) ->
+                       Gfx.with_clip (box_x + x0) (top + y0) (x1 - x0) (y1 - y0)
+                         (fun () -> Gfx.draw_image g (box_x + x) yy img)
+                     | None -> Gfx.draw_image g (box_x + x) yy img)
+                  | None -> ()) page.items;
           page.height);
       (* a link under the pointer: shown below; a click follows it *)
       let link_at mx my =

@@ -224,6 +224,51 @@ CAMLprim value caml_gfx_draw_mask_byte(value * argv, int argn)
 			    argv[6], argv[7]);
 }
 
+/* ---- pictures: 4 bytes a pixel, blue, green, red, alpha (Gfx.draw_image) ---- */
+
+/* the picture (w x h, in a string) with its top left at (x, y), each pixel
+   blended by its alpha times opacity/255 */
+CAMLprim value caml_gfx_draw_image(value t, value vx, value vy, value px, value vw,
+				   value vh, value vopacity)
+{
+  int x = Long_val(vx), y = Long_val(vy), w = Long_val(vw), h = Long_val(vh);
+  int opacity = Long_val(vopacity), bw = BW(t), bx0, by0, bx1, by1, i, j, i0, i1;
+  unsigned int * p = PIX(t);
+  const unsigned char * s = (const unsigned char *)String_val(px);
+  if (w < 0 || h < 0 || caml_string_length(px) < (mlsize_t)w * h * 4)
+    caml_invalid_argument("Gfx.draw_image");
+  bounds(t, &bx0, &by0, &bx1, &by1);
+  i0 = bx0 - x > 0 ? bx0 - x : 0;
+  i1 = bx1 - x < w ? bx1 - x : w;
+  for (j = 0; j < h; j++) {
+    int yy = y + j;
+    unsigned int * row;
+    const unsigned char * q;
+    if (yy < by0 || yy >= by1) continue;
+    row = p + yy * bw + x;
+    q = s + ((size_t)j * w) * 4;
+    for (i = i0; i < i1; i++) {
+      const unsigned char * c = q + i * 4;
+      int a = opacity == 255 ? c[3] : c[3] * opacity / 255;
+      unsigned int d;
+      if (a == 0) continue;
+      if (a == 255) { row[i] = (c[2] << 16) | (c[1] << 8) | c[0]; continue; }
+      d = row[i];
+      row[i] =
+	((((d >> 16) & 255) * (255 - a) + c[2] * a) / 255) << 16 |
+	((((d >> 8) & 255) * (255 - a) + c[1] * a) / 255) << 8 |
+	(((d & 255) * (255 - a) + c[0] * a) / 255);
+    }
+  }
+  return Val_unit;
+}
+
+CAMLprim value caml_gfx_draw_image_byte(value * argv, int argn)
+{
+  (void)argn;
+  return caml_gfx_draw_image(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);
+}
+
 /* ---- text ---- */
 
 static unsigned char glyphs[2][512 * 16];

@@ -86,3 +86,16 @@ val draw_mask : ?opacity:int -> t -> int -> int -> mask -> int -> unit
     taking [colour] as much as it has ink, times [opacity] (0-255, 255 by
     default); within the clip. *)
 
+
+(** {2 Pictures}
+
+    Colour pictures with transparency, as the picture service decodes them
+    ({!Images}). *)
+
+type image = { image_width : int; image_height : int; bgra : string }
+(** [bgra]: 4 bytes a pixel, row by row: blue, green, red, alpha (255:
+    opaque; not premultiplied). *)
+
+val draw_image : ?opacity:int -> t -> int -> int -> image -> unit
+(** [draw_image g x y i]: the picture's top left at [(x, y)], blended by
+    its alpha (times [opacity]/255, 255 by default); clipped. *)

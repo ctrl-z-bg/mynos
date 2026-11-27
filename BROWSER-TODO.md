@@ -21,7 +21,7 @@ Taken (the owner, 2026-11-27):
 
 Open:
 
-- [ ] In the image, or a package (`doc/decisions/packages.md`)
+- [ ] Ariadne as a package (`doc/decisions/packages.md`): the owner's choice (2026-11-27), to do later; on the RAM disk until then
 - [ ] The target sites: which real pages must read well for it to count as usable
 - [ ] Review and accept `doc/decisions/browser.md`
 
@@ -113,14 +113,23 @@ Found in M3:
 
 ## M4: images
 
-- [ ] `imaged`: its typed IPC protocol; the pixels come back in shared pages
-- [ ] Inflate (deflate) in OCaml, shared with gzip
-- [ ] PNG: filters, palettes, alpha, interlacing
-- [ ] JPEG: from `packages/browser`; progressive JPEG
-- [ ] GIF: the first frame
-- [ ] Scaling to the box's size; `width`/`height` before the image arrives
-- [ ] `background-image`
+Decoding is in C, at the owner's choice (2026-11-27): `imaged` (services/image) uses stb_image (JPEG baseline and progressive, PNG, GIF, BMP) and NanoSVG (SVG), in third_party/. A picture from the web is untrusted data, decoded in a process of its own. A first version of the decoders in OCaml (inflate, PNG, GIF, JPEG) was written and dropped untested.
+
+- [x] `imaged`: protocol `image/1` (`size`, `decode` at a width and height, an SVG drawn at it), module `Images`; started by `init.rc`
+- [x] JPEG (baseline, progressive), PNG, GIF (the first frame), BMP: stb_image
+- [x] SVG: NanoSVG (Wikipedia's wordmark and tagline)
+- [x] `Gfx.draw_image`: a picture blended by its alpha, clipped (C)
+- [x] Pictures fetched in the background (three workers) once the page shows; their size from `imaged`; laid out again (at most every second) only when a picture without `width` and `height` was waiting for its size
+- [x] Sized by `width`/`height` attributes and CSS (ratio kept, `max-width`) before arriving; by their own size after; pixels asked of `imaged` at the size drawn, the last two sizes kept
+- [x] Pictures as blocks (flex and grid items, `display: block`): replaced boxes
+- [x] The host's renderer (tests/render.ml) draws pictures, with `services/image/picture` (imaged's code as a host command)
+- [ ] `srcset` and `<picture>`: the best source for the size (today: `src`)
+- [ ] `background-image` (url, repeat, position, size), and `mask-image` as an alpha mask in the text's colour (Wikipedia's icons)
 - [ ] gzip in `Http` (`Accept-Encoding`)
+- [ ] Pictures fetched in the order they appear on screen; a cache across pages
+- [ ] Shared pages for the pixels instead of a copy in the reply (if large pictures make it slow)
+- [ ] A check of `imaged` in MyNOS (tools/run-tests.sh): a PNG, a JPEG, an SVG decoded, compared at sample pixels
+- [ ] Measurements: time from page shown to pictures drawn
 
 ## M5: the rest of the layout, and forms
 
@@ -139,7 +148,7 @@ Done before M2, at the owner's choice (2026-11-27): what gives pages their shape
 - [x] Margins collapsing through a parent's top and bottom (and out of the root)
 - [x] Boxes measured "dry" (nothing drawn), cached by element and width; min- and max-content widths cached by element
 - [ ] Forms without JavaScript: text fields, buttons, checkboxes, `select`; GET and POST (today: frames with their values)
-- [ ] New generic `Gfx` primitives if painting needs them (alpha blit, scaled blit)
+- [x] New generic `Gfx` primitives if painting needs them: `Gfx.draw_image` (M4; scaling is `imaged`'s)
 - [ ] The test pages match their reference renderings (a browser's screenshots: not yet; the display lists are checked)
 - [x] A test page for floats, flexbox, grid, positioning, clipping, inline-blocks and spans (`pages/m5.html`)
 

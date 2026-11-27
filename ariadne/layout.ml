@@ -48,6 +48,9 @@ type item =
   | Fill of { x : int; y : int; w : int; h : int; color : int }
   | Text of { x : int; y : int; s : string; color : int; font : Fonts.font }
       (** [y]: the baseline *)
+  | Image of { x : int; y : int; w : int; h : int; src : string; clip : (int * int * int * int) option }
+      (** a picture (its src attribute as written) drawn w x h; [clip]: x0,
+          y0, x1, y1, outside which it is not drawn *)
 
 type link = { lx : int; ly : int; lw : int; lh : int; href : string }
 
@@ -57,6 +60,7 @@ type page = {
   height : int;
   background : int;                  (* the canvas *)
   anchors : (string * int) list;     (* ids, and where they are *)
+  unsized : string list;             (* pictures whose size was asked for and not known *)
 }
 
 (* a float's margin box, in page coordinates *)
@@ -81,6 +85,8 @@ type out = {
   measures : (int * int, int * int) Hashtbl.t;         (* element, width -> border box w, h *)
   intrinsics : (int, int * int) Hashtbl.t;             (* element -> min-, max-content widths *)
   mutable abs : pending list ref list;                (* per containing block, innermost first *)
+  image : string -> (int * int) option;               (* a picture's own size, by its src *)
+  mutable unsized_ : string list;
 }
 
 let rgb c = c land 0xFFFFFF
@@ -104,6 +110,9 @@ let emit o it =
        | Fill f ->
          let x = max f.x x0 and y = max f.y y0 and x2 = min (f.x + f.w) x1 and y2 = min (f.y + f.h) y1 in
          if x2 > x && y2 > y then Dynarray.add_last o.items_ (Fill { f with x; y; w = x2 - x; h = y2 - y })
+       | Image i ->
+         if i.x < x1 && i.x + i.w > x0 && i.y < y1 && i.y + i.h > y0 then
+           Dynarray.add_last o.items_ (Image { i with clip = Some (x0, y0, x1, y1) })
        | Text t ->
          let w = Fonts.width t.font t.s in
          if t.y + t.font.descent > y0 && t.y - t.font.ascent < y1 && t.x < x1 && t.x + w > x0 then
@@ -126,7 +135,9 @@ let translate o m dx dy =
     for i = m.mi to Dynarray.length o.items_ - 1 do
       Dynarray.set o.items_ i (match Dynarray.get o.items_ i with
           | Fill f -> Fill { f with x = f.x + dx; y = f.y + dy }
-          | Text t -> Text { t with x = t.x + dx; y = t.y + dy })
+          | Text t -> Text { t with x = t.x + dx; y = t.y + dy }
+          | Image i -> Image { i with x = i.x + dx; y = i.y + dy;
+                                      clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) i.clip })
     done;
     for i = m.ml to Dynarray.length o.links_ - 1 do
       let l = Dynarray.get o.links_ i in
@@ -174,7 +185,7 @@ type atom_kind =
   | Word of string
   | Space
   | Break
-  | Box of { w : int; h : int; label : string; frame : bool }
+  | Box of { w : int; h : int; label : string; frame : bool; img : string option }
   | Ibox of { node : Dom.node; bw : int; bh : int; ml : int; mr : int }   (* an inline-block *)
   | Float of Dom.node                                                    (* a float met in a line *)
   | Abs of Dom.node                                                      (* where its static position is *)
@@ -208,7 +219,7 @@ let is_atomic n = List.mem (Dom.name n) [ "img"; "input"; "button"; "select"; "t
                                           "canvas"; "embed"; "object"; "audio"; "svg" ]
 
 (* a replaced or form element, as a box in the line *)
-let atomic (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
+let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
   let a = Dom.attr n in
   let size default_w default_h =
     let w = match st.width with Auto -> default_w | l -> px l ~of_:cw in
@@ -217,67 +228,95 @@ let atomic (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
   match Dom.name n with
   | "img" ->
     let alt = Option.value (a "alt") ~default:"" in
-    (* the width and height attributes give the ratio (HTML's mapping to
-       aspect-ratio): one given in CSS, the other follows *)
+    let src = match a "src" with Some u when String.trim u <> "" -> Some (String.trim u) | _ -> None in
     let num k = Option.bind (a k) (fun v -> float_of_string_opt (String.trim v)) in
-    let ratio = match num "width", num "height" with
-      | Some w, Some h when w > 0. && h > 0. -> Some (h /. w) | _ -> None in
+    let sized = (match num "width", num "height" with Some w, Some h -> w > 0. && h > 0. | _ -> false)
+                || (not (is_auto st.width) && not (is_auto st.height)) in
+    (* its own size, once fetched; noted when the layout depends on it *)
+    let natural = match src with
+      | Some u -> (match o.image u with
+          | Some _ as k -> k
+          | None -> if not sized && not (List.mem u o.unsized_) then o.unsized_ <- u :: o.unsized_; None)
+      | None -> None in
+    (* the width and height attributes give the ratio (HTML's mapping to
+       aspect-ratio), then the picture's own; one size given in CSS, the
+       other follows *)
+    let ratio = match num "width", num "height", natural with
+      | Some w, Some h, _ when w > 0. && h > 0. -> Some (h /. w)
+      | _, _, Some (w, h) when w > 0 && h > 0 -> Some (float h /. float w)
+      | _ -> None in
     (* max-width: a length always; a percentage only once the container's
        width is known (not while measuring natural widths, at 0) *)
     let clamp_w w = match st.max_width with
       | Len (p, 0.) -> min w (int_of_float p)
       | Len (_, _) as l when cw > 0 -> min w (px l ~of_:cw)
       | _ -> w in
+    (* known: drawn; not yet: a frame with the alt text, or the alt text *)
+    let box w h = match natural with
+      | Some _ -> Box { w; h; label = ""; frame = false; img = src }
+      | None -> Box { w; h; label = alt; frame = true; img = None } in
     (match st.width, st.height, ratio with
      | Auto, Auto, None -> if alt = "" then None else Some (Word ("[" ^ alt ^ "]"))
      | w, Auto, Some r when not (is_auto w) ->
        let w = clamp_w (px w ~of_:cw) in
-       Some (Box { w; h = int_of_float (float w *. r); label = alt; frame = true })
+       Some (box w (int_of_float (float w *. r)))
      | Auto, h, Some r when not (is_auto h) ->
        let h = px h ~of_:cw in
-       Some (Box { w = clamp_w (int_of_float (float h /. r)); h; label = alt; frame = true })
+       Some (box (clamp_w (int_of_float (float h /. r))) h)
      | Auto, Auto, Some r ->
-       let w = clamp_w (int_of_float (Option.get (num "width"))) in
-       Some (Box { w; h = int_of_float (float w *. r); label = alt; frame = true })
+       let w0 = match num "width", natural with
+         | Some w, _ when num "height" <> None -> int_of_float w
+         | _, Some (w, _) -> w
+         | _ -> 0 in
+       let w = clamp_w w0 in
+       Some (box w (int_of_float (Float.round (float w *. r))))
      | _ -> let w, h = size 0 (Metrics.line_height st) in
-       Some (Box { w = clamp_w w; h; label = alt; frame = true }))
+       Some (box (clamp_w w) h))
   | "input" ->
     (match String.lowercase_ascii (Option.value (a "type") ~default:"text") with
      | "hidden" -> None
-     | "checkbox" | "radio" -> Some (Box { w = 13; h = 13; label = (if a "checked" <> None then "x" else ""); frame = true })
+     | "checkbox" | "radio" -> Some (Box { w = 13; h = 13; label = (if a "checked" <> None then "x" else ""); frame = true; img = None })
      | "submit" | "button" | "reset" ->
        let label = Option.value (a "value") ~default:(if a "type" = Some "reset" then "Reset" else "Submit") in
        let w, h = size (Metrics.width st label + 16) (Metrics.line_height st + 4) in
-       Some (Box { w; h; label; frame = true })
+       Some (Box { w; h; label; frame = true; img = None })
      | _ ->
        let label = match a "value" with Some v -> v | None -> Option.value (a "placeholder") ~default:"" in
        let w, h = size 160 (Metrics.line_height st + 4) in
-       Some (Box { w; h; label; frame = true }))
+       Some (Box { w; h; label; frame = true; img = None }))
   | "button" ->
     let label = String.trim (Dom.text_content n) in
     let w, h = size (Metrics.width st label + 16) (Metrics.line_height st + 4) in
-    Some (Box { w; h; label; frame = true })
+    Some (Box { w; h; label; frame = true; img = None })
   | "select" ->
     let first = Dom.find (fun o -> Dom.is_html o "option") n in
     let label = match first with Some o -> String.trim (Dom.text_content o) ^ " v" | None -> "v" in
     let w, h = size (Metrics.width st label + 16) (Metrics.line_height st + 4) in
-    Some (Box { w; h; label; frame = true })
+    Some (Box { w; h; label; frame = true; img = None })
   | "textarea" ->
     let cols = Option.value (Option.bind (a "cols") int_of_string_opt) ~default:20 in
     let rows = Option.value (Option.bind (a "rows") int_of_string_opt) ~default:2 in
     let w, h = size (cols * Metrics.width st "n" + 8) (rows * Metrics.line_height st + 4) in
-    Some (Box { w; h; label = Dom.text_content n; frame = true })
+    Some (Box { w; h; label = Dom.text_content n; frame = true; img = None })
   | "iframe" | "video" | "canvas" | "embed" | "object" | "audio" ->
     let w, h = size 300 150 in
-    Some (Box { w; h; label = Dom.name n; frame = true })
+    Some (Box { w; h; label = Dom.name n; frame = true; img = None })
   | "svg" ->
     (match st.width, st.height, a "width", a "height" with
      | Auto, Auto, None, None -> None
      | _ ->
        let aw = Option.bind (a "width") float_of_string_opt and ah = Option.bind (a "height") float_of_string_opt in
        let w, h = size (int_of_float (Option.value aw ~default:0.)) (int_of_float (Option.value ah ~default:0.)) in
-       Some (Box { w; h; label = ""; frame = false }))
+       Some (Box { w; h; label = ""; frame = false; img = None }))
   | _ -> None
+
+(* a picture laid out as a block (a flex or grid item, display: block):
+   its content size, and its src once its size is known *)
+let replaced o (n : Dom.node) (st : Style.t) ~cw =
+  if not (Dom.is_html n "img") then None
+  else match atomic o n st ~cw with
+    | Some (Box { w; h; img; _ }) -> Some (w, h, img)
+    | _ -> None
 
 (* the pieces of a container's content: its inline descendants flattened
    (a loop: Dom.walk), its block-level, floating and positioned ones as
@@ -317,7 +356,7 @@ let pieces o (container : Dom.node) ~cw ~depth =
            else if Dom.is_html n "br" then (add (P_atom { kind = Break; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }); false)
            else if block_level st.display && depth < max_depth then (add (P_block (n, st)); false)
            else if is_atomic n then begin
-             (match atomic n st ~cw with
+             (match atomic o n st ~cw with
               | Some kind -> add (P_atom { kind; st; font = Metrics.font st; link = top_link (); bg = 0; dy = dy () })
               | None -> ());
              false
@@ -367,7 +406,7 @@ let atoms_of pieces =
   let add a = out := a :: !out in
   List.iter (function
       | P_atom a -> add a; prev_space := (a.kind = Break)
-      | P_space (w, st) -> add { kind = Box { w; h = 0; label = ""; frame = false }; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
+      | P_space (w, st) -> add { kind = Box { w; h = 0; label = ""; frame = false; img = None }; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
       | P_float (n, st) -> add { kind = Float n; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
       | P_abs (n, st) -> add { kind = Abs n; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
       | P_block _ -> ()
@@ -508,12 +547,13 @@ and intrinsic o (n : Dom.node) (st : Style.t) =
   | None ->
     let frame = hframe st ~cw:0 ~margins:false in
     let r =
-      match st.width with
-      | Len (p, 0.) ->
+      match replaced o n st ~cw:0, st.width with
+      | Some (w, _, _), _ -> (w + frame, w + frame)
+      | None, Len (p, 0.) ->
         let w = int_of_float p in
         let w = if st.border_box then w else w + frame in
         (w, w)
-      | _ ->
+      | None, _ ->
         let mn, mx =
           match st.display with
           | Flex | Inline_flex ->
@@ -613,6 +653,11 @@ and layout_abs o (cbx, cby, cbw, cbh) (p : pending) ~depth =
 
 (* a block box at (x, y) in a containing block [cw] wide *)
 and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~x ~y ~cw ~depth =
+  (* a picture: a box of its size, drawn in its content box *)
+  let repl = replaced o n st ~cw in
+  let st = match repl with
+    | Some (w, h, _) -> { st with width = Len (float w, 0.); height = Len (float h, 0.); border_box = false }
+    | None -> st in
   let m i = match st.margin.(i) with Auto -> None | l -> Some (px l ~of_:cw) in
   let b i = int_of_float (border st i) in
   let p i = px st.padding.(i) ~of_:cw in
@@ -694,6 +739,10 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
     | Len (hp, 0.), None -> min content_h (int_of_float hp - (if st.border_box then vframe else 0))
     | _ -> content_h in
   let h = vframe + valign + content_h in
+  (match repl with
+   | Some (_, _, Some src) when st.visible && not st.transparent && content_w > 0 && content_h > 0 ->
+     emit o (Image { x = cx; y = cy; w = content_w; h = content_h; src; clip = None })
+   | _ -> ());
   o.clip <- saved_clip;
   if has_bg then Dynarray.set o.items_ bg_slot (Fill { x = bx; y; w = bw; h; color = rgb st.background });
   if st.visible && not st.transparent && o.dry = 0 then begin
@@ -857,8 +906,11 @@ and inline_layout o ~bfc (container : Style.t) atoms ~x ~y ~w ~depth =
             emit o (Fill { x = !cx; y = ty - f.ascent - 1; w = aw; h = f.ascent + f.descent + 2; color = rgb a.bg });
           (match a.kind with
            | Word s -> emit o (Text { x = !cx; y = ty; s; color = st.color; font = f })
-           | Box { w = bw; h = bh; label; frame } ->
+           | Box { w = bw; h = bh; label; frame; img } ->
              let by = max line_y (baseline - bh) in
+             (match img with
+              | Some src when bw > 0 && bh > 0 -> emit o (Image { x = !cx; y = by; w = bw; h = bh; src; clip = None })
+              | _ -> ());
              if frame && bw > 0 && bh > 0 then begin
                let c = 0xA0A8B0 in
                emit o (Fill { x = !cx; y = by; w = bw; h = 1; color = c });
@@ -1458,10 +1510,10 @@ and table o (n : Dom.node) (st : Style.t) ~x ~y ~cw ~depth =
 
 (* ---- the page ---- *)
 
-let layout ~width ~height (styles : Style.styles) (doc : Dom.node) =
+let layout ?(image = fun _ -> None) ~width ~height (styles : Style.styles) (doc : Dom.node) =
   let o = { items_ = Dynarray.create (); links_ = Dynarray.create (); anchors_ = []; styles;
             vw = width; vh = height; dry = 0; clip = None; measures = Hashtbl.create 1024;
-            intrinsics = Hashtbl.create 1024; abs = [ ref [] ] } in
+            intrinsics = Hashtbl.create 1024; abs = [ ref [] ]; image; unsized_ = [] } in
   let root = Dom.find (fun n -> Dom.is_html n "html") doc in
   let total =
     match root with
@@ -1487,9 +1539,10 @@ let layout ~width ~height (styles : Style.styles) (doc : Dom.node) =
     | None -> (match bg_of (Dom.find (fun n -> Dom.is_html n "body") doc) with Some c -> c | None -> 0xFFFFFF) in
   (* positioned boxes may reach below the flow *)
   let bottom = Dynarray.fold_left (fun m it -> match it with
-      | Fill f -> max m (f.y + f.h) | Text t -> max m (t.y + t.font.descent)) total o.items_ in
+      | Fill f -> max m (f.y + f.h) | Text t -> max m (t.y + t.font.descent)
+      | Image i -> max m (i.y + i.h)) total o.items_ in
   { items = Dynarray.to_array o.items_; links = Dynarray.to_array o.links_; height = max total bottom; background;
-    anchors = o.anchors_ }
+    anchors = o.anchors_; unsized = o.unsized_ }
 
 (* ---- the display list as text, for the tests ---- *)
 
@@ -1498,7 +1551,8 @@ let dump p =
   Array.iter (function
       | Fill { x; y; w; h; color } -> Printf.bprintf b "fill %d,%d %dx%d #%06x\n" x y w h color
       | Text { x; y; s; color; font } ->
-        Printf.bprintf b "text %d,%d %s #%06x %s\n" x y font.key color s) p.items;
+        Printf.bprintf b "text %d,%d %s #%06x %s\n" x y font.key color s
+      | Image { x; y; w; h; src; _ } -> Printf.bprintf b "image %d,%d %dx%d %s\n" x y w h src) p.items;
   Array.iter (fun l -> Printf.bprintf b "link %d,%d %dx%d %s\n" l.lx l.ly l.lw l.lh l.href) p.links;
   Printf.bprintf b "height %d\n" p.height;
   Buffer.contents b

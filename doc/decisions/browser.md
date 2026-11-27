@@ -46,7 +46,7 @@ a rendering proxy, Ladybird, Servo and an OCaml browser.
 | Layout: block, inline and line breaking, then floats, positioning, tables, flexbox | `ariadne/` | OCaml |
 | Display list, painting, scrolling, the window, history, forms | `ariadne/` | OCaml, painting with `Gfx` |
 | Fonts: TrueType outlines, rasterized once per glyph and size, cached as masks, drawn with `Gfx.draw_mask` (grey levels, so antialiased) | a library, usable by every GUI program | OCaml |
-| Images: PNG (inflate), JPEG, GIF | an `imaged` service, which decodes in parallel with the layout, on another processor | OCaml |
+| Images: JPEG, PNG, GIF, BMP, SVG | an `imaged` service, which decodes in parallel with the layout, on another processor | C: stb_image and NanoSVG (decided 2026-11-27: untrusted data in a process of its own, and per-pixel work bytecode is worst at) |
 | JavaScript: QuickJS, the DOM reached over typed IPC (handles, not objects) | a `jsd` service | C |
 | The network: HTTP, TLS, redirects, gzip | `Http` and `netd`, as today. A shared fetch and cache service later, if it pays | OCaml / C |
 
