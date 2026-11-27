@@ -796,7 +796,8 @@ the same: a driver tried only there never learns that they are two.
 keyboard typed into the shell and `gui` started; a USB mouse moved the
 pointer for a fraction of a second, then never again.
 
-**Diagnosis.** On a failed interrupt transfer (a stall, a transaction
+**Diagnosis** (probable: the log of the try that worked, which would
+show the failed transfers, was not read). On a failed interrupt transfer (a stall, a transaction
 error: likelier for a low-speed mouse reached through the hub's
 transaction translator, many reports a second) the xHCI halts the
 endpoint. usbd queued the next transfer as after a good one; a halted
