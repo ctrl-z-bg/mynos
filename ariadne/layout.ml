@@ -251,10 +251,11 @@ let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
       | Len (p, 0.) -> min w (int_of_float p)
       | Len (_, _) as l when cw > 0 -> min w (px l ~of_:cw)
       | _ -> w in
-    (* known: drawn; not yet: a frame with the alt text, or the alt text *)
-    let box w h = match natural with
-      | Some _ -> Box { w; h; label = ""; frame = false; img = src }
-      | None -> Box { w; h; label = alt; frame = true; img = None } in
+    (* drawn (once its pixels arrive) when its size is known, given or its
+       own; else, for now, a frame with the alt text *)
+    let box w h =
+      if src <> None && (natural <> None || sized) then Box { w; h; label = ""; frame = false; img = src }
+      else Box { w; h; label = alt; frame = true; img = None } in
     (match st.width, st.height, ratio with
      | Auto, Auto, None -> if alt = "" then None else Some (Word ("[" ^ alt ^ "]"))
      | w, Auto, Some r when not (is_auto w) ->

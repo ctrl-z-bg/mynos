@@ -37,12 +37,21 @@ type loaded = {
   mutable laid : (int * Layout.page) option;      (* for a width *)
   mutable styled : (int * Style.styles) option;   (* for a width *)
   pics : (string, pic option) Hashtbl.t;          (* under pics_lock *)
+  started : (string, unit) Hashtbl.t;             (* fetches begun (pics_lock) *)
+  hurried : (string, unit) Hashtbl.t;             (* fetches asked for first: on screen (pics_lock) *)
   mutable sized : int;                            (* pictures whose size arrived (pics_lock) *)
   mutable laid_sized : int;                       (* ... when laid out *)
   times : (string * float) list;       (* the stages' times, in ms *)
 }
 
 let now = Unix.gettimeofday
+
+(* ARIADNE_DEBUG: what takes time (the page's stages, the pictures, slow
+   frames), in the kernel log, in ms since the start *)
+let debug = Sys.getenv_opt "ARIADNE_DEBUG" <> None
+let t_start = now ()
+let trace fmt = Printf.ksprintf (fun m ->
+    if debug then Mynos.log (Printf.sprintf "ariadne %6.0f: %s\n" ((now () -. t_start) *. 1000.) m)) fmt
 
 (* a style sheet's text, fetched *)
 let fetch_css url =
@@ -85,7 +94,10 @@ let load url =
   let title = match Dom.find (fun n -> Dom.is_html n "title") doc with
     | Some t -> String.trim (Text.collapse (Dom.text_content t)) | None -> "" in
   let ms a b = (b -. a) *. 1000. in
+  trace "page %s: load %.0f, decode %.0f, parse %.0f, css %.0f ms (%d sheets)" url (ms t0 t1) (ms t1 t2) (ms t2 t3)
+    (ms t3 t4) (List.length sheets);
   { response; doc; base; sheets; title; laid = None; styled = None; pics = Hashtbl.create 16;
+    started = Hashtbl.create 16; hurried = Hashtbl.create 16;
     sized = 0; laid_sized = 0;
     times = [ "load", ms t0 t1; "decode", ms t1 t2; "parse", ms t2 t3; "css", ms t3 t4 ] }
 
@@ -99,11 +111,14 @@ let layout_at l ~width ~height =
   match l.laid with
   | Some (w, p) when w = width -> p
   | _ ->
+    let t0 = now () in
     let styles = match l.styled with
       | Some (w, s) when w = width -> s
       | _ -> let s = Style.compute ~width ~height l.sheets l.doc in l.styled <- Some (width, s); s in
+    let t1 = now () in
     l.laid_sized <- Mutex.protect pics_lock (fun () -> l.sized);
     let p = Layout.layout ~image:(pic_size l) ~width ~height styles l.doc in
+    trace "laid out %d wide: cascade %.0f, layout %.0f ms" width ((t1 -. t0) *. 1000.) ((now () -. t1) *. 1000.);
     l.laid <- Some (width, p);
     p
 
@@ -113,45 +128,59 @@ let layout_at l ~width ~height =
 type job = Fetch of loaded * string | Scale of pic * int * int
 
 let jobs : job Queue.t = Queue.create ()
+let urgent : job Queue.t = Queue.create ()     (* pixels for the screen: first *)
 let jobs_ready = Condition.create ()
 let workers = ref false
 
 let max_pics = 300
 
+
 let worker () =
-  let images = lazy (try Some (Images.connect ()) with _ -> None) in
+  let images = lazy (try Some (Images.connect ()) with e -> trace "no imaged: %s" (Printexc.to_string e); None) in
   let rec loop () =
     let job = Mutex.protect pics_lock (fun () ->
-        while Queue.is_empty jobs do Condition.wait jobs_ready pics_lock done;
-        Queue.pop jobs) in
+        while Queue.is_empty jobs && Queue.is_empty urgent do Condition.wait jobs_ready pics_lock done;
+        if Queue.is_empty urgent then Queue.pop jobs else Queue.pop urgent) in
     (match job, Lazy.force images with
-     | Fetch (l, url), Some images ->
+     | Fetch (l, url), Some images
+       when Mutex.protect pics_lock (fun () ->
+           (* once: a picture on screen is asked for first, then met again in order *)
+           if Hashtbl.mem l.started url then false else (Hashtbl.replace l.started url (); true)) ->
        let p =
          try
+           trace "fetch %s" url;
            let r = Loader.load url in
+           trace "fetched %s: %s, %d bytes" url r.Loader.status (String.length r.body);
            if String.length r.Loader.status > 0 && (r.status.[0] = '2' || r.status = "a file") then
              let nw, nh = Images.size ~images r.body in
+             trace "size %s: %d x %d" url nw nh;
              Some { data = r.body; nw; nh; scaled = []; asked = [] }
            else None
-         with _ -> None in
+         with e -> trace "failed %s: %s" url (Printexc.to_string e); None in
        Mutex.protect pics_lock (fun () ->
            Hashtbl.replace l.pics url p;
            if p <> None then l.sized <- l.sized + 1)
      | Scale (p, w, h), Some images ->
+       let t0 = now () in
        (match Images.decode ~images ~width:w ~height:h p.data with
-        | d -> Mutex.protect pics_lock (fun () ->
+        | d ->
+          trace "decoded %dx%d (from %dx%d, %d bytes) in %.0f ms" w h p.nw p.nh (String.length p.data)
+            ((now () -. t0) *. 1000.);
+          Mutex.protect pics_lock (fun () ->
             p.scaled <- ((w, h), d.image) :: (match p.scaled with x :: _ -> [ x ] | [] -> []))
-        | exception _ -> ())
+        | exception e -> trace "decode failed: %s" (Printexc.to_string e))
+     | Fetch _, Some _ -> ()
      | _, None -> ());
     loop () in
   loop ()
 
-let enqueue job =
+let enqueue ?(first = false) job =
   Mutex.protect pics_lock (fun () ->
-      Queue.push job jobs;
+      Queue.push job (match job with Scale _ -> urgent | Fetch _ -> if first then urgent else jobs);
       Condition.signal jobs_ready);
   if not !workers then begin
     workers := true;
+    trace "workers start";
     for _ = 1 to 3 do ignore (Thread.create worker ()) done
   end
 
@@ -172,7 +201,7 @@ let fetch_pictures l =
 (* a picture's pixels at w x h: drawn now if there, asked for if not *)
 let pic_image l src w h =
   let u = Url.resolve l.base src in
-  let ask = ref None in
+  let ask = ref None and first = ref false in
   let r = Mutex.protect pics_lock (fun () ->
       match Hashtbl.find_opt l.pics u with
       | Some (Some p) ->
@@ -184,8 +213,15 @@ let pic_image l src w h =
              ask := Some p
            end;
            None)
+      | Some None ->
+        (* on screen and not fetched yet: before the others *)
+        if not (Hashtbl.mem l.started u) && not (Hashtbl.mem l.hurried u) then begin
+          Hashtbl.replace l.hurried u (); first := true
+        end;
+        None
       | _ -> None) in
   (match !ask with Some p -> enqueue (Scale (p, w, h)) | None -> ());
+  if !first then enqueue ~first:true (Fetch (l, u));
   r
 
 (* ---- --dump, --layout, --time ---- *)
@@ -244,7 +280,9 @@ let window first =
   let lock = Mutex.create () in
   let arrived : (int * loaded) option ref = ref None in
   let loads = ref 0 in
-  let page_width = ref 880 in
+  (* the page's width in the window's first size (900, as below): the
+     first page is laid out once, at the width it is shown *)
+  let page_width = ref (900 - 8 - 14) in
   let st = { shown = load "about:start"; address = first; loading = None; back = []; forward = [];
              want_scroll = None; hover = None } in
   let start url =
@@ -265,6 +303,7 @@ let window first =
     start url in
   if first <> "about:start" then go first;
   Gui.run ~title:"Ariadne" ~tick:0.1 ~resizable:(400, 300) 900 640 st (fun ui st ->
+      let t_frame = now () in
       let g = ui.Gui.g and width = Gui.width ui and height = Gui.height ui in
       (* a page arrived: shown, if it is the one asked for last *)
       (match Mutex.protect lock (fun () -> let a = !arrived in arrived := None; a) with
@@ -334,6 +373,7 @@ let window first =
             | "\027[F" | "\027[4~" -> Gui.scroll_to_end ui 2
             | _ -> ()) ui.Gui.keys;
       let top_ref = ref box_y in
+      let t_paint = now () and drawn = ref 0 in
       Gui.scroll ~colour:page.background ui 2 box_x box_y box_w box_h (fun top ->
           top_ref := top;
           offset := box_y - top;
@@ -342,11 +382,12 @@ let window first =
               | Fill { x; y; w; h; color } ->
                 let yy = top + y in
                 if yy + h > box_y && yy < box_y + box_h && w > 0 && h > 0 then
-                  Gfx.fill g (box_x + x) yy w h color
+                  (incr drawn; Gfx.fill g (box_x + x) yy w h color)
               | Text { x; y; s; color; font } ->
                 (* y is the baseline: each glyph's mask, from the fonts *)
                 let yy = top + y in
                 if yy + font.descent > box_y && yy - font.ascent < box_y + box_h then begin
+                  incr drawn;
                   match font.ttf with
                   | Some _ ->
                     List.iter (fun (dx, dy, (b : Ttf.bitmap)) ->
@@ -392,6 +433,7 @@ let window first =
               | Some ("mailto" | "javascript" | "tel") -> ()
               | _ -> go target)
          | _ -> ());
+      let t_painted = now () in
       (* the status line *)
       Gfx.fill g 0 (height - 22) width 22 0xE8EDF2;
       let status = match st.loading, st.hover with
@@ -400,6 +442,10 @@ let window first =
         | None, None ->
           (if st.shown.title <> "" then st.shown.title ^ "  \xc2\xb7  " else "") ^ st.shown.response.status in
       ignore (Gfx.text ~max:((width - 16) / Gfx.char_w) g 8 (height - 19) status Gui.muted);
+      if now () -. t_frame > 0.05 then
+        trace "frame %.0f ms: before the page %.0f, the page %.0f (%d items drawn of %d)"
+          ((now () -. t_frame) *. 1000.) ((t_paint -. t_frame) *. 1000.) ((t_painted -. t_paint) *. 1000.)
+          !drawn (Array.length page.items);
       st)
 
 let () =
