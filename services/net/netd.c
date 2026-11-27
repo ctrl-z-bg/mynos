@@ -1286,9 +1286,15 @@ static void * listener(void * arg) {
 
 int main(void) {
   pthread_t t;
-  int port = -1;
+  int port = -1, registered = 0;
 
   int irq = NE2K_IRQ;
+  /* a Pi with a Wi-Fi: the service first. Its card may be known only
+     after 5 s (the cable's link) and half a minute more (wifid), and
+     programs give up after 5 s; requests wait for an address anyway */
+  if ((mynos_piDevices() & MYNOS_PI_WIFI) && (port = mynos_registryRegister(SERVICE)) >= 0 &&
+      pthread_create(&t, NULL, listener, ARG(port)) == 0)
+    registered = 1;
   if (vnet_init(mac, &irq) == 0) {
     card = VIRTIO;
     mynos_log("netd: virtio card, IRQ %d, %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -1298,12 +1304,7 @@ int main(void) {
     card = GENET;
     mynos_log("netd: GENET, %02x:%02x:%02x:%02x:%02x:%02x\n",
               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  } else if ((mynos_piDevices() & MYNOS_PI_WIFI) &&
-             /* (the service first: wifid may take half a minute, and
-                programs give up after 5 s; requests wait for an address) */
-             (port = mynos_registryRegister(SERVICE)) >= 0 &&
-             pthread_create(&t, NULL, listener, ARG(port)) == 0 &&
-             wifi_init(mac, 30, card_wake) == 0) {
+  } else if (registered && wifi_init(mac, 30, card_wake) == 0) {
     card = WIFI;                  /* (no cable's link: the Wi-Fi, wifid's) */
     mynos_log("netd: Wi-Fi (wifid), %02x:%02x:%02x:%02x:%02x:%02x\n",
               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -1344,7 +1345,7 @@ int main(void) {
   raw_recv(icmp_pcb, on_icmp, NULL);
   raw_bind(icmp_pcb, IP_ADDR_ANY);
 
-  if (card != WIFI) {
+  if (!registered) {
     port = mynos_registryRegister(SERVICE);
     if (port < 0) {
       mynos_log("netd: cannot register (%d)\n", port);

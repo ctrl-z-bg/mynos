@@ -2208,3 +2208,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   serves its frames (`wifi`, `wifirx`), netd uses the Wi-Fi when the
   cable has no link (`services/net/wifinet.c`); untried on the board.
   `mynos_piDevices` returns 0 on a PC (it returned the kernel's error).
+- **2026-11-27** — Data over the Pi 400's Wi-Fi: with no cable, netd's
+  card is the Wi-Fi; DHCP from the router (192.168.178.58), ping 2-6 ms
+  over WPA2. httpd had given up meanwhile (netd's service came after 5 s
+  of waiting for the cable's link): on a Pi with a Wi-Fi netd now
+  registers its service first.
