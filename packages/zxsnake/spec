@@ -1,0 +1,11 @@
+# The package zxsnake (tools/pkg-build.sh): a ZX Spectrum game for one
+# player, played by zxspectrum
+NAME=zxsnake
+VERSION=1.0
+DESCRIPTION='Snake (David Crespo, 2020), the classic for one player on the ZX Spectrum 48K, nine speeds, played by zxspectrum; type zxsnake'
+LICENSE=MIT
+DEPENDS=zxspectrum
+COMMANDS=zxsnake
+RUN='zxspectrum /disk/pkg/zxsnake/snake.tap'
+EXTRA='third_party/zxsnake/snake.tap third_party/zxsnake/LICENSE third_party/zxsnake/README.md'
+DOC=third_party/zxsnake/README.md
