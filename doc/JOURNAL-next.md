@@ -945,3 +945,29 @@ waited for a wifid. It returns 0 on an error now.
 
 **Lesson.** Log what you drop: the superframes were there from the first
 try, silent.
+
+## 2026-11-27 — Over the Wi-Fi: HTTP works, the keys installed twice
+
+**What the log said** (read over the Wi-Fi itself, from MyNOS's httpd at
+the Pi's Wi-Fi address): the scan works (seven networks: the
+superframes were the cause), DHCP, TLS, HTTP over WPA2. But a cycle:
+the keys installed, then the AP's deauthentication (reason 3, then
+class 3 frames, reason 7), the link up again, the handshake again.
+And always the same shape: a command's answer came only while the next
+command waited (SET_AUTH's, the pairwise key's, the group key's), and
+the second attempt was always answered.
+
+**Diagnosis (probable).** Two things. The second attempt installed each
+key twice: a key installed again has its packet counters reset, which
+an AP takes for replays; it ends the association. And the answers that
+wait: since the previous try wifid read function 2 at every poll, the
+chip saying a frame was there or not; brcmfmac never reads it empty,
+and the answers seemed to come only after the host wrote to the chip.
+
+**Fix.** Function 2 read only when the chip says a frame is there (the
+indication read again after each batch, as brcmfmac). A command is sent
+once; if its answer is late, a harmless command (WLC_GET_MAGIC) is sent
+after 300 ms and every second, and the answer awaited up to 5 s.
+
+**Lesson.** A retry is not harmless when the command has a state: a key
+is not a question.

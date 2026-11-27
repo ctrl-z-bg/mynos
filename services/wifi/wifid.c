@@ -381,9 +381,10 @@ static int handle_frames(int want_id, unsigned char * out, int max, int * status
     wr(sdc->base + SDIO_TOSBMAILBOX, 2);   /* acknowledged */
     if (m & 0x08) mynos_log("wifid: the firmware says it is ready\n");
   }
-  /* every frame waiting: read whether the chip said so or not (a frame
-     coming while the indication is acknowledged would wait for the next
-     one's otherwise) */
+  /* the frames waiting, when the chip says there are (as brcmfmac: an
+     empty function 2 read is never asked for nothing; the indication
+     comes again for a frame that comes meanwhile) */
+  if (!(st & I_HMB_FRAME_IND)) return r;
   while ((len = read_frame(frame)) > 0) {
     int ch = frame[5] & 0xF, off = frame[7];
     unsigned char * p = frame + off;
@@ -410,7 +411,8 @@ static int handle_frames(int want_id, unsigned char * out, int max, int * status
       events++;
       seen_ev++;
       on_event(p, len - off);
-    } else if (ch == 2 && len - off > 4 + p[3] * 4 + 14) {
+    } else if (ch == 2) {
+      if (len - off < 4 + p[3] * 4 + 14) continue;   /* (no Ethernet frame) */
       /* data: BDC's header, an Ethernet frame; EAPOL's kept */
       const unsigned char * eth = p + 4 + p[3] * 4;
       int n = len - off - 4 - p[3] * 4;
@@ -432,31 +434,48 @@ static int handle_frames(int want_id, unsigned char * out, int max, int * status
 
 /* a command to the firmware (BCDC), its reply waited for: the reply's
    length, or -1 */
+/* a harmless command (WLC_GET_MAGIC), its answer not waited for: some
+   answers wait in the chip until the host writes something */
+static void nudge(void)
+{
+  unsigned char * p = frame + 12;
+  put32(p, 0);
+  put32(p + 4, 4);
+  put32(p + 8, (unsigned int)++reqid << 16);
+  put32(p + 12, 0);
+  put32(p + 16, 0);
+  send_frame(0, 20);
+}
+
+/* a command to the firmware (BCDC), its reply waited for up to 5 s (sent
+   once: a key installed twice has its counters reset): the reply's
+   length, or -1 */
 static int dcmd(unsigned int cmd, int set, const void * data, int len, void * reply, int max)
 {
   unsigned char * p = frame + 12;
-  int i, r, status = 0, attempt;
+  int i, r, status = 0;
+  unsigned short id;
+  unsigned char seq = tx_seq;
   if (len > FRAME - 64) return -1;
-  for (attempt = 0; attempt < 2; attempt++) {
-    unsigned char seq = tx_seq;
-    put32(p, cmd);
-    put32(p + 4, (unsigned int)len);
-    put32(p + 8, (unsigned int)++reqid << 16 | (set ? 2u : 0));
-    put32(p + 12, 0);
-    memcpy(p + 16, data, (size_t)len);
-    seen_ctl = seen_ev = seen_data = seen_other = 0;
-    if (send_frame(0, 16 + len) < 0) { mynos_log("wifid: a command not sent\n"); return -1; }
-    for (i = 0; i < 2000; i++) {
-      r = handle_frames(reqid, reply, max, &status);
-      if (r >= 0) return r;
-      if (r == -1) { mynos_log("wifid: command %u failed (%d)\n", cmd, status); return -1; }
-      mynos_sleep(1000);
-    }
-    mynos_log("wifid: command %u (id %u, seq %u, window %u): no answer; meanwhile %d control"
-              " (%d %d %d, %d %d %d), %d events, %d data\n", cmd, reqid, seq, tx_max, seen_ctl,
-              seen_ids[0][0], seen_ids[0][1], seen_ids[0][2],
-              seen_ids[1][0], seen_ids[1][1], seen_ids[1][2], seen_ev, seen_data);
+  put32(p, cmd);
+  put32(p + 4, (unsigned int)len);
+  id = ++reqid;
+  put32(p + 8, (unsigned int)id << 16 | (set ? 2u : 0));
+  put32(p + 12, 0);
+  memcpy(p + 16, data, (size_t)len);
+  seen_ctl = seen_ev = seen_data = seen_other = 0;
+  if (send_frame(0, 16 + len) < 0) { mynos_log("wifid: a command not sent\n"); return -1; }
+  for (i = 0; i < 5000; i++) {
+    r = handle_frames(id, reply, max, &status);
+    if (r >= 0) return r;
+    if (r == -1) { mynos_log("wifid: command %u failed (%d)\n", cmd, status); return -1; }
+    if (i == 300 || (i > 300 && i % 1000 == 0)) nudge();
+    mynos_sleep(1000);
   }
+  mynos_log("wifid: command %u (id %u, seq %u, window %u): no answer; meanwhile %d control"
+            " (%d %d %d, %d %d %d), %d events, %d data\n", cmd, id, seq, tx_max, seen_ctl,
+            seen_ids[0][0], seen_ids[0][1], seen_ids[0][2],
+            seen_ids[1][0], seen_ids[1][1], seen_ids[1][2], seen_ev, seen_data);
   return -1;
 }
 
