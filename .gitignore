@@ -53,6 +53,8 @@ system/vblkd
 services/virtio/vblkd
 services/sd/sdhcid
 system/sdhcid
+services/usb/usbd
+system/usbd
 services/net/netd
 tests/net/sockets
 tests/net/netd

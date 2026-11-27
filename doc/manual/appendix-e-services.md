@@ -461,6 +461,14 @@ changes nothing: the keys reach displayd already translated by consoled.
 Its line mode edits as consoled does, and Up and Down bring back the
 same lines, `/disk/.history`. Closing the window kills `sh` and what it started.
 
+**keys/1.** consoled serves a second service, `keys`, on a thread of its
+own: request 0 `keys` (codes:S), a keyboard's keys pressed and released
+as a PC keyboard sends them (scan codes, set 1, E0 before the grey
+keys), which go where the PS/2 keyboard's go. It is for a keyboard whose
+driver is not consoled's own: the USB's (`usbd`, whose controller has
+the mouse too). The io privilege only. Its own thread, because the main
+one may be waiting in a read for these very keys.
+
 ## E.12 netd: the network
 
 `netd` (`services/net/netd.c`, C, 2026, a `driver`), registered as
@@ -603,6 +611,18 @@ no graphical session: displayd logs it at boot and ends with code 0. Protocol **
   with the size asked (a double click on the title asks for the whole
   screen, or the size before). The program answers with the request
   `resize` and new pixels; until then the old ones show.
+- **pointer/1**: displayd's second service, `pointer`, on a thread of
+  its own: request 0 `move` (dx, dy, buttons, wheel), a mouse's report
+  from its driver (`usbd`, a USB mouse): dy positive is down, the
+  buttons 1 left, 2 right, 4 middle, the wheel positive up. The io
+  privilege only.
+
+**usbd** (the USB) drives an xHCI controller: QEMU's `qemu-xhci`
+(`USB=1` for `tools/run-qemu.sh`), a Raspberry Pi 4's or 400's VL805.
+It finds its devices on the root ports (no hubs yet), and those that
+speak HID's boot protocol, keyboards and mice, become keys for `keys`
+(a held key repeated: 500 ms, then 30 a second) and reports for
+`pointer`. Without an xHCI it ends at once.
 
 ## E.15 soundd: sound
 

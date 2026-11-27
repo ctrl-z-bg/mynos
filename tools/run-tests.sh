@@ -15,7 +15,7 @@
 #   i  the graphical session again: Graphics, keys, resizing, Packages,
 #      Text, Studio
 #   j  (AArch64) a Raspberry Pi 3: its UART, SD card, screen, power off;
-#      a Pi 4: its GIC-400, SD card, power off
+#      a Pi 4: its GIC-400, SD card, power off; the USB (xHCI) on virt
 # Environment: WAIT seconds to let the system run (default 10); SHOTS a
 # directory where the graphical session's screens are kept; LANES the
 # lanes to run (default "a b c d e f g h i", and j on AArch64: the checks
@@ -49,7 +49,7 @@ logs=$tmp/logs logn=$tmp/logn
 # files, monitor sockets and host ports); within a lane, one after the
 # other. Each lane appends its logs to its own part of the log, and writes
 # the results the checks need to a file; the checks run once all are done.
-results="virtio_disk virtio_net virtio_gui raspi_disk raspi_fb raspi_gui raspi_text raspi_off raspi4_disk raspi4_off disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload sound_ok edit_utf8 log_shown"
+results="virtio_disk virtio_net virtio_gui raspi_disk raspi_fb raspi_gui raspi_text raspi_off raspi4_disk raspi4_off usb_gui disk_reads files_ok net_fetched disk_written fat_checks nocom2 rebooted reboots_ok gui_ok powered_off gui_hangup pkgwin_ok history_saved kilo_saved edit_saved sh_saved trace_calls trace_json agent_marks serial_same_sh httpd_private httpd_upload sound_ok edit_utf8 log_shown"
 save_results() {
     for v in $results; do
         eval "x=\${$v:-}"            # only what the lane found: an empty
@@ -554,6 +554,75 @@ PY
 fi
 }
 
+sec_usb() {
+# the USB (usbd, mynos-btq.8.2-3; AArch64's virt, as a Pi 4's VL805 is
+# one more xHCI): QEMU's qemu-xhci with a USB keyboard and a USB mouse
+# only (no virtio ones), one processor (the suites run side by side: the
+# load), a line typed on the keyboard; in the graphical
+# session the mouse moved onto the welcome window's Clock button and
+# clicked: the Clock opens
+usb_gui=
+if [ "${ARCH:-i386}" = aarch64 ] && [ -f system/usbd ]; then
+    : > "$tmp/logusb"
+    USB=1 SMP=1 MEM=512 tools/run-qemu.sh "$ocamlrun" \
+        services/registry/registry services/fs/memrofs/memrofsd \
+        system/ramdisk.dsk \
+        -- -display none -serial null -serial "file:$tmp/logusb" \
+           -monitor "unix:$tmp/mon-usb,server,nowait" &
+    qemu=$!
+    i=0
+    while [ $i -lt 90 ] && ! { grep -aq 'usbd: port .*: a mouse' "$tmp/logusb" &&
+                               grep -aq 'mynos:/' "$tmp/logusb"; } 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    sleep 2
+    tools/type-keys.py "$tmp/mon-usb" 'X=ok; echo usbkeys-$X\n'; sleep 4
+    tools/type-keys.py "$tmp/mon-usb" 'gui\n'
+    umon() { printf '%s\n' "$1" | socat - "UNIX-CONNECT:$tmp/mon-usb" >/dev/null; }
+    # the welcome window drawn, then the pointer (at 512,384) moved left
+    # and down onto Clock (235,428), a click; the Clock's title, focused
+    i=0
+    while [ $i -lt 20 ]; do
+        sleep 3
+        umon "screendump $tmp/usb.ppm"; sleep 1
+        python3 - "$tmp/usb.ppm" <<'PY' && break
+import sys
+d = open(sys.argv[1], "rb").read().split(b"\n", 3)
+w, h = map(int, d[1].split())
+p = d[3]
+px = lambda x, y: (p[(y * w + x) * 3] << 16) | (p[(y * w + x) * 3 + 1] << 8) | p[(y * w + x) * 3 + 2]
+sys.exit(0 if (w, h) == (1024, 768) and px(140, 428) == px(330, 428) != 0 else 1)
+PY
+        i=$((i + 1))
+    done
+    k=0
+    while [ $k -lt 3 ] && [ -z "$usb_gui" ]; do
+        j=0
+        while [ $j -lt 14 ]; do umon "mouse_move -20 0"; j=$((j + 1)); done
+        umon "mouse_move 0 18"; umon "mouse_move 0 18"
+        sleep 1; umon "mouse_button 1"; sleep 0.3; umon "mouse_button 0"
+        i=0
+        while [ $i -lt 6 ]; do
+            sleep 2
+            umon "screendump $tmp/usb.ppm"; sleep 1
+            python3 - "$tmp/usb.ppm" <<'PY' && { usb_gui=yes; break; }
+import sys
+d = open(sys.argv[1], "rb").read().split(b"\n", 3)
+w, h = map(int, d[1].split())
+p = d[3]
+px = lambda x, y: (p[(y * w + x) * 3] << 16) | (p[(y * w + x) * 3 + 1] << 8) | p[(y * w + x) * 3 + 2]
+sys.exit(0 if (w, h) == (1024, 768) and px(150, 114) == 0x2D6CA2 else 1)
+PY
+            i=$((i + 1))
+        done
+        k=$((k + 1))
+    done
+    umon quit
+    wait $qemu || true
+    cat "$tmp/logusb" >> "$part"
+fi
+}
+
 sec_reboots() {
 # restarting again and again (shutdown -r): after a reset memory holds the
 # previous run's data, which the kernel once read as its own (a page given
@@ -1026,7 +1095,7 @@ if [ -f tests/net/ramdisk.dsk ]; then
     tools/net-peer.py https 47444 $tls/untrusted.pem $tls/untrusted.key & https2_pid=$!
     tools/net-peer.py https 47445 $tls/wrongname.pem $tls/wrongname.key & https3_pid=$!
     tools/net-peer.py llm 47090 & llm_pid=$!
-    NET=1 HTTP=47080 timeout "${WAIT_NET:-40}" tools/run-qemu.sh "$ocamlrun" \
+    NET=1 HTTP=47080 timeout $((${WAIT_NET:-40} + 20)) tools/run-qemu.sh "$ocamlrun" \
         services/registry/registry services/fs/memrofs/memrofsd \
         tests/net/ramdisk.dsk \
         -- -display none -serial null -serial "file:$logn" &
@@ -1034,6 +1103,12 @@ if [ -f tests/net/ramdisk.dsk ]; then
     i=0
     while [ $i -lt "${WAIT_NET:-40}" ] &&
           ! grep -aq 'net: all checks passed\|net: FAIL\|PANIC' "$logn" 2>/dev/null; do
+        sleep 1; i=$((i + 1))
+    done
+    # (the host's fetch of MyNOS's page, if not yet: it came after the
+    # guest's last check on a loaded machine, and QEMU was already gone)
+    i=0
+    while [ $i -lt 15 ] && [ ! -s "$tmp/fetched" ] && kill -0 $fetch_pid 2>/dev/null; do
         sleep 1; i=$((i + 1))
     done
     kill $qemu $echo_pid $udp_pid $fetch_pid $https_pid $https2_pid $https3_pid $llm_pid 2>/dev/null || true
@@ -1258,8 +1333,16 @@ s7_agent() {
     step 7.3-agent-services
     # the agent writes OCaml: run once it type-checks, refused when not
     # (the fake model calls the tool named in brackets)
+    n_agent=$(grep -ac 'tokens in, ' "$log7")
     tools/type-keys.py "$mon7" "agent -y '[run_ocaml] let () = print_endline (string_of_int (6 * 7) ^ {shift-apostrophe}-from-ocaml{shift-apostrophe})'\n"
     waitfor "42-from-ocaml" 90
+    # (the agent done, its last line: the next command typed sooner lost
+    # its first key to it, still reading the console)
+    i=0
+    while [ $i -lt 60 ] && [ "$(grep -ac 'tokens in, ' "$log7")" -le "$n_agent" ]; do
+        sleep 1; i=$((i + 1))
+    done
+    sleep 1
     tools/type-keys.py "$mon7" "agent -y '[run_ocaml] let () = print_endline 42'\n"
     waitfor "It does not compile" 90
     sleep 2
@@ -1468,7 +1551,11 @@ for lane in ${LANES:-$lanes_all}; do
             f) timed sec_seventh_b ;;
             g) timed sec_seventh_c ;;
             h) timed sec_seventh_d ;;
-            j) timed sec_raspi; timed sec_raspi4 ;;
+            # (j, three emulated boots more, starts once the short lanes
+            # are done: at the start, with all of them, the machine was so
+            # loaded that other lanes' timed checks failed; it still ends
+            # before the longest lane)
+            j) sleep "${LANE_J_DELAY:-100}"; timed sec_raspi; timed sec_raspi4; timed sec_usb ;;
         esac
         save_results "$lane"
     ) &
@@ -1882,6 +1969,11 @@ if [ -n "$raspi" ]; then
     else echo "FAIL  raspi4: a file written on a Pi 4's SD card, read by the host"; fail=1; fi
     if [ -n "$raspi4_off" ]; then echo "ok    raspi4: turned off by the watchdog (QEMU ended)"
     else echo "FAIL  raspi4: turned off by the watchdog (QEMU ended)"; fail=1; fi
+    expect "usbd: port 5: a keyboard"
+    expect "usbd: port 6: a mouse"
+    expect "usbkeys-ok"
+    if [ -n "$usb_gui" ]; then echo "ok    usb: a USB mouse clicked the welcome window's Clock"
+    else echo "FAIL  usb: a USB mouse clicked the welcome window's Clock"; fail=1; fi
 fi
 reject "PANIC"
 reject "page fault (?)"

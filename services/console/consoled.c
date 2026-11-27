@@ -61,6 +61,7 @@
 #include <mynos_console.h>
 #include <mynos_wire.h>
 #include <mynos_virtio.h>
+#include <pthread.h>
 #include "../keyboard/keymap.h"
 
 #define LINE_MAX 256
@@ -1037,10 +1038,77 @@ static void describe(wire_writer * w)
     requests, sizeof requests / sizeof requests[0]);
 }
 
+/* ---- keys from another driver: the service "keys" (keys/1) ----
+   A keyboard whose driver is not consoled's own (USB's: usbd, whose
+   controller has the mouse too) sends its keys here, as a PC keyboard's
+   scan codes (set 1, E0 before the grey keys), which go where the PS/2
+   keyboard's go. A service of its own, on a thread of its own: the main
+   thread may be waiting in a read for these very keys. Its requests use
+   the C library (wire's buffers): a POSIX thread, its own TLS (consoled's
+   other threads share main's, and keep away from it) */
+
+#define KEYS_SERVICE  "keys"
+#define KEYS_PROTOCOL "keys/1"
+
+static const wire_request_doc keys_requests[] = {
+  { 0, "keys", "codes:S", "U",
+    "Keys pressed and released, as a PC keyboard sends them (scan codes, set 1, "
+    "E0 before the grey keys). The io privilege only (a keyboard's driver)." },
+};
+
+static void * keys_service(void * arg)
+{
+  int port = mynos_registryRegister(KEYS_SERVICE);
+  (void)arg;
+  if (port < 0) {
+    mynos_log("consoled: cannot register " KEYS_SERVICE " (%d)\n", port);
+    return NULL;
+  }
+  for (;;) {
+    int channel = mynos_listenPort(port), caller, info;
+    mynos_msg_t * msg;
+    wire_reader r;
+    wire_writer w;
+    const char * id, * codes;
+    unsigned int idlen, n, i;
+    if (channel < 0) continue;
+    if (mynos_recv(channel, &msg, 0, 1000) < 0) { mynos_freeChannel(channel); continue; }
+    caller = mynos_channelPeer(channel);
+    wire_writer_init(&w);
+    wire_reader_init(&r, msg->start, msg->size);
+    id = wire_get_string(&r, &idlen);
+    if (!r.error && idlen == strlen(WIRE_DESCRIBE) && !memcmp(id, WIRE_DESCRIBE, idlen)
+        && wire_at_end(&r))
+      wire_reply_description(&w, KEYS_PROTOCOL,
+                             "Keys from a keyboard's driver into the console (consoled).",
+                             keys_requests, sizeof keys_requests / sizeof keys_requests[0]);
+    else if (!r.error && idlen == strlen(KEYS_PROTOCOL) && !memcmp(id, KEYS_PROTOCOL, idlen)
+             && wire_get_int(&r) == 0 && (codes = wire_get_string(&r, &n), !r.error)
+             && wire_at_end(&r)) {
+      info = caller > 0 ? mynos_processInfo(caller) : -1;
+      if (info < 0 || !(info & MYNOS_PRIV_IO))
+        wire_reply_error(&w, "denied: a keyboard's driver only (the io privilege)");
+      else {
+        mynos_P(kb_lock);
+        for (i = 0; i < n; i++) scancode((unsigned char)codes[i]);
+        mynos_V(kb_lock);
+        wire_reply_ok(&w);
+      }
+    } else
+      wire_reply_error(&w, "invalid: " KEYS_SERVICE " speaks " KEYS_PROTOCOL);
+    if (!w.error) mynos_send(channel, w.buf, w.len, 0);
+    wire_writer_free(&w);
+    mynos_freeMsg(&msg);
+    mynos_freeChannel(channel);
+  }
+  return NULL;
+}
+
 int main()
 {
   int irq, port;
   char * stack;
+  pthread_t keys_thread;
 
   lock = mynos_initSem(1);
   hist_lock = mynos_initSem(1);
@@ -1088,6 +1156,8 @@ int main()
     mynos_threadCreate(serial_thread, (void *)irq, stack + 0x4000, 0);
   } else
     mynos_log("consoled: no serial input (%d)\n", irq);
+
+  pthread_create(&keys_thread, NULL, keys_service, NULL);
 
   port = mynos_registryRegister(CONSOLE_SERVICE);
   if (port < 0) {

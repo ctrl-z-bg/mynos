@@ -2088,3 +2088,17 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   firmware), and only then lets a driver map the bridge and the window;
   libmynos's PCI functions reach bus 0 and 1 through the bridge. QEMU's
   `raspi4b` has no PCIe: nothing is touched there.
+- **2026-11-27** — The USB (mynos-btq.8.2, .8.3): `usbd` drives an xHCI
+  (reset, rings, ports, enumeration, control transfers) and HID's boot
+  keyboards and mice on the root ports (no hubs yet); their keys go to
+  consoled's new `keys` service, their reports to displayd's new
+  `pointer` service. Working on QEMU's `qemu-xhci` (`USB=1`; the suite's
+  lane j types on a USB keyboard and clicks with a USB mouse). On a Pi 4
+  or 400 it is the VL805 behind the kernel's PCIe: not yet tried there
+  (the rings and contexts are kept out of the caches by hand: the
+  BCM2711's PCIe is not coherent).
+- **2026-11-27** — The stress test's rare crash on four processors
+  (mynos-4dz) was the test's: a round's threads reused stacks whose
+  previous threads were still returning. Fixed; lane j starts later and
+  three checks wait for what they look for: the three suites at once
+  are green twice in a row.

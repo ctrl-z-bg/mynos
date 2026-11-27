@@ -414,8 +414,16 @@ static void * sleeper(void * arg) {
   return NULL;
 }
 
+/* this process's threads, as the kernel counts them (a thread counts
+   until it has really ended) */
+static unsigned int threads_now(void) {
+  unsigned int st[6];
+  return mynos_procstat(getpid(), st) == 0 ? st[4] : 0;
+}
+
 static int timer_round(int same) {
-  int i;
+  int i, ms;
+  unsigned int base = threads_now();
   woken = 0;
   for (i = 0; i < NTHREADS; i++) {
     /* the same deadline for all, or three groups of equal ones */
@@ -425,6 +433,11 @@ static int timer_round(int same) {
       return 0;
   }
   for (i = 0; i < NTHREADS; i++) mynos_P(done_sem);
+  /* the threads ended, not only counted: each said so (done_sem) before
+     returning on its stack, which the next round gives a new thread. On
+     several processors a thread was still returning while the next round
+     wrote its stack's first frame: it returned to 0xC (mynos-4dz) */
+  for (ms = 0; ms < 2000 && threads_now() > base; ms++) mynos_sleep(1000);
   return woken == NTHREADS;
 }
 
@@ -439,12 +452,15 @@ static void * ponger(void * arg) {
 }
 
 static int pingpong(int n) {
-  int i;
+  int i, ms;
+  unsigned int base = threads_now();
   pings = 0;
   ping = mynos_initSem(0);
   pong = mynos_initSem(0);
   mynos_threadCreate(ponger, (void *)n, pstack + sizeof pstack, 0);
   for (i = 0; i < n; i++) { mynos_V(ping); mynos_P(pong); }
+  /* (ponger ended, not only done: its stack is the next one's) */
+  for (ms = 0; ms < 2000 && threads_now() > base; ms++) mynos_sleep(1000);
   mynos_freeSem(ping);
   mynos_freeSem(pong);
   return pings == n;

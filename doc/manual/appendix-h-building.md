@@ -224,7 +224,9 @@ runs `kernel8.img` on QEMU's Raspberry Pi 3 (`MACHINE=raspi4b`: its Pi
 4, the same kernel): its four processors, its 1 GB, the console on the
 screen (the framebuffer) and the terminal (the UART), the disk on its SD
 card. It has no network, keyboard or mouse yet: the terminal is the
-keyboard, and Ctrl-Alt-End ends the graphical session. A real Pi has
+keyboard, and Ctrl-Alt-End ends the graphical session. (`USB=1` gives
+QEMU's `virt` a USB keyboard and mouse on an xHCI, as a Pi 4's: `usbd`.)
+A real Pi has
 the same limits for now: they are MyNOS's drivers (USB, Ethernet,
 Wi-Fi), not QEMU's. `tools/make-sd-raspi.sh` makes an SD card image
 for a real Pi 3, Zero 2 W, 4 or 400 (`tmp/mynos-raspi.img`, 2 GB;

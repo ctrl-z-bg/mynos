@@ -1492,6 +1492,72 @@ static void * mouse_thread(void * arg)
   return NULL;
 }
 
+/* ---- a mouse whose driver is not displayd's own: the service
+   "pointer" (pointer/1), on a thread of its own. USB's (usbd, whose
+   controller has the keyboard too) sends its reports here: motion (dy
+   positive: down), the buttons (1 left, 2 right, 4 middle), the wheel
+   (positive: up, away from the user) ---- */
+
+#define POINTER_SERVICE  "pointer"
+#define POINTER_PROTOCOL "pointer/1"
+
+static const wire_request_doc pointer_requests[] = {
+  { 0, "move", "(dx:I,dy:I,buttons:I,wheel:I)", "U",
+    "A mouse's report: its motion (dy positive: down), its buttons (1 left, 2 right, "
+    "4 middle), its wheel (positive: up). The io privilege only (a mouse's driver)." },
+};
+
+static void * pointer_service(void * arg)
+{
+  int port = mynos_registryRegister(POINTER_SERVICE);
+  (void)arg;
+  if (port < 0) {
+    mynos_log("displayd: cannot register " POINTER_SERVICE " (%d)\n", port);
+    return NULL;
+  }
+  for (;;) {
+    int ch = mynos_listenPort(port), caller, info;
+    mynos_msg_t * m;
+    wire_reader r;
+    wire_writer w;
+    const char * id;
+    unsigned int idlen;
+    long long dx, dy, buttons, wz;
+    if (ch < 0) continue;
+    if (mynos_recv(ch, &m, 0, 1000) < 0) { mynos_freeChannel(ch); continue; }
+    caller = mynos_channelPeer(ch);
+    wire_writer_init(&w);
+    wire_reader_init(&r, m->start, m->size);
+    id = wire_get_string(&r, &idlen);
+    if (!r.error && idlen == strlen(WIRE_DESCRIBE) && !memcmp(id, WIRE_DESCRIBE, idlen)
+        && wire_at_end(&r))
+      wire_reply_description(&w, POINTER_PROTOCOL,
+                             "A mouse's reports from its driver into the display server.",
+                             pointer_requests, sizeof pointer_requests / sizeof pointer_requests[0]);
+    else if (!r.error && idlen == strlen(POINTER_PROTOCOL) && !memcmp(id, POINTER_PROTOCOL, idlen)
+             && wire_get_int(&r) == 0 && (dx = wire_get_int(&r), dy = wire_get_int(&r),
+                                          buttons = wire_get_int(&r), wz = wire_get_int(&r),
+                                          !r.error) && wire_at_end(&r)) {
+      info = caller > 0 ? mynos_processInfo(caller) : -1;
+      if (info < 0 || !(info & MYNOS_PRIV_IO))
+        wire_reply_error(&w, "denied: a mouse's driver only (the io privilege)");
+      else {
+        pthread_mutex_lock(&lock);
+        pointer_to(px + (int)dx, py + (int)dy, (int)buttons & 7);
+        if (wz) wheel(-(int)wz);           /* (wheel() takes the PS/2 mouse's sign) */
+        pthread_mutex_unlock(&lock);
+        wire_reply_ok(&w);
+      }
+    } else
+      wire_reply_error(&w, "invalid: " POINTER_SERVICE " speaks " POINTER_PROTOCOL);
+    if (!w.error) mynos_send(ch, w.buf, w.len, 0);
+    wire_writer_free(&w);
+    mynos_freeMsg(&m);
+    mynos_freeChannel(ch);
+  }
+  return NULL;
+}
+
 /* ---- the keys: the console, raw, while the session lasts ---- */
 
 /* the length of the key at s (n bytes left): a UTF-8 character, a
@@ -2040,6 +2106,7 @@ int main(void)
   } else
     mynos_log("displayd: no PS/2 mouse (%d)\n", sem);
   vpointer_start();
+  pthread_create(&t, NULL, pointer_service, NULL);   /* a USB mouse's (usbd) */
 
   pthread_create(&t, NULL, timer_thread, NULL);
 

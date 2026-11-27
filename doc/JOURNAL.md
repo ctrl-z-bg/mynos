@@ -4365,3 +4365,61 @@ more than 0.1 s apart through the emulated UART. displayd now waits
 
 **Lesson.** "The platform's device range" is too coarse once a device
 inside it may be absent: such a device gets its own gate.
+
+## 2026-11-27 — The USB, on QEMU first
+
+**Goal.** The Pi 400's keyboard is USB, behind the VL805, an xHCI
+controller behind PCIe. QEMU's `raspi4b` has none of it, but QEMU's
+`virt` has `qemu-xhci`: the driver was written and tried there, the Pi's
+differences kept small (the controller found on PCI either way; its
+DMA kept out of the caches by hand, `dc cvac` and `dc civac`, which
+EL0 may use).
+
+**A design turned back.** The keys first went to consoled as a new
+request of `console/1`. But consoled serves its requests on one thread,
+which waits inside a `read` for the next key: a key sent to it as a
+request would wait for that thread, which waits for the key. consoled
+got a second service instead, `keys/1`, on a POSIX thread of its own
+(its other threads share main's TLS and keep away from the C library;
+this one needs `wire`'s buffers). displayd likewise got `pointer/1`.
+`console/1` is unchanged.
+
+**Findings.** QEMU aborted on QMP's `input-send-event` aimed at one
+device with no display (`qemu-fixed-text-console.device not found`):
+the test boots without the virtio keyboard and pointer instead, so that
+the monitor's `sendkey` and `mouse_move` reach the USB ones.
+
+**Lesson.** Before adding a request to a server, look at what its
+serving thread waits for.
+
+## 2026-11-27 — The stress test's "jump to 0xC" was the test's (mynos-4dz)
+
+**Symptom.** On x86-64 and AArch64, with four processors, the stress
+test died now and then right after its IPC check: `process 3: a jump to
+0x12C` (or 0xC, 0x8). Never alone, never under a plain load: only in
+the three suites at once, and more often as the suites got heavier.
+
+**Cause.** The test. Its timers' round starts 16 threads, each on
+`stacks[i]`, and waits for each one's `V(done_sem)`; the next round
+starts 16 more on the same stacks. But a thread says "done" and then
+returns, on its stack, to the thread start's exit: on another processor
+the next round's thread i had already written its first frame there,
+and the return found a word of it. `pingpong` reused its ponger's stack
+the same way.
+
+**Fix.** Each round waits for its threads to have ended, as the kernel
+counts them (`mynos_procstat`'s threads), before the stacks are used
+again.
+
+**And the suites' load.** Three suites at once run about 80 emulated
+processors on 16 cores. Lane j (three emulated boots more) pushed
+checks that wait a fixed time over their budget: lane j now starts
+100 s later (when the short lanes are done; it still ends before the
+longest), the USB boot has one processor, and three checks wait for
+what they look for instead: the agent's last line before the next
+command is typed (its first key went to the agent, still reading the
+console: `sh: gent: command not found`), the host's fetch of MyNOS's
+page before the network boot is stopped.
+
+**Lesson.** "Done" said by a thread is not "ended": its stack is still
+its own until it has returned.

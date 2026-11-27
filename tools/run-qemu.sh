@@ -48,6 +48,9 @@
 #            record it; run-demo.sh picks one
 #   VERBOSE  if set, kernel messages stay on screen after boot (they always
 #            go to the second serial port)
+#   USB      if set, an xHCI controller (qemu-xhci) with a USB keyboard and
+#            a USB mouse (usbd); on aarch64's virt instead of the virtio
+#            keyboard and tablet
 #   POINTER  aarch64: tablet (the default: absolute, no grab in a window)
 #            or mouse (relative, as the PC's PS/2 mouse: QEMU's monitor's
 #            mouse_move, which the graphical tests use)
@@ -149,7 +152,8 @@ set -- ${cpu:+-cpu "${CPU:-$cpu}"} \
     ${KVM:+-accel kvm} ${smp:+-smp $smp} \
     ${DISK:+-drive file=$DISK,format=raw,if=$disk_if} ${DISK:+$disk_dev} \
     ${NET:+-netdev user,id=n0${HTTP:+,hostfwd=tcp:127.0.0.1:$HTTP-:80}${UDP:+,hostfwd=udp::$UDP-:$UDP}} \
-    ${NET:+-device $net_dev} $audio "$@"
+    ${NET:+-device $net_dev} $audio \
+    ${USB:+-device qemu-xhci -device usb-kbd -device usb-mouse} "$@"
 mem=${MEM:-32} archive=
 if [ "${ARCH:-i386}" = aarch64 ]; then
     [ "$mem" -lt 128 ] && mem=128
@@ -169,10 +173,12 @@ if [ "${ARCH:-i386}" = aarch64 ]; then
             -device "loader,file=$archive,addr=0x04000000,force-raw=on" "$@"
     else
     # shellcheck disable=SC2086
+    input="-device virtio-keyboard-pci -device virtio-${POINTER:-tablet}-pci"
+    [ -n "${USB:-}" ] && input=
+    # shellcheck disable=SC2086
     set -- -M virt -kernel "$kernel" -m "$mem" $nonic \
         -device "loader,file=$archive,addr=0x44000000,force-raw=on" \
-        -device virtio-keyboard-pci -device "virtio-${POINTER:-tablet}-pci" \
-        -device virtio-gpu-pci "$@"
+        $input -device virtio-gpu-pci "$@"
     fi
 else
     set -- -kernel "$kernel" ${modules:+-initrd "$modules"} -m "$mem" \
