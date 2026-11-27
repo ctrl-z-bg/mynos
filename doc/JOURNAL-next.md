@@ -796,8 +796,9 @@ the same: a driver tried only there never learns that they are two.
 keyboard typed into the shell and `gui` started; a USB mouse moved the
 pointer for a fraction of a second, then never again.
 
-**Diagnosis** (probable: the log of the try that worked, which would
-show the failed transfers, was not read). On a failed interrupt transfer (a stall, a transaction
+**Diagnosis** (a guess, not confirmed: the log of the next try, where
+the mouse worked, shows no failed transfer at all). On a failed
+interrupt transfer (a stall, a transaction
 error: likelier for a low-speed mouse reached through the hub's
 transaction translator, many reports a second) the xHCI halts the
 endpoint. usbd queued the next transfer as after a good one; a halted
@@ -809,7 +810,16 @@ Halted, usbd sends Reset Endpoint (keeping the data toggle, but for a
 stall, which `CLEAR_FEATURE(ENDPOINT_HALT)` clears on the device too)
 and Set TR Dequeue Pointer past the failed TRB, then reads again. The
 ports' changes, the root's and the hubs' (their status change
-endpoints now read), are logged and acknowledged. The mouse works.
+endpoints now read), are logged and acknowledged. The mouse works, but
+that try's log has no `a transfer failed`: the first try's stop is
+still unexplained; if it comes back, the log will say what it was.
+
+**The board's USB tree** (that log): the VL805's hub, 2109:3431, high
+speed, 4 ports, on root port 1; a mouse (093a:2510) on its port 3 and
+the 400's keyboard (04d9:0007) on its port 4, both **low** speed:
+reached through the hub's transaction translator, the path QEMU's
+full-speed `usb-hub` never takes, and it works.
 
 **Lesson.** An error path that "goes on as before" is a path never
-tried: on real hardware it is the first one taken.
+tried; and a fix that came with the cure is not the cure until a log
+says so.
