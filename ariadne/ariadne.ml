@@ -4,6 +4,7 @@
      ariadne --dump URL             the page as text, and its links
      ariadne --layout URL [WIDTH]   the page's display list, laid out WIDTH wide
      ariadne --time URL             the time of each stage
+     ariadne --check-images         imaged checked (tools/run-tests.sh)
 
    A page is loaded (Loader), decoded (Encoding), parsed by the HTML
    Standard's parser (Html, into Dom); its style sheets are fetched and
@@ -56,7 +57,7 @@ let trace fmt = Printf.ksprintf (fun m ->
 (* a style sheet's text, fetched *)
 let fetch_css url =
   match Loader.load url with
-  | r when String.length r.Loader.status > 0 && (r.status.[0] = '2' || r.status = "a file") ->
+  | r when Loader.ok r ->
     Some (snd (Encoding.to_utf8 ?transport:(Encoding.charset_of_content_type r.content_type) r.body))
   | _ -> None
 
@@ -134,6 +135,34 @@ let workers = ref false
 
 let max_pics = 300
 
+(* pictures fetched, across pages (Back, the same icons on the next page):
+   by URL, the oldest dropped past [cache_budget] bytes of their data
+   (under pics_lock) *)
+let cache : (string, pic) Hashtbl.t = Hashtbl.create 64
+let cache_order : string Queue.t = Queue.create ()
+let cache_bytes = ref 0
+let cache_budget = 24 * 1024 * 1024
+
+let cache_add url p =
+  if not (Hashtbl.mem cache url) then begin
+    Hashtbl.replace cache url p; Queue.push url cache_order;
+    cache_bytes := !cache_bytes + String.length p.data;
+    while !cache_bytes > cache_budget && not (Queue.is_empty cache_order) do
+      let u = Queue.pop cache_order in
+      (match Hashtbl.find_opt cache u with
+       | Some q -> cache_bytes := !cache_bytes - String.length q.data; Hashtbl.remove cache u
+       | None -> ())
+    done
+  end
+
+(* a page's picture met (under pics_lock): from the cache, or to fetch
+   (true) *)
+let register l u =
+  if Hashtbl.mem l.pics u then false
+  else match Hashtbl.find_opt cache u with
+    | Some p -> Hashtbl.replace l.pics u (Some p); Hashtbl.replace l.started u (); l.sized <- l.sized + 1; false
+    | None -> Hashtbl.replace l.pics u None; true
+
 
 let worker () =
   let images = lazy (try Some (Images.connect ()) with e -> trace "no imaged: %s" (Printexc.to_string e); None) in
@@ -151,7 +180,7 @@ let worker () =
            trace "fetch %s" url;
            let r = Loader.load url in
            trace "fetched %s: %s, %d bytes" url r.Loader.status (String.length r.body);
-           if String.length r.Loader.status > 0 && (r.status.[0] = '2' || r.status = "a file") then
+           if Loader.ok r then
              let nw, nh = Images.size ~images r.body in
              trace "size %s: %d x %d" url nw nh;
              Some { data = r.body; nw; nh; scaled = []; asked = [] }
@@ -159,7 +188,7 @@ let worker () =
          with e -> trace "failed %s: %s" url (Printexc.to_string e); None in
        Mutex.protect pics_lock (fun () ->
            Hashtbl.replace l.pics url p;
-           if p <> None then l.sized <- l.sized + 1)
+           match p with Some p -> l.sized <- l.sized + 1; cache_add url p | None -> ())
      | Scale (p, w, h), Some images ->
        let t0 = now () in
        (match Images.decode ~images ~width:w ~height:h p.data with
@@ -184,16 +213,18 @@ let enqueue ?(first = false) job =
     for _ = 1 to 3 do ignore (Thread.create worker ()) done
   end
 
+(* the page's width, for the srcset candidate the layout will pick *)
+let fetch_width = ref 878
+
 (* a page's pictures, fetched: those of its img elements, in order *)
 let fetch_pictures l =
   let n = ref 0 in
   Dom.walk ~leave:ignore l.doc ~enter:(fun node ->
       (if Dom.is_html node "img" && !n < max_pics then
-         match Dom.attr node "src" with
-         | Some src when String.trim src <> "" ->
-           let u = Url.resolve l.base (String.trim src) in
-           let fresh = Mutex.protect pics_lock (fun () ->
-               if Hashtbl.mem l.pics u then false else (Hashtbl.replace l.pics u None; true)) in
+         match Layout.img_source ~vw:!fetch_width node with
+         | Some src ->
+           let u = Url.resolve l.base src in
+           let fresh = Mutex.protect pics_lock (fun () -> register l u) in
            if fresh then (incr n; enqueue (Fetch (l, u)))
          | _ -> ());
       true)
@@ -208,10 +239,10 @@ let pic_natural l src =
       | Some (Some p) -> Some (p.nw, p.nh)
       | Some None -> None
       | None ->
-        if Hashtbl.length l.pics < max_pics then begin
-          Hashtbl.replace l.pics u None; Hashtbl.replace l.hurried u (); fetch := true
+        if Hashtbl.length l.pics < max_pics && register l u then begin
+          Hashtbl.replace l.hurried u (); fetch := true
         end;
-        None) in
+        (match Hashtbl.find_opt l.pics u with Some (Some p) -> Some (p.nw, p.nh) | _ -> None)) in
   if !fetch then enqueue ~first:true (Fetch (l, u));
   r
 
@@ -361,6 +392,7 @@ let window first =
       let box_x = 4 and box_y = 44 and box_h = height - 44 - 24 in
       let box_w = width - 8 in
       page_width := box_w - 14;
+      fetch_width := !page_width;
       (* pictures whose size the layout waited for: laid out again, at
          most every second *)
       let l = st.shown in
@@ -492,6 +524,7 @@ let () =
   | [ "--layout"; url ] -> layout_dump url 800
   | [ "--layout"; url; w ] -> layout_dump url (Option.value (int_of_string_opt w) ~default:800)
   | [ "--time"; url ] -> time url
+  | [ "--check-images" ] -> Check_images.run ()
   | [ url ] when url <> "" && url.[0] <> '-' -> window (Url.of_typed url)
   | [] -> window "about:start"
   | _ -> usage ()

@@ -105,6 +105,21 @@ let fonts () =
                              && Fonts.family_of "'Linux Libertine','Georgia',serif" = Fonts.Serif
                              && Fonts.family_of "monospace" = Fonts.Mono)
 
+(* an img's source: <picture>, src, srcset (M4) *)
+let sources () =
+  let first_img html =
+    Option.get (Dom.find (fun n -> Dom.is_html n "img") (Html.parse html)) in
+  let src ?vw html = Layout.img_source ?vw (first_img html) in
+  check "img: src" (src {|<img src="a.png" srcset="b.png 2x">|} = Some "a.png");
+  check "img: srcset by density" (src {|<img srcset="a.png 2x, b.png 1x, c.png 1.5x">|} = Some "b.png");
+  check "img: srcset by width" (src ~vw:500 {|<img srcset="s.jpg 320w, m.jpg 640w, l.jpg 1280w">|} = Some "m.jpg"
+                                && src ~vw:2000 {|<img srcset="s.jpg 320w, l.jpg 1280w">|} = Some "l.jpg");
+  check "img: picture: not WebP"
+    (src {|<picture><source srcset="a.webp" type="image/webp"><source srcset="a.jpg" type="image/jpeg"><img src="z.png"></picture>|}
+     = Some "a.jpg");
+  check "img: picture: a media query's source skipped, then src"
+    (src {|<picture><source srcset="w.png" media="(min-width: 800px)"><img src="z.png"></picture>|} = Some "z.png")
+
 (* rule 3: a tree far deeper than any stack would allow a recursion *)
 let deep () =
   let depth = 5000 in
@@ -138,6 +153,7 @@ let () =
     urls ();
     encodings ();
     fonts ();
+    sources ();
     deep ();
     pages ();
     layouts ();

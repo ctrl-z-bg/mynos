@@ -123,7 +123,7 @@ Decoding is in C, at the owner's choice (2026-11-27): `imaged` (services/image) 
 - [x] Sized by `width`/`height` attributes and CSS (ratio kept, `max-width`) before arriving; by their own size after; pixels asked of `imaged` at the size drawn, the last two sizes kept
 - [x] Pictures as blocks (flex and grid items, `display: block`): replaced boxes
 - [x] The host's renderer (tests/render.ml) draws pictures, with `services/image/picture` (imaged's code as a host command)
-- [ ] `srcset` and `<picture>`: the best source for the size (today: `src`)
+- [x] `srcset` and `<picture>` (`Layout.img_source`): a `<source>` imaged decodes (not WebP, AVIF) and without a media query, else `src`, else `srcset`'s candidate (density nearest above 1x, or the narrowest from the page's width up); `data:` URLs (base64 or not) in the Loader
 - [x] `background-image`, `-repeat`, `-position`, `-size` (and the shorthand): the first layer, in the padding box of block-level boxes; `url()` resolved against its style sheet's URL
 - [x] `mask-image` (and `-webkit-`, `mask-size`, `-position`, `-repeat`, the shorthand) over a background colour: the picture's alpha in that colour (`Gfx.draw_image ~tint`): Wikipedia's icons
 - [x] A custom property that refers to itself (`--x: var(--x, 1rem)`, everywhere in Wikipedia's skin) has no value and the fallback holds (it made every declaration using it invalid: the icons' size among them)
@@ -131,12 +131,13 @@ Decoding is in C, at the owner's choice (2026-11-27): `imaged` (services/image) 
 - [ ] Wikipedia's header: the icons' places (the menu 9 px left of Chrome's, search lower), the appearance and bookmark icons, the contents icon by the title
 - [ ] gzip in `Http` (`Accept-Encoding`)
 - [x] Pictures on screen fetched before the others (then the rest in the page's order); pixels for the screen before any fetch
-- [ ] A cache of pictures across pages
+- [x] A cache of pictures across pages (by URL, 24 MB of their data, the oldest dropped): Back draws a page's pictures without fetching them
 - [x] `Http` keeps connections open and reuses them (per server: at most 2, one TLS handshake at a time; at most 8 idle): a picture on an open connection takes 0.1–0.3 s instead of about 1.1 s
 - [x] The first page laid out once, at the window's width (it was laid out twice: 1.1 s)
 - [x] `ARIADNE_DEBUG`: the page's stages, the pictures' fetches and decodings, slow frames, in the kernel log (ms since the start)
 - [ ] Shared pages for the pixels instead of a copy in the reply (if large pictures make it slow)
-- [ ] A check of `imaged` in MyNOS (tools/run-tests.sh): a PNG, a JPEG, an SVG decoded, compared at sample pixels
+- [x] A check of `imaged` in MyNOS: `ariadne --check-images` (tools/run-tests.sh): its description, a PNG with transparency, a JPEG (and scaled), an SVG drawn at twice its size, an error
+- [ ] `<source>` media queries (today such sources are skipped)
 - [ ] Measurements: time from page shown to pictures drawn
 
 ## Network speed (netd)

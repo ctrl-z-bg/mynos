@@ -24,8 +24,8 @@ all: ariadne.byte
 
 core: $(CORE) expected.cmo expected_layout.cmo
 
-ariadne.byte: $(CORE) loader.ml ariadne.ml $(MYNOS)
-	$(OCAMLC) mynos.cma unix.cma threads.cma -o $@ $(CORE) loader.ml ariadne.ml
+ariadne.byte: $(CORE) loader.ml check_images.ml ariadne.ml $(MYNOS)
+	$(OCAMLC) mynos.cma unix.cma threads.cma -o $@ $(CORE) loader.ml check_images.ml ariadne.ml
 
 # generated at every make, replaced only when they change (so that a file
 # copied back with an older date, as rsync does, still counts): the test

@@ -227,6 +227,60 @@ let transform st w =
 let is_atomic n = List.mem (Dom.name n) [ "img"; "input"; "button"; "select"; "textarea"; "iframe"; "video";
                                           "canvas"; "embed"; "object"; "audio"; "svg" ]
 
+(* ---- an img's source ---- *)
+
+(* the candidates of a srcset: (url, density or width) *)
+let srcset_candidates v =
+  List.filter_map (fun c ->
+      match List.filter (fun w -> w <> "") (String.split_on_char ' ' (String.trim c)) with
+      | [] -> None
+      | [ u ] -> Some (u, `X 1.)
+      | u :: d :: _ ->
+        let n = String.length d in
+        let num s = float_of_string_opt s in
+        (match d.[n - 1] with
+         | 'x' -> Option.map (fun x -> (u, `X x)) (num (String.sub d 0 (n - 1)))
+         | 'w' -> Option.map (fun w -> (u, `W w)) (num (String.sub d 0 (n - 1)))
+         | _ -> Some (u, `X 1.))) (String.split_on_char ',' v)
+  (* a URL with a comma in it (data:) breaks this split: such candidates are lost *)
+
+(* the one for a screen of one pixel a CSS pixel, a page [vw] wide: the
+   density nearest above 1 (else the highest), or the narrowest width
+   from [vw] up (else the widest) *)
+let pick_candidate ~vw cands =
+  let xs = List.filter_map (function (u, `X x) -> Some (x, u) | _ -> None) cands
+  and ws = List.filter_map (function (u, `W w) -> Some (w, u) | _ -> None) cands in
+  let best l ~at_least =
+    let l = List.sort compare l in
+    match List.find_opt (fun (v, _) -> v >= at_least) l with
+    | Some (_, u) -> Some u
+    | None -> (match List.rev l with (_, u) :: _ -> Some u | [] -> None) in
+  if ws <> [] then best ws ~at_least:(float vw) else best xs ~at_least:1.
+
+(* pictures imaged decodes (by their type): not WebP, AVIF, JPEG XL *)
+let decodable_type t =
+  match String.lowercase_ascii (String.trim t) with
+  | "" | "image/png" | "image/jpeg" | "image/jpg" | "image/gif" | "image/svg+xml" | "image/bmp" | "image/apng" -> true
+  | _ -> false
+
+(* an img's source: a <source> of its <picture> that imaged decodes (and
+   without a media query), else its src, else its srcset's best *)
+let img_source ?(vw = 1024) (n : Dom.node) =
+  let attr k = match Dom.attr n k with Some v when String.trim v <> "" -> Some (String.trim v) | _ -> None in
+  let from_srcset v = pick_candidate ~vw (srcset_candidates v) in
+  let from_picture () =
+    match n.parent with
+    | Some p when Dom.is_html p "picture" ->
+      List.find_map (fun (c : Dom.node) ->
+          if Dom.is_html c "source" && Dom.attr c "media" = None
+             && decodable_type (Option.value (Dom.attr c "type") ~default:"") then
+            Option.bind (Dom.attr c "srcset") from_srcset
+          else None) (Dom.children p)
+    | _ -> None in
+  match from_picture () with
+  | Some u -> Some u
+  | None -> (match attr "src" with Some u -> Some u | None -> Option.bind (attr "srcset") from_srcset)
+
 (* a replaced or form element, as a box in the line *)
 let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
   let a = Dom.attr n in
@@ -237,7 +291,7 @@ let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
   match Dom.name n with
   | "img" ->
     let alt = Option.value (a "alt") ~default:"" in
-    let src = match a "src" with Some u when String.trim u <> "" -> Some (String.trim u) | _ -> None in
+    let src = img_source ~vw:o.vw n in
     let num k = Option.bind (a k) (fun v -> float_of_string_opt (String.trim v)) in
     let sized = (match num "width", num "height" with Some w, Some h -> w > 0. && h > 0. | _ -> false)
                 || (not (is_auto st.width) && not (is_auto st.height)) in

@@ -56,8 +56,53 @@ let listing dir =
 
 let html ?(status = "") url body = { url; status; content_type = "text/html"; body }
 
+(* an answer with content: HTTP's 2xx, a file, a data: URL *)
+let ok r = String.length r.status > 0 && (r.status.[0] = '2' || r.status = "a file" || r.status = "a data URL")
+
+(* data:[type][;base64],data (RFC 2397) *)
+let base64 s =
+  let v c = match c with
+    | 'A' .. 'Z' -> Char.code c - 65 | 'a' .. 'z' -> Char.code c - 71 | '0' .. '9' -> Char.code c + 4
+    | '+' | '-' -> 62 | '/' | '_' -> 63 | _ -> -1 in
+  let b = Buffer.create (String.length s * 3 / 4) in
+  let acc = ref 0 and bits = ref 0 in
+  String.iter (fun c ->
+      let d = v c in
+      if d >= 0 then begin
+        acc := (!acc lsl 6) lor d; bits := !bits + 6;
+        if !bits >= 8 then begin
+          bits := !bits - 8;
+          Buffer.add_char b (Char.chr ((!acc lsr !bits) land 255))
+        end
+      end) s;
+  Buffer.contents b
+
+let percent_decode s =
+  let b = Buffer.create (String.length s) and n = String.length s in
+  let hex c = match c with
+    | '0' .. '9' -> Char.code c - 48 | 'a' .. 'f' -> Char.code c - 87 | 'A' .. 'F' -> Char.code c - 55 | _ -> -1 in
+  let i = ref 0 in
+  while !i < n do
+    if s.[!i] = '%' && !i + 2 < n && hex s.[!i + 1] >= 0 && hex s.[!i + 2] >= 0 then begin
+      Buffer.add_char b (Char.chr (hex s.[!i + 1] * 16 + hex s.[!i + 2])); i := !i + 3
+    end else (Buffer.add_char b s.[!i]; incr i)
+  done;
+  Buffer.contents b
+
+let data_url url =
+  let rest = String.sub url 5 (String.length url - 5) in
+  match String.index_opt rest ',' with
+  | None -> html ~status:"a bad data URL" url (message "Not shown" "A data: URL without a comma.")
+  | Some i ->
+    let meta = String.lowercase_ascii (String.sub rest 0 i) and data = String.sub rest (i + 1) (String.length rest - i - 1) in
+    let is_b64 = String.ends_with ~suffix:";base64" meta in
+    let ct = match String.index_opt meta ';' with Some j -> String.sub meta 0 j | None -> meta in
+    let body = if is_b64 then base64 (percent_decode data) else percent_decode data in
+    { url; status = "a data URL"; content_type = (if ct = "" then "text/plain" else ct); body }
+
 let load url =
   let rec go url redirects =
+    if Url.scheme_of url = Some "data" then data_url url else
     let url, _ = Url.strip_fragment url in
     match Url.scheme_of url with
     | Some "about" ->
