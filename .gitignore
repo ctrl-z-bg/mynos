@@ -80,3 +80,6 @@ tests/z80/_*/
 tests/emu/camlboy.byte
 tests/emu/emutest_gb.byte
 tests/emu/_*/
+tests/emu/msx.byte
+tests/emu/emutest_msx.byte
+tests/msx/_*/

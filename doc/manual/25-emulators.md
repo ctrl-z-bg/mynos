@@ -2,7 +2,7 @@
 
 MyNOS's emulators are not only windows. Each one registers a service of
 its own, `<machine><pid>` (`zx1234` for a ZX Spectrum, `camlboy1234` for
-a Game Boy), and answers the same typed protocol, emu/1
+a Game Boy, `msx1234` for an MSX), and answers the same typed protocol, emu/1
 (`packages/retro/emu_proto.mli`): what the machine is, its registers and
 memory, its screen; pausing it, stepping it, running it for some frames,
 stopping it at a breakpoint; pressing its keys; loading a tape; saving
@@ -27,11 +27,14 @@ zxspectrum [FILE]             a window; FILE a .tap, .sna or .z80
 zxspectrum --headless [FILE]  no window: the machine and its service
 camlboy ROM.gb                a window
 camlboy --headless ROM.gb
+msx [CARTRIDGE]               a window; CARTRIDGE a .rom
+msx --headless [CARTRIDGE]
 ```
 
-(`pkg install zxspectrum`, `pkg install camlboy`; each comes with games:
-`zxspectrum glazx`, `zxspectrum snake`, `camlboy tobutobugirl`. Your own
-tapes and cartridges go in `/disk/roms/zx`, `/disk/roms/gb`: the
+(`pkg install zxspectrum`, `pkg install camlboy`, `pkg install msx`;
+each comes with games: `zxspectrum glazx`, `zxspectrum snake`, `camlboy
+tobutobugirl`, `msx westen`. Your own tapes and cartridges go in
+`/disk/roms/zx`, `/disk/roms/gb`, `/disk/roms/msx`: the
 packages' READMEs say which ROMs a machine can use.) The window's status line says
 the service's name. A program finds the emulators running with
 `Emu_proto.find`, which lists the registered names made of a prefix and
@@ -83,7 +86,9 @@ address a watchpoint saw touched; for `exec`, the PC).
 
 A machine without something answers an error that says so: a Game Boy
 has no text screen (`screen_text`: use `screenshot`), and camlboy has no
-disassembler, watchpoints or saved states yet. The error is the answer:
+disassembler, watchpoints or saved states yet; an MSX has characters on
+its screen only in the text modes (BASIC's SCREEN 0 and 1), and in
+Graphics II, where most games are, `screen_text` says so. The error is the answer:
 a caller learns from it what to ask instead.
 
 ## 25.3 Keys
@@ -98,6 +103,9 @@ knows:
 ```
 Spectrum   A-Z 0-9 ENTER SPACE CS SS       (CS: CAPS SHIFT, SS: SYMBOL SHIFT)
 Game Boy   A B START SELECT UP DOWN LEFT RIGHT
+MSX        A-Z 0-9 ENTER SPACE SHIFT CTRL GRAPH CAPS CODE ESC TAB STOP BS
+           SELECT HOME INS DEL UP DOWN LEFT RIGHT F1-F5, and the
+           punctuation's keys (MINUS COMMA PERIOD SLASH...)
 ```
 
 A Spectrum's BASIC is typed as its keyboard has it: a command is one
@@ -238,3 +246,7 @@ recv, decode                             at the frame's end, or stopped:
   check at all; with them, the PC is looked at before each one, and the
   bus that checks watchpoints is put in only while there are some. An
   idle service costs nothing measurable (`packages/zxspectrum/MYNOS.md`).
+- **Written once.** All this, with the window, its sound and the
+  command line, is `Emu_frontend` (`packages/retro/emu_frontend.mli`):
+  a machine gives a frame, its picture, its keys and its memory; `msx`
+  is the machine and a page of glue.

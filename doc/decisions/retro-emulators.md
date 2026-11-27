@@ -4,8 +4,9 @@
 - **Date:** 2026-11-27
 - **Status:** accepted (2026-11-27). Done: the ZX Spectrum 48K
   (`zxspectrum` 1.0, with GLAZX), camlboy on emu/1 (1.2), the manual's
-  chapter 25; section 11 has the results. Next: a one-player Spectrum
-  game, then the MSX (mynos-0bj.3).
+  chapter 25; section 11 has the results. Then (2026-11-27) Snake for
+  the Spectrum, the games moved into the emulators' packages, and the
+  MSX1 (`msx` 1.0, C-BIOS and Westen House; mynos-0bj.3).
 
 ## What it is for
 
@@ -288,9 +289,32 @@ speed or less.
   keys); the sound goes off below 45 frames a second, not 50; zexall
   ran as bytecode (no native compiler in the containers).
 
+### 12. The MSX1 (2026-11-27)
+
+`packages/msx`: the TMS9918A (`vdp.ml`: four modes, sprites with their
+fifth-on-a-line and collision flags, the picture drawn whole at the
+frame's end), the cartridges (`cartridge.ml`: plain ROMs where their
+"AB" says, MegaROMs Konami, Konami SCC, ASCII8 and ASCII16, guessed from
+their code's `LD (nnnn),A`), the keyboard's matrix, the machine
+(`msx.ml`: slots 0 BIOS, 1 cartridge, 3 RAM, as C-BIOS's openMSX
+configuration; eight blocks of 8 KB the bus reads at once, worked out
+again when a slot or a bank changes). In `packages/retro`: the AY-3-8910
+(`ay8910.ml`, for the Spectrum 128K too) and `emu_frontend.ml`, the
+window, emu/1's service and the command line made generic, which `msx`
+uses (zxspectrum keeps its own, which it came from).
+
+C-BIOS 0.29a (BSD) is the BIOS; a real MSX1's, if the user has one, in
+`/disk/roms/msx/msx1.rom`. The game: Westen House (Apache 2.0, a 48 KB
+cartridge). Results: C-BIOS and the game run at once; about 210 frames
+a second under KVM, 600 in bytecode on the host without the picture, 7
+without KVM; emu/1's test in the suite (lane c) and `tests/msx/run.sh`
+on the host (the VDP's ports, the mappers on made-up MegaROMs, the PSG's
+pitch, C-BIOS's message, a state). Not done: the SCC's sound, the
+cassette, disks, the MSX2.
+
 ## Not now
 
-The 128K and the AY (with the MSX, which needs the AY); memory
+The 128K (its AY is written, with the MSX); memory
 contention; Shift and Ctrl alone in windows; the MSX2 (its V9938 is
 another VDP); the C64 cycle by cycle, its 1541 drive emulated; a `type`
 of free text with BASIC's keywords; an assembler.

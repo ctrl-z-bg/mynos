@@ -141,15 +141,14 @@ let end_frame t =
 
 let render t = Ula.render t.ula t.mem ~flash:(t.frame land 16 <> 0)
 
-(* one instruction, and what comes with it: the interrupt while /INT
-   lasts, the tape's trap *)
+(* one instruction, and what comes with it: the tape's trap; or the
+   interrupt taken while /INT lasts, alone: the handler's first
+   instruction is the next step, so that a breakpoint on 0x0038 sees it *)
 let one t =
   let z = t.z in
-  if not t.int_taken && t.ft < int_len then begin
-    let n = Z80.interrupt z 0xFF in
-    if n > 0 then begin t.int_taken <- true; t.ft <- t.ft + n end
-  end;
-  (match t.tape with
+  let n = if not t.int_taken && t.ft < int_len then Z80.interrupt z 0xFF else 0 in
+  if n > 0 then begin t.int_taken <- true; t.ft <- t.ft + n end
+  else (match t.tape with
    | Some tape when Z80.get z Z80.PC = 0x0556 ->
      if Tape.trap tape z (fun a v -> if a >= 0x4000 then Bytes.unsafe_set t.mem a (Char.unsafe_chr v))
      then t.ft <- t.ft + 10

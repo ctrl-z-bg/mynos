@@ -668,7 +668,7 @@ user.
 
 **emu/1** (`packages/retro/emu_proto.mli`) is served by each emulator a
 package brings, under `<machine><pid>`: `zxspectrum` as `zx<pid>`,
-`camlboy` as `camlboy<pid>`. They are programs a user starts, not
+`camlboy` as `camlboy<pid>`, `msx` as `msx<pid>`. They are programs a user starts, not
 services `init` keeps, and their names change with their pids:
 `Emu_proto.find "zx"` lists those running. Twenty requests: `info`,
 `regs`, `peek`, `disasm`, `screen_text`, `screenshot` (safe), `pause`,

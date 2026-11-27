@@ -292,7 +292,8 @@ sec_emu() {
 # sources, on a disk with the ROM), then emutest.byte, which finds zx<pid>
 # and drives it through emu/1: the ROM's message read from the screen,
 # PRINT 2+2 typed and its 4 read back, registers, memory, a disassembly,
-# a screenshot, breakpoints, watchpoints, waits, a state saved and loaded
+# a screenshot, breakpoints, watchpoints, waits, a state saved and loaded;
+# then camlboy (emutest_gb.byte) and the MSX (emutest_msx.byte) the same way
 if [ -f tests/emu/emu.img ] && [ -f system/ramdisk.dsk ]; then
     cp tests/emu/emu.img "$tmp/emu.img"
     : > "$tmp/logemu"
@@ -326,6 +327,16 @@ if [ -f tests/emu/emu.img ] && [ -f system/ramdisk.dsk ]; then
     tools/type-keys.py "$tmp/mon-emu" '/disk/gb/emutest_gb.byte\n'
     i=0
     while [ $i -lt 120 ] && ! grep -aq 'emu-gb: all checks passed\|emu-gb: some checks FAILED\|PANIC' "$tmp/logemu"; do
+        sleep 1; i=$((i + 1))
+    done
+    # the MSX: C-BIOS and the package's game, named as a user names it
+    tools/type-keys.py "$tmp/mon-emu" '/disk/msx/msx.byte --headless westen &\n'
+    i=0
+    while [ $i -lt 60 ] && ! grep -aq 'msx: msx' "$tmp/logemu"; do sleep 1; i=$((i + 1)); done
+    sleep 1
+    tools/type-keys.py "$tmp/mon-emu" '/disk/msx/emutest_msx.byte\n'
+    i=0
+    while [ $i -lt 120 ] && ! grep -aq 'emu-msx: all checks passed\|emu-msx: some checks FAILED\|PANIC' "$tmp/logemu"; do
         sleep 1; i=$((i + 1))
     done
     printf 'quit\n' | socat - "UNIX-CONNECT:$tmp/mon-emu" >/dev/null || true
@@ -1419,6 +1430,10 @@ if [ -f tests/emu/emu.img ]; then
     expect "emu: all checks passed"
     expect "emu-gb: break 0040, frames 10: the VBlank interrupt        ok"
     expect "emu-gb: all checks passed"
+    expect "emu-msx: break 0038, frames 3: the interrupt               ok"
+    expect "emu-msx: watch write FC9E (JIFFY), frames 3                ok"
+    expect "emu-msx: state saved, 30 frames, loaded: JIFFY back        ok"
+    expect "emu-msx: all checks passed"
 fi
 reject "PANIC"
 reject "page fault (?)"

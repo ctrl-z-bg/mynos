@@ -1932,3 +1932,14 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   is emptied by `pkg` at each update); each emulator's README says which
   ROMs it can use. `tools/pkg-build.sh`'s EXTRA takes SOURCE:PATH;
   sec_emu starts camlboy by its game's name.
+- **2026-11-27** — msx 1.0 (package, branch `retro`, mynos-0bj.3): an
+  MSX1, MyNOS's own emulator: the TMS9918A, the AY-3-8910
+  (`packages/retro/ay8910.ml`), slots, cartridges and MegaROMs (Konami,
+  Konami SCC, ASCII8, ASCII16), the keyboard; C-BIOS 0.29a (BSD) as its
+  BIOS, a real one from `/disk/roms/msx/msx1.rom`; Westen House (Apache
+  2.0) with it (`msx westen`). It serves emu/1 (`msx<pid>`) through
+  `packages/retro/emu_frontend.ml`, the window, service and command line
+  made generic. About 210 frames a second under KVM (60 needed), 7
+  without. Tests: `tests/msx/run.sh` (host), sec_emu (lane c,
+  `emutest_msx.byte`). An interrupt is now a step of its own, in the
+  Spectrum too: a breakpoint on 0x0038 was never hit.

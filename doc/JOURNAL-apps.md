@@ -143,3 +143,73 @@ name, so the lookup is tested.
 
 **Lesson.** Before choosing where a user puts files, read what the
 package manager does to its own directories.
+
+## 2026-11-27 — The MSX1, from C-BIOS to Westen House
+
+**What.** `packages/msx`: an MSX1 (the TMS9918A, the AY-3-8910, slots,
+cartridges and MegaROMs, the keyboard), with C-BIOS 0.29a and Westen
+House; mynos-0bj.3. The Z80 and emu/1 were already there.
+
+**How it went.** C-BIOS started at the first try (its logo in Graphics
+II, then its "No cartridge found." in text mode), and so did Westen
+House, a 48 KB cartridge whose "AB" is 16 KB in (so its first byte is at
+0x0000, over the BIOS's page once the game selects it). Its intro, its
+isometric rooms and its sprites showed in the first screenshots. What
+came from documents and was right at once: the slots as C-BIOS's own
+openMSX configuration puts them (0 BIOS and logo, 1 cartridge, 3 RAM),
+the VDP's two-byte writes to 0x99, Graphics II's masks from registers 3
+and 4. Westen's `input.asm` says which keys it reads (row 8: the arrows
+and Space; row 4: K to R; the joystick through the PSG's register 14),
+which the README repeats instead of guessing.
+
+**Speed.** 600 frames a second in bytecode on the host (no picture),
+about 210 in MyNOS under KVM, 7 without: the picture is drawn whole each
+frame (the ULA redraws only the rows that change); 60 are needed.
+
+**The front end once.** zxspectrum's main (window, sound, emu/1's
+requests, `--headless`, `--bench`) was copied, made a functor
+(`packages/retro/emu_frontend.ml`) over what a machine gives; `msx` is
+the machine and a page of glue. zxspectrum keeps its own copy for now.
+
+**Lesson.** For a machine as documented as the MSX, the work is in the
+chips; the parts that make it a MyNOS program were already written.
+
+## 2026-11-27 — A breakpoint on the interrupt's entry was never hit
+
+**Symptom.** emu/1's test of the MSX: `break exec 0x0038`, `frames 3`:
+three frames ran, no hit, though the interrupt's handler runs every
+frame (a watchpoint on JIFFY, which it counts, was hit).
+
+**Diagnosis.** The machine's step took the interrupt (the Z80 pushes the
+PC and jumps to 0x0038) and then ran an instruction, in the same step:
+the handler's first, at 0x0038, ran without the PC being looked at.
+
+**Cause.** `one` in `msx.ml`, as in `spectrum.ml` (from which it came),
+did both. The Spectrum's test had its breakpoint in the ROM's keyboard
+scan (0x02BF), called from the handler, so it never showed there.
+
+**Fix.** An accepted interrupt is a step of its own (its T-states only):
+the next step is the handler's first instruction, with its check. In
+both machines; the Spectrum's emu/1 test passes as before.
+
+**Lesson.** A step that does two things hides the second from whoever
+looks between steps: breakpoints, `step 1`, the recorder.
+
+## 2026-11-27 — The PSG one sample in twelve short
+
+**Symptom.** Westen House's music, with the sound on: 339 samples a
+frame where 22050 / 59.92 = 368 were due; a sound stream would run dry
+and stutter.
+
+**Diagnosis.** The chip is run in ticks of clock / 8 (223,722 a second,
+10.15 a sample). A sample was emitted when its ticks reached 10.15, that
+is at the eleventh tick, and the count restarted at 0: each sample took
+11 ticks, not 10.15.
+
+**Fix.** The part of the tick past the sample starts the next one (its
+mean carried with it); and the half tick a frame leaves (3733.5 ticks)
+is carried to the next frame too. 368 samples a frame, and the test's
+note of 440.4 Hz (register 0 at 254) measures 440.0.
+
+**Lesson.** Where two rates meet (ticks and samples, T-states and
+ticks), carry the remainder; a test that counts the samples finds it.
