@@ -327,15 +327,23 @@ static int send_frame(int ch, int len)
   return sdio_ext(1, 2, F2_ADDR, frame, padded);
 }
 
-/* a frame read into buf (FRAME bytes): its length, 0 if none, -1 */
+/* a frame read into buf (FRAME bytes): its length, 0 if none, -1 (the
+   first failures logged) */
+static int read_errors;
 static int read_frame(unsigned char * buf)
 {
   int len, chk, got = 64;
-  if (sdio_ext(0, 2, F2_ADDR, buf, 64) < 0) return -1;
+  if (sdio_ext(0, 2, F2_ADDR, buf, 64) < 0) {
+    if (read_errors++ < 10) mynos_log("wifid: a frame's header not read\n");
+    return -1;
+  }
   len = buf[0] | buf[1] << 8;
   chk = buf[2] | buf[3] << 8;
   if (len == 0 && chk == 0) return 0;
   if ((len ^ chk) != 0xFFFF || len < 12 || len > FRAME) {
+    if (read_errors++ < 10)
+      mynos_log("wifid: a bad frame header: %04x %04x %02x %02x %02x %02x\n", len, chk,
+                buf[4], buf[5], buf[6], buf[7]);
     sdio_byte(0, 0x06, 2);             /* function 2's read aborted */
     wr(sdc->base + SDIO_TOSBMAILBOX, 1);   /* (a NAK: the firmware sends it again) */
     return -1;
@@ -343,7 +351,10 @@ static int read_frame(unsigned char * buf)
   while (got < len) {
     int n = (len - got + 3) & ~3;
     if (n > 512) n = 512;
-    if (sdio_ext(0, 2, F2_ADDR, buf + got, n) < 0) return -1;
+    if (sdio_ext(0, 2, F2_ADDR, buf + got, n) < 0) {
+      if (read_errors++ < 10) mynos_log("wifid: a frame of %d bytes: read failed at %d\n", len, got);
+      return -1;
+    }
     got += n;
   }
   tx_max = buf[9];
@@ -364,8 +375,9 @@ static int handle_frames(int want_id, unsigned char * out, int max, int * status
     wr(sdc->base + SDIO_TOSBMAILBOX, 2);   /* acknowledged */
     if (m & 0x08) mynos_log("wifid: the firmware says it is ready\n");
   }
-  if (!(st & I_HMB_FRAME_IND)) return -2;
-  /* every frame waiting (their interrupt is acknowledged: none is left) */
+  /* every frame waiting: read whether the chip said so or not (a frame
+     coming while the indication is acknowledged would wait for the next
+     one's otherwise) */
   while ((len = read_frame(frame)) > 0) {
     int ch = frame[5] & 0xF, off = frame[7];
     unsigned char * p = frame + off;
@@ -601,13 +613,21 @@ static void handle_eapol(void)
     memset(&k, 0, sizeof k);
     r = wpa_eapol(f, fl, reply, &n, &k);
     if (r & WPA_REPLY) send_data(reply, n);
-    if ((r & WPA_PTK) && set_key(0, k.tk, 16, k.ap, 0) < 0)
-      mynos_log("wifid: the pairwise key not installed\n");
-    if ((r & WPA_GTK) && set_key(k.gtk_idx, k.gtk, k.gtk_len, NULL, 1) < 0)
-      mynos_log("wifid: the group key not installed\n");
-    if (r & WPA_PTK) {
-      keyed = 1;
-      mynos_log("wifid: WPA2 keys installed (group key %d)\n", k.gtk_idx);
+    {
+      int ptk_ok = 1, gtk_ok = 1;
+      if ((r & WPA_PTK) && set_key(0, k.tk, 16, k.ap, 0) < 0) {
+        ptk_ok = 0;
+        mynos_log("wifid: the pairwise key not installed\n");
+      }
+      if ((r & WPA_GTK) && set_key(k.gtk_idx, k.gtk, k.gtk_len, NULL, 1) < 0) {
+        gtk_ok = 0;
+        mynos_log("wifid: the group key not installed\n");
+      }
+      if ((r & WPA_PTK) && ptk_ok && gtk_ok) {
+        keyed = 1;
+        mynos_log("wifid: WPA2 keys installed (group key %d)\n", k.gtk_idx);
+      } else if ((r & WPA_GTK) && !(r & WPA_PTK) && gtk_ok)
+        mynos_log("wifid: the new group key installed (%d)\n", k.gtk_idx);
     }
   }
 }
@@ -853,9 +873,9 @@ int main(void)
   n = get_var("cur_etheraddr", check, 6);
   if (n >= 6) memcpy(own_mac, check, 6);
   {
-    char cap[256];
+    char cap[512];
     memset(cap, 0, sizeof cap);
-    if (get_var("cap", cap, 255) > 0) { cap[255] = 0; mynos_log("wifid: capabilities: %s\n", cap); }
+    if (get_var("cap", cap, 511) > 0) { cap[511] = 0; mynos_log("wifid: capabilities: %s\n", cap); }
   }
   if (n >= 6)
     mynos_log("wifid: MAC address %02x:%02x:%02x:%02x:%02x:%02x (%d events so far)\n",

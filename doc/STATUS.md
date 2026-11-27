@@ -2197,3 +2197,9 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   is now wifid's (`services/wifi/wpa.c`, its cryptography checked
   against the standards' vectors), and SDPCM's credit is respected (the
   firmware dropped commands beyond it). Second try pending.
+- **2026-11-27** — Second Wi-Fi try: the host's WPA2 4-way handshake
+  completes with the LAN's router (message 3's MIC right), but some
+  commands' answers are still lost (the scan, the pairwise key). Frames
+  are now read whether the chip signals them or not, read failures are
+  logged; "connected" only once both keys are installed. llmd reads its
+  `/disk/llm.env` on the Pi.
