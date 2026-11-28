@@ -203,6 +203,11 @@ let cookies () =
   set "f=6; Domain=other.org";
   check "cookies: a domain too wide, or another's, refused" (get ~host:"x.com" ~path:"/" () = None
                                                             && get ~host:"other.org" ~path:"/" () = None);
+  set "h=x\ny; Path=/";
+  set "i=x\001y; Path=/";
+  set "k=a\tb; Path=/";
+  check "cookies: control characters: refused, a tab kept"
+    (get ~host:"www.example.com" ~path:"/" () = Some "b=2; k=a\tb");
   set "g=7; Expires=Wed, 01 Jan 2031 00:00:00 GMT; Path=/";
   let back = Cookies.of_string (Cookies.to_string j ~now) in
   check "cookies: saved, those that outlive the session"

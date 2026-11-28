@@ -1,0 +1,10 @@
+title: Alignment
+The HTML Standard's alignment: center and align=center centre text, and the block boxes inside that do not fill the line (their margins not auto).
+a table in center
+a table, align=center
+a block in div align=center
+align=left inside center
+a block in div align=right
+its own auto margin wins
+text-align: center: not moved
+a table in td align=center

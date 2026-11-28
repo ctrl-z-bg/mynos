@@ -1,0 +1,40 @@
+fill 0,16 800x351 #ffffff
+text 0,31 serif 16 #000000 An
+text 24,31 serif 16 #000000 inline
+text 64,31 serif 16 #000000 svg
+text 90,31 serif 16 #000000 with
+text 122,31 serif 16 #000000 a
+text 133,31 serif 16 #000000 viewBox
+text 195,31 serif 16 #000000 and
+text 222,31 serif 16 #000000 no
+text 242,31 serif 16 #000000 size
+text 271,31 serif 16 #000000 fills
+text 300,31 serif 16 #000000 its
+text 319,31 serif 16 #000000 containing
+text 391,31 serif 16 #000000 block
+text 431,31 serif 16 #000000 (CSS
+text 469,31 serif 16 #000000 2.1
+text 493,31 serif 16 #000000 10.3.2);
+text 547,31 serif 16 #000000 in
+text 563,31 serif 16 #000000 a
+text 0,49 serif 16 #000000 shrink-to-fit
+text 81,49 serif 16 #000000 box
+text 109,49 serif 16 #000000 it
+text 122,49 serif 16 #000000 is
+text 137,49 serif 16 #000000 0
+text 149,49 serif 16 #000000 wide;
+text 189,49 serif 16 #000000 with
+text 221,49 serif 16 #000000 neither,
+text 273,49 serif 16 #000000 300
+text 301,49 serif 16 #000000 x
+text 313,49 serif 16 #000000 150.
+image 0,68 100x50 data:image/svg+xml (278 bytes)
+fill 0,125 10x36 #eeeeee
+text 0,140 serif 16 #000000 [
+image 5,135 10x5 data:image/svg+xml (274 bytes)
+text 0,158 serif 16 #000000 ]
+fill 14,121 40x40 #dddddd
+image 22,129 24x24 data:image/svg+xml (282 bytes)
+image 0,164 300x150 data:image/svg+xml (254 bytes)
+image 0,317 100x50 data:image/svg+xml (278 bytes)
+height 367

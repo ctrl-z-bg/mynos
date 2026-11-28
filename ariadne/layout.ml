@@ -409,7 +409,10 @@ let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
     Some (Box { w; h; label = Dom.name n; frame = true; img = None; ctl = None })
   | "svg" ->
     (* drawn by imaged, as a data: URL (Svg): its size from CSS, else its
-       attributes, the other side from the viewBox's ratio; 300 x 150 *)
+       attributes, the other side from the viewBox's ratio; with a ratio
+       alone, the containing block's width (CSS 2.1 10.3.2: nothing while
+       measuring, so 0 in a shrink-to-fit box, as in browsers); with
+       nothing, 300 x 150 *)
     let num k = Option.bind (a k) (fun v ->
         let v = String.trim v in
         let v = if String.ends_with ~suffix:"px" v then String.sub v 0 (String.length v - 2) else v in
@@ -417,13 +420,14 @@ let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
     let w = match st.width with Auto -> num "width" | l -> Some (px l ~of_:cw) in
     let h = match st.height with Auto -> num "height" | l -> Some (px l ~of_:cw) in
     let ratio = Svg.ratio n in
+    let clamp_cw w = match st.max_width with Auto -> w | l -> min w (px l ~of_:cw) in
     let w, h = match w, h, ratio with
       | Some w, Some h, _ -> (w, h)
       | Some w, None, Some r -> (w, int_of_float (Float.round (float w *. r)))
       | Some w, None, None -> (w, 150)
       | None, Some h, Some r when r > 0. -> (int_of_float (Float.round (float h /. r)), h)
       | None, Some h, _ -> (300, h)
-      | None, None, Some r -> (300, int_of_float (300. *. r))
+      | None, None, Some r -> (clamp_cw cw, int_of_float (Float.round (float (clamp_cw cw) *. r)))
       | None, None, None -> (300, 150) in
     if w <= 0 || h <= 0 || not st.visible then None
     else Some (Box { w; h; label = ""; frame = false; ctl = None;
@@ -774,7 +778,7 @@ and layout_abs o (cbx, cby, cbw, cbh) (p : pending) ~depth =
             ~x ~y ~cw:bw ~depth)
 
 (* a block box at (x, y) in a containing block [cw] wide *)
-and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~x ~y ~cw ~depth =
+and block o ?force_w ?force_h ?(valign = 0) ?legacy ~bfc (n : Dom.node) (st : Style.t) ~x ~y ~cw ~depth =
   (* a picture: a box of its size, drawn in its content box *)
   let repl = replaced o n st ~cw in
   let st = match repl with
@@ -805,9 +809,17 @@ and block o ?force_w ?force_h ?(valign = 0) ~bfc (n : Dom.node) (st : Style.t) ~
           if shrink then clamp (shrink_to_fit o n st ~avail:(max 0 (cw - ml0 - mr0)))
           else clamp (max 0 (cw - ml0 - mr0)) in
       let free = cw - w - ml0 - mr0 in
+      (* auto margins take the free space (CSS 2.1 10.3.3: block-level boxes
+         in the flow, tables too); else the container's legacy alignment *)
+      let in_flow = st.float_ = "none" && not (inline_box st.display) in
       (match m 3, m 1 with
-       | None, None when free > 0 && not shrink -> (w, free / 2)
-       | None, Some _ when free > 0 && not shrink -> (w, free)
+       | None, None when free > 0 && in_flow -> (w, free / 2)
+       | None, Some _ when free > 0 && in_flow -> (w, free)
+       | Some _, Some _ when free > 0 && in_flow ->
+         (match legacy with
+          | Some Style.Center -> (w, ml0 + free / 2)
+          | Some Style.Right -> (w, ml0 + free)
+          | _ -> (w, ml0))
        | _ -> (w, ml0)) in
   let bw = max bw frame_w in
   let content_w = bw - frame_w in
@@ -1011,7 +1023,7 @@ and flow o ~bfc (n : Dom.node) (st : Style.t) ~x ~y ~cw ~depth ~collapse_top ~co
             (l, max 0 (r - l))
           else (x, cw) in
         let m0 = mark o in
-        let r = block o ~bfc child cst ~x:cx ~y:top0 ~cw:ccw ~depth:(depth + 1) in
+        let r = block o ?legacy:st.legacy_align ~bfc child cst ~x:cx ~y:top0 ~cw:ccw ~depth:(depth + 1) in
         (* a margin that collapsed in through the child's top moves it down *)
         let top =
           if r.mt <> mt && not first then begin

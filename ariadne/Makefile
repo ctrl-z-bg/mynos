@@ -64,7 +64,8 @@ style.cmo: css.cmo selector.cmo dom.cmi
 fonts.cmo: ttf.cmo
 forms.cmo: dom.cmi text.cmo url.cmo
 dom_api.cmo: dom.cmi html.cmi selector.cmo css.cmo forms.cmo text.cmo
-layout.cmo: style.cmo fonts.cmo forms.cmo dom.cmi
+svg.cmo: style.cmo dom.cmi
+layout.cmo: style.cmo fonts.cmo forms.cmo svg.cmo dom.cmi
 
 # the checks, on the host's ocamlrun: the core's (tests/run_tests.ml), and
 # html5lib-tests (tests/html5lib.ml, with a copy of MyNOS's Json)

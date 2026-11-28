@@ -1,4 +1,4 @@
-fill 0,21 800x212 #ffffff
+fill 0,21 800x246 #ffffff
 text 8,50 serif-bold 32 #000000 Fetch
 text 92,50 serif-bold 32 #000000 and
 text 152,50 serif-bold 32 #000000 XMLHttpRequest
@@ -19,4 +19,7 @@ text 8,230 serif 16 #000000 another
 text 60,230 serif 16 #000000 origin:
 text 107,230 serif 16 #000000 (not
 text 137,230 serif 16 #000000 yet)
-height 249
+text 8,264 serif 16 #000000 AbortSignal:
+text 95,264 serif 16 #000000 (not
+text 125,264 serif 16 #000000 yet)
+height 283

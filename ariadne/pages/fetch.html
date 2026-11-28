@@ -6,6 +6,7 @@
 <p id="c">data: URL: (not yet)</p>
 <p id="d">async/await: (not yet)</p>
 <p id="e">another origin: (not yet)</p>
+<p id="f">AbortSignal: (not yet)</p>
 <script>
 fetch("about:test/lists").then(r => r.text()).then(t => {
   const doc = new DOMParser().parseFromString(t, "text/html");
@@ -32,4 +33,20 @@ fetch("data:text/plain,hello%20from%20a%20data%20URL").then(r => r.text())
 
 fetch("https://example.com/").then(() => { document.getElementById("e").textContent = "another origin: read (wrong)"; })
   .catch(e => { document.getElementById("e").textContent = "another origin: refused, as it should be (" + e.message.slice(0, 60) + "...)"; });
+
+(async () => {
+  const out = [];
+  const c = new AbortController();
+  c.signal.addEventListener("abort", () => out.push("event"));
+  c.abort(); c.abort();
+  out.push(c.signal.aborted + " " + c.signal.reason.name);
+  try { await fetch("data:text/plain,x", { signal: c.signal }); out.push("fetched (wrong)"); }
+  catch (e) { out.push("fetch " + e.name); }
+  const any = AbortSignal.any([new AbortController().signal, AbortSignal.abort("why")]);
+  out.push("any " + any.reason);
+  const t = AbortSignal.timeout(10);
+  await new Promise(r => t.onabort = r);
+  out.push("timeout " + t.reason.name);
+  document.getElementById("f").textContent = "AbortSignal: " + out.join(", ");
+})().catch(e => { document.getElementById("f").textContent = "AbortSignal failed: " + e; });
 </script>

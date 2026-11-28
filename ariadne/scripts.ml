@@ -239,7 +239,7 @@ let eval s ~name code =
     (* what the scripts printed, in the trace too (ARIADNE_DEBUG) *)
     List.iteri (fun i l ->
         if i < 20 && l <> "" then
-          s.log (Printf.sprintf "console (%s): %s" name (if String.length l > 160 then String.sub l 0 160 else l)))
+          s.log (Printf.sprintf "console (%s): %s" name (if String.length l > 1000 then String.sub l 0 1000 else l)))
       (String.split_on_char '\n' r.Js.console);
     if not r.ok then begin
       Buffer.add_string s.out ("error: " ^ r.value ^ "\n");
@@ -317,7 +317,7 @@ let close s =
 
 (* the page's scripts run; [fetch] gives a script's text by its URL *)
 let run ~(log : string -> unit) ~url ~base ~width ~height ~(fetch : string -> string option)
-    ?(cookies_get = fun _ -> "") ?(cookies_set = fun _ _ -> ()) ~(sheets : Style.sheet list) (doc : Dom.node) =
+    ?(cookies_get = fun _ -> "") ?(cookies_set = fun _ _ -> ()) ~(sheets : unit -> Style.sheet list) (doc : Dom.node) =
   let trace fmt = Printf.ksprintf log fmt in
   let t0 = Unix.gettimeofday () in
   let scripts = ref [] in
@@ -335,7 +335,7 @@ let run ~(log : string -> unit) ~url ~base ~width ~height ~(fetch : string -> st
       (* while loading: a layout of its own (no picture sizes yet); the
          window gives it its own when the page is shown *)
       let layout () =
-        let styles = Style.compute ~width ~height sheets doc in
+        let styles = Style.compute ~width ~height (sheets ()) doc in
         (Layout.layout ~width ~height styles doc, styles) in
       let s = { cx; dom = t; sid; pending = 0; log; out = Buffer.create 256; layout; laid = None;
                 scroll = (0, 0); view = (width, height); want_scroll = None; shown = false; closed = false } in

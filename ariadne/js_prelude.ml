@@ -18,7 +18,7 @@ let source = {js|
     let o = objects.get(h);
     if (o) return o;
     type = +type;
-    o = type === 1 ? new Element(h, type, name)
+    o = type === 1 ? new (interfaceOf(name))(h, type, name)
       : type === 3 ? new Text(h, type, name)
       : type === 9 ? new Document(h, type, name)
       : new Node(h, type, name);
@@ -205,9 +205,9 @@ let source = {js|
   function writeStyle(el, d) { el.setAttribute("style", Object.keys(d).map(k => k + ": " + d[k]).join("; ")); }
 
   class ClassList {
-    constructor(el) { this.el = el; }
-    get __all() { return (this.el.getAttribute("class") || "").split(/\s+/).filter(Boolean); }
-    __set(l) { this.el.setAttribute("class", l.join(" ")); }
+    constructor(el, attr) { this.el = el; this.attr = attr || "class"; }
+    get __all() { return (this.el.getAttribute(this.attr) || "").split(/\s+/).filter(Boolean); }
+    __set(l) { this.el.setAttribute(this.attr, l.join(" ")); }
     get length() { return this.__all.length; }
     item(i) { return this.__all[i] || null; }
     contains(c) { return this.__all.includes(c); }
@@ -252,10 +252,6 @@ let source = {js|
     }
     get hidden() { return this.hasAttribute("hidden"); } set hidden(v) { this.toggleAttribute("hidden", !!v); }
     get title() { return this.getAttribute("title") || ""; } set title(v) { this.setAttribute("title", v); }
-    get href() { const h = this.getAttribute("href"); return h === null ? "" : new URL(h, g.location.href).href; }
-    set href(v) { this.setAttribute("href", v); }
-    get src() { const s = this.getAttribute("src"); return s === null ? "" : new URL(s, g.location.href).href; }
-    set src(v) { this.setAttribute("src", v); }
     get children() { return list(D("elements", this.__h)); }
     get childElementCount() { return this.children.length; }
     get firstElementChild() { return this.children[0] || null; }
@@ -285,11 +281,6 @@ let source = {js|
     getElementsByClassName(c) { return list(D("byClass", this.__h, c)); }
     matches(s) { return D("matches", this.__h, s)[0] === "1"; }
     closest(s) { return one(D("closest", this.__h, s)); }
-    get value() { return D("value", this.__h)[0]; } set value(v) { D("setValue", this.__h, str(v)); }
-    get checked() { return D("checked", this.__h)[0] === "1"; } set checked(v) { D("setChecked", this.__h, v ? "1" : "0"); }
-    get disabled() { return this.hasAttribute("disabled"); } set disabled(v) { this.toggleAttribute("disabled", !!v); }
-    get name() { return this.getAttribute("name") || ""; } set name(v) { this.setAttribute("name", v); }
-    get type() { return (this.getAttribute("type") || "").toLowerCase(); } set type(v) { this.setAttribute("type", v); }
     get content() { return this; }   // a template's
     focus() {} blur() {}
     click() { this.dispatchEvent(new Event("click", { bubbles: true, cancelable: true })); }
@@ -347,7 +338,12 @@ let source = {js|
     getElementsByTagName(t) { return list(D("byTag", this.__h, t)); }
     getElementsByClassName(c) { return list(D("byClass", this.__h, c)); }
     getElementsByName(n) { return list(D("queryAll", this.__h, "[name=\"" + str(n).replace(/"/g, '\\"') + "\"]")); }
-    createElement(t) { return one(D("create", str(t))); }
+    createElement(t) { const el = one(D("create", str(t))); if (el) el.__made = true; return el; }
+    get baseURI() {
+      const b = this.querySelector("base[href]");
+      try { return b ? new URL(b.getAttribute("href"), g.location.href).href : g.location.href; }
+      catch (e) { return g.location.href; }
+    }
     createElementNS(ns, t) { return this.createElement(t); }
     createTextNode(s) { return one(D("createText", str(s))); }
     createComment(s) { return one(D("createComment", str(s))); }
@@ -358,7 +354,7 @@ let source = {js|
     get cookie() { return D("cookie")[0]; } set cookie(v) { D("setCookie", str(v)); }
     get referrer() { return ""; }
     get defaultView() { return g; }
-    get location() { return g.location; }
+    get location() { return g.location; } set location(v) { g.location = v; }
     get forms() { return this.getElementsByTagName("form"); }
     get images() { return this.getElementsByTagName("img"); }
     get links() { return this.querySelectorAll("a[href], area[href]"); }
@@ -453,7 +449,126 @@ let source = {js|
       }
     }
   }
-  class AbortController { constructor() { this.signal = { aborted: false, addEventListener() {} }; } abort() { this.signal.aborted = true; } }
+  // DOMException (WebIDL), if the engine has none
+  if (typeof g.DOMException !== "function") {
+    const codes = { IndexSizeError: 1, NotFoundError: 8, NotSupportedError: 9, InvalidStateError: 11,
+                    SyntaxError: 12, NetworkError: 19, AbortError: 20, TimeoutError: 23, DataCloneError: 25 };
+    g.DOMException = class DOMException extends Error {
+      constructor(message, name) {
+        super(message === undefined ? "" : String(message));
+        this.name = name === undefined ? "Error" : String(name);
+        this.code = codes[this.name] || 0;
+      }
+    };
+  }
+  // TextEncoder, TextDecoder (the Encoding Standard): UTF-8, and decoding
+  // UTF-16 and windows-1252 too
+  class TextEncoder {
+    get encoding() { return "utf-8"; }
+    encode(input = "") {
+      const s = String(input), out = [];
+      for (let i = 0; i < s.length; i++) {
+        let c = s.charCodeAt(i);
+        if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length) {
+          const d = s.charCodeAt(i + 1);
+          if (d >= 0xDC00 && d <= 0xDFFF) { c = 0x10000 + ((c - 0xD800) << 10) + (d - 0xDC00); i++; }
+          else c = 0xFFFD;
+        } else if (c >= 0xD800 && c <= 0xDFFF) c = 0xFFFD;
+        if (c < 0x80) out.push(c);
+        else if (c < 0x800) out.push(0xC0 | c >> 6, 0x80 | c & 63);
+        else if (c < 0x10000) out.push(0xE0 | c >> 12, 0x80 | c >> 6 & 63, 0x80 | c & 63);
+        else out.push(0xF0 | c >> 18, 0x80 | c >> 12 & 63, 0x80 | c >> 6 & 63, 0x80 | c & 63);
+      }
+      return new Uint8Array(out);
+    }
+    encodeInto(input, dest) {
+      const b = this.encode(input), n = Math.min(b.length, dest.length);
+      // whole characters only
+      let k = n; while (k > 0 && k < b.length && (b[k] & 0xC0) === 0x80) k--;
+      dest.set(b.subarray(0, k));
+      return { read: new TextDecoder().decode(b.subarray(0, k)).length, written: k };
+    }
+  }
+  class TextDecoder {
+    constructor(label = "utf-8", opts) {
+      const l = String(label).trim().toLowerCase();
+      this.encoding = ["utf8", "unicode-1-1-utf-8", "utf-8"].includes(l) ? "utf-8"
+        : ["utf-16", "utf-16le"].includes(l) ? "utf-16le" : l === "utf-16be" ? "utf-16be"
+        : ["latin1", "iso-8859-1", "ascii", "us-ascii", "windows-1252", "cp1252"].includes(l) ? "windows-1252" : null;
+      if (!this.encoding) throw new RangeError("TextDecoder: the encoding " + label + " is not supported");
+      this.fatal = !!(opts && opts.fatal); this.ignoreBOM = !!(opts && opts.ignoreBOM);
+    }
+    decode(input) {
+      if (input === undefined) return "";
+      const b = input instanceof ArrayBuffer ? new Uint8Array(input)
+        : new Uint8Array(input.buffer, input.byteOffset || 0, input.byteLength);
+      let out = "", i = 0;
+      const bad = () => { if (this.fatal) throw new TypeError("TextDecoder: invalid data"); out += "�"; };
+      if (this.encoding === "windows-1252") {
+        for (; i < b.length; i++) out += String.fromCharCode(b[i]);
+        return out;
+      }
+      if (this.encoding !== "utf-8") {
+        const be = this.encoding === "utf-16be";
+        if (!this.ignoreBOM && b.length >= 2 && (be ? b[0] === 0xFE && b[1] === 0xFF : b[0] === 0xFF && b[1] === 0xFE)) i = 2;
+        for (; i + 1 < b.length; i += 2) out += String.fromCharCode(be ? b[i] << 8 | b[i + 1] : b[i] | b[i + 1] << 8);
+        if (i < b.length) bad();
+        return out;
+      }
+      if (!this.ignoreBOM && b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF) i = 3;
+      while (i < b.length) {
+        const c = b[i];
+        let n = c < 0x80 ? 0 : c >= 0xC2 && c < 0xE0 ? 1 : c >= 0xE0 && c < 0xF0 ? 2 : c >= 0xF0 && c < 0xF5 ? 3 : -1;
+        if (n < 0) { bad(); i++; continue; }
+        if (n === 0) { out += String.fromCharCode(c); i++; continue; }
+        let cp = c & (0x3F >> n), j = 1;
+        for (; j <= n && i + j < b.length && (b[i + j] & 0xC0) === 0x80; j++) cp = cp << 6 | b[i + j] & 63;
+        if (j <= n || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)
+            || (n === 2 && cp < 0x800) || (n === 3 && cp < 0x10000)) { bad(); i += Math.max(1, j); continue; }
+        out += String.fromCodePoint(cp); i += n + 1;
+      }
+      return out;
+    }
+  }
+  g.TextEncoder = TextEncoder; g.TextDecoder = TextDecoder;
+  // AbortController and AbortSignal (the DOM Standard): a signal is an
+  // event target, aborted once (its reason, an "abort" event); abort(),
+  // timeout() and any() make signals of their own
+  class AbortSignal extends EventTarget {
+    constructor(key) {
+      super();
+      if (key !== signalKey) throw new TypeError("Illegal constructor");
+      this.aborted = false; this.reason = undefined; this.onabort = null; this.__followers = [];
+    }
+    throwIfAborted() { if (this.aborted) throw this.reason; }
+    __abort(reason) {
+      if (this.aborted) return;
+      this.aborted = true;
+      this.reason = reason === undefined ? new g.DOMException("signal is aborted without reason", "AbortError") : reason;
+      const fs = this.__followers; this.__followers = [];
+      this.dispatchEvent(new Event("abort"));
+      for (const f of fs) f.__abort(this.reason);
+    }
+    static abort(reason) { const s = new AbortSignal(signalKey); s.__abort(reason); return s; }
+    static timeout(ms) {
+      const s = new AbortSignal(signalKey);
+      g.setTimeout(() => s.__abort(new g.DOMException("signal timed out", "TimeoutError")), ms);
+      return s;
+    }
+    static any(signals) {
+      const s = new AbortSignal(signalKey);
+      for (const x of signals) {
+        if (x.aborted) { s.__abort(x.reason); return s; }
+      }
+      for (const x of signals) x.__followers.push(s);
+      return s;
+    }
+  }
+  const signalKey = {};
+  class AbortController {
+    constructor() { this.signal = new AbortSignal(signalKey); }
+    abort(reason) { this.signal.__abort(reason); }
+  }
 
   // one request: [status, reason, url, body, headers...]; a NetworkError thrown
   function request(method, url, headers, body, mode) {
@@ -480,7 +595,8 @@ let source = {js|
     text() { this.bodyUsed = true; return Promise.resolve(this.__body); }
     json() { this.bodyUsed = true; try { return Promise.resolve(JSON.parse(this.__body)); } catch (e) { return Promise.reject(e); } }
     blob() { return this.text(); }
-    arrayBuffer() { return Promise.reject(new TypeError("arrayBuffer: not in Ariadne yet")); }
+    // the body as Ariadne holds it (text), in UTF-8
+    arrayBuffer() { return this.text().then(t => new g.TextEncoder().encode(t).buffer); }
     clone() { return new Response(this.__body, this); }
   }
 
@@ -488,6 +604,8 @@ let source = {js|
     init = init || {};
     return new Promise((resolve, reject) => {
       try {
+        const signal = init.signal || (input && input.signal);
+        if (signal && signal.aborted) { reject(signal.reason); return; }
         const url = new URL(typeof input === "string" ? input : (input.url || String(input)), g.location.href).href;
         const method = String(init.method || (input && input.method) || "GET").toUpperCase();
         let body = init.body;
@@ -613,15 +731,264 @@ let source = {js|
     for (const o of [...observers]) o.__check();
     if (g.document) g.document.dispatchEvent(new Event("scroll", { bubbles: true }));
   };
+  // ---- the element interfaces (the HTML Standard's): each element's
+  // object is of its tag's interface, which reflects its content attributes
+  // as properties (link.rel, script.async, img.loading, input.type...)
+  const baseUrl = () => (g.document && g.document.baseURI) || g.location.href;
+  // [property, kind, attribute (default: the property in lower case), default]
+  // kinds: s string, u URL, b boolean, n integer, e enumerated ([values,
+  // missing, invalid]), c CORS setting (null when absent)
+  function reflect(cls, spec) {
+    for (const [prop, kind, attr0, def] of spec) {
+      const a = attr0 || prop.toLowerCase();
+      let get, set = function (v) { this.setAttribute(a, v); };
+      switch (kind) {
+        case "s": get = function () { const v = this.getAttribute(a); return v === null ? (def ?? "") : v; }; break;
+        case "u": get = function () {
+          const v = this.getAttribute(a);
+          if (v === null) return def === "document" ? g.location.href : "";
+          try { return new URL(v, baseUrl()).href; } catch (e) { return v; }
+        }; break;
+        case "b": get = function () { return this.hasAttribute(a); };
+          set = function (v) { this.toggleAttribute(a, !!v); }; break;
+        case "n": get = function () {
+          const v = parseInt(this.getAttribute(a), 10);
+          return isNaN(v) ? (def ?? 0) : v;
+        }; set = function (v) { this.setAttribute(a, String(Math.trunc(Number(v)) || 0)); }; break;
+        case "e": get = function () {
+          const [values, missing, invalid] = def, v = this.getAttribute(a);
+          if (v === null) return missing;
+          const l = v.toLowerCase();
+          return values.includes(l) ? l : invalid;
+        }; break;
+        case "c": get = function () {
+          const v = this.getAttribute(a);
+          return v === null ? null : v.toLowerCase() === "use-credentials" ? "use-credentials" : "anonymous";
+        }; set = function (v) { if (v === null) this.removeAttribute(a); else this.setAttribute(a, v); }; break;
+      }
+      Object.defineProperty(cls.prototype, prop, { get, set, configurable: true, enumerable: true });
+    }
+  }
+  class HTMLElement extends Element {}
+  reflect(HTMLElement, [["lang", "s"], ["dir", "s"], ["accessKey", "s", "accesskey"], ["translate", "b"],
+                        ["draggable", "b"], ["inert", "b"], ["nonce", "s"], ["autofocus", "b"]]);
+  Object.defineProperty(HTMLElement.prototype, "tabIndex", { configurable: true, enumerable: true,
+    get() {
+      const v = parseInt(this.getAttribute("tabindex"), 10);
+      if (!isNaN(v)) return v;
+      return /^(A|AREA|BUTTON|INPUT|SELECT|TEXTAREA|IFRAME|SUMMARY)$/.test(this.nodeName) ? 0 : -1;
+    },
+    set(v) { this.setAttribute("tabindex", String(Math.trunc(Number(v)) || 0)); } });
+  class SVGElement extends Element {}
+  const ifaces = { HTMLElement, SVGElement };
+  const byTag = {};
+  function iface(name, tags, spec, extend) {
+    const cls = ({ [name]: class extends (extend || HTMLElement) {} })[name];
+    if (spec) reflect(cls, spec);
+    for (const t of tags) byTag[t] = cls;
+    ifaces[name] = cls;
+    return cls;
+  }
+  function interfaceOf(name) {
+    // HTML elements' names are in upper case (nodeName); the others, SVG's
+    if (name !== name.toUpperCase()) return name === "svg" ? ifaces.SVGSVGElement : SVGElement;
+    return byTag[name] || HTMLElement;
+  }
+  // a link's URL, in parts (HTMLHyperlinkElementUtils)
+  function urlParts(cls) {
+    for (const k of ["protocol", "username", "password", "host", "hostname", "port", "pathname", "search", "hash", "origin"])
+      Object.defineProperty(cls.prototype, k, { configurable: true, enumerable: true,
+        get() { const h = this.href; if (!h) return ""; try { return new URL(h)[k]; } catch (e) { return ""; } },
+        set(v) { if (k === "origin") return; const u = new URL(this.href || baseUrl()); u[k] = v; this.href = u.href; } });
+    cls.prototype.toString = function () { return this.href; };
+  }
+  const relList = cls => Object.defineProperty(cls.prototype, "relList", { configurable: true,
+    get() { return new ClassList(this, "rel"); } });
+  const controlValue = cls => Object.defineProperty(cls.prototype, "value", { configurable: true, enumerable: true,
+    get() { return D("value", this.__h)[0]; }, set(v) { D("setValue", this.__h, str(v)); } });
+  const formOwner = cls => Object.defineProperty(cls.prototype, "form", { configurable: true,
+    get() { const id = this.getAttribute("form"); return id ? g.document.getElementById(id) : this.closest("form"); } });
+  const ref = ["referrerPolicy", "s", "referrerpolicy"], co = ["crossOrigin", "c", "crossorigin"];
+  urlParts(iface("HTMLAnchorElement", ["A"], [["href", "u"], ["target", "s"], ["download", "s"], ["rel", "s"],
+    ["hreflang", "s"], ["type", "s"], ["ping", "s"], ref]));
+  Object.defineProperty(ifaces.HTMLAnchorElement.prototype, "text", { configurable: true,
+    get() { return this.textContent; }, set(v) { this.textContent = v; } });
+  relList(ifaces.HTMLAnchorElement);
+  urlParts(iface("HTMLAreaElement", ["AREA"], [["href", "u"], ["target", "s"], ["download", "s"], ["rel", "s"],
+    ["alt", "s"], ["coords", "s"], ["shape", "s"], ref]));
+  relList(iface("HTMLLinkElement", ["LINK"], [["href", "u"], ["rel", "s"], ["media", "s"], ["hreflang", "s"],
+    ["type", "s"], ["as", "s"], ["sizes", "s"], ["integrity", "s"], ["imageSrcset", "s", "imagesrcset"],
+    ["imageSizes", "s", "imagesizes"], ["disabled", "b"], ["fetchPriority", "s", "fetchpriority"], co, ref]));
+  iface("HTMLScriptElement", ["SCRIPT"], [["src", "u"], ["type", "s"], ["defer", "b"], ["noModule", "b", "nomodule"],
+    ["integrity", "s"], ["charset", "s"], ["event", "s"], ["htmlFor", "s", "for"], co, ref]);
+  Object.defineProperties(ifaces.HTMLScriptElement.prototype, {
+    text: { configurable: true, get() { return this.textContent; }, set(v) { this.textContent = v; } },
+    // a script made by a script is async unless told otherwise ("force async")
+    async: { configurable: true, enumerable: true,
+      get() { return this.hasAttribute("async") || (!!this.__made && this.__async !== false); },
+      set(v) { this.__async = !!v; this.toggleAttribute("async", !!v); } } });
+  ifaces.HTMLScriptElement.supports = t => t === "classic";
+  iface("HTMLImageElement", ["IMG"], [["src", "u"], ["alt", "s"], ["srcset", "s"], ["sizes", "s"], ["useMap", "s", "usemap"],
+    ["isMap", "b", "ismap"], ["loading", "e", null, [["lazy", "eager"], "eager", "eager"]],
+    ["decoding", "e", null, [["sync", "async", "auto"], "auto", "auto"]], ["fetchPriority", "s", "fetchpriority"], co, ref]);
+  Object.defineProperties(ifaces.HTMLImageElement.prototype, {
+    width: { configurable: true, get() { const b = boxOf(this); return b ? b[2] : parseInt(this.getAttribute("width"), 10) || 0; },
+             set(v) { this.setAttribute("width", String(v)); } },
+    height: { configurable: true, get() { const b = boxOf(this); return b ? b[3] : parseInt(this.getAttribute("height"), 10) || 0; },
+              set(v) { this.setAttribute("height", String(v)); } },
+    currentSrc: { configurable: true, get() { return this.src; } },
+    complete: { configurable: true, get() { return true; } },
+    decode: { configurable: true, value() { return Promise.resolve(); } } });
+  iface("HTMLIFrameElement", ["IFRAME"], [["src", "u"], ["srcdoc", "s"], ["name", "s"], ["allow", "s"],
+    ["allowFullscreen", "b", "allowfullscreen"], ["width", "s"], ["height", "s"], ["loading", "s"], ref]);
+  Object.defineProperties(ifaces.HTMLIFrameElement.prototype, {
+    contentWindow: { configurable: true, get() { return null; } },
+    contentDocument: { configurable: true, get() { return null; } } });
+  const field = [["name", "s"], ["disabled", "b"], ["autocomplete", "s"], ["required", "b"], ["readOnly", "b", "readonly"],
+    ["placeholder", "s"]];
+  const input = iface("HTMLInputElement", ["INPUT"], field.concat([["accept", "s"], ["alt", "s"], ["src", "u"],
+    ["defaultValue", "s", "value"], ["defaultChecked", "b", "checked"], ["max", "s"], ["min", "s"], ["step", "s"],
+    ["maxLength", "n", "maxlength", -1], ["minLength", "n", "minlength", -1], ["multiple", "b"], ["pattern", "s"],
+    ["size", "n", null, 20], ["inputMode", "s", "inputmode"],
+    ["type", "e", null, [["hidden", "text", "search", "tel", "url", "email", "password", "date", "month", "week",
+      "time", "datetime-local", "number", "range", "color", "checkbox", "radio", "file", "submit", "image", "reset",
+      "button"], "text", "text"]]]));
+  controlValue(input); formOwner(input);
+  Object.defineProperty(input.prototype, "checked", { configurable: true, enumerable: true,
+    get() { return D("checked", this.__h)[0] === "1"; }, set(v) { D("setChecked", this.__h, v ? "1" : "0"); } });
+  input.prototype.select = function () {}; input.prototype.setSelectionRange = function () {};
+  const textarea = iface("HTMLTextAreaElement", ["TEXTAREA"], field.concat([["rows", "n", null, 2], ["cols", "n", null, 20],
+    ["maxLength", "n", "maxlength", -1], ["wrap", "s"]]));
+  controlValue(textarea); formOwner(textarea);
+  Object.defineProperty(textarea.prototype, "defaultValue", { configurable: true,
+    get() { return this.textContent; }, set(v) { this.textContent = v; } });
+  const button = iface("HTMLButtonElement", ["BUTTON"], [["name", "s"], ["disabled", "b"], ["value", "s"],
+    ["formAction", "u", "formaction"], ["formMethod", "s", "formmethod"], ["formTarget", "s", "formtarget"],
+    ["type", "e", null, [["submit", "reset", "button"], "submit", "submit"]]]);
+  formOwner(button);
+  const option = iface("HTMLOptionElement", ["OPTION"], [["disabled", "b"], ["label", "s"],
+    ["defaultSelected", "b", "selected"]]);
+  Object.defineProperties(option.prototype, {
+    value: { configurable: true, enumerable: true,
+      get() { const v = this.getAttribute("value"); return v === null ? this.text : v; },
+      set(v) { this.setAttribute("value", v); } },
+    text: { configurable: true, get() { return this.textContent.replace(/\s+/g, " ").trim(); },
+            set(v) { this.textContent = v; } },
+    selected: { configurable: true, get() { const s = this.closest("select"); return !!s && s.value === this.value; },
+                set(v) { const s = this.closest("select"); if (s && v) s.value = this.value; } },
+    index: { configurable: true, get() { const s = this.closest("select"); return s ? s.options.indexOf(this) : 0; } } });
+  formOwner(option);
+  const select = iface("HTMLSelectElement", ["SELECT"], [["name", "s"], ["disabled", "b"], ["required", "b"],
+    ["multiple", "b"], ["size", "n", null, 0], ["autocomplete", "s"]]);
+  controlValue(select); formOwner(select);
+  Object.defineProperties(select.prototype, {
+    options: { configurable: true, get() { return this.querySelectorAll("option"); } },
+    length: { configurable: true, get() { return this.options.length; } },
+    type: { configurable: true, get() { return this.multiple ? "select-multiple" : "select-one"; } },
+    selectedIndex: { configurable: true,
+      get() { const v = this.value; return this.options.findIndex(o => o.value === v); },
+      set(i) { const o = this.options[i]; if (o) this.value = o.value; } },
+    selectedOptions: { configurable: true, get() { return this.options.filter(o => o.selected); } } });
+  select.prototype.item = function (i) { return this.options[i] || null; };
+  const form = iface("HTMLFormElement", ["FORM"], [["action", "u", null, "document"], ["target", "s"], ["name", "s"],
+    ["noValidate", "b", "novalidate"], ["acceptCharset", "s", "accept-charset"], ["autocomplete", "s"],
+    ["method", "e", null, [["get", "post", "dialog"], "get", "get"]],
+    ["enctype", "e", null, [["application/x-www-form-urlencoded", "multipart/form-data", "text/plain"],
+      "application/x-www-form-urlencoded", "application/x-www-form-urlencoded"]]]);
+  Object.defineProperties(form.prototype, {
+    elements: { configurable: true, get() { return this.querySelectorAll("input, select, textarea, button, fieldset, output, object"); } },
+    length: { configurable: true, get() { return this.elements.length; } } });
+  form.prototype.checkValidity = form.prototype.reportValidity = function () { return true; };
+  iface("HTMLFieldSetElement", ["FIELDSET"], [["disabled", "b"], ["name", "s"]]);
+  iface("HTMLOutputElement", ["OUTPUT"], [["name", "s"], ["htmlFor", "s", "for"]]);
+  iface("HTMLLabelElement", ["LABEL"], [["htmlFor", "s", "for"]]);
+  Object.defineProperty(ifaces.HTMLLabelElement.prototype, "control", { configurable: true,
+    get() { const f = this.htmlFor; return f ? g.document.getElementById(f) : this.querySelector("input, select, textarea, button"); } });
+  iface("HTMLMetaElement", ["META"], [["name", "s"], ["content", "s"], ["httpEquiv", "s", "http-equiv"], ["media", "s"]]);
+  iface("HTMLBaseElement", ["BASE"], [["href", "u", null, "document"], ["target", "s"]]);
+  iface("HTMLStyleElement", ["STYLE"], [["media", "s"], ["type", "s"], ["disabled", "b"]]);
+  iface("HTMLTitleElement", ["TITLE"]);
+  Object.defineProperty(ifaces.HTMLTitleElement.prototype, "text", { configurable: true,
+    get() { return this.textContent; }, set(v) { this.textContent = v; } });
+  const media = iface("HTMLMediaElement", [], [["src", "u"], ["autoplay", "b"], ["loop", "b"], ["controls", "b"],
+    ["defaultMuted", "b", "muted"], ["preload", "s"], co]);
+  Object.assign(media.prototype, { play() { return Promise.resolve(); }, pause() {}, load() {}, canPlayType() { return ""; } });
+  Object.defineProperties(media.prototype, { paused: { configurable: true, get() { return true; } },
+    muted: { configurable: true, get() { return this.hasAttribute("muted"); }, set(v) {} } });
+  iface("HTMLVideoElement", ["VIDEO"], [["poster", "u"], ["playsInline", "b", "playsinline"], ["width", "n"], ["height", "n"]], media);
+  iface("HTMLAudioElement", ["AUDIO"], null, media);
+  iface("HTMLSourceElement", ["SOURCE"], [["src", "u"], ["type", "s"], ["srcset", "s"], ["sizes", "s"], ["media", "s"]]);
+  iface("HTMLCanvasElement", ["CANVAS"], [["width", "n", null, 300], ["height", "n", null, 150]]);
+  Object.assign(ifaces.HTMLCanvasElement.prototype, { getContext() { return null; }, toDataURL() { return "data:,"; } });
+  iface("HTMLTableCellElement", ["TD", "TH"], [["colSpan", "n", "colspan", 1], ["rowSpan", "n", "rowspan", 1],
+    ["headers", "s"], ["scope", "s"], ["abbr", "s"]]);
+  iface("HTMLTableElement", ["TABLE"]);
+  iface("HTMLTableRowElement", ["TR"]);
+  iface("HTMLTableSectionElement", ["TBODY", "THEAD", "TFOOT"]);
+  iface("HTMLOListElement", ["OL"], [["start", "n", null, 1], ["reversed", "b"], ["type", "s"]]);
+  iface("HTMLUListElement", ["UL"]);
+  iface("HTMLLIElement", ["LI"], [["value", "n"]]);
+  iface("HTMLDetailsElement", ["DETAILS"], [["open", "b"], ["name", "s"]]);
+  iface("HTMLDialogElement", ["DIALOG"], [["open", "b"]]);
+  Object.assign(ifaces.HTMLDialogElement.prototype, {
+    show() { this.open = true; }, showModal() { this.open = true; },
+    close(v) { if (this.open) { this.open = false; if (v !== undefined) this.returnValue = String(v); this.dispatchEvent(new Event("close")); } } });
+  iface("HTMLTemplateElement", ["TEMPLATE"]);
+  iface("HTMLObjectElement", ["OBJECT"], [["data", "u"], ["type", "s"], ["name", "s"], ["width", "s"], ["height", "s"]]);
+  iface("HTMLEmbedElement", ["EMBED"], [["src", "u"], ["type", "s"], ["width", "s"], ["height", "s"]]);
+  iface("HTMLDataElement", ["DATA"], [["value", "s"]]);
+  iface("HTMLTimeElement", ["TIME"], [["dateTime", "s", "datetime"]]);
+  iface("HTMLQuoteElement", ["Q", "BLOCKQUOTE"], [["cite", "u"]]);
+  iface("HTMLModElement", ["INS", "DEL"], [["cite", "u"], ["dateTime", "s", "datetime"]]);
+  for (const [n, tags] of [["HTMLDivElement", ["DIV"]], ["HTMLSpanElement", ["SPAN"]], ["HTMLParagraphElement", ["P"]],
+       ["HTMLHeadingElement", ["H1", "H2", "H3", "H4", "H5", "H6"]], ["HTMLBodyElement", ["BODY"]],
+       ["HTMLHtmlElement", ["HTML"]], ["HTMLHeadElement", ["HEAD"]], ["HTMLPreElement", ["PRE", "LISTING", "XMP"]],
+       ["HTMLBRElement", ["BR"]], ["HTMLHRElement", ["HR"]], ["HTMLPictureElement", ["PICTURE"]],
+       ["HTMLDListElement", ["DL"]], ["HTMLMenuElement", ["MENU"]], ["HTMLMapElement", ["MAP"]],
+       ["HTMLOptGroupElement", ["OPTGROUP"]], ["HTMLProgressElement", ["PROGRESS"]], ["HTMLMeterElement", ["METER"]],
+       ["HTMLSlotElement", ["SLOT"]], ["HTMLTableCaptionElement", ["CAPTION"]], ["HTMLTableColElement", ["COL", "COLGROUP"]],
+       ["HTMLUnknownElement", []]])
+    iface(n, tags);
+  // the legacy constructors (named constructors): Image, Option, Audio
+  g.Image = function Image(width, height) {
+    const img = g.document.createElement("img");
+    if (width !== undefined) img.setAttribute("width", String(width));
+    if (height !== undefined) img.setAttribute("height", String(height));
+    return img;
+  };
+  g.Image.prototype = ifaces.HTMLImageElement.prototype;
+  g.Option = function Option(text, value, defaultSelected, selected) {
+    const o = g.document.createElement("option");
+    if (text !== undefined && text !== "") o.textContent = String(text);
+    if (value !== undefined) o.setAttribute("value", String(value));
+    if (defaultSelected) o.setAttribute("selected", "");
+    if (selected) o.__selected = true;
+    return o;
+  };
+  g.Option.prototype = option.prototype;
+  g.Audio = function Audio(src) {
+    const a = g.document.createElement("audio");
+    a.setAttribute("preload", "auto");
+    if (src !== undefined) a.setAttribute("src", String(src));
+    return a;
+  };
+  g.Audio.prototype = ifaces.HTMLAudioElement.prototype;
+  ifaces.SVGSVGElement = ({ SVGSVGElement: class extends SVGElement {} }).SVGSVGElement;
+  ifaces.SVGGraphicsElement = SVGElement;
+  // an SVG element's href (SVGAnimatedString), href or xlink:href
+  Object.defineProperty(SVGElement.prototype, "href", { configurable: true,
+    get() { const v = this.getAttribute("href") ?? this.getAttribute("xlink:href") ?? ""; return { baseVal: v, animVal: v }; } });
+
   class ResizeObserver { constructor() {} observe() {} unobserve() {} disconnect() {} }
   class MutationObserver { constructor() {} observe() {} disconnect() {} takeRecords() { return []; } }
   g.IntersectionObserver = IntersectionObserver; g.ResizeObserver = ResizeObserver; g.MutationObserver = MutationObserver;
   g.Headers = Headers; g.Response = Response; g.XMLHttpRequest = XMLHttpRequest;
-  g.URLSearchParams = URLSearchParams; g.FormData = FormData; g.AbortController = AbortController;
+  g.URLSearchParams = URLSearchParams; g.FormData = FormData; g.AbortController = AbortController; g.AbortSignal = AbortSignal;
 
   g.window = g; g.self = g; g.top = g; g.parent = g; g.frames = g;
   Object.setPrototypeOf(g, EventTarget.prototype);
-  g.Node = Node; g.Element = Element; g.HTMLElement = Element; g.Text = Text; g.Document = Document;
+  g.Node = Node; g.Element = Element; g.Text = Text; g.Document = Document;
+  for (const k in ifaces) g[k] = ifaces[k];
   g.EventTarget = EventTarget; g.Event = Event; g.CustomEvent = CustomEvent; g.DOMRect = DOMRect;
   g.navigator = { userAgent: "Mozilla/5.0 (MyNOS) Ariadne/0.1", language: "en", languages: ["en"], platform: "MyNOS",
                   cookieEnabled: true, onLine: true };
@@ -661,12 +1028,42 @@ let source = {js|
 
   g.__init = function (url, width, height, sid) {
     g.__sid = String(sid);
-    const u = new URL(url);
-    g.location = {
-      href: u.href, protocol: u.protocol, host: u.host, hostname: u.hostname, port: u.port,
-      pathname: u.pathname, search: u.search, hash: u.hash, origin: u.origin,
-      toString() { return this.href; }, assign() {}, replace() {}, reload() {}
+    // Location (the HTML Standard): its URL, and navigating: Ariadne goes
+    // there after this run (navigation is asynchronous); a change of the
+    // fragment alone stays in the page (a scroll, hashchange)
+    let here = new URL(url);
+    const navigate = (to, replace) => {
+      const u = new URL(String(to), (g.document && g.document.baseURI) || here.href);
+      const same = u.href.split("#")[0] === here.href.split("#")[0];
+      if (same && u.href.includes("#")) {
+        const old = here.href;
+        here = u;
+        const id = decodeURIComponent(u.hash.slice(1));
+        const el = id && (g.document.getElementById(id) || g.document.querySelector("a[name=\"" + id.replace(/"/g, "") + "\"]"));
+        if (el) el.scrollIntoView(); else if (id === "" || id === "top") g.scrollTo(0, 0);
+        const e = new Event("hashchange"); e.oldURL = old; e.newURL = u.href;
+        g.setTimeout(() => g.dispatchEvent(e), 0);
+        return;
+      }
+      D("navigate", u.href, replace ? "1" : "0");
     };
+    class Location {
+      get href() { return here.href; } set href(v) { navigate(v, false); }
+      assign(v) { navigate(v, false); }
+      replace(v) { navigate(v, true); }
+      reload() { D("navigate", here.href, "1"); }
+      toString() { return here.href; }
+      get origin() { return here.origin; }
+      get ancestorOrigins() { return []; }
+    }
+    for (const k of ["protocol", "host", "hostname", "port", "pathname", "search", "hash"])
+      Object.defineProperty(Location.prototype, k, { enumerable: true, configurable: true,
+        get() { return here[k]; },
+        set(v) { const u = new URL(here.href); u[k] = v; navigate(u.href, false); } });
+    const loc = new Location();
+    Object.defineProperty(g, "location", { configurable: true, enumerable: true,
+      get() { return loc; }, set(v) { navigate(v, false); } });
+    g.Location = Location;
     g.document = one(D("document"));
     // the page's own scripts: Ariadne runs them
     markStarted(g.document);

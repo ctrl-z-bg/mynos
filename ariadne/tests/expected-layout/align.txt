@@ -1,0 +1,65 @@
+fill 0,16 800x230 #ffffff
+text 8,31 serif 16 #000000 The
+text 37,31 serif 16 #000000 HTML
+text 86,31 serif 16 #000000 Standard's
+text 156,31 serif 16 #000000 alignment:
+text 228,31 serif 16 #000000 center
+text 271,31 serif 16 #000000 and
+text 298,31 serif 16 #000000 align=center
+text 382,31 serif 16 #000000 centre
+text 425,31 serif 16 #000000 text,
+text 457,31 serif 16 #000000 and
+text 484,31 serif 16 #000000 the
+text 508,31 serif 16 #000000 block
+text 548,31 serif 16 #000000 boxes
+text 8,49 serif 16 #000000 inside
+text 50,49 serif 16 #000000 that
+text 78,49 serif 16 #000000 do
+text 98,49 serif 16 #000000 not
+text 122,49 serif 16 #000000 fill
+text 145,49 serif 16 #000000 the
+text 169,49 serif 16 #000000 line
+text 197,49 serif 16 #000000 (their
+text 236,49 serif 16 #000000 margins
+text 291,49 serif 16 #000000 not
+text 315,49 serif 16 #000000 auto).
+text 257,86 serif 16 #000000 a
+text 268,86 serif 16 #000000 table
+text 303,86 serif 16 #000000 in
+text 319,86 serif 16 #000000 center
+text 243,110 serif 16 #000000 a
+text 254,110 serif 16 #000000 table,
+text 293,110 serif 16 #000000 align=center
+fill 208,116 200x20 #ccddee
+text 222,131 serif 16 #000000 a
+text 233,131 serif 16 #000000 block
+text 273,131 serif 16 #000000 in
+text 289,131 serif 16 #000000 div
+text 313,131 serif 16 #000000 align=center
+fill 8,136 200x20 #ccddee
+text 8,151 serif 16 #000000 align=left
+text 74,151 serif 16 #000000 inside
+text 116,151 serif 16 #000000 center
+fill 408,156 200x20 #ccddee
+text 446,171 serif 16 #000000 a
+text 457,171 serif 16 #000000 block
+text 497,171 serif 16 #000000 in
+text 513,171 serif 16 #000000 div
+text 537,171 serif 16 #000000 align=right
+fill 408,176 200x20 #ccddee
+text 427,191 serif 16 #000000 its
+text 446,191 serif 16 #000000 own
+text 478,191 serif 16 #000000 auto
+text 510,191 serif 16 #000000 margin
+text 559,191 serif 16 #000000 wins
+fill 8,196 200x20 #ccddee
+text 15,211 serif 16 #000000 text-align:
+text 85,211 serif 16 #000000 center:
+text 133,211 serif 16 #000000 not
+text 157,211 serif 16 #000000 moved
+text 229,237 serif 16 #000000 a
+text 240,237 serif 16 #000000 table
+text 275,237 serif 16 #000000 in
+text 291,237 serif 16 #000000 td
+text 307,237 serif 16 #000000 align=center
+height 254

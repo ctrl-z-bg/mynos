@@ -30,11 +30,25 @@ let pics_lock = Mutex.create ()
 
 (* ---- a page and its style sheets ---- *)
 
+(* a page's style sheets are those its document holds now (CSSOM's
+   document.styleSheets): its <style>s, each parsed once per text, and its
+   <link rel=stylesheet>s, fetched once; those a script adds are fetched in a
+   thread of their own and apply when they arrive (they do not hold the page
+   back, as in browsers) *)
+type sheet_cache = {
+  sheet_base : string;
+  parsed : (string, Style.sheet list) Hashtbl.t;   (* a source's sheets (with its imports), under sheets_lock *)
+  fetching : (string, unit) Hashtbl.t;             (* links being fetched (sheets_lock) *)
+  mutable arrived : bool;                          (* a link's sheet arrived: style again (sheets_lock) *)
+}
+let sheets_lock = Mutex.create ()
+
 type loaded = {
   response : Loader.response;
   doc : Dom.node;
   base : string;                       (* what its links are resolved against *)
-  sheets : Style.sheet list;
+  mutable sheets : Style.sheet list;   (* as its document is now (css) *)
+  css : sheet_cache;
   title : string;
   mutable laid : (int * Layout.page) option;      (* for a width *)
   mutable last : Layout.page option;              (* the last laid out: painted while scripts have the tree *)
@@ -55,8 +69,41 @@ let now = Unix.gettimeofday
    frames), in the kernel log, in ms since the start *)
 let debug = Sys.getenv_opt "ARIADNE_DEBUG" <> None
 let t_start = now ()
+(* a message's data: URLs, as their type and size (an inline svg's are long) *)
+let short_data m =
+  let b = Buffer.create (String.length m) and n = String.length m in
+  let rec go i =
+    if i >= n then ()
+    else if i + 5 <= n && String.sub m i 5 = "data:" then begin
+      (* the URL runs to a space, or to ": " (the trace's own) *)
+      let rec stop j = if j >= n || m.[j] = ' ' || (m.[j] = ':' && j + 1 < n && m.[j + 1] = ' ') then j else stop (j + 1) in
+      let j = stop i in
+      if j - i <= 80 then Buffer.add_string b (String.sub m i (j - i))
+      else begin
+        let mime = match String.index_from_opt m i ';', String.index_from_opt m i ',' with
+          | Some k, Some c when k < c -> String.sub m i (k - i)
+          | _, Some c when c < j -> String.sub m i (c - i)
+          | _ -> "data:" in
+        Buffer.add_string b (Printf.sprintf "%s (%d bytes)" mime (j - i))
+      end;
+      go j
+    end else (Buffer.add_char b m.[i]; go (i + 1)) in
+  go 0;
+  Buffer.contents b
+
 let trace fmt = Printf.ksprintf (fun m ->
-    if debug then Mynos.log (Printf.sprintf "ariadne %6.0f: %s\n" ((now () -. t_start) *. 1000.) m)) fmt
+    if debug then begin
+      let m = short_data m in
+      (* the kernel's log keeps lines of 190 bytes or so: longer ones in parts *)
+      let t = (now () -. t_start) *. 1000. and part = 150 in
+      let rec go i =
+        if i < String.length m then begin
+          Mynos.log (Printf.sprintf "ariadne %6.0f: %s%s\n" t (if i = 0 then "" else "... ")
+                       (String.sub m i (min part (String.length m - i))));
+          go (i + part)
+        end in
+      if m = "" then Mynos.log (Printf.sprintf "ariadne %6.0f:\n" t) else go 0
+    end) fmt
 
 (* a style sheet's text, fetched *)
 let fetch_css url =
@@ -78,6 +125,39 @@ let rec with_imports ~base ~depth ?media text =
         | None -> []) sh.imports in
   imported @ [ sh ]
 
+let source_key = function
+  | Style.Inline_sheet (t, m) -> "s" ^ Option.value m ~default:"" ^ "\000" ^ t
+  | Style.Linked (h, m) -> "l" ^ Option.value m ~default:"" ^ "\000" ^ h
+
+(* the sheets of [doc] as it is now; [wait]: links fetched now (the page's
+   own, when it loads), else in the background *)
+let current_sheets ?(wait = false) c doc =
+  List.concat_map (fun src ->
+      let k = source_key src in
+      match Mutex.protect sheets_lock (fun () -> Hashtbl.find_opt c.parsed k) with
+      | Some s -> s
+      | None ->
+        let store s = Mutex.protect sheets_lock (fun () -> Hashtbl.replace c.parsed k s) in
+        match src with
+        | Style.Inline_sheet (t, media) ->
+          let s = with_imports ~base:c.sheet_base ~depth:0 ?media t in store s; s
+        | Style.Linked (href, media) ->
+          let u = Url.resolve c.sheet_base href in
+          let get () = match fetch_css u with Some t -> with_imports ~base:u ~depth:0 ?media t | None -> [] in
+          if wait then (let s = get () in store s; s)
+          else begin
+            let start = Mutex.protect sheets_lock (fun () ->
+                if Hashtbl.mem c.fetching k then false else (Hashtbl.replace c.fetching k (); true)) in
+            if start then
+              ignore (Thread.create (fun () ->
+                  trace "sheet %s: added by a script, fetching" u;
+                  let s = get () in
+                  trace "sheet %s: %d rules" u (List.fold_left (fun a (sh : Style.sheet) -> a + List.length sh.rules) 0 s);
+                  Mutex.protect sheets_lock (fun () -> Hashtbl.replace c.parsed k s; c.arrived <- true)) ());
+            []
+          end)
+    (Style.sources doc)
+
 let load ?post url =
   let t0 = now () in
   let response = Loader.load ?post (Url.of_typed url) in
@@ -89,12 +169,8 @@ let load ?post url =
   let base = match Dom.find (fun n -> Dom.is_html n "base" && Dom.attr n "href" <> None) doc with
     | Some b -> Url.resolve response.url (Option.get (Dom.attr b "href"))
     | None -> response.url in
-  let sheets = List.concat_map (function
-      | Style.Inline_sheet (t, media) -> with_imports ~base ~depth:0 ?media t
-      | Style.Linked (href, media) ->
-        let u = Url.resolve base href in
-        (match fetch_css u with Some t -> with_imports ~base:u ~depth:0 ?media t | None -> []))
-      (Style.sources doc) in
+  let css = { sheet_base = base; parsed = Hashtbl.create 16; fetching = Hashtbl.create 4; arrived = false } in
+  let sheets = current_sheets ~wait:true css doc in
   let t4 = now () in
   (* the page's scripts (Scripts: jsd), before the cascade *)
   let fetch_script u =
@@ -102,14 +178,15 @@ let load ?post url =
     | r when Loader.ok r -> Some (snd (Encoding.to_utf8 ?transport:(Encoding.charset_of_content_type r.content_type) r.body))
     | _ -> None in
   let scripts = Scripts.run ~log:(fun m -> trace "%s" m) ~url:response.url ~base ~width:878 ~height:600
-      ~fetch:fetch_script ~cookies_get:Loader.script_cookies ~cookies_set:Loader.script_set_cookie ~sheets doc in
+      ~fetch:fetch_script ~cookies_get:Loader.script_cookies ~cookies_set:Loader.script_set_cookie
+      ~sheets:(fun () -> current_sheets css doc) doc in
   let t5 = now () in
   let title = match Dom.find (fun n -> Dom.is_html n "title") doc with
     | Some t -> String.trim (Text.collapse (Dom.text_content t)) | None -> "" in
   let ms a b = (b -. a) *. 1000. in
   trace "page %s: load %.0f, decode %.0f, parse %.0f, css %.0f ms (%d sheets), scripts %.0f ms" url
     (ms t0 t1) (ms t1 t2) (ms t2 t3) (ms t3 t4) (List.length sheets) (ms t4 t5);
-  { response; doc; base; sheets; title; laid = None; last = None; styled = None; pics = Hashtbl.create 16;
+  { response; doc; base; sheets; css; title; laid = None; last = None; styled = None; pics = Hashtbl.create 16;
     started = Hashtbl.create 16; hurried = Hashtbl.create 16;
     sized = 0; laid_sized = 0;
     console = (match scripts with Some (r, _) -> r.Scripts.console | None -> "");
@@ -132,7 +209,10 @@ let layout_at l ~width ~height =
     let t0 = now () in
     let styles = match l.styled with
       | Some (w, s) when w = width -> s
-      | _ -> let s = Style.compute ~width ~height l.sheets l.doc in l.styled <- Some (width, s); s in
+      | _ ->
+        (* the sheets as the document is now: scripts may have added some *)
+        l.sheets <- current_sheets l.css l.doc;
+        let s = Style.compute ~width ~height l.sheets l.doc in l.styled <- Some (width, s); s in
     let t1 = now () in
     l.laid_sized <- Mutex.protect pics_lock (fun () -> l.sized);
     let p = Layout.layout ~image:(pic_size l) ~width ~height styles l.doc in
@@ -497,6 +577,9 @@ let window first =
                           && Mutex.protect pics_lock (fun () -> l.sized) <> l.laid_sized ->
          last_relayout := now (); l.laid <- None
        | _ -> ());
+      (* a sheet a script asked for arrived: style again *)
+      if locked && Mutex.protect sheets_lock (fun () -> let a = st.shown.css.arrived in st.shown.css.arrived <- false; a)
+      then (st.shown.laid <- None; st.shown.styled <- None);
       (match st.shown.session with
        | Some s when locked && s.Scripts.dom.changed && now () -. !last_tick >= 1. ->
          (* the scripts changed the page: its style and layout again, at
@@ -795,6 +878,15 @@ let window first =
       let t_painted = now () in
       (* the scripts: the viewport as it is now (their observers, scroll
          events), and a scroll they asked for *)
+      (* a script asked to go elsewhere (location.href = ..., assign,
+         replace, reload): once its run is over, as browsers do *)
+      (match st.shown.session with
+       | Some s when locked && s.Scripts.dom.navigation <> None ->
+         let url, replace = Option.get s.dom.navigation in
+         s.dom.navigation <- None;
+         if replace then (st.want_scroll <- Some 0; st.focus <- None; st.popup <- None; start url)
+         else go url
+       | _ -> ());
       (match st.shown.session with
        | Some s when locked ->
          s.Scripts.view <- (!page_width, box_h);

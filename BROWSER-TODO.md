@@ -192,7 +192,6 @@ Found in M5:
 - [ ] `fetch` and `XMLHttpRequest`
 - [x] Scripts in order, once the page is parsed (inline, `src`); Wikipedia's 4 run without an error (126 ms) and the page takes its `client-js` look
 - [x] Cookies (`cookies.ml`, RFC 6265's essentials: Expires, Max-Age, Domain and host-only, Path, Secure, HttpOnly; no public suffix list, a Domain must have a dot and contain the host): Ariadne's jar in the Loader, sent with each request, set by each answer (redirects too), those that outlive the session in /disk/ariadne-cookies.txt (ARIADNE_COOKIES); `document.cookie` (not HttpOnly). Google's consent page now goes through
-- [ ] Google's results: its page is written by scripts it loads (scripts added by scripts, `fetch`): blank until those come
 - [x] `fetch` (`Response`, `Headers`), `XMLHttpRequest`, `URLSearchParams`, `FormData` (basic), `DOMParser` (a detached element): requests made by Ariadne (`Loader.fetch`: any method, headers, body; redirects; cookies), synchronous inside, their callbacks later; another origin's: no cookies, readable only if it allows it (Access-Control-Allow-Origin), only GET, HEAD, POST (no preflight); `data:` URLs anyone's. jsd runs pending jobs (promises, async functions) after each run, and the time waited for the browser does not count against a run's 5 s
 - [x] Layout geometry for scripts: a layout of the page as it is now (forced, cached by the DOM's version; the window's once the page is shown), every element's box (`Layout.element_box`: block boxes, and inline fragments by element); `getBoundingClientRect`, `getClientRects`, `offset*` (`offsetParent` by CSS's rule), `client*`, `scroll*`, `scrollIntoView`, `window.scrollTo`/`scrollBy`, `innerWidth`/`scrollY`..., `getComputedStyle` (the cascade's computed values); `IntersectionObserver` from the boxes and the viewport, at observing and as the page scrolls; scroll events. Clicks go to the innermost element under the pointer (`Layout.element_at`)
 - [ ] `ResizeObserver`, `MutationObserver` (they report nothing yet); IntersectionObserver's thresholds other than 0; elements' own scrolling
@@ -204,10 +203,20 @@ Found in M5:
 - [ ] Gradients: diagonals (drawn along the nearer axis), radial and conic ones, several layers
 - [ ] Repubblica: a white box over the top strip's video picture
 - [ ] Web fonts (`@font-face`: WOFF needs zlib, WOFF2 Brotli): Repubblica's Eugenio
-- [ ] Google: its home page is not centred (to look at); its results need scripts added by scripts
+- [x] Google's home page as Chrome draws it (with Ariadne's User-Agent): `<center>` and `align=` centre block children (the HTML Standard's alignment, `text-align: -webkit-center`); auto margins centre tables too (CSS 2.1 10.3.3); an inline svg with only a viewBox fills its containing block (CSS 2.1 10.3.2; 0 in a shrink-to-fit box); test pages align, svgsize, checked against Chrome
+- [x] Style sheets as the document holds them now: `<style>`s parsed once per text, `<link rel=stylesheet>` a script adds fetched in the background and applied when they arrive
+- [x] The element interfaces (`HTMLLinkElement`, `HTMLScriptElement`, `HTMLImageElement`... about 60): each element's object of its tag's interface, reflecting its content attributes (strings, URLs, booleans, numbers, enumerations, CORS settings: `link.rel`, `script.async`, `img.loading`, `input.type`, `form.method`...), `relList`, a link's URL parts, `form`/`elements`/`options`/`selectedIndex`; SVG elements `SVGElement`; `Image`, `Option`, `Audio`; `document.baseURI`
+- [x] `Location`: `location.href = ...`, `assign`, `replace`, `reload`, its parts, `window.location = ...`: Ariadne goes there after the run; a fragment alone scrolls (`hashchange`)
+- [x] `AbortController`/`AbortSignal` (the DOM Standard: `abort`, `timeout`, `any`, the event, fetch refusing an aborted signal); `DOMException`; `TextEncoder`/`TextDecoder` (UTF-8, UTF-16, windows-1252; the same as Node's on valid and invalid input); `Response.arrayBuffer`
+- [x] Cookies with control characters refused (RFC 6265bis 5.6): a script's error text with newlines had broken the cookie file
+- [ ] Google's results: its page checks the browser with a script, then goes on (Location, now): it now ends at Google's "unusual traffic" page (a reCAPTCHA, in an iframe); not to get around. Iframes are not drawn at all yet
+- [ ] Iframes (a browsing context of their own: a document, its scripts, its layout in the box)
+- [ ] WebP pictures (stb_image has none): Repubblica's small thumbnails (gelestatic.it) are WebP
+- [ ] `form.submit()`, `requestSubmit()` from scripts; `select.selectedIndex` for several selected options
+- [ ] Repubblica: one "TypeError: not a function" left, without a stack
+- [ ] Google's home page: "Accedi" not rounded (`border-radius`), the logo 40 px higher than Chrome's, "Google offerto in: English" missing
 - [ ] The host's renderer: protocol-relative picture URLs (`//host/...`) not downloaded
 - [ ] `defer` and `async` as such, `type=module`, `document.write` while parsing
-- [ ] Google's results: still blank after the consent (its scripts run without errors and request nothing): to look into with the corpus, not as Google's case
 - [ ] Layout again after the DOM changes (only what changed): a layout of Repubblica costs 1-1.5 s, and the window waits for it
 - [ ] The page's own scripts block showing it (4.5 to 17 s on Repubblica, its scripts fetched one after another): what is parsed shown before them, and their `src` fetched ahead, as browsers do
 - [x] Repubblica's lazy sections (`lazy-html`, an IntersectionObserver with a 500 px bottom margin, then XHR): loaded when the reader scrolls near them, at 28 400 px (Chrome: 29 000)

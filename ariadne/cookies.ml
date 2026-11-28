@@ -94,6 +94,10 @@ let trim = String.trim
 (* a Set-Cookie header, from a response to [host] [path] (https or not) *)
 let set t ~now ~host ~path ~secure_origin header =
   let host = String.lowercase_ascii host in
+  (* a control character other than a tab: the whole of it ignored
+     (RFC 6265bis 5.6, as browsers do) *)
+  if String.exists (fun c -> (c < ' ' && c <> '\t') || c = '\127') header then ()
+  else
   match String.split_on_char ';' header with
   | [] -> ()
   | first :: attrs ->

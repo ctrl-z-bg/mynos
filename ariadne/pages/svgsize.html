@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<title>SVG sizes</title>
+<body style="margin:0; width:600px">
+<p>An inline svg with a viewBox and no size fills its containing block (CSS 2.1 10.3.2); in a shrink-to-fit box it is 0 wide; with neither, 300 x 150.</p>
+<div id="c1" style="width:100px"><svg id="s1" viewBox="0 0 24 12"><rect width="24" height="12" fill="#3584e4"/></svg></div>
+<div id="c2" style="display:inline-block; background:#eee">[<svg id="s2" viewBox="0 0 24 12"><rect width="24" height="12" fill="#e01b24"/></svg>]</div>
+<a id="c4" style="display:inline-block; width:40px; height:40px; padding:8px; box-sizing:border-box; background:#ddd"><svg id="s4" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#26a269"/></svg></a>
+<div id="c5"><svg id="s5"><rect width="300" height="150" fill="#f6d32d"/></svg></div>
+<div id="c6" style="width:100px"><svg id="s6" viewBox="0 0 24 12" style="display:block"><rect width="24" height="12" fill="#9141ac"/></svg></div>
+</body>

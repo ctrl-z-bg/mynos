@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html><head><title>Alignment</title>
+<style>
+body { margin: 8px; width: 600px }
+.box { width: 200px; height: 20px; background: #cde }
+.auto { margin-left: auto; margin-right: 0 }
+</style></head>
+<body>
+<p>The HTML Standard's alignment: center and align=center centre text, and
+the block boxes inside that do not fill the line (their margins not auto).</p>
+<center id="c1"><table id="t1"><tr><td>a table in center</td></tr></table></center>
+<table id="t2" align="center"><tr><td>a table, align=center</td></tr></table>
+<div align="center"><div id="b1" class="box">a block in div align=center</div></div>
+<center><div align="left"><div id="b2" class="box">align=left inside center</div></div></center>
+<div align="right"><div id="b3" class="box">a block in div align=right</div></div>
+<center><div id="b4" class="box auto">its own auto margin wins</div></center>
+<div style="text-align: center"><div id="b5" class="box">text-align: center: not moved</div></div>
+<table width="100%"><tr><td align="center"><table id="t3"><tr><td>a table in td align=center</td></tr></table></td></tr></table>
+</body></html>

@@ -63,6 +63,10 @@ type t = {
   mutable font_family : string;
   mutable line_height : line_height;
   mutable text_align : align;
+  (* the HTML Standard's alignment of descendants (center, align=...;
+     Chrome's text-align: -webkit-center...): block children that do not
+     fill the line, their margins not auto, go to that side *)
+  mutable legacy_align : align option;
   mutable text_indent : length;
   mutable white_space : white_space;
   mutable underline : bool;
@@ -133,7 +137,7 @@ type t = {
 let initial () = {
   display = Inline; position = Static; float_ = "none"; color = 0x000000; background = 0;
   font_size = 16.; font_weight = 400; italic = false; font_family = "serif";
-  line_height = Lh_normal; text_align = Left; text_indent = Len (0., 0.); white_space = Normal;
+  line_height = Lh_normal; text_align = Left; legacy_align = None; text_indent = Len (0., 0.); white_space = Normal;
   underline = false; line_through = false; overline = false; transform = No_transform;
   margin = Array.make 4 (Len (0., 0.)); padding = Array.make 4 (Len (0., 0.));
   border_width = Array.make 4 3.; border_style = Array.make 4 false; border_color = Array.make 4 (-1);
@@ -156,7 +160,7 @@ let inherit_from p =
   let s = initial () in
   s.color <- p.color; s.font_size <- p.font_size; s.font_weight <- p.font_weight;
   s.italic <- p.italic; s.font_family <- p.font_family; s.line_height <- p.line_height;
-  s.text_align <- p.text_align; s.text_indent <- p.text_indent; s.white_space <- p.white_space;
+  s.text_align <- p.text_align; s.legacy_align <- p.legacy_align; s.text_indent <- p.text_indent; s.white_space <- p.white_space;
   s.transform <- p.transform; s.visible <- p.visible; s.list_style <- p.list_style;
   s.custom <- p.custom;
   s.border_spacing <- p.border_spacing;
@@ -802,10 +806,13 @@ let rec apply ctx (s : t) (parent : t) name (v : cv list) =
          | _ -> ()))
   | "text-align" ->
     (match ident v with
-     | Some ("left" | "start" | "-webkit-left" | "-moz-left") -> s.text_align <- Left
-     | Some ("right" | "end" | "-webkit-right" | "-moz-right") -> s.text_align <- Right
-     | Some ("center" | "-webkit-center" | "-moz-center") -> s.text_align <- Center
-     | Some "justify" -> s.text_align <- Justify
+     | Some ("left" | "start") -> s.text_align <- Left; s.legacy_align <- None
+     | Some ("right" | "end") -> s.text_align <- Right; s.legacy_align <- None
+     | Some "center" -> s.text_align <- Center; s.legacy_align <- None
+     | Some "justify" -> s.text_align <- Justify; s.legacy_align <- None
+     | Some ("-webkit-left" | "-moz-left") -> s.text_align <- Left; s.legacy_align <- Some Left
+     | Some ("-webkit-right" | "-moz-right") -> s.text_align <- Right; s.legacy_align <- Some Right
+     | Some ("-webkit-center" | "-moz-center") -> s.text_align <- Center; s.legacy_align <- Some Center
      | _ -> ())
   | "text-indent" -> len (fun l -> s.text_indent <- l)
   | "white-space" | "white-space-collapse" ->
@@ -1285,7 +1292,7 @@ sub, sup { font-size: smaller }
 u, ins { text-decoration: underline }
 s, strike, del { text-decoration: line-through }
 mark { background: yellow; color: black }
-center { text-align: center }
+center { text-align: -webkit-center }
 th { text-align: center }
 td, th { padding: 1px }
 table { border-spacing: 2px; box-sizing: border-box }
@@ -1354,8 +1361,9 @@ let hints (n : Dom.node) =
      | Some al when List.mem name [ "p"; "div"; "h1"; "h2"; "h3"; "h4"; "h5"; "h6"; "td"; "th"; "tr";
                                     "tbody"; "thead"; "tfoot"; "caption" ] ->
        (match String.lowercase_ascii al with
-        | "center" | "middle" -> [ d "text-align" "center" ]
-        | "left" | "right" | "justify" -> [ d "text-align" (String.lowercase_ascii al) ]
+        | "center" | "middle" -> [ d "text-align" "-webkit-center" ]
+        | "left" | "right" -> [ d "text-align" ("-webkit-" ^ String.lowercase_ascii al) ]
+        | "justify" -> [ d "text-align" "justify" ]
         | _ -> [])
      | Some al when name = "table" && String.lowercase_ascii al = "center" ->
        [ d "margin-left" "auto"; d "margin-right" "auto" ]
@@ -1521,7 +1529,7 @@ let compute ~width ~height sheets (doc : Dom.node) =
         | "font-weight" -> s.font_weight <- src.font_weight
         | "font-style" -> s.italic <- src.italic
         | "line-height" -> s.line_height <- src.line_height
-        | "text-align" -> s.text_align <- src.text_align
+        | "text-align" -> s.text_align <- src.text_align; s.legacy_align <- src.legacy_align
         | "white-space" -> s.white_space <- src.white_space
         | "visibility" -> s.visible <- src.visible
         | "text-decoration" | "text-decoration-line" ->
