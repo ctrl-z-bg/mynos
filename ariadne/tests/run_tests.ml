@@ -208,6 +208,27 @@ let cookies () =
   check "cookies: saved, those that outlive the session"
     (Cookies.header back ~now ~host:"www.example.com" ~path:"/" ~secure:true = Some "g=7")
 
+(* inline SVG: its painting from the cascade *)
+let svg () =
+  let html = {|<style>.hdr svg { fill: #5a5a5a } .red { color: #ff0000 } .x path { fill: #00ff00 }</style>
+<svg style="display:none"><symbol id="s" viewBox="0 0 10 10"><path d="M0 0h10v10z"/></symbol>
+<symbol id="r" viewBox="0 0 10 10"><circle r="4" stroke="currentColor" fill="none"/></symbol></svg>
+<p class="hdr"><svg id="a"><use href="#s"/></svg></p>
+<p class="red"><svg id="b"><use href="#r"/></svg></p>
+<svg id="c"><rect width="5" height="5"/></svg>
+<svg id="d" class="x"><path fill="#0000ff" d="M0 0h1v1z"/></svg>|} in
+  let doc = Html.parse html in
+  let sheets = List.concat_map (function
+      | Style.Inline_sheet (t, media) -> [ Style.parse_sheet ?media t ] | Style.Linked _ -> []) (Style.sources doc) in
+  let styles = Style.compute ~width:800 ~height:600 sheets doc in
+  let text id = Svg.document styles ~w:10 ~h:10 (Option.get (Dom.find (fun n -> Dom.attr n "id" = Some id) doc)) in
+  let has s sub = let n = String.length s and m = String.length sub in
+    let rec go i = i + m <= n && (String.sub s i m = sub || go (i + 1)) in go 0 in
+  check "svg: a CSS rule's fill, through a symbol" (has (text "a") {|fill="#5a5a5a"|} && has (text "a") {|viewBox="0 0 10 10"|});
+  check "svg: currentColor through <use>: the use's colour" (has (text "b") {|stroke="#ff0000"|});
+  check "svg: black by default" (has (text "c") {|fill="#000000"|});
+  check "svg: CSS over a presentation attribute" (has (text "d") {|<path fill="#00ff00"|} && not (has (text "d") "0000ff"))
+
 (* rule 3: a tree far deeper than any stack would allow a recursion *)
 let deep () =
   let depth = 5000 in
@@ -245,6 +266,7 @@ let () =
     forms ();
     dom_api ();
     cookies ();
+    svg ();
     deep ();
     pages ();
     layouts ();

@@ -33,6 +33,9 @@ type line_height = Lh_normal | Lh_px of float | Lh_factor of float
    radial ones as one colour, their stops' average *)
 type gradient = { angle : float; stops : (int * length option) list }
 
+(* SVG's paint: fill, stroke *)
+type paint = Paint_none | Paint_color of int | Paint_current
+
 type layer_size = Size_auto | Cover | Contain | Size of length * length   (* Auto: from the ratio *)
 type layer = {
   mutable image : string option;    (* its URL (resolved against its sheet's, if it had one) *)
@@ -114,6 +117,11 @@ type t = {
   mutable bg : layer;                 (* background-image and the rest *)
   mutable shift : (length * length) option;  (* transform's translations (a percentage: of the box) *)
   mutable border_image : gradient option;    (* border-image's source, when a gradient *)
+  mutable fill : paint;                      (* SVG: inherited, black at first *)
+  mutable stroke : paint;                    (* SVG: inherited, none at first *)
+  mutable stroke_width : length;             (* SVG: inherited, 1 at first *)
+  mutable svg_set : int;                     (* set on the element itself (not inherited): fill 1,
+                                                stroke 2, stroke-width 4, color 8 *)
   mutable border_fill : bool;                (* border-image's fill: its middle painted too *)
   mutable border_outset : length array;      (* border-image-outset: top, right, bottom, left *)
   mutable mask : layer;               (* mask-image and the rest *)
@@ -140,6 +148,7 @@ let initial () = {
   grid_columns = []; grid_rows = []; grid_areas = []; grid_area = []; grid_column = []; grid_row = [];
   border_spacing = 0.; border_collapse = false; masked = false; transparent = false;
   content = None; caption_bottom = false; bg = new_layer (); mask = new_layer (); shift = None;
+  fill = Paint_color 0xFF000000; stroke = Paint_none; stroke_width = Len (1., 0.); svg_set = 0;
   border_image = None; border_fill = false; border_outset = Array.make 4 (Len (0., 0.)) }
 
 (* a child's start: the inherited properties from its parent, the others initial *)
@@ -154,6 +163,7 @@ let inherit_from p =
   s.border_collapse <- p.border_collapse;
   s.transparent <- p.transparent;
   s.caption_bottom <- p.caption_bottom;
+  s.fill <- p.fill; s.stroke <- p.stroke; s.stroke_width <- p.stroke_width;
   (* text decorations are drawn through descendants: inherited here *)
   s.underline <- p.underline; s.line_through <- p.line_through; s.overline <- p.overline;
   s
@@ -712,7 +722,22 @@ let rec apply ctx (s : t) (parent : t) name (v : cv list) =
      | Some "absolute" -> s.position <- Absolute | Some "fixed" -> s.position <- Fixed
      | Some "sticky" | Some "-webkit-sticky" -> s.position <- Sticky | _ -> ())
   | "float" -> Option.iter (fun f -> s.float_ <- f) (ident v)
-  | "color" -> Option.iter (fun c -> if c lsr 24 <> 0 then s.color <- c land 0xFFFFFF) (color ~current:parent.color v)
+  | "color" ->
+    Option.iter (fun c -> if c lsr 24 <> 0 then (s.color <- c land 0xFFFFFF; s.svg_set <- s.svg_set lor 8))
+      (color ~current:parent.color v)
+  | "fill" | "stroke" ->
+    let p = match ident v with
+      | Some "none" -> Some Paint_none
+      | Some "currentcolor" -> Some Paint_current
+      | _ -> Option.map (fun c -> Paint_color c) (color ~current:s.color v) in
+    (match p, name with
+     | Some p, "fill" -> s.fill <- p; s.svg_set <- s.svg_set lor 1
+     | Some p, _ -> s.stroke <- p; s.svg_set <- s.svg_set lor 2
+     | None, _ -> ())
+  | "stroke-width" ->
+    (match v with
+     | [ Tok (Number (n, _)) ] -> s.stroke_width <- Len (n, 0.); s.svg_set <- s.svg_set lor 4
+     | _ -> Option.iter (fun l -> s.stroke_width <- l; s.svg_set <- s.svg_set lor 4) (length ctx v))
   | "background-color" -> Option.iter (fun c -> s.background <- c) (color ~current:s.color v)
   | "background" ->
     s.background <- 0;
@@ -1310,6 +1335,10 @@ let hints (n : Dom.node) =
       | None -> [] in
   let name = Dom.name n in
   List.concat [
+    (* SVG's presentation attributes (below every author rule) *)
+    (if Dom.ns n = Some Dom.Svg then
+       List.filter_map (fun k -> Option.map (fun v -> d k v) (a k)) [ "fill"; "stroke"; "stroke-width"; "color" ]
+     else []);
     (match a "bgcolor" with Some c -> [ d "background-color" c ] | None -> []);
     (match name, a "color" with "font", Some c -> [ d "color" c ] | _ -> []);
     (match name, a "text" with "body", Some c -> [ d "color" c ] | _ -> []);

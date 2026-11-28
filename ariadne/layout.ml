@@ -75,6 +75,7 @@ type page = {
   background : int;                  (* the canvas *)
   anchors : (string * int) list;     (* ids, and where they are *)
   hits : hit array;                  (* the block-level boxes, in the order laid out (inner after outer) *)
+  frags : hit array;                 (* the inline boxes: words, pictures, inline-blocks, and their elements *)
   unsized : string list;             (* pictures whose size was asked for and not known *)
 }
 
@@ -92,6 +93,7 @@ type out = {
   items_ : item Dynarray.t;
   links_ : link Dynarray.t;
   hits_ : hit Dynarray.t;
+  frags_ : hit Dynarray.t;                            (* inline boxes: a word, a picture... and its element *)
   mutable anchors_ : (string * int) list;
   styles : Style.styles;
   vw : int;
@@ -154,9 +156,9 @@ let add_link o l =
 let add_anchor o id y = if o.dry = 0 then o.anchors_ <- (id, y) :: o.anchors_
 
 (* what was emitted since a mark, moved by (dx, dy) *)
-type mark = { mi : int; ml : int; ma : int; mh : int }
+type mark = { mi : int; ml : int; ma : int; mh : int; mf : int }
 let mark o = { mi = Dynarray.length o.items_; ml = Dynarray.length o.links_; ma = List.length o.anchors_;
-               mh = Dynarray.length o.hits_ }
+               mh = Dynarray.length o.hits_; mf = Dynarray.length o.frags_ }
 
 let translate o m dx dy =
   if (dx <> 0 || dy <> 0) && o.dry = 0 then begin
@@ -175,6 +177,10 @@ let translate o m dx dy =
     for i = m.mh to Dynarray.length o.hits_ - 1 do
       let h = Dynarray.get o.hits_ i in
       Dynarray.set o.hits_ i { h with hx = h.hx + dx; hy = h.hy + dy }
+    done;
+    for i = m.mf to Dynarray.length o.frags_ - 1 do
+      let h = Dynarray.get o.frags_ i in
+      Dynarray.set o.frags_ i { h with hx = h.hx + dx; hy = h.hy + dy }
     done;
     for i = m.ml to Dynarray.length o.links_ - 1 do
       let l = Dynarray.get o.links_ i in
@@ -228,7 +234,8 @@ type atom_kind =
   | Abs of Dom.node                                                      (* where its static position is *)
 
 type atom = { kind : atom_kind; st : Style.t; font : Fonts.font; link : (string * Dom.node) option; bg : int;
-              dy : int }   (* raised (negative) or lowered by vertical-align *)
+              dy : int;   (* raised (negative) or lowered by vertical-align *)
+              owner : Dom.node option }   (* the element it is of: a text's parent, an atomic element *)
 
 (* how far a box reaches above the baseline: a form control's text sits on
    the line's baseline (the box reaching below it), any other box sits on
@@ -247,7 +254,7 @@ type piece =
   | P_float of Dom.node * Style.t
   | P_abs of Dom.node * Style.t
   | P_atom of atom
-  | P_text of string * Style.t * (string * Dom.node) option * int * int
+  | P_text of string * Style.t * (string * Dom.node) option * int * int * Dom.node option
   | P_space of int * Style.t
 
 let block_level = function
@@ -420,7 +427,7 @@ let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
       | None, None, None -> (300, 150) in
     if w <= 0 || h <= 0 || not st.visible then None
     else Some (Box { w; h; label = ""; frame = false; ctl = None;
-                     img = (if o.dry > 0 then Some "" else Some (Svg.data_url ~color:st.color ~w ~h n)) })
+                     img = (if o.dry > 0 then Some "" else Some (Svg.data_url o.styles ~w ~h n)) })
   | _ -> None
 
 (* a picture laid out as a block (a flex or grid item, display: block):
@@ -449,7 +456,7 @@ let pieces o (container : Dom.node) ~cw ~depth =
   let generated (n : Dom.node) which =
     match Style.pseudo o.styles n which with
     | Some (ps, text) ->
-      add (P_text (text, ps, top_link (), (match !bgs with b :: _ -> b | [] -> 0), dy ()))
+      add (P_text (text, ps, top_link (), (match !bgs with b :: _ -> b | [] -> 0), dy (), Some n))
     | None -> () in
   let enter (n : Dom.node) =
     if n == container then (generated n "before"; true)
@@ -457,7 +464,7 @@ let pieces o (container : Dom.node) ~cw ~depth =
       | Text { data } ->
         (match Option.bind n.parent (fun p -> Style.get o.styles p) with
          | Some st when st.display <> None_ ->
-           add (P_text (data, st, top_link (), (match !bgs with b :: _ -> b | [] -> 0), dy ()))
+           add (P_text (data, st, top_link (), (match !bgs with b :: _ -> b | [] -> 0), dy (), n.parent))
          | _ -> ());
         false
       | Element _ ->
@@ -467,16 +474,17 @@ let pieces o (container : Dom.node) ~cw ~depth =
            if st.display = None_ || st.clipped || st.display = Table_column then false
            else if positioned st then (add (P_abs (n, st)); false)
            else if st.float_ <> "none" then (add (P_float (n, st)); false)
-           else if Dom.is_html n "br" then (add (P_atom { kind = Break; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }); false)
+           else if Dom.is_html n "br" then (add (P_atom { kind = Break; st; font = Metrics.font st; link = None; bg = 0; dy = 0; owner = None }); false)
            else if block_level st.display && depth < max_depth then (add (P_block (n, st)); false)
            else if is_atomic n then begin
              (match atomic o n st ~cw with
-              | Some kind -> add (P_atom { kind; st; font = Metrics.font st; link = top_link (); bg = 0; dy = dy () })
+              | Some kind -> add (P_atom { kind; st; font = Metrics.font st; link = top_link (); bg = 0; dy = dy ();
+                                           owner = Some n })
               | None -> ());
              false
            end else if inline_box st.display && depth < max_depth then begin
              add (P_atom { kind = Ibox { node = n; bw = 0; bh = 0; ml = 0; mr = 0 }; st; font = Metrics.font st;
-                           link = top_link (); bg = 0; dy = dy () });
+                           link = top_link (); bg = 0; dy = dy (); owner = Some n });
              false
            end else begin
              let href = if Dom.is_html n "a" then Dom.attr n "href" else None in
@@ -520,13 +528,13 @@ let atoms_of pieces =
   let add a = out := a :: !out in
   List.iter (function
       | P_atom a -> add a; prev_space := (a.kind = Break)
-      | P_space (w, st) -> add { kind = Box { w; h = 0; label = ""; frame = false; img = None; ctl = None }; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
-      | P_float (n, st) -> add { kind = Float n; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
-      | P_abs (n, st) -> add { kind = Abs n; st; font = Metrics.font st; link = None; bg = 0; dy = 0 }
+      | P_space (w, st) -> add { kind = Box { w; h = 0; label = ""; frame = false; img = None; ctl = None }; st; font = Metrics.font st; link = None; bg = 0; dy = 0; owner = None }
+      | P_float (n, st) -> add { kind = Float n; st; font = Metrics.font st; link = None; bg = 0; dy = 0; owner = None }
+      | P_abs (n, st) -> add { kind = Abs n; st; font = Metrics.font st; link = None; bg = 0; dy = 0; owner = None }
       | P_block _ -> ()
-      | P_text (data, st, link, bg, dy) ->
+      | P_text (data, st, link, bg, dy, owner) ->
         let font = Metrics.font st in
-        let mk kind = { kind; st; font; link; bg; dy } in
+        let mk kind = { kind; st; font; link; bg; dy; owner } in
         (match st.white_space with
          | Pre | Pre_wrap ->
            let lines = String.split_on_char '\n' data in
@@ -1082,6 +1090,14 @@ and inline_layout o ~bfc (container : Style.t) atoms ~x ~y ~w ~depth =
         let st = a.st in
         let f = a.font in
         let ty = baseline + a.dy in
+        (* its box, for scripts and clicks: the font's height, or the box's *)
+        (match a.owner with
+         | Some owner when o.dry = 0 && aw > 0 ->
+           let fy, fh = match a.kind with
+             | Box { h = bh; _ } -> (max line_y (baseline - box_above a), bh)
+             | _ -> (ty - f.ascent, f.ascent + f.descent) in
+           Dynarray.add_last o.frags_ { hx = !cx; hy = fy; hw = aw; hh = fh; hnode = owner }
+         | _ -> ());
         if st.visible && not st.transparent then begin
           if a.bg <> 0 && aw > 0 then
             emit o (Fill { x = !cx; y = ty - f.ascent - 1; w = aw; h = f.ascent + f.descent + 2; color = rgb a.bg });
@@ -1215,7 +1231,7 @@ and item_intrinsic o it =
     let m = hframe cst ~cw:0 ~margins:true - hframe cst ~cw:0 ~margins:false in
     (a + m, b + m)
   | Txt (data, st) ->
-    let atoms = atoms_of [ P_text (data, st, None, 0, 0) ] in
+    let atoms = atoms_of [ P_text (data, st, None, 0, 0, None) ] in
     (List.fold_left (fun m a -> max m (atom_width a)) 0 atoms,
      List.fold_left (fun s a -> s + atom_width a) 0 atoms)
 
@@ -1231,14 +1247,14 @@ and lay_item o it ~ix ~iy ~bw ?bh ~depth () =
     ignore (block o ~force_w:bw ?force_h:bh ~bfc:{ floats = [] } c { cst with margin = zero_margins }
               ~x:ix ~y:iy ~cw:bw ~depth:(depth + 1))
   | Txt (data, tst) ->
-    ignore (inline_layout o ~bfc:{ floats = [] } tst (atoms_of [ P_text (data, tst, None, 0, 0) ]) ~x:ix ~y:iy ~w:bw ~depth)
+    ignore (inline_layout o ~bfc:{ floats = [] } tst (atoms_of [ P_text (data, tst, None, 0, 0, None) ]) ~x:ix ~y:iy ~w:bw ~depth)
 
 and item_height o it ~bw ~depth =
   match it with
   | Item (c, cst) -> snd (measure_forced o c { cst with margin = zero_margins } ~bw)
   | Txt (data, tst) ->
     o.dry <- o.dry + 1;
-    let y' = inline_layout o ~bfc:{ floats = [] } tst (atoms_of [ P_text (data, tst, None, 0, 0) ]) ~x:0 ~y:0 ~w:bw ~depth in
+    let y' = inline_layout o ~bfc:{ floats = [] } tst (atoms_of [ P_text (data, tst, None, 0, 0, None) ]) ~x:0 ~y:0 ~w:bw ~depth in
     o.dry <- o.dry - 1;
     y'
 
@@ -1699,7 +1715,8 @@ and table o (n : Dom.node) (st : Style.t) ~x ~y ~cw ~depth =
 (* ---- the page ---- *)
 
 let layout ?(image = fun _ -> None) ~width ~height (styles : Style.styles) (doc : Dom.node) =
-  let o = { items_ = Dynarray.create (); links_ = Dynarray.create (); hits_ = Dynarray.create (); anchors_ = []; styles;
+  let o = { items_ = Dynarray.create (); links_ = Dynarray.create (); hits_ = Dynarray.create (); frags_ = Dynarray.create ();
+            anchors_ = []; styles;
             vw = width; vh = height; dry = 0; clip = None; measures = Hashtbl.create 1024;
             intrinsics = Hashtbl.create 1024; abs = [ ref [] ]; image; unsized_ = [] } in
   let root = Dom.find (fun n -> Dom.is_html n "html") doc in
@@ -1730,7 +1747,8 @@ let layout ?(image = fun _ -> None) ~width ~height (styles : Style.styles) (doc 
       | Fill f -> max m (f.y + f.h) | Text t -> max m (t.y + t.font.descent)
       | Image i -> max m (i.y + i.h) | Bg _ | Control _ | Gradient _ -> m) total o.items_ in
   { items = Dynarray.to_array o.items_; links = Dynarray.to_array o.links_; height = max total bottom; background;
-    anchors = o.anchors_; unsized = o.unsized_; hits = Dynarray.to_array o.hits_ }
+    anchors = o.anchors_; unsized = o.unsized_; hits = Dynarray.to_array o.hits_;
+    frags = Dynarray.to_array o.frags_ }
 
 (* ---- the display list as text, for the tests ---- *)
 
@@ -1740,7 +1758,13 @@ let dump p =
       | Fill { x; y; w; h; color } -> Printf.bprintf b "fill %d,%d %dx%d #%06x\n" x y w h color
       | Text { x; y; s; color; font } ->
         Printf.bprintf b "text %d,%d %s #%06x %s\n" x y font.key color s
-      | Image { x; y; w; h; src; _ } -> Printf.bprintf b "image %d,%d %dx%d %s\n" x y w h src
+      | Image { x; y; w; h; src; _ } ->
+        (* a data: URL (an inline svg's): its type and length *)
+        let src = if String.starts_with ~prefix:"data:" src then
+            Printf.sprintf "%s (%d bytes)" (List.hd (String.split_on_char ';' (List.hd (String.split_on_char ',' src))))
+              (String.length src)
+          else src in
+        Printf.bprintf b "image %d,%d %dx%d %s\n" x y w h src
       | Control { x; y; w; h; node; paint; _ } ->
         let sh = Forms.shown node in
         Printf.bprintf b "control %d,%d %dx%d %s%s%s\n" x y w h (Dom.name node)
@@ -1865,3 +1889,52 @@ let bands ~x ~y ~w ~h (g : Style.gradient) =
           let a, b = if forward then (a, b) else (len - b, len - a) in
           if horizontal then (x + a, y, b - a, h, c) else (x, y + a, w, b - a, c)) !spans
     end
+
+(* ---- elements' boxes (for scripts: getBoundingClientRect, offsetWidth,
+   IntersectionObserver; for the window's clicks) ---- *)
+
+(* x, y, w, h on the page *)
+type rect = { rx : int; ry : int; rw : int; rh : int }
+
+let union a b =
+  let x0 = min a.rx b.rx and y0 = min a.ry b.ry in
+  let x1 = max (a.rx + a.rw) (b.rx + b.rw) and y1 = max (a.ry + a.rh) (b.ry + b.rh) in
+  { rx = x0; ry = y0; rw = x1 - x0; rh = y1 - y0 }
+
+(* by element: its block box (the last laid out), its fragments' union *)
+type index = { blocks : (int, rect) Hashtbl.t; inline : (int, rect) Hashtbl.t }
+
+let index page =
+  let blocks = Hashtbl.create 1024 and inline = Hashtbl.create 1024 in
+  Array.iter (fun h -> Hashtbl.replace blocks h.hnode.Dom.id { rx = h.hx; ry = h.hy; rw = h.hw; rh = h.hh }) page.hits;
+  Array.iter (fun h ->
+      let r = { rx = h.hx; ry = h.hy; rw = h.hw; rh = h.hh } in
+      Hashtbl.replace inline h.hnode.Dom.id
+        (match Hashtbl.find_opt inline h.hnode.id with Some u -> union u r | None -> r)) page.frags;
+  { blocks; inline }
+
+(* an element's box: its block box, else the union of its own and its
+   descendants' inline fragments (None: not laid out, display: none...) *)
+let element_box idx (n : Dom.node) =
+  match Hashtbl.find_opt idx.blocks n.id with
+  | Some r -> Some r
+  | None ->
+    let acc = ref None in
+    Dom.walk n ~leave:ignore ~enter:(fun x ->
+        (match Hashtbl.find_opt idx.inline x.id with
+         | Some r -> acc := Some (match !acc with Some u -> union u r | None -> r)
+         | None -> ());
+        (* a block inside: its box counts whole *)
+        (match Hashtbl.find_opt idx.blocks x.id with
+         | Some r when x != n -> acc := Some (match !acc with Some u -> union u r | None -> r); false
+         | _ -> true));
+    !acc
+
+(* what is under a point: the innermost element with a box there (an
+   inline element's fragment, else a block) *)
+let element_at _idx page ~x ~y =
+  let inside h = x >= h.hx && x < h.hx + h.hw && y >= h.hy && y < h.hy + h.hh in
+  let frag = Array.fold_left (fun f h -> if inside h then Some h.hnode else f) None page.frags in
+  match frag with
+  | Some n -> Some n
+  | None -> Array.fold_left (fun f h -> if inside h then Some h.hnode else f) None page.hits

@@ -32,6 +32,14 @@ let source = {js|
     return out;
   }
   function one(r) { return r.length >= 3 ? wrap(r[0], r[1], r[2]) : null; }
+  function boxOf(el) { const r = D("box", el.__h); return r.length ? r.map(Number) : null; }
+  function view() { const v = D("viewport").map(Number); return { sx: v[0], sy: v[1], w: v[2], h: v[3], ph: v[4] }; }
+  class DOMRect {
+    constructor(x, y, w, h) { this.x = x; this.y = y; this.width = w; this.height = h;
+                              this.left = x; this.top = y; this.right = x + w; this.bottom = y + h; }
+    toJSON() { return { x: this.x, y: this.y, width: this.width, height: this.height, top: this.top,
+                        left: this.left, right: this.right, bottom: this.bottom }; }
+  }
   function str(v) { return v === null || v === undefined ? "" : String(v); }
 
   class EventTarget {
@@ -82,6 +90,47 @@ let source = {js|
   }
   class CustomEvent extends Event { constructor(type, init) { super(type, init); this.detail = init ? init.detail : null; } }
 
+  // ---- scripts put in the page by scripts: run soon after (as browsers do,
+  // asynchronously), their src fetched (no CORS for scripts), then their
+  // load (or error) event; never twice, and not those innerHTML made ----
+  const jsTypes = ["", "text/javascript", "application/javascript", "application/ecmascript", "text/ecmascript",
+                   "application/x-javascript"];
+  function runScript(s) {
+    if (s.__started) return;
+    s.__started = true;
+    const type = (s.getAttribute("type") || "").trim().toLowerCase();
+    if (!jsTypes.includes(type)) return;
+    g.setTimeout(() => {
+      const src = s.getAttribute("src");
+      let code, failed = false;
+      if (src !== null) {
+        try {
+          const r = request("GET", new URL(src, g.location.href).href, null, null, "script");
+          if (r.status >= 400) failed = true; else code = r.body;
+        } catch (e) { failed = true; console.warn("script " + src + ": " + (e && e.message)); }
+      } else code = s.textContent;
+      if (!failed) {
+        g.__currentScript = s;
+        try { (0, eval)(code); }
+        catch (e) { console.error("script " + (src || "inline") + ": " + String(e) + (e && e.stack ? "\n" + e.stack : "")); }
+        g.__currentScript = null;
+      }
+      s.dispatchEvent(new Event(failed ? "error" : "load"));
+    }, 0);
+  }
+  // a node about to be put in: its scripts (a fragment's, before it
+  // empties into the page); then, once in, run if it is in the page now
+  function scriptsOf(n) {
+    if (n.nodeType === 1 && n.nodeName === "SCRIPT") return [n];
+    if (n.nodeType === 1 || n.nodeType === 11) return list(D("queryAll", n.__h, "script"));
+    return [];
+  }
+  function inserted(scripts) {
+    const todo = scripts.filter(s => !s.__started);
+    if (todo.length && todo[0].isConnected) todo.forEach(runScript);
+  }
+  function markStarted(el) { for (const s of list(D("queryAll", el.__h, "script"))) s.__started = true; }
+
   class Node extends EventTarget {
     constructor(h, type, name) { super(); this.__h = h; this.nodeType = type; this.nodeName = name; }
     get parentNode() { return one(D("parent", this.__h)); }
@@ -98,8 +147,8 @@ let source = {js|
     get nodeValue() { return this.nodeType === 1 || this.nodeType === 9 ? null : this.textContent; }
     set nodeValue(v) { if (this.nodeType !== 1 && this.nodeType !== 9) this.textContent = v; }
     hasChildNodes() { return this.childNodes.length > 0; }
-    appendChild(c) { D("insert", this.__h, c.__h, ""); return c; }
-    insertBefore(c, ref) { D("insert", this.__h, c.__h, ref ? ref.__h : ""); return c; }
+    appendChild(c) { const sc = scriptsOf(c); D("insert", this.__h, c.__h, ""); inserted(sc); return c; }
+    insertBefore(c, ref) { const sc = scriptsOf(c); D("insert", this.__h, c.__h, ref ? ref.__h : ""); inserted(sc); return c; }
     removeChild(c) { D("remove", c.__h); return c; }
     replaceChild(n, o) { this.insertBefore(n, o); this.removeChild(o); return o; }
     remove() { D("remove", this.__h); }
@@ -213,11 +262,12 @@ let source = {js|
     get lastElementChild() { const c = this.children; return c[c.length - 1] || null; }
     get nextElementSibling() { let n = this.nextSibling; while (n && n.nodeType !== 1) n = n.nextSibling; return n; }
     get previousElementSibling() { let n = this.previousSibling; while (n && n.nodeType !== 1) n = n.previousSibling; return n; }
-    get innerHTML() { return D("html", this.__h)[0]; } set innerHTML(v) { D("setHtml", this.__h, str(v)); }
+    get innerHTML() { return D("html", this.__h)[0]; }
+    set innerHTML(v) { D("setHtml", this.__h, str(v)); markStarted(this); }
     get outerHTML() { return D("outerHtml", this.__h)[0]; }
     set outerHTML(v) { this.insertAdjacentHTML("beforebegin", v); this.remove(); }
     get innerText() { return this.textContent; } set innerText(v) { this.textContent = v; }
-    insertAdjacentHTML(w, s) { D("insertHtml", this.__h, w, str(s)); }
+    insertAdjacentHTML(w, s) { D("insertHtml", this.__h, w, str(s)); markStarted(this.parentNode || this); }
     insertAdjacentElement(w, el) {
       const p = this.parentNode;
       switch (String(w).toLowerCase()) {
@@ -243,11 +293,45 @@ let source = {js|
     get content() { return this; }   // a template's
     focus() {} blur() {}
     click() { this.dispatchEvent(new Event("click", { bubbles: true, cancelable: true })); }
-    getBoundingClientRect() { return { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 }; }
-    getClientRects() { return []; }
-    get offsetWidth() { return 0; } get offsetHeight() { return 0; }
-    get clientWidth() { return 0; } get clientHeight() { return 0; }
-    scrollIntoView() {}
+    // the layout (the browser's, of the page as it is now): border box on
+    // the page [x, y, w, h, top, right, bottom, left borders], or null
+    getBoundingClientRect() {
+      const b = boxOf(this);
+      if (!b) return new DOMRect(0, 0, 0, 0);
+      const v = view();
+      return new DOMRect(b[0] - v.sx, b[1] - v.sy, b[2], b[3]);
+    }
+    getClientRects() { return boxOf(this) ? [this.getBoundingClientRect()] : []; }
+    get offsetParent() { return one(D("offsetParent", this.__h)); }
+    get offsetWidth() { const b = boxOf(this); return b ? b[2] : 0; }
+    get offsetHeight() { const b = boxOf(this); return b ? b[3] : 0; }
+    get offsetLeft() {
+      const b = boxOf(this); if (!b) return 0;
+      const p = this.offsetParent, pb = p && boxOf(p);
+      return b[0] - (pb ? pb[0] + pb[7] : 0);
+    }
+    get offsetTop() {
+      const b = boxOf(this); if (!b) return 0;
+      const p = this.offsetParent, pb = p && boxOf(p);
+      return b[1] - (pb ? pb[1] + pb[4] : 0);
+    }
+    get clientWidth() {
+      if (this === g.document.documentElement) return view().w;
+      const b = boxOf(this); return b ? b[2] - b[5] - b[7] : 0;
+    }
+    get clientHeight() {
+      if (this === g.document.documentElement) return view().h;
+      const b = boxOf(this); return b ? b[3] - b[4] - b[6] : 0;
+    }
+    get clientTop() { const b = boxOf(this); return b ? b[4] : 0; }
+    get clientLeft() { const b = boxOf(this); return b ? b[7] : 0; }
+    // elements do not scroll in Ariadne: only the page
+    get scrollWidth() { return this === g.document.documentElement ? view().w : this.clientWidth; }
+    get scrollHeight() { return this === g.document.documentElement ? view().ph : this.clientHeight; }
+    get scrollTop() { return this === g.document.documentElement || this === g.document.body ? view().sy : 0; }
+    set scrollTop(v) { if (this === g.document.documentElement || this === g.document.body) g.scrollTo(0, v); }
+    get scrollLeft() { return 0; } set scrollLeft(v) {}
+    scrollIntoView() { const b = boxOf(this); if (b) g.scrollTo(0, b[1]); }
     setAttributeNS(ns, k, v) { this.setAttribute(k, v); }
     getAttributeNS(ns, k) { return this.getAttribute(k); }
   }
@@ -270,6 +354,7 @@ let source = {js|
     createDocumentFragment() { return one(D("createFragment")); }
     createEvent() { return new Event(""); }
     get readyState() { return g.__readyState; }
+    get currentScript() { return g.__currentScript || null; }
     get cookie() { return D("cookie")[0]; } set cookie(v) { D("setCookie", str(v)); }
     get referrer() { return ""; }
     get defaultView() { return g; }
@@ -295,10 +380,15 @@ let source = {js|
   g.cancelAnimationFrame = g.clearTimeout;
   g.queueMicrotask = f => Promise.resolve().then(f);
   // the timers due within [ms] of the page's time, in order (Ariadne calls it)
+  // a run's worth (10 callbacks at most: each run of jsd is limited in
+  // time): the window is [ms] from now, or the last one's (ms = 0, its
+  // rest); "due waiting": those still due in the window, and in all
+  let until = 0;
+  g.__pendingTimers = () => timers.length;
   g.__runTimers = function (ms) {
-    const until = now + ms;
+    if (ms > 0 || until < now) until = now + ms;
     let n = 0;
-    while (n < 1000) {
+    while (n < 10) {
       timers.sort((a, b) => a.at - b.at || a.id - b.id);
       const t = timers[0];
       if (!t || t.at > until) break;
@@ -308,8 +398,9 @@ let source = {js|
       catch (e) { console.error(String(e) + (e && e.stack ? "\n" + e.stack : "")); }
       n++;
     }
-    now = until;
-    return timers.length;
+    const due = timers.filter(t => t.at <= until).length;
+    if (due === 0) now = until;
+    return due + " " + timers.length;
   };
 
   // ---- the network: fetch, XMLHttpRequest (the browser's, through __dom) ----
@@ -365,11 +456,12 @@ let source = {js|
   class AbortController { constructor() { this.signal = { aborted: false, addEventListener() {} }; } abort() { this.signal.aborted = true; } }
 
   // one request: [status, reason, url, body, headers...]; a NetworkError thrown
-  function request(method, url, headers, body) {
+  function request(method, url, headers, body, mode) {
     const h = [];
     if (headers) new Headers(headers).forEach((v, k) => h.push(k + ": " + v));
     const hasBody = body !== undefined && body !== null && method !== "GET" && method !== "HEAD";
-    const r = D("fetch", method, String(url), h.join("\n"), hasBody ? "1" : "0", hasBody ? String(body) : "");
+    const r = D("fetch", method, String(url), h.join("\n"), hasBody ? "1" : "0", hasBody ? String(body) : "",
+                mode || "cors");
     const hs = new Headers();
     for (let i = 4; i + 1 < r.length; i += 2) hs.append(r[i], r[i + 1]);
     return { status: +r[0], statusText: r[1], url: r[2], body: r[3], headers: hs };
@@ -465,27 +557,62 @@ let source = {js|
     }
   }
   g.DOMParser = DOMParser;
-  // IntersectionObserver: scripts do not see the layout yet, so every
-  // element observed is reported in view, soon after (lazy content loads at
-  // once); ResizeObserver and MutationObserver report nothing yet
+  // IntersectionObserver: an element's box against the viewport (grown by
+  // rootMargin, in px), its state reported when first observed, then when
+  // it changes as the page scrolls (Ariadne calls __scrolled). Thresholds:
+  // the crossing of 0 (in view or not)
+  const observers = new Set();
   class IntersectionObserver {
-    constructor(cb, opts) { this.__cb = cb; this.__targets = new Set(); this.root = null;
-                            this.rootMargin = (opts && opts.rootMargin) || "0px"; this.thresholds = [0]; }
+    constructor(cb, opts) {
+      this.__cb = cb; this.__targets = new Map(); this.root = null;
+      this.rootMargin = (opts && opts.rootMargin) || "0px"; this.thresholds = [0];
+      const m = this.rootMargin.split(/\s+/).map(x => parseFloat(x) || 0);
+      const [t, r = t, b = t, l = r] = m;
+      this.__margin = { t, r, b, l };
+    }
     observe(el) {
       if (this.__targets.has(el)) return;
-      this.__targets.add(el);
-      g.setTimeout(() => {
-        if (!this.__targets.has(el)) return;
-        const r = { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 };
-        try { this.__cb([{ target: el, isIntersecting: true, intersectionRatio: 1, time: 0,
-                           boundingClientRect: r, intersectionRect: r, rootBounds: r }], this); }
-        catch (e) { console.error(String(e) + (e && e.stack ? "\n" + e.stack : "")); }
-      }, 0);
+      this.__targets.set(el, undefined);
+      observers.add(this);
+      g.setTimeout(() => this.__check([el]), 0);
     }
     unobserve(el) { this.__targets.delete(el); }
-    disconnect() { this.__targets.clear(); }
+    disconnect() { this.__targets.clear(); observers.delete(this); }
     takeRecords() { return []; }
+    __check(els) {
+      const v = view(), m = this.__margin;
+      const top = v.sy - m.t, bottom = v.sy + v.h + m.b, left = v.sx - m.l, right = v.sx + v.w + m.r;
+      const entries = [];
+      for (const el of els || [...this.__targets.keys()]) {
+        if (!this.__targets.has(el)) continue;
+        const b = boxOf(el);
+        let ratio = 0, inter = false;
+        if (b) {
+          const iw = Math.min(b[0] + b[2], right) - Math.max(b[0], left);
+          const ih = Math.min(b[1] + b[3], bottom) - Math.max(b[1], top);
+          inter = iw >= 0 && ih >= 0 && (iw > 0 || b[2] === 0) && (ih > 0 || b[3] === 0);
+          ratio = inter && b[2] * b[3] > 0 ? (iw * ih) / (b[2] * b[3]) : (inter ? 1 : 0);
+        }
+        if (this.__targets.get(el) !== inter) {
+          this.__targets.set(el, inter);
+          const r = b ? new DOMRect(b[0] - v.sx, b[1] - v.sy, b[2], b[3]) : new DOMRect(0, 0, 0, 0);
+          entries.push({ target: el, isIntersecting: inter, intersectionRatio: ratio, time: Date.now(),
+                         boundingClientRect: r, intersectionRect: inter ? r : new DOMRect(0, 0, 0, 0),
+                         rootBounds: new DOMRect(0, 0, v.w, v.h) });
+        }
+      }
+      if (entries.length) {
+        try { this.__cb(entries, this); }
+        catch (e) { console.error(String(e) + (e && e.stack ? "\n" + e.stack : "")); }
+      }
+    }
   }
+  // the page scrolled: the observers, and scroll events (the document's,
+  // bubbling to the window)
+  g.__scrolled = function () {
+    for (const o of [...observers]) o.__check();
+    if (g.document) g.document.dispatchEvent(new Event("scroll", { bubbles: true }));
+  };
   class ResizeObserver { constructor() {} observe() {} unobserve() {} disconnect() {} }
   class MutationObserver { constructor() {} observe() {} disconnect() {} takeRecords() { return []; } }
   g.IntersectionObserver = IntersectionObserver; g.ResizeObserver = ResizeObserver; g.MutationObserver = MutationObserver;
@@ -495,12 +622,24 @@ let source = {js|
   g.window = g; g.self = g; g.top = g; g.parent = g; g.frames = g;
   Object.setPrototypeOf(g, EventTarget.prototype);
   g.Node = Node; g.Element = Element; g.HTMLElement = Element; g.Text = Text; g.Document = Document;
-  g.EventTarget = EventTarget; g.Event = Event; g.CustomEvent = CustomEvent;
+  g.EventTarget = EventTarget; g.Event = Event; g.CustomEvent = CustomEvent; g.DOMRect = DOMRect;
   g.navigator = { userAgent: "Mozilla/5.0 (MyNOS) Ariadne/0.1", language: "en", languages: ["en"], platform: "MyNOS",
                   cookieEnabled: true, onLine: true };
-  g.innerWidth = 878; g.innerHeight = 600; g.devicePixelRatio = 1;
-  g.screen = { width: 1024, height: 768 };
-  g.getComputedStyle = el => el.style;
+  g.devicePixelRatio = 1;
+  for (const [k, f] of [["innerWidth", v => v.w], ["innerHeight", v => v.h], ["outerWidth", v => v.w],
+                        ["outerHeight", v => v.h], ["scrollX", v => v.sx], ["scrollY", v => v.sy],
+                        ["pageXOffset", v => v.sx], ["pageYOffset", v => v.sy]])
+    Object.defineProperty(g, k, { get: () => f(view()), configurable: true });
+  g.screen = { get width() { return view().w; }, get height() { return view().h; },
+               get availWidth() { return view().w; }, get availHeight() { return view().h; } };
+  // getComputedStyle: the cascade's computed values (the browser's)
+  g.getComputedStyle = el => new Proxy({}, {
+    get(_, k) {
+      if (typeof k !== "string") return undefined;
+      if (k === "getPropertyValue") return p => D("computed", el.__h, String(p))[0];
+      return D("computed", el.__h, camelToKebab(k))[0];
+    }
+  });
   g.matchMedia = q => ({ matches: false, media: q, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} });
   g.localStorage = g.sessionStorage = (function () {
     const m = new Map();
@@ -510,12 +649,18 @@ let source = {js|
   })();
   g.alert = m => console.log("alert: " + m);
   g.confirm = () => false; g.prompt = () => null;
-  g.scrollTo = g.scroll = g.scrollBy = () => {};
+  g.scrollTo = g.scroll = function (x, y) {
+    if (typeof x === "object" && x) { y = x.top; x = x.left; }
+    D("scrollTo", String(Math.round(+x || 0)), String(Math.round(+y || 0)));
+  };
+  g.scrollBy = function (dx, dy) {
+    if (typeof dx === "object" && dx) { dy = dx.top; dx = dx.left; }
+    const v = view(); g.scrollTo(v.sx + (+dx || 0), v.sy + (+dy || 0));
+  };
   g.__readyState = "loading";
 
   g.__init = function (url, width, height, sid) {
     g.__sid = String(sid);
-    g.innerWidth = width; g.innerHeight = height;
     const u = new URL(url);
     g.location = {
       href: u.href, protocol: u.protocol, host: u.host, hostname: u.hostname, port: u.port,
@@ -523,6 +668,8 @@ let source = {js|
       toString() { return this.href; }, assign() {}, replace() {}, reload() {}
     };
     g.document = one(D("document"));
+    // the page's own scripts: Ariadne runs them
+    markStarted(g.document);
   };
   // an event from the user (Ariadne): whether its default action stays
   g.__event = function (h, type, name, what) {
@@ -530,10 +677,15 @@ let source = {js|
     const ev = new Event(what, { bubbles: what !== "load", cancelable: what === "click" || what === "submit" });
     return n.dispatchEvent(ev);
   };
+  // the document's readiness (the HTML Standard's "the end"): interactive
+  // (readystatechange, then DOMContentLoaded), complete (readystatechange,
+  // then the window's load)
   g.__afterScripts = function () {
     g.__readyState = "interactive";
+    g.document.dispatchEvent(new Event("readystatechange"));
     g.document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true }));
     g.__readyState = "complete";
+    g.document.dispatchEvent(new Event("readystatechange"));
     g.dispatchEvent(new Event("load"));
   };
 })();

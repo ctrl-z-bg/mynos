@@ -185,27 +185,33 @@ Found in M5:
 - [x] `jsd` (services/js): protocol `js/1` (create a context, eval, destroy), module `Js`; a runtime per context (64 MB, a stack limit, a run stopped after 5 s); the contexts of a program that ended freed; `ariadne --check-js` in tools/run-tests.sh
 - [x] DOM nodes as handles: jsd's `__dom(op, ...args)` calls Ariadne's service `dom/1` (one request: an operation, strings) during a run; `Dom_api` (in the core) does the operations, nodes answered as handle, type, name; an IPC round trip costs 130-210 µs under KVM, so the API does bulk work in one call (querySelectorAll, innerHTML)
 - [x] `console` (log, info, debug, warn, error): its text returned with each run
-- [x] Timers (`setTimeout`, `setInterval`, `requestAnimationFrame`): those due within the first second, run once the scripts have
+- [x] Timers (`setTimeout`, `setInterval`, `requestAnimationFrame`): none before the page is shown (as browsers: the page's own scripts only, then showing it); then in a thread of their own (`Scripts.start`), every 100 ms, those due
 - [x] The core DOM (`js_prelude.ml`, JavaScript over `__dom`): `document`, `window`, `Node`, `Element`, `Text`; queries, attributes, `id`, `className`, `classList`, `dataset`, `style` (the attribute), `textContent`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`, creating, inserting, moving and removing nodes, form values; `location`, `navigator`, `localStorage` (in memory), `URL`; `<noscript>` not shown when scripts ran; `ARIADNE_NOJS` turns scripts off
-- [x] Events: `addEventListener`, `dispatchEvent` (bubbling), `DOMContentLoaded` and `load`
-- [x] Events from the user: the context kept while the page is shown (closed when another replaces it), the scripts run from the window's thread (no lock needed); `click` at what is under the pointer (a control, a link, else the innermost block: `Layout.hits`), `onclick=` attributes, `preventDefault` stops following a link, toggling, sending; `input`, `change`, `submit`; timers while the page is shown; style and layout again when a script changed the page. Repubblica's Menu button opens its menu
+- [x] Events: `addEventListener`, `dispatchEvent` (bubbling), the document's readiness (`readyState`; `readystatechange` at interactive and complete, `DOMContentLoaded`, `load`)
+- [x] Events from the user: the context kept while the page is shown (closed when another replaces it), the shown page's tree held by one lock (`Scripts.dom_lock`): the timers' thread takes it for a batch, each frame tries it, and while scripts have it paints the page as last laid out, scrolls, and says "scripts running..." (no clicks or typing that frame); `click` at what is under the pointer (a control, a link, else the innermost block: `Layout.hits`), `onclick=` attributes, `preventDefault` stops following a link, toggling, sending; `input`, `change`, `submit`; style and layout again when a script changed the page, at most once a second (pages whose ads keep changing them). Repubblica's Menu button opens its menu
 - [ ] `fetch` and `XMLHttpRequest`
 - [x] Scripts in order, once the page is parsed (inline, `src`); Wikipedia's 4 run without an error (126 ms) and the page takes its `client-js` look
 - [x] Cookies (`cookies.ml`, RFC 6265's essentials: Expires, Max-Age, Domain and host-only, Path, Secure, HttpOnly; no public suffix list, a Domain must have a dot and contain the host): Ariadne's jar in the Loader, sent with each request, set by each answer (redirects too), those that outlive the session in /disk/ariadne-cookies.txt (ARIADNE_COOKIES); `document.cookie` (not HttpOnly). Google's consent page now goes through
 - [ ] Google's results: its page is written by scripts it loads (scripts added by scripts, `fetch`): blank until those come
 - [x] `fetch` (`Response`, `Headers`), `XMLHttpRequest`, `URLSearchParams`, `FormData` (basic), `DOMParser` (a detached element): requests made by Ariadne (`Loader.fetch`: any method, headers, body; redirects; cookies), synchronous inside, their callbacks later; another origin's: no cookies, readable only if it allows it (Access-Control-Allow-Origin), only GET, HEAD, POST (no preflight); `data:` URLs anyone's. jsd runs pending jobs (promises, async functions) after each run, and the time waited for the browser does not count against a run's 5 s
-- [x] `IntersectionObserver`: every element observed reported in view soon after (scripts do not see the layout): Repubblica's lazy sections load at once; `ResizeObserver`, `MutationObserver` report nothing yet
-- [ ] Layout geometry for scripts (`getBoundingClientRect`, `offsetWidth`...): today zeros; then a real IntersectionObserver
+- [x] Layout geometry for scripts: a layout of the page as it is now (forced, cached by the DOM's version; the window's once the page is shown), every element's box (`Layout.element_box`: block boxes, and inline fragments by element); `getBoundingClientRect`, `getClientRects`, `offset*` (`offsetParent` by CSS's rule), `client*`, `scroll*`, `scrollIntoView`, `window.scrollTo`/`scrollBy`, `innerWidth`/`scrollY`..., `getComputedStyle` (the cascade's computed values); `IntersectionObserver` from the boxes and the viewport, at observing and as the page scrolls; scroll events. Clicks go to the innermost element under the pointer (`Layout.element_at`)
+- [ ] `ResizeObserver`, `MutationObserver` (they report nothing yet); IntersectionObserver's thresholds other than 0; elements' own scrolling
+- [x] Scripts added by scripts (`appendChild`, `insertBefore`... of a `<script>`, or of what holds one): run soon after, their `src` fetched (no CORS for scripts, cookies sent), then their `load` or `error`; `document.currentScript`; never twice; not those `innerHTML` made
 - [x] Inline `<svg>` drawn (`svg.ml`: serialized into a document of its own, `<use>` replaced by what it names, a lone symbol's viewBox the picture's, `currentColor` and the outer fill the element's colour; a data: URL, which goes the pictures' way to imaged); sized by CSS, its attributes, the viewBox's ratio, else 300 x 150. Repubblica's icons
-- [ ] SVG's `<text>` (NanoSVG draws none), CSS's `fill` and `stroke` on SVG elements
+- [x] SVG's painting from the cascade: `fill`, `stroke`, `stroke-width` (inherited; black, none, 1 at first), presentation attributes as hints below author rules; the root's computed values, each element's where it sets them; `<use>`'s content inherits from the `<use>` (currentColor too)
+- [ ] SVG's `<text>` (NanoSVG draws none)
 - [x] Gradients: `linear-gradient` (direction, stops with positions, hard stops), `conic-` and `radial-` as one colour; as backgrounds, and as `border-image` (with `fill`: the box and its outset, Repubblica's full-width band; without: the border's strips, instead of the border); drawn in bands of one colour (`Layout.bands`)
 - [ ] Gradients: diagonals (drawn along the nearer axis), radial and conic ones, several layers
 - [ ] Repubblica: a white box over the top strip's video picture
 - [ ] Web fonts (`@font-face`: WOFF needs zlib, WOFF2 Brotli): Repubblica's Eugenio
 - [ ] Google: its home page is not centred (to look at); its results need scripts added by scripts
 - [ ] The host's renderer: protocol-relative picture URLs (`//host/...`) not downloaded
-- [ ] Scripts added by scripts (`createElement('script')`), `defer` and `async` as such, `type=module`, `document.write` while parsing
-- [ ] Layout again after the DOM changes (only what changed)
+- [ ] `defer` and `async` as such, `type=module`, `document.write` while parsing
+- [ ] Google's results: still blank after the consent (its scripts run without errors and request nothing): to look into with the corpus, not as Google's case
+- [ ] Layout again after the DOM changes (only what changed): a layout of Repubblica costs 1-1.5 s, and the window waits for it
+- [ ] The page's own scripts block showing it (4.5 to 17 s on Repubblica, its scripts fetched one after another): what is parsed shown before them, and their `src` fetched ahead, as browsers do
+- [x] Repubblica's lazy sections (`lazy-html`, an IntersectionObserver with a 500 px bottom margin, then XHR): loaded when the reader scrolls near them, at 28 400 px (Chrome: 29 000)
+- [x] A debugging hook: with ARIADNE_DEBUG, /disk/ariadne-probe.js runs before the page's scripts (pages may replace `console.log`: a probe keeps its own)
 
 ## Later
 

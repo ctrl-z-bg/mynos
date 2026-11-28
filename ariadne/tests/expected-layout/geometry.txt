@@ -1,0 +1,43 @@
+fill 0,21 800x2424 #ffffff
+text 8,50 serif-bold 32 #000000 Geometry
+text 23,109 serif 16 #0a141e A
+text 39,109 serif 16 #0a141e box:
+text 71,109 serif 16 #0a141e 200
+text 99,109 serif 16 #0a141e x
+text 111,109 serif 16 #0a141e 100,
+text 143,109 serif 16 #0a141e padding
+text 199,109 serif 16 #0a141e 10,
+text 23,127 serif 16 #0a141e border
+text 69,127 serif 16 #0a141e 5
+fill 8,79 230x5 #1a5fb4
+fill 8,204 230x5 #1a5fb4
+fill 8,79 5x130 #1a5fb4
+fill 233,79 5x130 #1a5fb4
+text 8,240 serif 16 #000000 Some
+text 48,240 serif 16 #000000 text
+text 76,240 serif 16 #000000 and
+text 103,240 serif 16 #000000 an
+text 122,240 serif 16 #000000 inline
+text 162,240 serif 16 #000000 span
+text 195,240 serif 16 #000000 in
+text 211,240 serif 16 #000000 a
+text 222,240 serif 16 #000000 line.
+text 56,282 serif 16 #000000 a
+text 67,282 serif 16 #000000 child
+text 103,282 serif 16 #000000 of
+text 120,282 serif 16 #000000 a
+text 131,282 serif 16 #000000 positioned
+text 202,282 serif 16 #000000 div
+text 8,323 mono 16 #000000 (not run)
+text 8,358 serif 16 #000000 the
+text 32,358 serif 16 #000000 box
+text 60,358 serif 16 #000000 below:
+text 108,358 serif 16 #000000 (not
+text 138,358 serif 16 #000000 observed)
+text 8,392 serif 16 #000000 scroll
+text 48,392 serif 16 #000000 events:
+text 97,392 serif 16 #000000 0
+fill 8,2395 784x50 #2ec27e
+text 8,2410 serif 16 #000000 far
+text 30,2410 serif 16 #000000 below
+height 2453

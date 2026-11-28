@@ -1,7 +1,7 @@
 fill 0,21 800x287 #ffffff
 text 8,50 serif-bold 32 #000000 SVG
 text 8,119 serif 16 #000000 Shapes:
-image 62,79 60x40 data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MCIgaGVpZ2h0PSI0MCIgZmlsbD0iIzAwMDAwMCI+PHJlY3QgeD0iMiIgeT0iMiIgd2lkdGg9IjM2IiBoZWlnaHQ9IjM2IiBmaWxsPSIjZTAxYjI0Ij48L3JlY3Q+PGNpcmNsZSBjeD0iNDgiIGN5PSIyMCIgcj0iMTAiIGZpbGw9IiMyZWMyN2UiPjwvY2lyY2xlPjwvc3ZnPg==
+image 62,79 60x40 data:image/svg+xml (338 bytes)
 text 126,119 serif 16 #000000 a
 text 137,119 serif 16 #000000 red
 text 161,119 serif 16 #000000 square,
@@ -14,22 +14,22 @@ text 64,162 serif 16 #1a5fb4 in
 text 80,162 serif 16 #1a5fb4 the
 text 104,162 serif 16 #1a5fb4 text's
 text 141,162 serif 16 #1a5fb4 colour:
-image 190,138 24x24 data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjMWE1ZmI0Ij48cGF0aCBmaWxsPSIjMWE1ZmI0IiBkPSJNMyAxMmgxOE0xMiAzdjE4IiBzdHJva2U9IiMxYTVmYjQiIHN0cm9rZS13aWR0aD0iNCI+PC9wYXRoPjwvc3ZnPg==
+image 190,138 24x24 data:image/svg+xml (318 bytes)
 text 218,162 serif 16 #1a5fb4 (blue).
 text 8,213 serif 16 #000000 From
 text 47,213 serif 16 #000000 a
 text 58,213 serif 16 #000000 sprite:
-image 102,181 32x32 data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjMDAwMDAwIj48cGF0aCBkPSJNMTIgMmwzIDdoN2wtNS41IDQuNSAyIDcuNS02LjUtNC41LTYuNSA0LjUgMi03LjVMMiA5aDd6Ij48L3BhdGg+PC9zdmc+
+image 102,181 32x32 data:image/svg+xml (314 bytes)
 text 138,213 serif 16 #000000 a
 text 149,213 serif 16 #000000 star,
 text 179,213 serif 16 #000000 sized
 text 216,213 serif 16 #000000 by
 text 236,213 serif 16 #000000 CSS;
-image 273,193 20x20 data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjMWE1ZmI0Ij48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI5IiBmaWxsPSJub25lIiBzdHJva2U9IiMxYTVmYjQiIHN0cm9rZS13aWR0aD0iMyI+PC9jaXJjbGU+PC9zdmc+
+image 273,193 20x20 data:image/svg+xml (330 bytes)
 text 297,213 serif 16 #000000 a
 text 308,213 serif 16 #000000 blue
 text 340,213 serif 16 #000000 ring.
-image 9,233 200x40 data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCAxMDAgMjAiIGZpbGw9IiMwMDAwMDAiPjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iMjAiIGZpbGw9IiNmNmQzMmQiPjwvcmVjdD48dGV4dCB4PSI1IiB5PSIxNCI+dGV4dCBpcyBub3QgZHJhd248L3RleHQ+PC9zdmc+
+image 9,233 200x40 data:image/svg+xml (338 bytes)
 fill 8,232 202x1 #999999
 fill 8,273 202x1 #999999
 fill 8,232 1x42 #999999

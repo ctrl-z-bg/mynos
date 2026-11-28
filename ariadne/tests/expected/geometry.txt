@@ -1,0 +1,9 @@
+title: Geometry
+# Geometry
+A box: 200 x 100, padding 10, border 5
+Some text and an inline span in a line.
+a child of a positioned div
+    (not run)
+the box below: (not observed)
+scroll events: 0
+far below

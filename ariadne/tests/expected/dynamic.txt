@@ -1,0 +1,8 @@
+title: Scripts added by scripts
+# Scripts added by scripts
+inline script added: (not run)
+src script added: (not run)
+its load event: (not fired)
+innerHTML's script: not run (as it should be)
+a missing src: (no event)
+a chain of two: (not run)

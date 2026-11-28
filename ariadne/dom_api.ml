@@ -6,8 +6,27 @@
    these operations: Js_prelude. No input or output here: the host tests
    it. An error is [Failure], its message the script's exception. *)
 
+(* what scripts learn of the layout (the browser's: a layout of the page
+   as it is now) *)
+type geometry = {
+  box : Dom.node -> (int * int * int * int * int array) option;
+      (* the border box on the page, and the borders' widths (top, right,
+         bottom, left); None: no box (display: none) *)
+  viewport : unit -> int * int * int * int * int;   (* scroll x, y; width, height; the page's height *)
+  offset_parent : Dom.node -> Dom.node option;
+  computed : Dom.node -> string -> string;          (* getComputedStyle's value *)
+  scroll_to : int -> int -> unit;                   (* window.scrollTo *)
+}
+
+let no_geometry = {
+  box = (fun _ -> None); viewport = (fun () -> (0, 0, 0, 0, 0)); offset_parent = (fun _ -> None);
+  computed = (fun _ _ -> ""); scroll_to = (fun _ _ -> ());
+}
+
 type t = {
   doc : Dom.node;
+  mutable geometry : geometry;
+  mutable version : int;                           (* one more at each change: a layout's freshness *)
   cookies : (unit -> string) * (string -> unit);   (* document.cookie: read, set (the Loader's jar) *)
   fetch : string list -> string list;              (* a request: the browser's (fetch, XMLHttpRequest) *)
   nodes : (int, Dom.node) Hashtbl.t;        (* the handles given out *)
@@ -15,7 +34,7 @@ type t = {
 }
 
 let create ?(cookies = ((fun () -> ""), ignore)) ?(fetch = fun _ -> failwith "NetworkError: no network here") doc =
-  let t = { doc; cookies; fetch; nodes = Hashtbl.create 256; changed = false } in
+  let t = { doc; cookies; fetch; nodes = Hashtbl.create 256; changed = false; geometry = no_geometry; version = 0 } in
   Hashtbl.replace t.nodes doc.Dom.id doc;
   t
 
@@ -147,7 +166,7 @@ let set_attr (n : Dom.node) k v =
 let replace_children t (n : Dom.node) (nodes : Dom.node list) =
   List.iter Dom.remove (Dom.children n);
   List.iter (Dom.append n) nodes;
-  t.changed <- true
+  t.changed <- true; t.version <- t.version + 1
 
 (* the html, head, body elements *)
 let html_element t = Dom.find (fun n -> Dom.is_html n "html") t.doc
@@ -162,7 +181,7 @@ let call t op (args : string list) : string list =
   let h n = [ handle t n; string_of_int (node_type n); node_name n ] in
   let opt = function Some n -> h n | None -> [] in
   let many l = List.concat_map h l in
-  let changed () = t.changed <- true in
+  let changed () = t.changed <- true; t.version <- t.version + 1 in
   match op, args with
   | "document", [] -> h t.doc
   | "documentElement", [] -> opt (html_element t)
@@ -266,6 +285,16 @@ let call t op (args : string list) : string list =
      | None -> Option.iter (fun hd -> let ti = Dom.element "title" in Dom.append ti (Dom.text s); Dom.append hd ti) (head t));
     []
   | "fetch", args -> t.fetch args
+  | "box", [ n ] ->
+    (match t.geometry.box (node t n) with
+     | Some (x, y, w, h, b) -> List.map string_of_int ([ x; y; w; h ] @ Array.to_list b)
+     | None -> [])
+  | "viewport", [] ->
+    let sx, sy, w, h, ph = t.geometry.viewport () in List.map string_of_int [ sx; sy; w; h; ph ]
+  | "offsetParent", [ n ] -> opt (t.geometry.offset_parent (node t n))
+  | "computed", [ n; prop ] -> [ t.geometry.computed (node t n) (String.lowercase_ascii prop) ]
+  | "scrollTo", [ x; y ] ->
+    t.geometry.scroll_to (Option.value (int_of_string_opt x) ~default:0) (Option.value (int_of_string_opt y) ~default:0); []
   | "cookie", [] -> [ (fst t.cookies) () ]
   | "setCookie", [ c ] -> (snd t.cookies) c; []
   | op, args -> fail "no DOM operation %s/%d" op (List.length args)

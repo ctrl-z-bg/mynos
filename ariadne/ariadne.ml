@@ -37,6 +37,7 @@ type loaded = {
   sheets : Style.sheet list;
   title : string;
   mutable laid : (int * Layout.page) option;      (* for a width *)
+  mutable last : Layout.page option;              (* the last laid out: painted while scripts have the tree *)
   mutable styled : (int * Style.styles) option;   (* for a width *)
   pics : (string, pic option) Hashtbl.t;          (* under pics_lock *)
   started : (string, unit) Hashtbl.t;             (* fetches begun (pics_lock) *)
@@ -101,14 +102,14 @@ let load ?post url =
     | r when Loader.ok r -> Some (snd (Encoding.to_utf8 ?transport:(Encoding.charset_of_content_type r.content_type) r.body))
     | _ -> None in
   let scripts = Scripts.run ~log:(fun m -> trace "%s" m) ~url:response.url ~base ~width:878 ~height:600
-      ~fetch:fetch_script ~cookies_get:Loader.script_cookies ~cookies_set:Loader.script_set_cookie doc in
+      ~fetch:fetch_script ~cookies_get:Loader.script_cookies ~cookies_set:Loader.script_set_cookie ~sheets doc in
   let t5 = now () in
   let title = match Dom.find (fun n -> Dom.is_html n "title") doc with
     | Some t -> String.trim (Text.collapse (Dom.text_content t)) | None -> "" in
   let ms a b = (b -. a) *. 1000. in
   trace "page %s: load %.0f, decode %.0f, parse %.0f, css %.0f ms (%d sheets), scripts %.0f ms" url
     (ms t0 t1) (ms t1 t2) (ms t2 t3) (ms t3 t4) (List.length sheets) (ms t4 t5);
-  { response; doc; base; sheets; title; laid = None; styled = None; pics = Hashtbl.create 16;
+  { response; doc; base; sheets; title; laid = None; last = None; styled = None; pics = Hashtbl.create 16;
     started = Hashtbl.create 16; hurried = Hashtbl.create 16;
     sized = 0; laid_sized = 0;
     console = (match scripts with Some (r, _) -> r.Scripts.console | None -> "");
@@ -137,6 +138,7 @@ let layout_at l ~width ~height =
     let p = Layout.layout ~image:(pic_size l) ~width ~height styles l.doc in
     trace "laid out %d wide: cascade %.0f, layout %.0f ms" width ((t1 -. t0) *. 1000.) ((now () -. t1) *. 1000.);
     l.laid <- Some (width, p);
+    l.last <- Some p;
     p
 
 (* the pictures' work, in threads of their own: fetching a page's
@@ -422,8 +424,13 @@ let window first =
        | Forms.Post (url, body) -> go ~post:body url)
     | _ -> () in
   let last_tick = ref (now ()) in
+  let view_h = ref 600 in
   if first <> "about:start" then go first;
   Gui.run ~title:"Ariadne" ~tick:0.1 ~resizable:(400, 300) 900 640 st (fun ui st ->
+      (* the page's tree, unless its scripts have it now: then the page as
+         last laid out, and nothing done to the tree this frame *)
+      let locked = Mutex.try_lock Scripts.dom_lock in
+      Fun.protect ~finally:(fun () -> if locked then Mutex.unlock Scripts.dom_lock) (fun () ->
       let t_frame = now () in
       let g = ui.Gui.g and width = Gui.width ui and height = Gui.height ui in
       (* a page arrived: shown, if it is the one asked for last *)
@@ -431,11 +438,22 @@ let window first =
        | Some (n, l) when not (match st.loading with Some (_, m) -> m = n | None -> false) ->
          Option.iter Scripts.close l.session
        | _ -> ());
-      (match Mutex.protect lock (fun () -> let a = !arrived in arrived := None; a) with
+      (match (if locked then Mutex.protect lock (fun () -> let a = !arrived in arrived := None; a) else None) with
        | Some (n, l) when (match st.loading with Some (_, m) -> m = n | None -> false) ->
          let asked = match st.loading with Some (u, _) -> u | None -> l.response.url in
          Option.iter Scripts.close st.shown.session;
          st.shown <- l; st.loading <- None;
+         (* its scripts' layout: the window's, laid out again when they changed the page *)
+         (match l.session with
+          | Some s ->
+            let seen = ref s.Scripts.dom.version in
+            s.layout <- (fun () ->
+                if s.dom.version <> !seen then (seen := s.dom.version; l.laid <- None; l.styled <- None);
+                let page = layout_at l ~width:!page_width ~height:!view_h in
+                (page, match l.styled with Some (_, st) -> st | None -> Style.compute ~width:!page_width
+                                                                       ~height:!view_h l.sheets l.doc));
+            Scripts.start s
+          | None -> ());
          fetch_pictures l;
          st.address <- l.response.url ^ (match snd (Url.strip_fragment asked) with
              | Some f -> "#" ^ f | None -> "");
@@ -480,15 +498,20 @@ let window first =
          last_relayout := now (); l.laid <- None
        | _ -> ());
       (match st.shown.session with
-       | Some s ->
-         if s.Scripts.pending > 0 && now () -. !last_tick >= 0.1 then begin
-           Scripts.tick s (int_of_float ((now () -. !last_tick) *. 1000.));
-           last_tick := now ()
-         end else if s.pending = 0 then last_tick := now ();
-         (* the scripts changed the page: its style and layout again *)
-         if Scripts.changed s then (st.shown.laid <- None; st.shown.styled <- None)
-       | None -> ());
-      let page = layout_at st.shown ~width:!page_width ~height:box_h in
+       | Some s when locked && s.Scripts.dom.changed && now () -. !last_tick >= 1. ->
+         (* the scripts changed the page: its style and layout again, at
+            most every second (scripts that keep changing it, ads...) *)
+         ignore (Scripts.changed s);
+         last_tick := now ();
+         st.shown.laid <- None; st.shown.styled <- None
+       | _ -> ());
+      view_h := box_h;
+      let page =
+        if locked then layout_at st.shown ~width:!page_width ~height:box_h
+        else match st.shown.last with
+          | Some p -> p
+          | None -> Layout.layout ~width:!page_width ~height:box_h (Style.compute ~width:1 ~height:1 [] (Dom.document ()))
+                      (Dom.document ()) in
       (match st.want_scroll with
        | Some s ->
          let s = match snd (Url.strip_fragment st.address) with
@@ -499,7 +522,8 @@ let window first =
       (* a text control with the keys: typed into; else the keys scroll the
          page, when the address does not have them *)
       if ui.Gui.field = 1 then st.focus <- None;
-      (match st.focus with
+      (* typing changes the tree: only while the frame holds it *)
+      (match (if locked then st.focus else None) with
        | Some (node, caret) ->
          let v = ref (Forms.value node) in
          let c = ref (min caret (String.length !v)) in
@@ -712,30 +736,19 @@ let window first =
           | _ -> ())
        | _ -> ());
       if List.mem "\027" ui.Gui.keys then st.popup <- None;
-      (* a click: an event for the scripts at what is under it (a control,
-         a link, else the innermost block); its default action unless
-         they prevent it *)
+      (* a click: an event for the scripts at what is under it (the
+         innermost element with a box there: Layout.element_at); its
+         default action unless they prevent it *)
       let click_target mx my =
-        match control_at mx my with
-        | Some (n, _, _, _, _, _) -> Some n
-        | None ->
-          if my < box_y || my >= box_y + box_h then None
-          else
-            let px = mx - box_x and py = my - !top_ref in
-            let inside x y w h = px >= x && px < x + w && py >= y && py < y + h in
-            match Array.fold_left (fun f (l : Layout.link) -> if inside l.lx l.ly l.lw l.lh then Some l.anode else f)
-                    None page.links with
-            | Some a -> Some a
-            | None ->
-              Array.fold_left (fun f (h : Layout.hit) -> if inside h.hx h.hy h.hw h.hh then Some h.hnode else f)
-                None page.hits in
+        if my < box_y || my >= box_y + box_h then None
+        else Layout.element_at () page ~x:(mx - box_x) ~y:(my - !top_ref) in
       let allowed =
-        if ui.Gui.clicked && st.popup = None && st.shown.session <> None then
+        if ui.Gui.clicked && locked && st.popup = None && st.shown.session <> None then
           let px, py = ui.Gui.press in
           match click_target px py with Some n -> event n "click" | None -> true
         else true in
       let control_clicked =
-        ui.Gui.clicked && (st.popup <> None
+        ui.Gui.clicked && locked && (st.popup <> None
                            || (let px, py = ui.Gui.press in control_at px py <> None)) in
       (if control_clicked && allowed then begin
          let px, py = ui.Gui.press in
@@ -780,19 +793,30 @@ let window first =
               | _ -> go target)
          | _ -> ());
       let t_painted = now () in
+      (* the scripts: the viewport as it is now (their observers, scroll
+         events), and a scroll they asked for *)
+      (match st.shown.session with
+       | Some s when locked ->
+         s.Scripts.view <- (!page_width, box_h);
+         Scripts.scrolled_to s (0, !offset);
+         (match s.want_scroll with
+          | Some (_, y) -> s.want_scroll <- None; Gui.scroll_to ui 2 (min y (max 0 (page.height - box_h)))
+          | None -> ())
+       | _ -> ());
       (* the status line *)
       Gfx.fill g 0 (height - 22) width 22 0xE8EDF2;
       let status = match st.loading, st.hover with
         | Some (u, _), _ -> "loading " ^ u ^ "..."
         | None, Some h -> h
         | None, None ->
-          (if st.shown.title <> "" then st.shown.title ^ "  \xc2\xb7  " else "") ^ st.shown.response.status in
+          (if st.shown.title <> "" then st.shown.title ^ "  \xc2\xb7  " else "") ^ st.shown.response.status
+          ^ (if not locked then "  \xc2\xb7  scripts running..." else "") in
       ignore (Gfx.text ~max:((width - 16) / Gfx.char_w) g 8 (height - 19) status Gui.muted);
       if now () -. t_frame > 0.05 then
         trace "frame %.0f ms: before the page %.0f, the page %.0f (%d items drawn of %d)"
           ((now () -. t_frame) *. 1000.) ((t_paint -. t_frame) *. 1000.) ((t_painted -. t_paint) *. 1000.)
           !drawn (Array.length page.items);
-      st)
+      st))
 
 let () =
   match List.tl (Array.to_list Sys.argv) with

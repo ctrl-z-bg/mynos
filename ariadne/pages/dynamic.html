@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<title>Scripts added by scripts</title>
+<h1>Scripts added by scripts</h1>
+<p id="a">inline script added: (not run)</p>
+<p id="b">src script added: (not run)</p>
+<p id="b2">its load event: (not fired)</p>
+<p id="c">innerHTML's script: not run (as it should be)</p>
+<p id="d">a missing src: (no event)</p>
+<p id="e">a chain of two: (not run)</p>
+<div id="box"></div>
+<script>
+const a = document.createElement("script");
+a.textContent = "document.getElementById('a').textContent = 'inline script added: ran'";
+document.body.appendChild(a);
+
+const b = document.createElement("script");
+b.src = "data:text/javascript,document.getElementById('b').textContent='src script added: ran, its currentScript a ' + document.currentScript.tagName";
+b.onload = () => { document.getElementById("b2").textContent = "its load event: fired"; };
+document.head.appendChild(b);
+
+document.getElementById("box").innerHTML =
+  "<script>document.getElementById('c').textContent = 'WRONG: innerHTML\\'s script ran'<\/script>";
+
+const d = document.createElement("script");
+d.src = "about:test/no-such-page";
+d.addEventListener("error", () => { document.getElementById("d").textContent = "a missing src: its error event fired"; });
+document.body.appendChild(d);
+
+const e = document.createElement("script");
+e.textContent = "const f = document.createElement('script');" +
+  "f.textContent = \"document.getElementById('e').textContent = 'a chain of two: both ran'\";" +
+  "document.body.appendChild(f);";
+document.body.appendChild(e);
+</script>
