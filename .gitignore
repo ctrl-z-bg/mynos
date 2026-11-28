@@ -30,6 +30,8 @@ services/keyboard/keyboardd
 services/registry/registry
 services/serial/seriald
 *.cm[ioa]
+*.cmx
+*.cmxa
 *.byte
 *.dsk
 tests/abi/abi

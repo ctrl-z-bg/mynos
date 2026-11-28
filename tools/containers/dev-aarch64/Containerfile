@@ -6,11 +6,15 @@
 # musl 1.2.5 built for AArch64: /opt/musl-aarch64 (its musl-gcc wraps the
 # cross gcc). User-space programs are static Linux AArch64 binaries.
 # OCaml 5.5.2:
-#   /opt/ocaml-5.5.2            the compiler (bytecode only, on the build
-#                               host): bytecode is the same on every
-#                               architecture
+#   /opt/ocaml-5.5.2            the compiler for the build host (with its
+#                               native compiler, which the cross one
+#                               needs to be built): bytecode is the same
+#                               on every architecture
 #   /opt/ocaml-runtime-musl     the bytecode runtime cross-built for
 #                               AArch64 with musl, as in dev-x86_64
+#   /opt/ocaml-cross-aarch64    a cross ocamlopt: native code for MyNOS
+#                               on AArch64 (doc/decisions/ocaml-native.md;
+#                               MYNOS_OCAMLOPT)
 #
 # Build:  tools/containers/build-image.sh dev-aarch64
 # Use:    tools/in-container.sh dev-aarch64 <command>
@@ -45,10 +49,10 @@ RUN mkdir /tmp/musl && cd /tmp/musl \
  && ./configure --target=aarch64-linux-gnu CC=aarch64-linux-gnu-gcc \
       --prefix=/opt/musl-aarch64 --disable-shared --enable-wrapper=gcc \
  && make -j8 && make install
-# the compiler, for the build host (glibc), bytecode only
+# the compiler, for the build host (glibc)
 RUN mkdir /tmp/host && cd /tmp/host \
  && tar xzf /tmp/ocaml-${OCAML_VERSION}.tar.gz --strip-components=1 \
- && ./configure --prefix=/opt/ocaml-${OCAML_VERSION} --disable-native-compiler \
+ && ./configure --prefix=/opt/ocaml-${OCAML_VERSION} \
       --disable-ocamldoc --disable-ocamltest \
  && make -j8 && make install
 # the bytecode runtime for MyNOS on AArch64: static, musl, cross-built
@@ -71,6 +75,21 @@ RUN export PATH=/opt/ocaml-${OCAML_VERSION}/bin:$PATH \
  && cp -r otherlibs/unix otherlibs/systhreads otherlibs/str /opt/ocaml-runtime-musl/otherlibs/ \
  && cp Makefile.config /opt/ocaml-runtime-musl/ \
  && echo "${OCAML_VERSION}" > /opt/ocaml-runtime-musl/VERSION
+# the cross compiler: ocamlopt on the build host, AArch64's code, musl's
+# static programs (OCaml's experimental "make crossopt", with the host's
+# compiler of the same version on PATH). STRIP, AS and ASPP: the cross
+# binutils', or the build strips a target binary with the host's strip
+# and looks for aarch64-linux-musl-as.
+RUN export PATH=/opt/ocaml-${OCAML_VERSION}/bin:$PATH \
+ && mkdir /tmp/cross && cd /tmp/cross \
+ && tar xzf /tmp/ocaml-${OCAML_VERSION}.tar.gz --strip-components=1 \
+ && ./configure --prefix=/opt/ocaml-cross-aarch64 --target=aarch64-linux-musl \
+      CC=/opt/musl-aarch64/bin/musl-gcc AR=aarch64-linux-gnu-ar \
+      RANLIB=aarch64-linux-gnu-ranlib STRIP=aarch64-linux-gnu-strip \
+      AS=aarch64-linux-gnu-as ASPP="/opt/musl-aarch64/bin/musl-gcc -c" \
+      LDFLAGS=-static --disable-shared --disable-ocamldoc --disable-ocamltest \
+      --disable-debug-runtime --disable-instrumented-runtime \
+ && make crossopt -j8 && make installcross
 
 FROM docker.io/library/debian:trixie-slim
 ARG OCAML_VERSION
@@ -81,10 +100,12 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=build /opt/ocaml-${OCAML_VERSION} /opt/ocaml-${OCAML_VERSION}
 COPY --from=build /opt/ocaml-runtime-musl /opt/ocaml-runtime-musl
+COPY --from=build /opt/ocaml-cross-aarch64 /opt/ocaml-cross-aarch64
 COPY --from=build /opt/musl-aarch64 /opt/musl-aarch64
 ENV PATH=/opt/ocaml-${OCAML_VERSION}/bin:/opt/musl-aarch64/bin:$PATH
 ENV MYNOS_CC=musl-gcc \
     MYNOS_LDFLAGS="-static -Wl,-Ttext-segment=0x40000000 -Wl,-z,noseparate-code -Wl,--build-id=none" \
     OCAML_RUNTIME_LIB=/opt/ocaml-runtime-musl \
+    MYNOS_OCAMLOPT=/opt/ocaml-cross-aarch64/bin/ocamlopt \
     MYNOS_ARCH=aarch64
 WORKDIR /mynos

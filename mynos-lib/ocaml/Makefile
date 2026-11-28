@@ -1,8 +1,10 @@
 # The Mynos OCaml library (bytecode). Needs ocamlc 5.x and the primitive
-# list of the MyNOS runtime (mynos-runtime/primitives).
+# list of the MyNOS runtime (mynos-runtime/primitives). Where there is a
+# cross ocamlopt (MYNOS_OCAMLOPT, the dev-aarch64 container), also native:
+# mynos.cmxa (its C stubs: mynos-runtime/libmynosrt.a).
 OCAMLC = ocamlc -use-prims ../../mynos-runtime/primitives
 
-all: mynos.cma
+all: mynos.cma $(if $(MYNOS_OCAMLOPT),mynos.cmxa)
 
 mynos.cmi: mynos.mli
 	$(OCAMLC) -c mynos.mli
@@ -150,5 +152,10 @@ $(filter-out mynos.cmo,$(MODULES)) $(filter-out mynos.cmi,$(MODULES:.cmo=.cmi)):
 mynos.cma: $(MODULES)
 	$(OCAMLC) -a -o $@ $(MODULES)
 
+# native: the same modules in the same order, compiled at once against the
+# interfaces ocamlc made (the same compiler's version)
+mynos.cmxa: $(MODULES:.cmo=.cmi) $(MODULES:.cmo=.ml)
+	$(MYNOS_OCAMLOPT) -a -o $@ $(MODULES:.cmo=.ml)
+
 clean:
-	rm -f *~ *.cm[ioa]
+	rm -f *~ *.cm[ioax] *.cmxa *.o *.a

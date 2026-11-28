@@ -2234,3 +2234,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   libmynos that run on MyNOS; the kernel now ignores the top byte of
   user addresses (TBI0), which OCaml's GC uses. Under QEMU the Z80
   emulators run 20 to 27 times as fast as in bytecode.
+- **2026-11-28** — Native OCaml in the build (AArch64): the dev-aarch64
+  container has a cross `ocamlopt` (MYNOS_OCAMLOPT); the build makes
+  `mynos-lib/ocaml/mynos.cmxa` and `mynos-runtime/libmynosrt.a` (the
+  stubs), `tools/ocamlopt-mynos.sh` links a program. On the Pi 400 the
+  emulators' benches: Spectrum 724 frames a second native (40
+  bytecode), MSX1 410 (24); the real `zxspectrum` (threads, Mynos, emu/1)
+  builds native and runs. Packages: not yet (btq.4).

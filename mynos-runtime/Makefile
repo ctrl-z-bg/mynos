@@ -9,7 +9,11 @@
 # stubs of Num (third_party/num, mynos-yux), with its portable C digits.
 #
 # Outputs: ocamlrun, and primitives (the full primitive list, which ocamlc
-# needs with -use-prims to link programs that use Mynos).
+# needs with -use-prims to link programs that use Mynos). Where there is
+# a cross ocamlopt (MYNOS_OCAMLOPT, the dev-aarch64 container), also
+# libmynosrt.a: the Mynos and Gfx stubs for native programs, which link
+# OCaml's own native runtime and unix, threads and str libraries
+# (tools/ocamlopt-mynos.sh; doc/decisions/ocaml-native.md).
 include ../mynos.mk
 CC = $(MYNOS_CC)
 
@@ -18,7 +22,14 @@ CFLAGS = -Wall -O2 -I$(OCAML_RUNTIME_LIB) -I../mynos-lib/include
 
 STUBS = mynos_stubs.c gfx_stubs.c
 
-all: ocamlrun
+all: ocamlrun $(if $(MYNOS_OCAMLOPT),libmynosrt.a)
+
+# the archive's tool: the target's (an AArch64 archive's index needs it)
+MYNOS_AR ?= $(if $(filter aarch64,$(MYNOS_ARCH)),aarch64-linux-gnu-ar,ar)
+
+libmynosrt.a: mynos_stubs.o gfx_stubs.o
+	rm -f $@
+	$(MYNOS_AR) rcs $@ mynos_stubs.o gfx_stubs.o
 
 # OCaml's unix and threads libraries (as otherlibs/unix/Makefile lists them)
 OTHERLIBS = $(OCAML_RUNTIME_LIB)/otherlibs
@@ -78,5 +89,5 @@ ocamlrun: main.o mynos_stubs.o gfx_stubs.o prims.o $(LIB_OBJ) \
 	  -lm -lpthread $(MYNOS_LDFLAGS)
 
 clean:
-	rm -f *~ *.o ocamlrun primitives prims.c
+	rm -f *~ *.o ocamlrun primitives prims.c libmynosrt.a
 	rm -rf unix threads str num
