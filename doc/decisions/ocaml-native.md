@@ -127,3 +127,66 @@ dev-aarch64 container, the native `Mynos` and `Gfx` libraries with
 MyNOS's stubs, then the emulators built native (packages: per
 architecture, bytecode where there is no native build; agreed with the
 applications' session).
+
+## ocamlopt inside MyNOS (2026-11-28, btq.4.1)
+
+The owner asked whether the compiler itself could run in MyNOS (to
+optimise on the fly), and to drop it if it were a bloodbath. It is not:
+**it works, end to end**, on QEMU and on the Pi 400: `ocamlopt` compiles
+`hello.ml` inside MyNOS, runs the assembler and the linker, and the
+program it makes runs.
+
+**The pieces.**
+- **The assembler and the linker**: GNU binutils 2.44 (`as`, `ld`),
+  cross-built for aarch64-linux-musl and linked with libmynos (through a
+  `musl-gcc` wrapper: binutils' configure empties `LIBS`, and without
+  libmynos their file functions were musl's raw system calls, which MyNOS
+  does not serve). They built at once (with `-D_LARGEFILE64_SOURCE`) and
+  run unchanged: a C program and an OCaml one assembled and linked in
+  MyNOS. A few calls answer ENOSYS harmlessly (getrlimit, prlimit64,
+  fcntl, umask, fchmodat).
+- **Starting them**: `system(3)` in libmynos (MyNOS has no `execve`):
+  `sh -c`, spawned and waited for; OCaml's `Sys.command` goes through it.
+- **The compiler**: the cross tree's `utils/config.generated.ml` edited
+  for MyNOS (`asm` /disk/bu/as; `mkexe` `ld` itself with the start files;
+  `native_c_libraries` libmynosrt, libmynos, libgcc, libc and the end
+  files), the standard library found through `OCAMLLIB`. As bytecode
+  (`ocamlrun ocamlopt.byte`, 4.6 MB) or native (`ocamlopt.opt`, linked
+  from the target's compiler-libs, 11 MB).
+- **The kernel**: a program could be 4 MB at most (the RAM disk was
+  mapped right after it, at 0x40400000); the 64-bit kernels now take
+  256 MB and map the RAM disk at 256 GB.
+- **On the card**: the native standard library without its debugging
+  sections, 10 MB; binutils and the C libraries, 13 MB.
+
+**The time, for a hello world** (compiled, assembled, linked):
+
+| | QEMU (TCG) | Pi 400 |
+|---|---|---|
+| all, the program written to /disk | 23 s | 29.6 s |
+| all, the program written to /tmp | 17.9 s | 10.3 s |
+| compiling and assembling only (`-S -c`) | 2.3 s | 3.1 s |
+| `as` alone | 0.5 s | |
+
+The Pi being slower than an emulator says where the time goes: not in
+computing (the bytecode and the native compiler take the same time) but
+in **input and output in small pieces**. musl's `FILE`s have 1 KB
+buffers, and in MyNOS each read or write of a file is an IPC request to
+its service (and, on the SD card, a command to a polled controller): a
+C test writing 2.7 MB in 100-byte `fwrite`s takes 1.34 s to /tmp and
+8.6 s to /disk with musl's buffer, 0.12 s and 0.61 s with a 1 MB one.
+GNU ld reads archives in pieces with seeks between them, and writes its
+output so. Each `system()` also starts `ocamlrun` and the shell.
+
+**What would make it fast**, none of it done yet:
+1. Bigger stdio buffers in libmynos (it already replaces musl's
+   `__stdio_read` and `__stdio_write`: a larger buffer for files, freed
+   in its `__stdio_close`): every C program gains, ld most.
+2. `system()` starting simple commands directly (their words parsed,
+   quotes honoured) instead of through the shell.
+3. A cache in fatfs, or the toolchain's libraries in the RAM disk.
+
+The expected result is a few seconds for a small program, which makes
+compiling a hot module in MyNOS usable. **Verdict:** feasible; what is
+slow is MyNOS's file I/O granularity, which C programs in general
+suffer from as well.
