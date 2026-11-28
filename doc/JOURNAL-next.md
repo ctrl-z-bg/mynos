@@ -1022,13 +1022,12 @@ AArch64 runtime's `libcamlrun.a` is built `-O2`, as on x86); idle
 processors (they wait with `wfi`); the drivers' polling (usbd and wifid
 sleep 5 ms between rounds).
 
-**Where it stands.** No fault found: the Pi's processor runs OCaml's
-bytecode at about a twentieth of the PC's, where a factor of 8 to 10
-was expected (an A72 at 1.8 GHz against a core at 4.7 GHz). The rest is
-not explained; a comparison with Raspberry Pi OS on the same board
-(`ocamlrun` and the same tests) would say whether it is MyNOS's or the
-chip's. The request for the maximum stays, harmless, and the measured
-clock is logged.
+**Where it stands.** No fault found. The same bytecode, the MSX1's
+bench, runs at 197 frames a second on the PC and 24 on the Pi: an
+eighth, what an A72 at 1.8 GHz is to a core at 4.7 GHz; the bench's
+twentieth is against its reference, MyNOS i386 under KVM. The
+emulators' answer is native code (2026-11-28, below). The request for
+the maximum stays, harmless, and the measured clock is logged.
 
 **Lesson.** On a board whose firmware owns the clocks, what the
 firmware says the clock is and what it is are two things: measure it.
