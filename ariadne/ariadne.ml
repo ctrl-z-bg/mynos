@@ -124,24 +124,28 @@ let trace fmt = Printf.ksprintf (fun m ->
       if m = "" then Mynos.log (Printf.sprintf "ariadne %6.0f:\n" t) else go 0
     end) fmt
 
-(* a style sheet's text, fetched *)
-let fetch_css url =
-  match Loader.load url with
+(* a style sheet's text, fetched ([get]: the page's fetches begun ahead) *)
+let fetch_css ?(get = fun u -> Loader.load u) url =
+  match get url with
   | r when Loader.ok r ->
     Some (snd (Encoding.to_utf8 ?transport:(Encoding.charset_of_content_type r.content_type) r.body))
   | _ -> None
 
-(* a sheet, after the sheets it imports (three levels at most) *)
-let rec with_imports ~base ~depth ?media text =
+(* a sheet, after the sheets it imports (three levels at most): those
+   fetched together, used in their order *)
+let rec with_imports ?get ~base ~depth ?media text =
   let sh = Style.parse_sheet ~base ?media text in
   let imported =
     if depth >= 3 then []
-    else List.concat_map (fun (u, mq) ->
-        let url = Url.resolve base u in
-        let media = match mq with [] -> media | q -> Some (Css.to_string q) in
-        match fetch_css url with
-        | Some t -> with_imports ~base:url ~depth:(depth + 1) ?media t
-        | None -> []) sh.imports in
+    else
+      let fetching = List.map (fun (u, mq) ->
+          let url = Url.resolve base u in
+          (url, mq, Loader.ahead (fun () -> fetch_css ?get url))) sh.imports in
+      List.concat_map (fun (url, mq, a) ->
+          let media = match mq with [] -> media | q -> Some (Css.to_string q) in
+          match Loader.await a with
+          | Some t -> with_imports ?get ~base:url ~depth:(depth + 1) ?media t
+          | None -> []) fetching in
   imported @ [ sh ]
 
 let source_key = function
@@ -150,7 +154,7 @@ let source_key = function
 
 (* the sheets of [doc] as it is now; [wait]: links fetched now (the page's
    own, when it loads), else in the background *)
-let current_sheets ?(wait = false) c doc =
+let current_sheets ?(wait = false) ?get c doc =
   List.concat_map (fun src ->
       let k = source_key src in
       match Mutex.protect sheets_lock (fun () -> Hashtbl.find_opt c.parsed k) with
@@ -159,18 +163,18 @@ let current_sheets ?(wait = false) c doc =
         let store s = Mutex.protect sheets_lock (fun () -> Hashtbl.replace c.parsed k s) in
         match src with
         | Style.Inline_sheet (t, media) ->
-          let s = with_imports ~base:c.sheet_base ~depth:0 ?media t in store s; s
+          let s = with_imports ?get ~base:c.sheet_base ~depth:0 ?media t in store s; s
         | Style.Linked (href, media) ->
           let u = Url.resolve c.sheet_base href in
-          let get () = match fetch_css u with Some t -> with_imports ~base:u ~depth:0 ?media t | None -> [] in
-          if wait then (let s = get () in store s; s)
+          let fetched () = match fetch_css ?get u with Some t -> with_imports ?get ~base:u ~depth:0 ?media t | None -> [] in
+          if wait then (let s = fetched () in store s; s)
           else begin
             let start = Mutex.protect sheets_lock (fun () ->
                 if Hashtbl.mem c.fetching k then false else (Hashtbl.replace c.fetching k (); true)) in
             if start then
               ignore (Thread.create (fun () ->
                   trace "sheet %s: added by a script, fetching" u;
-                  let s = get () in
+                  let s = fetched () in
                   trace "sheet %s: %d rules" u (List.fold_left (fun a (sh : Style.sheet) -> a + List.length sh.rules) 0 s);
                   Mutex.protect sheets_lock (fun () -> Hashtbl.replace c.parsed k s; c.arrived <- true)) ());
             []
@@ -192,12 +196,26 @@ let load ?post ?html ?base_url ?framed url =
   let base = match Dom.find (fun n -> Dom.is_html n "base" && Dom.attr n "href" <> None) doc with
     | Some b -> Url.resolve doc_base (Option.get (Dom.attr b "href"))
     | None -> doc_base in
+  (* fetched ahead, all at once (as browsers' preload scanners): the
+     sheets, the scripts' srcs; each used in document order *)
+  let ahead = Hashtbl.create 16 in
+  let start u = if not (Hashtbl.mem ahead u) then Hashtbl.replace ahead u (Loader.ahead (fun () -> Loader.load u)) in
+  List.iter (function Style.Linked (h, _) -> start (Url.resolve base h) | Style.Inline_sheet _ -> ()) (Style.sources doc);
+  if Scripts.enabled then
+    Dom.iter (fun n ->
+        if Dom.is_html n "script" && Scripts.is_js n then
+          match Dom.attr n "src" with
+          | Some s when String.trim s <> "" -> start (Url.resolve base (String.trim s))
+          | _ -> ()) doc;
+  let get u = match Hashtbl.find_opt ahead u with
+    | Some a -> Hashtbl.remove ahead u; Loader.await a
+    | None -> Loader.load u in
   let css = { sheet_base = base; parsed = Hashtbl.create 16; fetching = Hashtbl.create 4; arrived = false } in
-  let sheets = current_sheets ~wait:true css doc in
+  let sheets = current_sheets ~wait:true ~get css doc in
   let t4 = now () in
   (* the page's scripts (Scripts: jsd), before the cascade *)
   let fetch_script u =
-    match Loader.load u with
+    match get u with
     | r when Loader.ok r -> Some (snd (Encoding.to_utf8 ?transport:(Encoding.charset_of_content_type r.content_type) r.body))
     | _ -> None in
   let scripts = Scripts.run ?framed ~log:(fun m -> trace "%s" m) ~url:response.url ~base ~width:878 ~height:600

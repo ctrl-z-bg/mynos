@@ -73,7 +73,25 @@ let origin u =
    body): [status; reason; url; body; name; value...]. Another origin's:
    no cookies, its answer readable if it allows it (Access-Control-Allow-
    Origin), and only GET, HEAD, POST (there is no preflight) *)
-let fetch_for ~page ~log = function
+(* scripts' srcs fetched ahead (from when a script put them in the page),
+   by URL: taken by the script's own request *)
+type ahead = { pre : (string, Loader.answer Loader.ahead) Hashtbl.t; pre_lock : Mutex.t }
+
+(* a script's src: a GET in the script's mode (any origin, with cookies) *)
+let script_request url = Loader.fetch ~credentials:true ~meth:"GET" ~headers:[] url
+
+let prefetch_for ah ~page url =
+  let u = Url.resolve page url in
+  Mutex.protect ah.pre_lock (fun () ->
+      if not (Hashtbl.mem ah.pre u) then Hashtbl.replace ah.pre u (Loader.ahead (fun () -> script_request u)))
+
+let ready_for ah ~page url =
+  let u = Url.resolve page url in
+  match Mutex.protect ah.pre_lock (fun () -> Hashtbl.find_opt ah.pre u) with
+  | Some a -> Loader.ready a
+  | None -> true
+
+let fetch_for ?ah ~page ~log = function
   | [ meth; url; headers; has_body; body; mode ] ->
     let meth = String.uppercase_ascii meth in
     let url = Url.resolve page url in
@@ -89,7 +107,16 @@ let fetch_for ~page ~log = function
     if not same && not (List.mem meth [ "GET"; "HEAD"; "POST" ]) then
       failwith ("NetworkError: " ^ meth ^ " to another origin (" ^ theirs ^ ") is not allowed here");
     let headers = if same then headers else ("Origin", mine) :: headers in
-    let a = Loader.fetch ~credentials:same ~meth ~headers ?body:(if has_body = "1" then Some body else None) url in
+    let fetched_ahead = match ah with
+      | Some ah when mode = "script" && meth = "GET" ->
+        Mutex.protect ah.pre_lock (fun () ->
+            match Hashtbl.find_opt ah.pre url with
+            | Some a -> Hashtbl.remove ah.pre url; Some a
+            | None -> None)
+      | _ -> None in
+    let a = match fetched_ahead with
+      | Some a -> Loader.await a
+      | None -> Loader.fetch ~credentials:same ~meth ~headers ?body:(if has_body = "1" then Some body else None) url in
     log (Printf.sprintf "request %s %s: %d %s, %d bytes" meth url a.Loader.a_status a.a_reason (String.length a.a_body));
     if a.Loader.a_status = 0 then failwith ("NetworkError: " ^ a.a_reason);
     if not same then begin
@@ -358,7 +385,9 @@ let run ?(framed = false) ~(log : string -> unit) ~url ~base ~width ~height ~(fe
     | exception _ -> trace "scripts: no jsd"; None
     | js ->
       let name = Lazy.force service in
-      let t = Dom_api.create ~cookies:((fun () -> cookies_get url), cookies_set url) ~fetch:(fetch_for ~page:url ~log) doc in
+      let ah = { pre = Hashtbl.create 8; pre_lock = Mutex.create () } in
+      let t = Dom_api.create ~cookies:((fun () -> cookies_get url), cookies_set url) ~fetch:(fetch_for ~ah ~page:url ~log)
+          ~prefetch:(prefetch_for ah ~page:url) ~ready:(ready_for ah ~page:url) doc in
       let sid = Mutex.protect lock (fun () -> incr next_sid; Hashtbl.replace sessions !next_sid t; !next_sid) in
       let cx = Js.create ~js ~dom:name () in
       (* while loading: a layout of its own (no picture sizes yet); the
@@ -382,7 +411,14 @@ let run ?(framed = false) ~(log : string -> unit) ~url ~base ~width ~height ~(fe
          match In_channel.with_open_bin "/disk/ariadne-probe.js" In_channel.input_all with
          | probe -> log "probe: /disk/ariadne-probe.js"; run_one ~name:"probe" probe
          | exception Sys_error _ -> ());
-      List.iteri (fun i sc ->
+      (* the HTML Standard's order: the parser's scripts as they come (async
+         ones in it too: any order is theirs), then the defer ones (a src,
+         not async), in order *)
+      let deferred sc = Dom.attr sc "defer" <> None && Dom.attr sc "async" = None
+                        && (match Dom.attr sc "src" with Some s -> String.trim s <> "" | None -> false) in
+      let numbered = List.mapi (fun i sc -> (i, sc)) scripts in
+      let first, later = List.partition (fun (_, sc) -> not (deferred sc)) numbered in
+      List.iter (fun (i, sc) ->
           let code, name = match Dom.attr sc "src" with
             | Some src when String.trim src <> "" ->
               let u = Url.resolve base (String.trim src) in
@@ -390,7 +426,7 @@ let run ?(framed = false) ~(log : string -> unit) ~url ~base ~width ~height ~(fe
             | _ -> (Some (Dom.text_content sc), Printf.sprintf "%s#script%d" url (i + 1)) in
           match code with
           | Some code -> incr ran; run_one ~name code
-          | None -> trace "script %s: not fetched" name) scripts;
+          | None -> trace "script %s: not fetched" name) (first @ later);
       run_one ~name:"after" "__afterScripts()";
       (* the timers (and the scripts scripts added): the window's, once the
          page is shown, as browsers do: not before showing it *)

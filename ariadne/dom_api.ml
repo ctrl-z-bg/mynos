@@ -29,6 +29,8 @@ type t = {
   mutable version : int;                           (* one more at each change: a layout's freshness *)
   cookies : (unit -> string) * (string -> unit);   (* document.cookie: read, set (the Loader's jar) *)
   fetch : string list -> string list;              (* a request: the browser's (fetch, XMLHttpRequest) *)
+  prefetch : string -> unit;                       (* a script's src: fetched ahead, from now *)
+  ready : string -> bool;                          (* ... and its answer in *)
   nodes : (int, Dom.node) Hashtbl.t;        (* the handles given out *)
   mutable changed : bool;                    (* the tree, an attribute or a text changed *)
   mutable navigation : (string * bool) option;  (* a script asked to go to a URL (replacing this page or not) *)
@@ -37,8 +39,9 @@ type t = {
      "frame:" ^ an iframe's handle), the data (JSON), the target origin *)
 }
 
-let create ?(cookies = ((fun () -> ""), ignore)) ?(fetch = fun _ -> failwith "NetworkError: no network here") doc =
-  let t = { doc; cookies; fetch; nodes = Hashtbl.create 256; changed = false; geometry = no_geometry; version = 0;
+let create ?(cookies = ((fun () -> ""), ignore)) ?(fetch = fun _ -> failwith "NetworkError: no network here")
+    ?(prefetch = ignore) ?(ready = fun _ -> true) doc =
+  let t = { doc; cookies; fetch; prefetch; ready; nodes = Hashtbl.create 256; changed = false; geometry = no_geometry; version = 0;
             navigation = None; outbox = [] } in
   Hashtbl.replace t.nodes doc.Dom.id doc;
   t
@@ -303,6 +306,8 @@ let call t op (args : string list) : string list =
   | "navigate", [ url; replace ] -> t.navigation <- Some (url, replace = "1"); []
   | "postMessage", [ target; data; origin ] ->
     if List.length t.outbox < 200 then t.outbox <- (target, data, origin) :: t.outbox; []
+  | "prefetch", [ url ] -> t.prefetch url; []
+  | "ready", [ url ] -> [ (if t.ready url then "1" else "0") ]
   | "cookie", [] -> [ (fst t.cookies) () ]
   | "setCookie", [ c ] -> (snd t.cookies) c; []
   | op, args -> fail "no DOM operation %s/%d" op (List.length args)

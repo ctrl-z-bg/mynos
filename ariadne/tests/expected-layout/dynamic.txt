@@ -36,4 +36,25 @@ text 58,264 serif 16 #000000 of
 text 75,264 serif 16 #000000 two:
 text 107,264 serif 16 #000000 (not
 text 137,264 serif 16 #000000 run)
-height 283
+text 8,298 serif 16 #000000 an
+text 27,298 serif 16 #000000 inline
+text 67,298 serif 16 #000000 script
+text 107,298 serif 16 #000000 runs
+text 139,298 serif 16 #000000 as
+text 156,298 serif 16 #000000 it
+text 169,298 serif 16 #000000 is
+text 184,298 serif 16 #000000 put
+text 208,298 serif 16 #000000 in:
+text 229,298 serif 16 #000000 (not
+text 259,298 serif 16 #000000 run)
+text 8,332 serif 16 #000000 two
+text 36,332 serif 16 #000000 not
+text 60,332 serif 16 #000000 async,
+text 104,332 serif 16 #000000 in
+text 120,332 serif 16 #000000 the
+text 144,332 serif 16 #000000 order
+text 182,332 serif 16 #000000 put
+text 206,332 serif 16 #000000 in:
+text 227,332 serif 16 #000000 (not
+text 257,332 serif 16 #000000 run)
+height 351

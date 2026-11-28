@@ -147,7 +147,7 @@ Measured 2026-11-27 under KVM (`netbench`, a throwaway program, and `ARIADNE_DEB
 - [x] Why a TLS handshake costs about 0.9 s: not netd. Each handshake step and frame timed in netd (2026-11-27): the handshake's computation is about 35 ms in all, netd sends each packet within a few ms; the time is between a packet out and the answer in, with QEMU's NE2000 (SYN to SYN-ACK 270 ms, ClientHello to the server's answer 502 ms). With a virtio card (`VIRTIO=1`) the same handshake takes 94–125 ms, and Wikipedia's Ariadne page shows in 1.4 s (7.9 s with the NE2000), all its 30 pictures in 5.0 s (about 16 s).
 - [ ] The NE2000's delay: QEMU's NE2000 holding received packets (it refuses them while it thinks its ring is busy, and QEMU retries later?), or how netd's driver (ne2k.c) empties the ring. Meanwhile: virtio by default for x86-64 (`tools/run-demo.sh`), the NE2000 for i386 and PCs without virtio
 - [ ] Handshakes in parallel: netd runs lwIP (NO_SYS) and every connection's TLS in its one main loop, so their cryptography takes turns on one processor. TLS (mbedTLS) in threads of its own, the loop passing them the bytes, would let them use the other processors.
-- [ ] Style sheets fetched in parallel (today one after the other: 13 sheets, 2.9 s on a reused connection)
+- [x] Fetched in parallel, used in the standards' order: a page's sheets and scripts' srcs all asked for once it is parsed (as browsers' preload scanners), each used in document order (sheets in their order, `@import`s fetched together; scripts in order, `defer` ones after the others); a script a script puts in fetched from then, run when its answer is in (async ones at once, in any order; `async = false` ones in the order put in; an inline one as it is put in), the timers never waiting on the network. Http: 6 connections per server (browsers' HTTP/1.1), opened together (netd carries them at once: it answers a connect when its handshake ends). Wikipedia's Ariadne: 13 sheets in 0.5 s (2.9 s); Repubblica: its scripts 2.4-2.9 s (about 4.4 s), shown at 4 s (about 6)
 
 ## M5: the rest of the layout, and forms
 
@@ -222,7 +222,7 @@ Found in M5:
 - [ ] The host's renderer: protocol-relative picture URLs (`//host/...`) not downloaded
 - [ ] `defer` and `async` as such, `type=module`, `document.write` while parsing
 - [ ] Layout again after the DOM changes (only what changed): a layout of Repubblica costs 1-1.5 s, and the window waits for it
-- [ ] The page's own scripts block showing it (4.5 to 17 s on Repubblica, its scripts fetched one after another): what is parsed shown before them, and their `src` fetched ahead, as browsers do
+- [ ] The page's own scripts block showing it (Repubblica: 2.4-2.9 s of them, fetched ahead now): what is parsed shown before them, as browsers do
 - [x] Repubblica's lazy sections (`lazy-html`, an IntersectionObserver with a 500 px bottom margin, then XHR): loaded when the reader scrolls near them, at 28 400 px (Chrome: 29 000)
 - [x] A debugging hook: with ARIADNE_DEBUG, /disk/ariadne-probe.js runs before the page's scripts (pages may replace `console.log`: a probe keeps its own)
 

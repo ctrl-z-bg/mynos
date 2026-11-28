@@ -260,3 +260,25 @@ let fetch ?(credentials = true) ~meth ~headers ?body url =
       { a_url = r.url; a_status = (if ok r then 200 else 404); a_reason = r.status;
         a_headers = [ "content-type", r.content_type ]; a_body = r.body } in
   go meth body url 0
+
+(* ---- fetching ahead: a request begun in a thread of its own (a page's
+   sheets and scripts all at once, as browsers' preload scanners; a
+   script's src from when a script puts it in the page), its answer taken
+   when it is needed, in the order the standards ask ---- *)
+type 'a ahead = { am : Mutex.t; ac : Condition.t; mutable av : ('a, exn) result option }
+
+let ahead f =
+  let a = { am = Mutex.create (); ac = Condition.create (); av = None } in
+  ignore (Thread.create (fun () ->
+      let r = match f () with v -> Ok v | exception e -> Error e in
+      Mutex.protect a.am (fun () -> a.av <- Some r; Condition.broadcast a.ac)) ());
+  a
+
+let ready a = Mutex.protect a.am (fun () -> a.av <> None)
+
+let await a =
+  match Mutex.protect a.am (fun () ->
+      while a.av = None do Condition.wait a.ac a.am done;
+      Option.get a.av) with
+  | Ok v -> v
+  | Error e -> raise e

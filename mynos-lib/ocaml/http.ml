@@ -137,26 +137,26 @@ let body_end s =
       | _ -> Some `Close
 
 (* connections kept open after an answer whose end was known, for the
-   next request to the same server: a TLS handshake costs about a second
-   in netd, which makes them one at a time. So, per server, at most
-   [per_server] connections, and one handshake at a time: a request
-   without a free connection opens one if it may, else waits for one. A
-   program's threads share them; netd closes those of a program that has
-   ended *)
+   next request to the same server. Per server at most [per_server]
+   connections (6: what browsers open for HTTP/1.1), opened at once if
+   asked at once (netd carries them together: their handshakes overlap):
+   a request without a free connection opens one if it may, else waits
+   for one. A program's threads share them; netd closes those of a
+   program that has ended *)
 type key = bool * string * int
 type kept = { kn : Net.t; ks : int; key : key }
-type server = { mutable count : int; mutable opening : bool }   (* open (or opening) connections *)
+type server = { mutable count : int }   (* open (or opening) connections *)
 
 let pool : kept list ref = ref []         (* idle, the most recent first *)
 let servers : (key, server) Hashtbl.t = Hashtbl.create 8
 let pool_lock = Mutex.create ()
 let changed = Condition.create ()
-let max_kept = 8
-let per_server = 2
+let max_kept = 16
+let per_server = 6
 
 let server key = match Hashtbl.find_opt servers key with
   | Some sv -> sv
-  | None -> let sv = { count = 0; opening = false } in Hashtbl.replace servers key sv; sv
+  | None -> let sv = { count = 0 } in Hashtbl.replace servers key sv; sv
 
 (* a connection gone (under pool_lock) *)
 let gone key = let sv = server key in sv.count <- max 0 (sv.count - 1); Condition.broadcast changed
@@ -173,15 +173,13 @@ let acquire key =
         | k :: others, rest -> pool := others @ rest; `Idle k
         | [], _ ->
           let sv = server key in
-          if not sv.opening && sv.count < per_server then begin
-            sv.opening <- true; sv.count <- sv.count + 1; `Open
-          end else (Condition.wait changed pool_lock; loop ()) in
+          if sv.count < per_server then (sv.count <- sv.count + 1; `Open)
+          else (Condition.wait changed pool_lock; loop ()) in
       loop ())
 
 let opened key ~ok =
   Mutex.protect pool_lock (fun () ->
       let sv = server key in
-      sv.opening <- false;
       if not ok then sv.count <- max 0 (sv.count - 1);
       Condition.broadcast changed)
 

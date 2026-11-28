@@ -7,6 +7,8 @@
 <p id="c">innerHTML's script: not run (as it should be)</p>
 <p id="d">a missing src: (no event)</p>
 <p id="e">a chain of two: (not run)</p>
+<p id="f">an inline script runs as it is put in: (not run)</p>
+<p id="g">two not async, in the order put in: (not run)</p>
 <div id="box"></div>
 <script>
 const a = document.createElement("script");
@@ -31,4 +33,22 @@ e.textContent = "const f = document.createElement('script');" +
   "f.textContent = \"document.getElementById('e').textContent = 'a chain of two: both ran'\";" +
   "document.body.appendChild(f);";
 document.body.appendChild(e);
+
+// an inline script runs at once (the HTML Standard): before appendChild returns
+window.ranAtOnce = false;
+const f = document.createElement("script");
+f.textContent = "window.ranAtOnce = true";
+document.body.appendChild(f);
+document.getElementById("f").textContent = "an inline script runs as it is put in: " + (window.ranAtOnce ? "yes" : "NO");
+
+// async = false: in the order put in, whichever arrives first (the first is bigger)
+window.order = [];
+const big = "/*" + "x".repeat(20000) + "*/";
+for (const [name, pad] of [["one", big], ["two", ""]]) {
+  const s = document.createElement("script");
+  s.async = false;
+  s.src = "data:text/javascript," + encodeURIComponent(pad + "order.push('" + name + "');"
+    + "document.getElementById('g').textContent = 'two not async, in the order put in: ' + order.join(', ')");
+  document.body.appendChild(s);
+}
 </script>

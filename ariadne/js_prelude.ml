@@ -97,33 +97,57 @@ let source = {js|
     }
   }
 
-  // ---- scripts put in the page by scripts: run soon after (as browsers do,
-  // asynchronously), their src fetched (no CORS for scripts), then their
-  // load (or error) event; never twice, and not those innerHTML made ----
+  // ---- scripts put in the page by scripts (the HTML Standard): an inline
+  // one runs as it is put in; one with a src is fetched from then (Ariadne
+  // fetches ahead) and runs when its answer is in: an async one (those
+  // scripts make are, unless told not) as soon as it is, those not async
+  // in the order they were put in; then its load (or error) event. Never
+  // twice, and not those innerHTML made ----
   const jsTypes = ["", "text/javascript", "application/javascript", "application/ecmascript", "text/ecmascript",
                    "application/x-javascript"];
+  const waitingAsync = new Set(), waitingOrdered = [];
+  let polling = false;
+  function execute(s, code, failed, src) {
+    if (!failed) {
+      const before = g.__currentScript;
+      g.__currentScript = s;
+      try { (0, eval)(code); }
+      catch (e) { console.error("script " + (src || "inline") + ": " + String(e) + (e && e.stack ? "\n" + e.stack : "")); }
+      g.__currentScript = before;
+    }
+    if (src !== null) s.dispatchEvent(new Event(failed ? "error" : "load"));
+  }
+  function fetchAndRun(s) {
+    let code, failed = false;
+    try {
+      const r = request("GET", s.__url, null, null, "script");
+      if (r.status >= 400) failed = true; else code = r.body;
+    } catch (e) { failed = true; console.warn("script " + s.__url + ": " + (e && e.message)); }
+    execute(s, code, failed, s.__url);
+  }
+  const isReady = s => D("ready", s.__url)[0] === "1";
+  function poll() {
+    if (polling) return;
+    polling = true;
+    g.setTimeout(function tick() {
+      polling = false;
+      for (const s of [...waitingAsync]) if (isReady(s)) { waitingAsync.delete(s); fetchAndRun(s); }
+      while (waitingOrdered.length && isReady(waitingOrdered[0])) fetchAndRun(waitingOrdered.shift());
+      if (waitingAsync.size || waitingOrdered.length) { polling = true; g.setTimeout(tick, 20); }
+    }, 0);
+  }
   function runScript(s) {
     if (s.__started) return;
     s.__started = true;
     const type = (s.getAttribute("type") || "").trim().toLowerCase();
     if (!jsTypes.includes(type)) return;
-    g.setTimeout(() => {
-      const src = s.getAttribute("src");
-      let code, failed = false;
-      if (src !== null) {
-        try {
-          const r = request("GET", new URL(src, g.location.href).href, null, null, "script");
-          if (r.status >= 400) failed = true; else code = r.body;
-        } catch (e) { failed = true; console.warn("script " + src + ": " + (e && e.message)); }
-      } else code = s.textContent;
-      if (!failed) {
-        g.__currentScript = s;
-        try { (0, eval)(code); }
-        catch (e) { console.error("script " + (src || "inline") + ": " + String(e) + (e && e.stack ? "\n" + e.stack : "")); }
-        g.__currentScript = null;
-      }
-      s.dispatchEvent(new Event(failed ? "error" : "load"));
-    }, 0);
+    const src = s.getAttribute("src");
+    if (src === null) { execute(s, s.textContent, false, null); return; }
+    try { s.__url = new URL(src, (g.document && g.document.baseURI) || g.location.href).href; }
+    catch (e) { g.setTimeout(() => s.dispatchEvent(new Event("error")), 0); return; }
+    D("prefetch", s.__url);
+    if (s.async) waitingAsync.add(s); else waitingOrdered.push(s);
+    poll();
   }
   // a node about to be put in: its scripts (a fragment's, before it
   // empties into the page); then, once in, run if it is in the page now
