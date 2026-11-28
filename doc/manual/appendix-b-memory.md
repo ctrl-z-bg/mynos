@@ -57,6 +57,12 @@ works because the first gigabyte is the same in every process.
   0x00000000 └─────────────────────────────────┘
 ```
 
+**The 64-bit kernels** (x86-64, AArch64) keep the program at
+`0x40000000` but give it up to 256 MB, and map the RAM disk far above
+it, at `0x4000000000` (256 GB; `MYNOS_RAMDISK` in `mynos.h`): a native
+OCaml program carries its runtime, and the compiler itself, `ocamlopt`,
+is 11 MB. Their user space ends at 512 GB, the stack at its top.
+
 **The kernel's gigabyte.** Page directory entries 0–255 (`KLAST_PAGE_DIR_ENTRY_USED`
 is 255 in `start.asm`) are copied into every new page directory. At boot
 `init_memory` (`mem.c`) allocates a page table for entries 0–254, pages

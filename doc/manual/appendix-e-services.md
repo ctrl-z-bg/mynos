@@ -258,7 +258,8 @@ Protocol **fs/1** (E.7). The RAM disk is a GRUB module made on the host
 by `services/fs/memrofs/tool/createDisk`: the magic `.RAMDISK`, a table
 of 1,000 entries (a name of up to 63 characters, the offset of the
 contents, the size), then the contents. The kernel maps it read-only
-into every process at `0x40400000`, up to 64 MB (`RAMDISK_MAXPTS`,
+into every process at `0x40400000` (on the 64-bit kernels at
+`0x4000000000`: `MYNOS_RAMDISK`, `mynos.h`), up to 64 MB (`RAMDISK_MAXPTS`,
 `kernel/process.c`), and memrofs reads the table and the files there.
 
 The namespace is flat: `list` works on the root only, and every request

@@ -31,7 +31,7 @@ What "unchanged" means is precise. A program is unchanged in its
 **source**; it must still be built as a static i386 executable linked at
 `0x40000000`, where MyNOS loads programs, and its image must fit in 4 MB
 (one page table: `spawnProcess` in `kernel/process.c` refuses anything
-else). `mynos.mk` gives the compiler and the flags:
+else; on the 64-bit kernels, 256 MB: appendix B). `mynos.mk` gives the compiler and the flags:
 
 ```
 MYNOS_CC      = musl-gcc
@@ -121,6 +121,9 @@ The kernel answers the 55 call numbers below. Every other number gets
 
 There is no `execve`: a program starts another with the native `spawn`
 (call 30, appendix A.9), which `libmynos` wraps as `mynos_spawn`.
+`libmynos` also has `system(3)` (musl's needs `execve`): the command is
+run by MyNOS's shell, `sh -c`, and waited for; OCaml's `Sys.command`
+goes through it.
 
 **Memory.**
 
