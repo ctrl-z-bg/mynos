@@ -55,9 +55,13 @@ extern uint32_t ramdisk_len;
 extern uint32_t ramdisk_present;
 #endif
 
+/* a program's image: at 1 GB, up to 256 MB (native OCaml programs carry
+   their runtime: the compiler, ocamlopt, is 11 MB); the RAM disk, every
+   process's, far above, at 256 GB (MYNOS_RAMDISK in mynos.h; i386's is
+   right after a 4 MB program) */
 #define PROGRAM_BASE 0x40000000UL
-#define PROGRAM_MAX  0x400000UL
-#define RAMDISK_BASE (PROGRAM_BASE + PROGRAM_MAX)
+#define PROGRAM_MAX  0x10000000UL
+#define RAMDISK_BASE 0x4000000000UL
 
 static char * default_argv[] = { "mynos", NULL };
 

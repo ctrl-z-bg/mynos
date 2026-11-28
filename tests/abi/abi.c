@@ -580,10 +580,10 @@ int main(int argc, char ** argv) {
   }
 #endif
 
-  /* the RAM disk's pages (0x40400000 up, when there is one) are every
+  /* the RAM disk's pages (MYNOS_RAMDISK up, when there is one) are every
      process's: munmap refuses them (mynos-q5b) */
   check("munmap refuses the RAM disk",
-        munmap((void *)0x40400000, 4096) == -1 && errno == EINVAL);
+        munmap((void *)MYNOS_RAMDISK, 4096) == -1 && errno == EINVAL);
 
   /* the last page directory entry of the kernel's gigabyte (0x3FC00000)
      is empty: it used to point at physical page 0 with the user bit, and

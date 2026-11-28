@@ -156,3 +156,25 @@ static int spawn_file(const char * path, char ** argv, char ** envp,
   free(image);
   return pid;
 }
+
+/* system(3): MyNOS has no execve, so musl's (posix_spawn of /bin/sh) cannot
+   work; the command is run by MyNOS's shell (sh -c), as a child, and
+   waited for: its status as waitpid gives it, -1 if it did not start.
+   (OCaml's Sys.command; ocamlopt runs its assembler and linker so.) */
+#include <sys/wait.h>
+
+int system(const char * cmd)
+{
+  char * argv[5];
+  int pid, st;
+  if (!cmd) return 1;                   /* a shell there is */
+  argv[0] = "ocamlrun";
+  argv[1] = "/sh.byte";
+  argv[2] = "-c";
+  argv[3] = (char *)cmd;
+  argv[4] = NULL;
+  pid = mynos_spawn("ocamlrun", argv, NULL);
+  if (pid < 0) return -1;
+  if (waitpid(pid, &st, 0) < 0) return -1;
+  return st;
+}

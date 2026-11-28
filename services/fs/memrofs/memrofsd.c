@@ -32,7 +32,7 @@
 /*
  * memrofs: read-only filesystem on the RAM disk that GRUB loads as a module
  * (".RAMDISK" image, see tool/createDisk.c). The kernel maps the image at
- * 0x40400000 in every process. Protocol: mynos-lib/include/mynos_fs.h.
+ * MYNOS_RAMDISK (mynos.h) in every process. Protocol: mynos-lib/include/mynos_fs.h.
  */
 
 char * MAGIC = ".RAMDISK";
@@ -289,7 +289,7 @@ static void self_test(void)
 int main() {
   int port;
 
-  ramdisk = (char*)0x40400000;
+  ramdisk = MYNOS_RAMDISK;
   filesystem = (fileentry_t *)(ramdisk + strlen(MAGIC));
 
   port = mynos_registryRegister(MEMROFS_SERVICE);

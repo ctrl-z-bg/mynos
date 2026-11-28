@@ -217,6 +217,15 @@ int mynos_pagerEvict(int pid, void * addr, void * dst, unsigned int token, int w
 /* that page copied into ours at dst, its writes forgotten; 0 or an error */
 int mynos_pagerCopy(int pid, void * addr, void * dst);
 
+/* the RAM disk: read-only, mapped at this address in every process
+   (memrofs reads it there); after a 4 MB program on i386, far above the
+   program (up to 256 MB) on the 64-bit kernels */
+#if defined(__x86_64__) || defined(__aarch64__)
+#define MYNOS_RAMDISK ((char *)0x4000000000UL)
+#else
+#define MYNOS_RAMDISK ((char *)0x40400000)
+#endif
+
 /* PROCESSES */
 /* start the ELF program in file path as a child process, with arguments
    and environment (NULL-terminated; argv may be NULL, envp NULL means our
