@@ -348,3 +348,71 @@ demand) is a change of how much: the headless user that asked for 600
 frames found it first. And a protocol's first step can be a register
 written before the go: read the chip's sequence, not just its list of
 commands.
+
+## 2026-11-28 — nettools: SSH in OCaml, and the console's ends
+
+**Goal.** A package of network commands: `ssh` and `sshd` that work with
+OpenSSH, `ssh-keygen`, and small tools (`nc`, `dig`, `sntp`, `whois`,
+`portscan`), without touching the system: a package is bytecode, so the
+cryptography is OCaml too (netd's mbedTLS is out of reach, and has no
+Ed25519).
+
+**Design.** One algorithm of each kind, OpenSSH's first since 2014:
+curve25519-sha256 with strict kex (Terrapin), ssh-ed25519,
+chacha20-poly1305@openssh.com. MyNOS's ints are 31 bits on i386, the
+trap bench fell into, so: SHA-256 and SHA-512 on Int32 and Int64;
+ChaCha20, the hot one, on halves of 16 bits in plain ints (nothing
+boxed); Poly1305 and the curves on Num's big integers, whose C is in the
+runtime already. SHA-2's constants are computed (cube and square roots
+of the primes, with Num) instead of copied. The protocol is apart from
+MyNOS (the transport takes two functions, read and write), so the client
+and the server could be tried against each other on the host, and the
+server against the host's OpenSSH, before MyNOS saw them.
+
+**Results.** The vectors (made by the host's OpenSSH and OpenSSL with
+throwaway keys, and RFC 8439's) passed the first time, on the host and
+in MyNOS (`ssh-keygen --selftest`); OpenSSH 10.2 logged in to sshd with
+a key and with a password, ran commands with their exit status, and a
+shell with a terminal; `ssh-keygen -y` read our key files and we read
+its. Under KVM an X25519 takes 2.7 ms and a signature 7.
+
+**Bugs on the way, all of the edges.**
+- The host's test hung: the client waited for the reply to `exec` and
+  threw away what came before it, the command's output (a fast command
+  answers before the reply). The reply is now waited for with the rest.
+- In the same test, the server's backend wrote from the connection's
+  reader thread: with the window full, the reader waited for an adjust
+  that only it could read. A session's output must come from another
+  thread (in MyNOS, the console's).
+- One run in ten of the same test hung, with 3 MB going both ways. Each
+  end's reader, given data, sent a window adjust; sending took the
+  transport's lock, held by that end's writer, itself stuck in a write
+  because the other end was not reading: both readers were waiting to
+  write. Waiting by window alone was not enough. Now nothing that sends
+  waits: packets go into a queue that a thread of the transport writes
+  out; a rekey the peer asks for puts its own packets first and holds
+  the others' until NEWKEYS. Then, also intermittent, EPIPE: a closed
+  connection's writer outlived it and shut down its descriptor, by then
+  the next connection's. The writer is waited for when a connection ends.
+- After `exit` from a session, the first letters of the next command
+  were lost. The client's keyboard thread was still in a read when the
+  program ended; the console kept that read and gave it the next keys
+  (mynos-3j9). `ssh` and `nc` now read only when `select` says there is
+  input.
+- `ssh HOST 'cat > file' < binary` hung. The console's end of input was
+  given once, as a Ctrl-D is, and `cat`'s last line, without a newline,
+  used it up: the read after waited for ever. An SSH channel's EOF is
+  final: every read gets it. And without a terminal Ctrl-C is a byte
+  like any other: a `\003` in the data used to end the program.
+- The password showed as it was typed: consoled edits a line with the
+  echo on whatever the mode says (mynos-tk0z). `ssh` reads it in raw
+  mode, a key at a time.
+- A client that sent nothing kept a connection for ever: two minutes to
+  log in, then no limit.
+
+**Lesson.** The middle (the cryptography, the protocol) was right at
+once, because it had vectors and a real peer to answer to. The bugs were
+at the ends, where data meets a thread or a console: who reads, who is
+left waiting, how often an end is said. A reader that can block on a
+write is a deadlock waiting for full buffers: run a test of this kind
+tens of times, not once.

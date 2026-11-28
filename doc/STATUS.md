@@ -12,7 +12,7 @@ Actionable work is tracked in beads (`bd list`); this document refers to
 issues by ID instead of keeping its own TODO lists. The story of what was
 found along the way, bug by bug, is in `doc/JOURNAL.md`.
 
-Last updated: 2026-11-27
+Last updated: 2026-11-28
 
 ---
 
@@ -229,6 +229,9 @@ All services are linked statically against `libmynos` and placed at
   KVM; it comes with Tobu Tobu Girl), `zxspectrum` (MyNOS's ZX Spectrum
   48K, with GLAZX and Snake), `msx` (MyNOS's MSX1, C-BIOS, with Westen
   House), `bench` (how fast MyNOS is, a score; a tool for the agent),
+  `nettools` (`ssh`, `sshd`, `ssh-keygen` in OCaml, OpenSSH's peers:
+  curve25519, Ed25519, ChaCha20-Poly1305; `nc`, `dig`, `sntp`, `whois`,
+  `portscan`; not published yet),
   `zork1`, `zork2`, `zork3` (Infocom's story
   files, MIT since 2025, `third_party/zork`), `minotaur` (an original text adventure
   inside MyNOS). A package may give the agent
@@ -1982,3 +1985,15 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   owner's choice: no MSX2 game with it).
 - **2026-11-27** — Published to mynos-packages (8544170): msx 2.0 (`msx`
   and `msx2` both commands) and bench 1.0, built from d57e6e4.
+- **2026-11-28** — nettools 1.0 (package, mynos-4mf; not published):
+  SSH 2 in OCaml, the cryptography too (SHA-2, ChaCha20, Poly1305,
+  X25519, Ed25519 on Num; vectors of OpenSSL's and the RFCs', on the
+  host and in MyNOS as `ssh-keygen --selftest`). `sshd`: a console/1
+  service per session for `sh`, logins from /disk/ssh/passwd (in clear,
+  for now) and authorized_keys; `ssh`: known_hosts, keys, the password,
+  a terminal in raw mode. OpenSSH 10.2 logs in to MyNOS's sshd
+  (tests/nettools/interop.sh on the host, and in QEMU through
+  `hostfwd_add`). Found, not touched (system): 127.0.0.1 unreachable
+  in netd (mynos-4gy), a console read of an ended process takes the
+  next keys (mynos-3j9), consoled shows a line typed with echo off
+  (mynos-tk0z), sh's `cat` adds a newline (mynos-g60h).

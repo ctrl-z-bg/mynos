@@ -1,0 +1,13 @@
+# The package nettools (tools/pkg-build.sh): SSH (client, server, keys)
+# and small network commands, in one program; each command a script of
+# one line that runs it (#!/disk/bin/nettools.byte)
+NAME=nettools
+VERSION=1.0
+DESCRIPTION='Network commands: ssh and sshd (SSH 2, compatible with OpenSSH: Ed25519 keys, ChaCha20-Poly1305), ssh-keygen; nc, dig, sntp, whois, portscan'
+LICENSE=GPL-2.0-or-later
+LIBRARIES='threads num'
+SRC=packages/nettools
+SOURCES='sha2.ml chacha20.ml poly1305.ml curve25519.ml ssh_wire.ml ssh_keys.ml ssh_transport.ml ssh_chan.ml ssh_server.ml ssh_client.ml selftest.ml net_io.ml sshd.ml ssh_main.ml keygen.ml netutils.ml nettools.ml'
+COMMANDS='ssh sshd ssh-keygen nc dig sntp whois portscan'
+DOC=packages/nettools/README.md
+EXTRA=packages/nettools/tool.json

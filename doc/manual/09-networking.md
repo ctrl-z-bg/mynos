@@ -344,7 +344,59 @@ removes a `10.0.2.2` address from it at the next start, unless
 `PKG=local` (H.9). Appendix H.9
 tells how packages are built and published.
 
-## 9.9 When something does not work
+## 9.9 Logging in from afar — `ssh`, `sshd` (package nettools)
+
+The package `nettools` (`pkg install nettools`) brings SSH, written for
+MyNOS in OCaml, the cryptography too, and a few small tools. Its SSH
+speaks with OpenSSH, the SSH of Linux, macOS and Windows, with the
+algorithms OpenSSH prefers (curve25519, Ed25519, ChaCha20-Poly1305). It
+uses OpenSSH's files for its keys.
+
+**Into MyNOS.** Say who may log in, then start the server:
+
+```
+mynos:/$ mkdir /disk/ssh
+mynos:/$ echo alice secret > /disk/ssh/passwd
+mynos:/$ sshd &
+sshd: made the host key /disk/ssh/ssh_host_ed25519_key
+sshd: listening on port 22, host key SHA256:bfT8pBMN...
+```
+
+`/disk/ssh/passwd` has a line `USER PASSWORD` for each user, in clear
+for now: whoever can read the disk can read it.
+`/disk/ssh/authorized_keys` takes OpenSSH's public lines (`ssh-ed25519
+AAAA... name`) instead, for logins without a password. MyNOS has one
+user: whoever logs in has the whole system, as at its keyboard. Each
+session gets `sh`, with a console of its own as a terminal window gives.
+In QEMU, your computer reaches MyNOS's port 22 once QEMU's monitor
+(Ctrl-Alt-2 in its window; with `SERIAL=1`, Ctrl-A then C in the terminal) is told `hostfwd_add n0 tcp:127.0.0.1:2222-:22`:
+
+```
+you@computer:~$ ssh -p 2222 alice@127.0.0.1
+alice@127.0.0.1's password:
+MyNOS sh. help lists the commands, ocaml starts the OCaml toplevel;
+mynos:/disk$
+```
+
+**Out of MyNOS.** `ssh-keygen` makes a key, `/disk/ssh/id_ed25519`, and
+prints its public line, for the other machine's `~/.ssh/authorized_keys`.
+`ssh USER@HOST` logs in; `ssh USER@HOST COMMAND` runs one command. The
+first time, `ssh` shows the server's key and asks whether to trust it.
+If you answer yes, it remembers the key in `/disk/ssh/known_hosts`, and
+refuses the server if its key ever changes. Your computer is `10.0.2.2`,
+as in 9.1. In a session, `~.` at the start of a line closes it.
+
+**The small tools.**
+
+| Command | |
+|---|---|
+| `nc HOST PORT`, `nc -l PORT` | a TCP connection: what you type goes, what comes is printed |
+| `dig NAME [TYPE] [@SERVER]` | a question to the DNS: `dig gmail.com MX`, `dig 10.0.2.2 PTR` |
+| `sntp [SERVER]` | the time of an NTP server (`pool.ntp.org`), and how far MyNOS's clock is |
+| `whois NAME` | who holds a domain |
+| `portscan HOST [PORTS]` | which TCP ports answer: `portscan 10.0.2.2 1-1024` |
+
+## 9.10 When something does not work
 
 | You see | What it means |
 |---|---|
@@ -357,3 +409,7 @@ tells how packages are built and published.
 | `run-demo.sh: port 8080 is busy, no web server forwarding` | another program on your computer uses 8080: choose another with `HTTP=PORT` |
 | `pkg: NAME: no such package` | the index does not have it: `pkg list` shows what it has, `pkg update` reads it again |
 | `pkg: ...: its BLAKE2b hash is not the index's` | the archive is not the one the index describes: nothing was installed; try again later, or `pkg update` |
+| `sshd: nobody may log in` | neither `/disk/ssh/passwd` nor `/disk/ssh/authorized_keys` has a line (9.9) |
+| `ssh: 127.0.0.1 port 22: timeout` | MyNOS does not reach itself at `127.0.0.1` yet: use its address, `10.0.2.15` |
+| `WARNING: THE HOST KEY HAS CHANGED` | the server is not the one `ssh` met before: someone may be in the middle; if the server was installed again, take its line out of `/disk/ssh/known_hosts` |
+| `ssh: permission denied (publickey,password)` | the server took neither the key nor the password |

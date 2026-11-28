@@ -83,3 +83,4 @@ tests/emu/_*/
 tests/emu/msx.byte
 tests/emu/emutest_msx.byte
 tests/msx/_*/
+tests/nettools/_*/

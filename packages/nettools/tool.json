@@ -1,0 +1,10 @@
+{
+  "name": "dns_lookup",
+  "description": "Asks the DNS about a name, as dig does: its addresses (A, AAAA), mail servers (MX), texts (TXT), name servers (NS), aliases (CNAME), zone (SOA), or for an IPv4 address its name (PTR). Prints the records with their time to live.",
+  "parameters": {
+    "name": "the name (example.com), or an address for PTR",
+    "type": "A, AAAA, MX, TXT, NS, CNAME, SOA, PTR or ANY; A if empty"
+  },
+  "command": [ "dig", "{name}", "{type}" ],
+  "safe": true
+}
