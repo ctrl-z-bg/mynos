@@ -1993,7 +1993,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   for now) and authorized_keys; `ssh`: known_hosts, keys, the password,
   a terminal in raw mode. OpenSSH 10.2 logs in to MyNOS's sshd
   (tests/nettools/interop.sh on the host, and in QEMU through
-  `hostfwd_add`). Found, not touched (system): 127.0.0.1 unreachable
+  `hostfwd_add`), and MyNOS's ssh logs in to OpenSSH's sshd (rekeys
+  every 16 KB included). Found, not touched (system): 127.0.0.1 unreachable
   in netd (mynos-4gy), a console read of an ended process takes the
   next keys (mynos-3j9), consoled shows a line typed with echo off
   (mynos-tk0z), sh's `cat` adds a newline (mynos-g60h).

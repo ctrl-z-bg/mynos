@@ -374,7 +374,12 @@ throwaway keys, and RFC 8439's) passed the first time, on the host and
 in MyNOS (`ssh-keygen --selftest`); OpenSSH 10.2 logged in to sshd with
 a key and with a password, ran commands with their exit status, and a
 shell with a terminal; `ssh-keygen -y` read our key files and we read
-its. Under KVM an X25519 takes 2.7 ms and a signature 7.
+its. Under KVM an X25519 takes 2.7 ms and a signature 7. Then the
+other way: MyNOS's `ssh` into the host's own OpenSSH server (a
+throwaway `sshd` on 127.0.0.1, its keys in the scratchpad, a
+ForceCommand, with the owner's leave): the key accepted, exit
+statuses, a terminal, 1 MB each way, and with `RekeyLimit 16K` forty
+key exchanges started by the server, all answered.
 
 **Bugs on the way, all of the edges.**
 - The host's test hung: the client waited for the reply to `exec` and
