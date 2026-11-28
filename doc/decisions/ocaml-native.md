@@ -4,8 +4,10 @@
 - **Date:** 2026-11-25
 - **Status:** deferred by the owner (2026-11-25), after the
   measurements below: with a real processor bytecode is not what is
-  slow. The design, its trade-offs and risks are kept here for when it
-  is worth it (the browser version, a slow processor).
+  slow. Taken up again and accepted (the owner, 2026-11-28) for the
+  slow processor it was kept for: the Raspberry Pi 400, where the
+  emulators run in bytecode below their machines' speed. First on
+  AArch64; the prototype's numbers are in "The Pi 400" below.
 
 ## The design proposed
 
@@ -84,3 +86,44 @@ Deferred (the owner, 2026-11-25); the disk driver's waiting fixed
 instead (mynos-9rw: the interrupt, not a loop on the status port). A
 table of bytecode against native times needs the prototype: the
 toolchain above and the services built with it.
+
+## The Pi 400 (2026-11-28, AArch64)
+
+On the Pi 400 (Cortex-A72, 1.8 GHz, measured) the MSX ran below 10
+frames a second in its window, the Spectrum at 20: bytecode, at about
+an eighth of the reference PC's speed (the PC's own bytecode, not
+KVM's: the MSX1's bench 197 frames a second on the PC, 24 on the Pi).
+
+**The prototype.** A cross `ocamlopt` 5.5.2 for aarch64-linux-musl
+(built in a container from the dev-aarch64 one: the build host's OCaml
+must have its native compiler; `STRIP`, `AS` and `ASPP` given to
+`configure` as the cross binutils', or the build strips a target
+binary with the host's strip and looks for `aarch64-linux-musl-as`).
+Programs are linked as MyNOS's C ones (static, at 0x40000000) with
+`-cclib "-lasmrun -L.../mynos-lib/lib -lmynos"`. The emulators' modules
+(the Z80, the Spectrum's ULA, the MSX's VDP, PSG and cartridges) built
+unchanged, without MyNOS's libraries (`tests/z80/bench.ml`, an MSX
+bench of the same shape).
+
+**The kernel had to change once.** OCaml 5's arm64 runtime marks the
+frames its GC has scanned with bit 60 of their return addresses, which
+works because Linux ignores the top byte of user addresses (TBI): MyNOS
+now does too (TCR_EL1.TBI0; doc/JOURNAL-next.md, 2026-11-28).
+
+| on the Pi 400 | native | bytecode | |
+|---|---|---|---|
+| the Spectrum's bench (GLAZX), frames a second (50 needed) | 724 | 40 | 18x |
+| the MSX1's (Westen House), frames a second (60 needed) | 410 | 24 | 17x |
+| 35 M integer additions | 0.028 s | 0.600 s | 21x |
+| 1 M float array updates | 0.006 s | 0.112 s | 19x |
+| 1 M square roots | 0.016 s | 0.118 s | 7x |
+| 1 M three-element lists | 0.085 s | 0.288 s | 3.4x |
+| exceptions, system calls, large allocations | about the same | | |
+
+**What it says.** The emulators gain what a language change can give,
+and their machines' speed with room to spare; what the system does
+(calls, pages) gains nothing. The steps from here: the toolchain in the
+dev-aarch64 container, the native `Mynos` and `Gfx` libraries with
+MyNOS's stubs, then the emulators built native (packages: per
+architecture, bytecode where there is no native build; agreed with the
+applications' session).
