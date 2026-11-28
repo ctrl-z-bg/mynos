@@ -1,4 +1,3 @@
-fill 0,21 800x246 #ffffff
 text 8,50 serif-bold 32 #000000 Scripts
 text 112,50 serif-bold 32 #000000 added
 text 204,50 serif-bold 32 #000000 by

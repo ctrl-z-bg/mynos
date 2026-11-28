@@ -1,4 +1,3 @@
-fill 0,16 800x341 #ffffff
 fill 680,16 120x60 #eeeeee
 text 680,31 serif 16 #000000 Floated
 text 0,31 serif 16 #000000 Text

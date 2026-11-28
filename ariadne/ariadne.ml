@@ -61,7 +61,26 @@ type loaded = {
   times : (string * float) list;       (* the stages' times, in ms *)
   console : string;                    (* what the page's scripts printed, their errors *)
   session : Scripts.session option;    (* its scripts, kept while it is shown *)
+  frames : (int, frame) Hashtbl.t;     (* its iframes' documents, by element (the window's thread) *)
+  mutable t_relayout : float;          (* when laid out again for pictures' sizes *)
+  mutable t_changed : float;           (* ... for its scripts' changes *)
 }
+
+(* an iframe's browsing context: the page it holds, loaded in a thread of
+   its own; navigated by its links and scripts *)
+and frame = {
+  mutable asked : source;              (* what its attributes say: a change loads it again *)
+  mutable current : source;            (* what it shows (navigated since) *)
+  fbase : string;                      (* its parent's base: a srcdoc's *)
+  mutable gen : int;                   (* its loads: only the last one's page is kept *)
+  mutable child : loaded option;       (* under frames_lock *)
+  mutable started : bool;              (* its scripts' timers and its pictures started *)
+  mutable fscroll : int;
+  mutable fw : int; mutable fh : int;  (* its size, as last drawn *)
+}
+and source = Src of string | Srcdoc of string | Blank
+
+let frames_lock = Mutex.create ()
 
 let now = Unix.gettimeofday
 
@@ -158,17 +177,21 @@ let current_sheets ?(wait = false) c doc =
           end)
     (Style.sources doc)
 
-let load ?post url =
+let load ?post ?html ?base_url ?framed url =
   let t0 = now () in
-  let response = Loader.load ?post (Url.of_typed url) in
+  (* [html]: a document given (an iframe's srcdoc, about:blank) *)
+  let response = match html with
+    | Some body -> { Loader.url; status = "200 OK"; content_type = "text/html; charset=utf-8"; body }
+    | None -> Loader.load ?post (Url.of_typed url) in
   let t1 = now () in
   let text, _ = Loader.document response in
   let t2 = now () in
   let doc = Html.parse text in
   let t3 = now () in
+  let doc_base = Option.value base_url ~default:response.url in
   let base = match Dom.find (fun n -> Dom.is_html n "base" && Dom.attr n "href" <> None) doc with
-    | Some b -> Url.resolve response.url (Option.get (Dom.attr b "href"))
-    | None -> response.url in
+    | Some b -> Url.resolve doc_base (Option.get (Dom.attr b "href"))
+    | None -> doc_base in
   let css = { sheet_base = base; parsed = Hashtbl.create 16; fetching = Hashtbl.create 4; arrived = false } in
   let sheets = current_sheets ~wait:true css doc in
   let t4 = now () in
@@ -177,7 +200,7 @@ let load ?post url =
     match Loader.load u with
     | r when Loader.ok r -> Some (snd (Encoding.to_utf8 ?transport:(Encoding.charset_of_content_type r.content_type) r.body))
     | _ -> None in
-  let scripts = Scripts.run ~log:(fun m -> trace "%s" m) ~url:response.url ~base ~width:878 ~height:600
+  let scripts = Scripts.run ?framed ~log:(fun m -> trace "%s" m) ~url:response.url ~base ~width:878 ~height:600
       ~fetch:fetch_script ~cookies_get:Loader.script_cookies ~cookies_set:Loader.script_set_cookie
       ~sheets:(fun () -> current_sheets css doc) doc in
   let t5 = now () in
@@ -190,7 +213,7 @@ let load ?post url =
     started = Hashtbl.create 16; hurried = Hashtbl.create 16;
     sized = 0; laid_sized = 0;
     console = (match scripts with Some (r, _) -> r.Scripts.console | None -> "");
-    session = Option.map snd scripts;
+    session = Option.map snd scripts; frames = Hashtbl.create 2; t_relayout = 0.; t_changed = 0.;
     times = [ "load", ms t0 t1; "decode", ms t1 t2; "parse", ms t2 t3; "css", ms t3 t4; "scripts", ms t4 t5 ] }
 
 (* a picture's URL: a data: URL as it is (an inline svg's), else resolved *)
@@ -461,8 +484,130 @@ let shown_prefix node c =
   | Forms.Field { password = true } -> String.concat "" (List.init (Forms.utf8_length before) (fun _ -> "\xe2\x80\xa2"))
   | _ -> before
 
+(* ---- iframes ---- *)
+
+(* a page gone: its scripts closed, and its frames' (their loads under way
+   dropped) *)
+let rec close_page l =
+  Option.iter Scripts.close l.session;
+  let kids = Mutex.protect frames_lock (fun () ->
+      Hashtbl.fold (fun _ f acc -> f.gen <- f.gen + 1; let c = f.child in f.child <- None; c :: acc) l.frames []) in
+  List.iter (Option.iter close_page) kids
+
+(* what an iframe's attributes ask for: srcdoc first, then src *)
+let frame_source l (node : Dom.node) =
+  match Dom.attr node "srcdoc" with
+  | Some h -> Srcdoc h
+  | None ->
+    match Dom.attr node "src" with
+    | Some s when String.trim s <> "" && String.trim s <> "about:blank" -> Src (Url.resolve l.base (String.trim s))
+    | _ -> Blank
+
+(* the frame's current source loaded, in a thread of its own; the page it
+   showed closed *)
+let start_frame f =
+  let old = Mutex.protect frames_lock (fun () ->
+      f.gen <- f.gen + 1; let c = f.child in f.child <- None; c) in
+  Option.iter close_page old;
+  f.started <- false; f.fscroll <- 0;
+  let gen = f.gen and src = f.current in
+  ignore (Thread.create (fun () ->
+      let c = match src with
+        | Src u -> load ~framed:true u
+        | Srcdoc h -> load ~framed:true ~html:h ~base_url:f.fbase "about:srcdoc"
+        | Blank -> load ~framed:true ~html:"" ~base_url:f.fbase "about:blank" in
+      let keep = Mutex.protect frames_lock (fun () ->
+          if f.gen = gen then (f.child <- Some c; true) else false) in
+      if not keep then close_page c) ())
+
+(* a page's origin, serialized: its URL's ("https://host[:port]") for
+   http(s); a srcdoc's or about:blank's, its parent's (its base); else
+   opaque, "null" (the HTML Standard's) *)
+let origin_of l =
+  let u = if l.response.url = "about:srcdoc" || l.response.url = "about:blank" then l.base else l.response.url in
+  match Url.scheme_of u with
+  | Some ("http" | "https") -> fst (Url.split u)
+  | _ -> "null"
+
+(* messages between a page and a frame of it (each a context of its own):
+   the page's to the frame, the frame's to the page ("parent") or to the
+   top; each delivered only where its target origin allows *)
+let route_messages ~top l (node : Dom.node) c =
+  let allowed target_origin receiver =
+    target_origin = "*" || target_origin = "/" || fst (Url.split target_origin) = origin_of receiver in
+  match l.session, c.session with
+  | Some ps, Some cs ->
+    let h = Dom_api.handle ps.Scripts.dom node in
+    let down, rest = List.partition (fun (t, _, _) -> t = "frame:" ^ h) ps.dom.outbox in
+    ps.dom.outbox <- rest;
+    List.iter (fun (_, data, o) ->
+        if allowed o c then begin
+          trace "message to the frame %s: %s" c.response.url data;
+          Scripts.message cs ~data ~origin:(origin_of l) ~source:"parent"
+        end) (List.rev down);
+    let up, rest = List.partition (fun (t, _, _) -> t = "parent" || t = "top") cs.dom.outbox in
+    cs.dom.outbox <- rest;
+    List.iter (fun (t, data, o) ->
+        let receiver = if t = "top" then top else l in
+        let source = if receiver == l then "frame:" ^ h else "none" in
+        match receiver.session with
+        | Some rs when allowed o receiver ->
+          trace "message from the frame %s: %s" c.response.url data;
+          Scripts.message rs ~data ~origin:(origin_of c) ~source
+        | _ -> ()) (List.rev up)
+  | _ -> ()
+
+(* an iframe's frame (the tree held): made, and loaded, when first met;
+   loaded again when its attributes ask for something else *)
+let frame_of l (node : Dom.node) =
+  let asked = frame_source l node in
+  match Hashtbl.find_opt l.frames node.Dom.id with
+  | Some f ->
+    if f.asked <> asked then (f.asked <- asked; f.current <- asked; start_frame f);
+    f
+  | None ->
+    let f = { asked; current = asked; fbase = l.base; gen = 0; child = None; started = false;
+              fscroll = 0; fw = 300; fh = 150 } in
+    Hashtbl.replace l.frames node.Dom.id f;
+    start_frame f;
+    f
+
+(* a page shown (the window's, or a frame's): its scripts' layout is the
+   window's, at the size it is shown; their timers; its pictures *)
+let attach l ~width ~height =
+  (match l.session with
+   | Some s ->
+     let seen = ref s.Scripts.dom.version in
+     s.layout <- (fun () ->
+         if s.dom.version <> !seen then (seen := s.dom.version; l.laid <- None; l.styled <- None);
+         let page = layout_at l ~width:(width ()) ~height:(height ()) in
+         (page, match l.styled with
+           | Some (_, st) -> st
+           | None -> Style.compute ~width:(width ()) ~height:(height ()) l.sheets l.doc));
+     Scripts.start s
+   | None -> ());
+  fetch_pictures l
+
+(* a shown page, each frame: laid out again when pictures' sizes it waited
+   for arrived (at most every second), when a sheet a script asked for
+   arrived, when its scripts changed it (at most every second: scripts
+   that keep changing it, ads...) *)
+let refresh l ~locked =
+  (match l.laid with
+   | Some (_, p) when p.unsized <> [] && now () -. l.t_relayout > 1.
+                      && Mutex.protect pics_lock (fun () -> l.sized) <> l.laid_sized ->
+     l.t_relayout <- now (); l.laid <- None
+   | _ -> ());
+  if locked && Mutex.protect sheets_lock (fun () -> let a = l.css.arrived in l.css.arrived <- false; a)
+  then (l.laid <- None; l.styled <- None);
+  match l.session with
+  | Some s when locked && s.Scripts.dom.changed && now () -. l.t_changed >= 1. ->
+    ignore (Scripts.changed s);
+    l.t_changed <- now ();
+    l.laid <- None; l.styled <- None
+  | _ -> ()
+
 let offset = ref 0          (* how far the page is scrolled, as last drawn *)
-let last_relayout = ref 0.
 
 let window first =
   let lock = Mutex.create () in
@@ -503,8 +648,10 @@ let window first =
        | Forms.Get url -> go url
        | Forms.Post (url, body) -> go ~post:body url)
     | _ -> () in
-  let last_tick = ref (now ()) in
   let view_h = ref 600 in
+  (* the frames drawn: their visible box, and their page's origin on the
+     screen (the innermost first) *)
+  let frames_drawn : (int * int * int * int * frame * loaded * Layout.page * int * int) list ref = ref [] in
   if first <> "about:start" then go first;
   Gui.run ~title:"Ariadne" ~tick:0.1 ~resizable:(400, 300) 900 640 st (fun ui st ->
       (* the page's tree, unless its scripts have it now: then the page as
@@ -516,25 +663,14 @@ let window first =
       (* a page arrived: shown, if it is the one asked for last *)
       (match Mutex.protect lock (fun () -> !arrived) with
        | Some (n, l) when not (match st.loading with Some (_, m) -> m = n | None -> false) ->
-         Option.iter Scripts.close l.session
+         close_page l
        | _ -> ());
       (match (if locked then Mutex.protect lock (fun () -> let a = !arrived in arrived := None; a) else None) with
        | Some (n, l) when (match st.loading with Some (_, m) -> m = n | None -> false) ->
          let asked = match st.loading with Some (u, _) -> u | None -> l.response.url in
-         Option.iter Scripts.close st.shown.session;
+         close_page st.shown;
          st.shown <- l; st.loading <- None;
-         (* its scripts' layout: the window's, laid out again when they changed the page *)
-         (match l.session with
-          | Some s ->
-            let seen = ref s.Scripts.dom.version in
-            s.layout <- (fun () ->
-                if s.dom.version <> !seen then (seen := s.dom.version; l.laid <- None; l.styled <- None);
-                let page = layout_at l ~width:!page_width ~height:!view_h in
-                (page, match l.styled with Some (_, st) -> st | None -> Style.compute ~width:!page_width
-                                                                       ~height:!view_h l.sheets l.doc));
-            Scripts.start s
-          | None -> ());
-         fetch_pictures l;
+         attach l ~width:(fun () -> !page_width) ~height:(fun () -> !view_h);
          st.address <- l.response.url ^ (match snd (Url.strip_fragment asked) with
              | Some f -> "#" ^ f | None -> "");
          if st.want_scroll = None then st.want_scroll <- Some 0
@@ -569,25 +705,7 @@ let window first =
       let box_w = width - 8 in
       page_width := box_w - 14;
       fetch_width := !page_width;
-      (* pictures whose size the layout waited for: laid out again, at
-         most every second *)
-      let l = st.shown in
-      (match l.laid with
-       | Some (_, p) when p.unsized <> [] && now () -. !last_relayout > 1.
-                          && Mutex.protect pics_lock (fun () -> l.sized) <> l.laid_sized ->
-         last_relayout := now (); l.laid <- None
-       | _ -> ());
-      (* a sheet a script asked for arrived: style again *)
-      if locked && Mutex.protect sheets_lock (fun () -> let a = st.shown.css.arrived in st.shown.css.arrived <- false; a)
-      then (st.shown.laid <- None; st.shown.styled <- None);
-      (match st.shown.session with
-       | Some s when locked && s.Scripts.dom.changed && now () -. !last_tick >= 1. ->
-         (* the scripts changed the page: its style and layout again, at
-            most every second (scripts that keep changing it, ads...) *)
-         ignore (Scripts.changed s);
-         last_tick := now ();
-         st.shown.laid <- None; st.shown.styled <- None
-       | _ -> ());
+      refresh st.shown ~locked;
       view_h := box_h;
       let page =
         if locked then layout_at st.shown ~width:!page_width ~height:box_h
@@ -641,126 +759,191 @@ let window first =
             | "\027[H" | "\027[1~" -> Gui.scroll_to ui 2 0
             | "\027[F" | "\027[4~" -> Gui.scroll_to_end ui 2
             | _ -> ()) ui.Gui.keys;
+      (* the frames drawn last frame: the one under the pointer (the
+         innermost); the link there in its page *)
+      let frame_at mx my =
+        List.find_opt (fun (x0, y0, x1, y1, _, _, _, _, _) -> mx >= x0 && mx < x1 && my >= y0 && my < y1) !frames_drawn in
+      let link_in (cp : Layout.page) x y =
+        Array.fold_left (fun found (k : Layout.link) ->
+            if x >= k.lx && x < k.lx + k.lw && y >= k.ly && y < k.ly + k.lh then Some k else found) None cp.links in
+      (* the wheel over a frame whose page is taller: that page scrolls *)
+      (if ui.Gui.wheel <> 0 then
+         match frame_at ui.Gui.mx ui.Gui.my with
+         | Some (_, _, _, _, f, _, cp, _, _) when cp.height > f.fh ->
+           f.fscroll <- max 0 (min (cp.height - f.fh) (f.fscroll + ui.Gui.wheel * 48));
+           ui.Gui.wheel <- 0
+         | _ -> ());
       let top_ref = ref box_y in
       let t_paint = now () and drawn = ref 0 in
+      (* a page's items, its origin on the screen at (ox, oy), drawn where
+         they are within the band vy0..vy1; an iframe's document drawn in
+         its box (a page of its own: paint_frame) *)
+      let rec paint_items l (page : Layout.page) ~ox ~oy ~vy0 ~vy1 ~depth =
+      Array.iter (fun (it : Layout.item) ->
+          match it with
+          | Frame { x; y; w; h; node; clip } ->
+            let clip = Option.map (fun (a, b, c, d) -> (ox + a, oy + b, ox + c, oy + d)) clip in
+            paint_frame l node ~sx:(ox + x) ~sy:(oy + y) ~w ~h ~clip ~vy0 ~vy1 ~depth
+          | Fill { x; y; w; h; color } ->
+            let yy = oy + y in
+            if yy + h > vy0 && yy < vy1 && w > 0 && h > 0 then
+              (incr drawn; Gfx.fill g (ox + x) yy w h color)
+          | Text { x; y; s; color; font } ->
+            (* y is the baseline: each glyph's mask, from the fonts *)
+            let yy = oy + y in
+            if yy + font.descent > vy0 && yy - font.ascent < vy1 then begin
+              incr drawn;
+              match font.ttf with
+              | Some _ ->
+                List.iter (fun (dx, dy, (b : Ttf.bitmap)) ->
+                    Gfx.draw_mask g (ox + x + dx) (yy + dy)
+                      { Gfx.mask_width = b.width; mask_height = b.height; grey = b.grey } color)
+                  (Fonts.glyphs font s)
+              | None -> ignore (Gfx.text g (ox + x) (yy - font.ascent) s color)
+            end
+          | Image { x; y; w; h; src; clip } ->
+            let yy = oy + y in
+            if yy + h > vy0 && yy < vy1 then
+              (match pic_image l src w h with
+              | Some img ->
+                (match clip with
+                 | Some (x0, y0, x1, y1) ->
+                   Gfx.with_clip (ox + x0) (oy + y0) (x1 - x0) (y1 - y0)
+                     (fun () -> Gfx.draw_image g (ox + x) yy img)
+                 | None -> Gfx.draw_image g (ox + x) yy img)
+              | None -> ())
+          | Control { x; y; w; h; node; font; color; paint } ->
+            let sx = ox + x and sy = oy + y in
+            if paint && sy + h > vy0 && sy < vy1 && w > 2 && h > 2 then begin
+              incr drawn;
+              let sh = Forms.shown node in
+              (match Forms.kind node, sh.mark with
+               | Forms.Check, `Check ->
+                 Gfx.fill g sx sy w h accent;
+                 for t = 0 to 1 do
+                   Gfx.line g (sx + 3) (sy + 6 + t) (sx + 5) (sy + 8 + t) 0xFFFFFF;
+                   Gfx.line g (sx + 5) (sy + 8 + t) (sx + 9) (sy + 3 + t) 0xFFFFFF
+                 done
+               | Forms.Radio, mark ->
+                 let on = mark = `Dot in
+                 Gfx.draw_mask g sx sy (Lazy.force radio_ring) (if on then accent else 0x767676);
+                 if on then Gfx.draw_mask g sx sy (Lazy.force radio_dot) accent
+               | Forms.Select, _ ->
+                 let rx = sx + w - 13 and cy = sy + h / 2 - 2 in
+                 for i = 0 to 3 do Gfx.fill g (rx + i) (cy + i) (7 - 2 * i) 1 color done
+               | _ -> ());
+              let caret = match st.focus with Some (n, c) when n == node -> Some c | _ -> None in
+              if sh.text <> "" || caret <> None then
+                Gfx.with_clip (sx + 1) (sy + 1) (w - (if Forms.kind node = Forms.Select then 16 else 2)) (h - 2) (fun () ->
+                    let colour = if sh.placeholder then 0x757575 else color in
+                    match Forms.kind node with
+                    | Forms.Area ->
+                      (* lines from the top; the caret at its line's place *)
+                      let lines = String.split_on_char '\n' sh.text in
+                      List.iteri (fun i l ->
+                          draw_string g (sx + 4) (sy + 2 + font.ascent + i * font.line) l colour font) lines;
+                      (match caret with
+                       | Some c ->
+                         let before = shown_prefix node c in
+                         let row = List.length (String.split_on_char '\n' before) - 1 in
+                         let col = match String.rindex_opt before '\n' with
+                           | Some i -> String.sub before (i + 1) (String.length before - i - 1) | None -> before in
+                         Gfx.fill g (sx + 4 + Fonts.width font col) (sy + 2 + row * font.line) 1
+                           (font.ascent + font.descent) color
+                       | None -> ())
+                    | _ ->
+                      let base = sy + (h + font.ascent - font.descent) / 2 in
+                      let tw = Fonts.width font sh.text in
+                      let caret_px = match caret with
+                        | Some c when not sh.placeholder -> Fonts.width font (shown_prefix node c)
+                        | _ -> 0 in
+                      (* the text moved left, to keep the caret in sight *)
+                      let shift = max 0 (caret_px - (w - 10)) in
+                      let tx = if sh.centred then sx + (w - tw) / 2 else sx + 4 - shift in
+                      draw_string g tx base sh.text colour font;
+                      if caret <> None then
+                        Gfx.fill g (sx + 4 - shift + caret_px) (base - font.ascent) 1
+                          (font.ascent + font.descent) color)
+            end
+          | Gradient { x; y; w; h; g = gr; clip } ->
+            let yy = oy + y in
+            if yy + h > vy0 && yy < vy1 && w > 0 && h > 0 then begin
+              incr drawn;
+              let cx0, cy0, cx1, cy1 = Option.value clip ~default:(min_int, min_int, max_int, max_int) in
+              List.iter (fun (bx, by, bw, bh, c) ->
+                  let x0 = max bx cx0 and y0 = max by cy0 in
+                  let x1 = min (bx + bw) cx1 and y1 = min (by + bh) cy1 in
+                  if x1 > x0 && y1 > y0 && c lsr 24 <> 0 then
+                    Gfx.fill g (ox + x0) (oy + y0) (x1 - x0) (y1 - y0) (c land 0xFFFFFF))
+                (Layout.bands ~x ~y ~w ~h gr)
+            end
+          | Bg { x; y; w; h; layer; tint; clip } ->
+            let yy = oy + y in
+            (match layer.image with
+             | Some src when yy + h > vy0 && yy < vy1 && w > 0 && h > 0 ->
+               (match pic_natural l src with
+                | Some natural ->
+                  (* the box, within its clip *)
+                  let x0, y0, x1, y1 = match clip with
+                    | Some (a, b, c, d) -> (max a x, max b y, min c (x + w), min d (y + h))
+                    | None -> (x, y, x + w, y + h) in
+                  if x1 > x0 && y1 > y0 then
+                    Gfx.with_clip (ox + x0) (oy + y0) (x1 - x0) (y1 - y0) (fun () ->
+                        List.iter (fun (tx, ty, tw, th) ->
+                            if oy + ty + th > vy0 && oy + ty < vy1 then
+                              match pic_image l src tw th with
+                              | Some img -> Gfx.draw_image ?tint g (ox + tx) (oy + ty) img
+                              | None -> ())
+                          (Layout.tiles ~x ~y ~w ~h layer ~natural))
+                | None -> ())
+             | _ -> ())) page.items
+      and paint_frame l node ~sx ~sy ~w ~h ~clip ~vy0 ~vy1 ~depth =
+        let x0, y0, x1, y1 = match clip with
+          | Some (a, b, c, d) -> (max sx a, max sy b, min (sx + w) c, min (sy + h) d)
+          | None -> (sx, sy, sx + w, sy + h) in
+        let y0 = max y0 vy0 and y1 = min y1 vy1 in
+        (* made, or loaded again, only with the tree held *)
+        let f = if locked then Some (frame_of l node) else Hashtbl.find_opt l.frames node.Dom.id in
+        match f with
+        | Some f when depth < 4 ->
+          f.fw <- w; f.fh <- h;
+          (match Mutex.protect frames_lock (fun () -> f.child) with
+           | Some c ->
+             if locked && not f.started then begin
+               f.started <- true;
+               attach c ~width:(fun () -> f.fw) ~height:(fun () -> f.fh);
+               (* its document loaded: the iframe's load event, in its page *)
+               Option.iter (fun ps -> ignore (Scripts.event ps node "load")) l.session
+             end;
+             refresh c ~locked;
+             if locked then route_messages ~top:st.shown l node c;
+             (match c.session with
+              | Some s when locked && s.Scripts.dom.navigation <> None ->
+                (* its scripts navigated: the frame goes there *)
+                let u, _ = Option.get s.dom.navigation in
+                s.dom.navigation <- None;
+                f.current <- Src u; start_frame f
+              | _ ->
+                let cp = if locked then Some (layout_at c ~width:w ~height:h) else c.last in
+                match cp with
+                | Some cp when x1 > x0 && y1 > y0 ->
+                  f.fscroll <- max 0 (min f.fscroll (cp.height - h));
+                  (match c.session with
+                   | Some s when locked -> s.Scripts.view <- (w, h); Scripts.scrolled_to s (0, f.fscroll)
+                   | _ -> ());
+                  let cox = sx and coy = sy - f.fscroll in
+                  frames_drawn := (x0, y0, x1, y1, f, c, cp, cox, coy) :: !frames_drawn;
+                  Gfx.with_clip x0 y0 (x1 - x0) (y1 - y0) (fun () ->
+                      Option.iter (Gfx.fill g x0 y0 (x1 - x0) (y1 - y0)) cp.canvas;
+                      paint_items c cp ~ox:cox ~oy:coy ~vy0:y0 ~vy1:y1 ~depth:(depth + 1))
+                | _ -> ())
+           | None -> ())
+        | _ -> () in
       Gui.scroll ~colour:page.background ui 2 box_x box_y box_w box_h (fun top ->
           top_ref := top;
           offset := box_y - top;
-          Array.iter (fun (it : Layout.item) ->
-              match it with
-              | Fill { x; y; w; h; color } ->
-                let yy = top + y in
-                if yy + h > box_y && yy < box_y + box_h && w > 0 && h > 0 then
-                  (incr drawn; Gfx.fill g (box_x + x) yy w h color)
-              | Text { x; y; s; color; font } ->
-                (* y is the baseline: each glyph's mask, from the fonts *)
-                let yy = top + y in
-                if yy + font.descent > box_y && yy - font.ascent < box_y + box_h then begin
-                  incr drawn;
-                  match font.ttf with
-                  | Some _ ->
-                    List.iter (fun (dx, dy, (b : Ttf.bitmap)) ->
-                        Gfx.draw_mask g (box_x + x + dx) (yy + dy)
-                          { Gfx.mask_width = b.width; mask_height = b.height; grey = b.grey } color)
-                      (Fonts.glyphs font s)
-                  | None -> ignore (Gfx.text g (box_x + x) (yy - font.ascent) s color)
-                end
-              | Image { x; y; w; h; src; clip } ->
-                let yy = top + y in
-                if yy + h > box_y && yy < box_y + box_h then
-                  (match pic_image st.shown src w h with
-                  | Some img ->
-                    (match clip with
-                     | Some (x0, y0, x1, y1) ->
-                       Gfx.with_clip (box_x + x0) (top + y0) (x1 - x0) (y1 - y0)
-                         (fun () -> Gfx.draw_image g (box_x + x) yy img)
-                     | None -> Gfx.draw_image g (box_x + x) yy img)
-                  | None -> ())
-              | Control { x; y; w; h; node; font; color; paint } ->
-                let sx = box_x + x and sy = top + y in
-                if paint && sy + h > box_y && sy < box_y + box_h && w > 2 && h > 2 then begin
-                  incr drawn;
-                  let sh = Forms.shown node in
-                  (match Forms.kind node, sh.mark with
-                   | Forms.Check, `Check ->
-                     Gfx.fill g sx sy w h accent;
-                     for t = 0 to 1 do
-                       Gfx.line g (sx + 3) (sy + 6 + t) (sx + 5) (sy + 8 + t) 0xFFFFFF;
-                       Gfx.line g (sx + 5) (sy + 8 + t) (sx + 9) (sy + 3 + t) 0xFFFFFF
-                     done
-                   | Forms.Radio, mark ->
-                     let on = mark = `Dot in
-                     Gfx.draw_mask g sx sy (Lazy.force radio_ring) (if on then accent else 0x767676);
-                     if on then Gfx.draw_mask g sx sy (Lazy.force radio_dot) accent
-                   | Forms.Select, _ ->
-                     let rx = sx + w - 13 and cy = sy + h / 2 - 2 in
-                     for i = 0 to 3 do Gfx.fill g (rx + i) (cy + i) (7 - 2 * i) 1 color done
-                   | _ -> ());
-                  let caret = match st.focus with Some (n, c) when n == node -> Some c | _ -> None in
-                  if sh.text <> "" || caret <> None then
-                    Gfx.with_clip (sx + 1) (sy + 1) (w - (if Forms.kind node = Forms.Select then 16 else 2)) (h - 2) (fun () ->
-                        let colour = if sh.placeholder then 0x757575 else color in
-                        match Forms.kind node with
-                        | Forms.Area ->
-                          (* lines from the top; the caret at its line's place *)
-                          let lines = String.split_on_char '\n' sh.text in
-                          List.iteri (fun i l ->
-                              draw_string g (sx + 4) (sy + 2 + font.ascent + i * font.line) l colour font) lines;
-                          (match caret with
-                           | Some c ->
-                             let before = shown_prefix node c in
-                             let row = List.length (String.split_on_char '\n' before) - 1 in
-                             let col = match String.rindex_opt before '\n' with
-                               | Some i -> String.sub before (i + 1) (String.length before - i - 1) | None -> before in
-                             Gfx.fill g (sx + 4 + Fonts.width font col) (sy + 2 + row * font.line) 1
-                               (font.ascent + font.descent) color
-                           | None -> ())
-                        | _ ->
-                          let base = sy + (h + font.ascent - font.descent) / 2 in
-                          let tw = Fonts.width font sh.text in
-                          let caret_px = match caret with
-                            | Some c when not sh.placeholder -> Fonts.width font (shown_prefix node c)
-                            | _ -> 0 in
-                          (* the text moved left, to keep the caret in sight *)
-                          let shift = max 0 (caret_px - (w - 10)) in
-                          let tx = if sh.centred then sx + (w - tw) / 2 else sx + 4 - shift in
-                          draw_string g tx base sh.text colour font;
-                          if caret <> None then
-                            Gfx.fill g (sx + 4 - shift + caret_px) (base - font.ascent) 1
-                              (font.ascent + font.descent) color)
-                end
-              | Gradient { x; y; w; h; g = gr; clip } ->
-                let yy = top + y in
-                if yy + h > box_y && yy < box_y + box_h && w > 0 && h > 0 then begin
-                  incr drawn;
-                  let cx0, cy0, cx1, cy1 = Option.value clip ~default:(min_int, min_int, max_int, max_int) in
-                  List.iter (fun (bx, by, bw, bh, c) ->
-                      let x0 = max bx cx0 and y0 = max by cy0 in
-                      let x1 = min (bx + bw) cx1 and y1 = min (by + bh) cy1 in
-                      if x1 > x0 && y1 > y0 && c lsr 24 <> 0 then
-                        Gfx.fill g (box_x + x0) (top + y0) (x1 - x0) (y1 - y0) (c land 0xFFFFFF))
-                    (Layout.bands ~x ~y ~w ~h gr)
-                end
-              | Bg { x; y; w; h; layer; tint; clip } ->
-                let yy = top + y in
-                (match layer.image with
-                 | Some src when yy + h > box_y && yy < box_y + box_h && w > 0 && h > 0 ->
-                   (match pic_natural st.shown src with
-                    | Some natural ->
-                      (* the box, within its clip *)
-                      let x0, y0, x1, y1 = match clip with
-                        | Some (a, b, c, d) -> (max a x, max b y, min c (x + w), min d (y + h))
-                        | None -> (x, y, x + w, y + h) in
-                      if x1 > x0 && y1 > y0 then
-                        Gfx.with_clip (box_x + x0) (top + y0) (x1 - x0) (y1 - y0) (fun () ->
-                            List.iter (fun (tx, ty, tw, th) ->
-                                if top + ty + th > box_y && top + ty < box_y + box_h then
-                                  match pic_image st.shown src tw th with
-                                  | Some img -> Gfx.draw_image ?tint g (box_x + tx) (top + ty) img
-                                  | None -> ())
-                              (Layout.tiles ~x ~y ~w ~h layer ~natural))
-                    | None -> ())
-                 | _ -> ())) page.items;
+          frames_drawn := [];
+          paint_items st.shown page ~ox:box_x ~oy:top ~vy0:box_y ~vy1:(box_y + box_h) ~depth:0;
           (* a select's options, over the page *)
           (match st.popup with
            | Some (sel, px, py, pw, font) ->
@@ -811,6 +994,11 @@ let window first =
           else None
         | None -> None in
       st.hover <- Option.map (Url.resolve st.shown.base) (link_at ui.Gui.mx ui.Gui.my);
+      (match frame_at ui.Gui.mx ui.Gui.my with
+       | Some (_, _, _, _, _, c, cp, cox, coy) ->
+         st.hover <- Option.map (fun (k : Layout.link) -> Url.resolve c.base k.href)
+             (link_in cp (ui.Gui.mx - cox) (ui.Gui.my - coy))
+       | None -> ());
       if st.hover <> None then ui.Gui.pointer <- Display.Hand;
       (match control_at ui.Gui.mx ui.Gui.my with
        | Some (node, _, _, _, _, _) when st.popup = None ->
@@ -822,16 +1010,42 @@ let window first =
       (* a click: an event for the scripts at what is under it (the
          innermost element with a box there: Layout.element_at); its
          default action unless they prevent it *)
+      (* a click in a frame: its scripts' event, its link (the frame goes
+         there; the window, for _top, _parent, _blank) *)
+      let frame_clicked =
+        ui.Gui.clicked && st.popup = None && (let px, py = ui.Gui.press in frame_at px py <> None) in
+      (if frame_clicked && locked then
+         let px, py = ui.Gui.press in
+         match frame_at px py with
+         | Some (_, _, _, _, f, c, cp, cox, coy) ->
+           st.focus <- None;
+           let x = px - cox and y = py - coy in
+           let allowed = match c.session with
+             | Some s -> (match Layout.element_at () cp ~x ~y with Some n -> Scripts.event s n "click" | None -> true)
+             | None -> true in
+           (match link_in cp x y, link_in cp (ui.Gui.mx - cox) (ui.Gui.my - coy) with
+            | Some k, Some k2 when allowed && k.href = k2.href ->
+              let url = Url.resolve c.base k.href in
+              let target = match Dom.attr k.anode "target" with
+                | Some t -> String.lowercase_ascii (String.trim t) | None -> "" in
+              (match Url.scheme_of url with
+               | Some ("mailto" | "javascript" | "tel") -> ()
+               | _ ->
+                 if List.mem target [ "_top"; "_parent"; "_blank" ] then go url
+                 else (f.current <- Src url; start_frame f))
+            | _ -> ())
+         | None -> ());
+      let page_clicked = ui.Gui.clicked && not frame_clicked in
       let click_target mx my =
         if my < box_y || my >= box_y + box_h then None
         else Layout.element_at () page ~x:(mx - box_x) ~y:(my - !top_ref) in
       let allowed =
-        if ui.Gui.clicked && locked && st.popup = None && st.shown.session <> None then
+        if page_clicked && locked && st.popup = None && st.shown.session <> None then
           let px, py = ui.Gui.press in
           match click_target px py with Some n -> event n "click" | None -> true
         else true in
       let control_clicked =
-        ui.Gui.clicked && locked && (st.popup <> None
+        page_clicked && locked && (st.popup <> None
                            || (let px, py = ui.Gui.press in control_at px py <> None)) in
       (if control_clicked && allowed then begin
          let px, py = ui.Gui.press in
@@ -858,8 +1072,8 @@ let window first =
               | _ -> ())
            | _ -> ()
        end
-       else if ui.Gui.clicked then st.focus <- None);
-      (if ui.Gui.clicked && not control_clicked && allowed then
+       else if page_clicked then st.focus <- None);
+      (if page_clicked && not control_clicked && allowed then
          let px, py = ui.Gui.press in
          match link_at px py, link_at ui.Gui.mx ui.Gui.my with
          | Some h, Some h2 when h = h2 ->

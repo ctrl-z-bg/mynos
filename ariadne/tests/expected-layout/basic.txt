@@ -1,4 +1,3 @@
-fill 0,21 800x322 #ffffff
 text 8,50 serif-bold 32 #ff0000 Ariadne's
 text 149,50 serif-bold 32 #ff0000 thread
 text 8,94 serif 16 #ff0000 Minos

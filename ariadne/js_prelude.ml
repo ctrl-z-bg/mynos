@@ -89,6 +89,13 @@ let source = {js|
     stopImmediatePropagation() { this.__stopped = true; }
   }
   class CustomEvent extends Event { constructor(type, init) { super(type, init); this.detail = init ? init.detail : null; } }
+  class MessageEvent extends Event {
+    constructor(type, init) {
+      super(type, init); init = init || {};
+      this.data = init.data === undefined ? null : init.data; this.origin = init.origin || "";
+      this.lastEventId = init.lastEventId || ""; this.source = init.source || null; this.ports = init.ports || [];
+    }
+  }
 
   // ---- scripts put in the page by scripts: run soon after (as browsers do,
   // asynchronously), their src fetched (no CORS for scripts), then their
@@ -842,7 +849,7 @@ let source = {js|
   iface("HTMLIFrameElement", ["IFRAME"], [["src", "u"], ["srcdoc", "s"], ["name", "s"], ["allow", "s"],
     ["allowFullscreen", "b", "allowfullscreen"], ["width", "s"], ["height", "s"], ["loading", "s"], ref]);
   Object.defineProperties(ifaces.HTMLIFrameElement.prototype, {
-    contentWindow: { configurable: true, get() { return null; } },
+    contentWindow: { configurable: true, get() { return this.__cw || (this.__cw = windowProxy("frame:" + this.__h)); } },
     contentDocument: { configurable: true, get() { return null; } } });
   const field = [["name", "s"], ["disabled", "b"], ["autocomplete", "s"], ["required", "b"], ["readOnly", "b", "readonly"],
     ["placeholder", "s"]];
@@ -949,6 +956,82 @@ let source = {js|
        ["HTMLSlotElement", ["SLOT"]], ["HTMLTableCaptionElement", ["CAPTION"]], ["HTMLTableColElement", ["COL", "COLGROUP"]],
        ["HTMLUnknownElement", []]])
     iface(n, tags);
+  // another frame's window (each frame is a context of its own): what a
+  // cross-origin window offers, postMessage (the data as JSON: the
+  // structured clone's plain values); Ariadne carries it
+  function windowProxy(target) {
+    const w = {
+      postMessage(data, targetOrigin) {
+        const o = targetOrigin && typeof targetOrigin === "object" ? targetOrigin.targetOrigin : targetOrigin;
+        let json;
+        try { json = JSON.stringify(data === undefined ? null : data); }
+        catch (e) { throw new g.DOMException("postMessage: the data cannot be cloned", "DataCloneError"); }
+        D("postMessage", target, json === undefined ? "null" : json, o === undefined ? "/" : String(o));
+      },
+      closed: false, focus() {}, blur() {}, close() {},
+      get length() { return 0; }
+    };
+    w.window = w.self = w.frames = w;
+    return w;
+  }
+  // MessageChannel (the HTML Standard): two entangled ports in this
+  // context; a message reaches the other port soon (a task), once it is
+  // started (start(), or setting onmessage); ports are not carried to
+  // other frames yet
+  class MessagePort extends EventTarget {
+    constructor() { super(); this.__other = null; this.__started = false; this.__queue = []; this.__onmessage = null; this.__closed = false; }
+    get onmessage() { return this.__onmessage; }
+    set onmessage(f) { this.__onmessage = f; this.start(); }
+    postMessage(data) {
+      const to = this.__other;
+      if (!to || this.__closed || to.__closed) return;
+      let copy;
+      try { copy = data === undefined ? undefined : JSON.parse(JSON.stringify(data)); }
+      catch (e) { throw new g.DOMException("postMessage: the data cannot be cloned", "DataCloneError"); }
+      to.__queue.push(copy);
+      if (to.__started) to.__flush();
+    }
+    start() { if (!this.__started) { this.__started = true; this.__flush(); } }
+    close() { this.__closed = true; }
+    __flush() {
+      if (!this.__queue.length || this.__scheduled) return;
+      this.__scheduled = true;
+      g.setTimeout(() => {
+        this.__scheduled = false;
+        const q = this.__queue; this.__queue = [];
+        for (const data of q) {
+          if (this.__closed) break;
+          // its listeners, and onmessage (dispatchEvent calls it)
+          this.dispatchEvent(new MessageEvent("message", { data }));
+        }
+      }, 0);
+    }
+  }
+  class MessageChannel {
+    constructor() {
+      this.port1 = new MessagePort(); this.port2 = new MessagePort();
+      this.port1.__other = this.port2; this.port2.__other = this.port1;
+    }
+  }
+  g.MessageChannel = MessageChannel; g.MessagePort = MessagePort;
+  // posted to this window itself: a message event, soon
+  g.postMessage = function (data, targetOrigin) {
+    const e = new MessageEvent("message", { data, origin: g.location.origin, source: g });
+    g.setTimeout(() => g.dispatchEvent(e), 0);
+  };
+  // a message from another frame: [source] "parent", "top", or
+  // "frame:" + the iframe's handle here
+  g.__message = function (data, origin, source) {
+    let src = null;
+    if (source === "parent") src = g.parent;
+    else if (source === "top") src = g.top;
+    else if (source.startsWith("frame:")) {
+      const el = wrap(source.slice(6), 1, "IFRAME");
+      src = el.contentWindow;
+    }
+    g.dispatchEvent(new MessageEvent("message", { data: JSON.parse(data), origin, source: src }));
+  };
+
   // the legacy constructors (named constructors): Image, Option, Audio
   g.Image = function Image(width, height) {
     const img = g.document.createElement("img");
@@ -987,9 +1070,15 @@ let source = {js|
 
   g.window = g; g.self = g; g.top = g; g.parent = g; g.frames = g;
   Object.setPrototypeOf(g, EventTarget.prototype);
+  // the window's methods called bare (addEventListener("load", ...) at a
+  // script's top level): the window is their this, as in browsers
+  for (const k of ["addEventListener", "removeEventListener", "dispatchEvent"]) {
+    const f = EventTarget.prototype[k];
+    g[k] = function (...a) { return f.apply(this === undefined || this === null ? g : this, a); };
+  }
   g.Node = Node; g.Element = Element; g.Text = Text; g.Document = Document;
   for (const k in ifaces) g[k] = ifaces[k];
-  g.EventTarget = EventTarget; g.Event = Event; g.CustomEvent = CustomEvent; g.DOMRect = DOMRect;
+  g.EventTarget = EventTarget; g.Event = Event; g.CustomEvent = CustomEvent; g.MessageEvent = MessageEvent; g.DOMRect = DOMRect;
   g.navigator = { userAgent: "Mozilla/5.0 (MyNOS) Ariadne/0.1", language: "en", languages: ["en"], platform: "MyNOS",
                   cookieEnabled: true, onLine: true };
   g.devicePixelRatio = 1;
@@ -1026,8 +1115,13 @@ let source = {js|
   };
   g.__readyState = "loading";
 
-  g.__init = function (url, width, height, sid) {
+  g.__init = function (url, width, height, sid, framed) {
     g.__sid = String(sid);
+    // in a frame: its parent and the top, other contexts (their proxies)
+    if (framed) {
+      g.parent = windowProxy("parent"); g.top = windowProxy("top");
+      g.frameElement = null;
+    }
     // Location (the HTML Standard): its URL, and navigating: Ariadne goes
     // there after this run (navigation is asynchronous); a change of the
     // fragment alone stays in the page (a scroll, hashchange)

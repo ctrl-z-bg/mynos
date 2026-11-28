@@ -56,6 +56,9 @@ type item =
   | Control of { x : int; y : int; w : int; h : int; node : Dom.node; font : Fonts.font; color : int;
                  paint : bool }
   | Gradient of { x : int; y : int; w : int; h : int; g : Style.gradient; clip : (int * int * int * int) option }
+  | Frame of { x : int; y : int; w : int; h : int; node : Dom.node; clip : (int * int * int * int) option }
+      (** an iframe's content box: the window draws the document it holds
+          there (a page of its own) *)
       (** a gradient filling the box: the painter draws it in bands ({!bands}) *)
       (** a form control's box (its frame is Fills): the painter draws what
           it shows ({!Forms.shown}) unless [paint] is false (a button
@@ -73,6 +76,7 @@ type page = {
   links : link array;
   height : int;
   background : int;                  (* the canvas *)
+  canvas : int option;               (* ... if the document sets it (a frame's is transparent if not) *)
   anchors : (string * int) list;     (* ids, and where they are *)
   hits : hit array;                  (* the block-level boxes, in the order laid out (inner after outer) *)
   frags : hit array;                 (* the inline boxes: words, pictures, inline-blocks, and their elements *)
@@ -136,6 +140,12 @@ let emit o it =
            Dynarray.add_last o.items_ (Bg { b with clip = Some (x0, y0, x1, y1) })
        | Control c ->
          if c.x < x1 && c.x + c.w > x0 && c.y < y1 && c.y + c.h > y0 then Dynarray.add_last o.items_ it
+       | Frame f ->
+         if f.x < x1 && f.x + f.w > x0 && f.y < y1 && f.y + f.h > y0 then
+           let clip = match f.clip with
+             | Some (a, b, c, d) -> (max a x0, max b y0, min c x1, min d y1)
+             | None -> (x0, y0, x1, y1) in
+           Dynarray.add_last o.items_ (Frame { f with clip = Some clip })
        | Gradient gr ->
          if gr.x < x1 && gr.x + gr.w > x0 && gr.y < y1 && gr.y + gr.h > y0 then
            let clip = match gr.clip with
@@ -171,6 +181,8 @@ let translate o m dx dy =
           | Bg b -> Bg { b with x = b.x + dx; y = b.y + dy;
                                 clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) b.clip }
           | Control c -> Control { c with x = c.x + dx; y = c.y + dy }
+          | Frame f -> Frame { f with x = f.x + dx; y = f.y + dy;
+                                      clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) f.clip }
           | Gradient gr -> Gradient { gr with x = gr.x + dx; y = gr.y + dy;
                                               clip = Option.map (fun (a, b, c, d) -> (a + dx, b + dy, c + dx, d + dy)) gr.clip })
     done;
@@ -228,7 +240,8 @@ type atom_kind =
   | Word of string
   | Space
   | Break
-  | Box of { w : int; h : int; label : string; frame : bool; img : string option; ctl : Dom.node option }
+  | Box of { w : int; h : int; label : string; frame : bool; img : string option; ctl : Dom.node option;
+             nested : (Dom.node * int) option }   (* an iframe, and its border's width *)
   | Ibox of { node : Dom.node; bw : int; bh : int; ml : int; mr : int }   (* an inline-block *)
   | Float of Dom.node                                                    (* a float met in a line *)
   | Abs of Dom.node                                                      (* where its static position is *)
@@ -364,8 +377,8 @@ let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
     (* drawn (once its pixels arrive) when its size is known, given or its
        own; else, for now, a frame with the alt text *)
     let box w h =
-      if src <> None && (natural <> None || sized) then Box { w; h; label = ""; frame = false; img = src; ctl = None }
-      else Box { w; h; label = alt; frame = true; img = None; ctl = None } in
+      if src <> None && (natural <> None || sized) then Box { w; h; label = ""; frame = false; img = src; ctl = None; nested = None }
+      else Box { w; h; label = alt; frame = true; img = None; ctl = None; nested = None } in
     (match st.width, st.height, ratio with
      | Auto, Auto, None -> if alt = "" then None else Some (Word ("[" ^ alt ^ "]"))
      | w, Auto, Some r when not (is_auto w) ->
@@ -385,12 +398,12 @@ let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
        Some (box (clamp_w w) h))
   | "input" | "button" | "select" | "textarea" ->
     (* a form control: its box, the painter shows its state (Forms.shown) *)
-    let ctl w h = Some (Box { w; h; label = ""; frame = true; img = None; ctl = Some n }) in
+    let ctl w h = Some (Box { w; h; label = ""; frame = true; img = None; ctl = Some n; nested = None }) in
     let shown = (Forms.shown n).text in
     (match Forms.kind n with
      | Forms.Not_control -> None
      | Check -> ctl 13 13
-     | Radio -> Some (Box { w = 13; h = 13; label = ""; frame = false; img = None; ctl = Some n })
+     | Radio -> Some (Box { w = 13; h = 13; label = ""; frame = false; img = None; ctl = Some n; nested = None })
      | Button _ ->
        let w, h = size (Metrics.width st shown + 16) (Metrics.line_height st + 4) in ctl w h
      | Select ->
@@ -404,9 +417,16 @@ let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
        let chars = Option.value (Option.bind (a "size") int_of_string_opt) ~default:20 in
        let w, h = size (max 40 (int_of_float (float chars *. st.font_size *. 0.62) + 10)) (Metrics.line_height st + 6) in
        ctl w h)
-  | "iframe" | "video" | "canvas" | "embed" | "object" | "audio" ->
+  | "iframe" ->
+    (* the document it holds is drawn by the window (a Frame item), inside
+       its border (2px inset in browsers: a frame here) *)
+    let b = int_of_float (Float.max (border st 3) (border st 0)) in
     let w, h = size 300 150 in
-    Some (Box { w; h; label = Dom.name n; frame = true; img = None; ctl = None })
+    let w, h = if st.border_box then (w, h) else (w + 2 * b, h + 2 * b) in
+    Some (Box { w; h; label = ""; frame = b > 0; img = None; ctl = None; nested = Some (n, b) })
+  | "video" | "canvas" | "embed" | "object" | "audio" ->
+    let w, h = size 300 150 in
+    Some (Box { w; h; label = Dom.name n; frame = true; img = None; ctl = None; nested = None })
   | "svg" ->
     (* drawn by imaged, as a data: URL (Svg): its size from CSS, else its
        attributes, the other side from the viewBox's ratio; with a ratio
@@ -430,15 +450,17 @@ let atomic o (n : Dom.node) (st : Style.t) ~cw : atom_kind option =
       | None, None, Some r -> (clamp_cw cw, int_of_float (Float.round (float (clamp_cw cw) *. r)))
       | None, None, None -> (300, 150) in
     if w <= 0 || h <= 0 || not st.visible then None
-    else Some (Box { w; h; label = ""; frame = false; ctl = None;
+    else Some (Box { w; h; label = ""; frame = false; ctl = None; nested = None;
                      img = (if o.dry > 0 then Some "" else Some (Svg.data_url o.styles ~w ~h n)) })
   | _ -> None
 
 (* a picture laid out as a block (a flex or grid item, display: block):
    its content size, and its src once its size is known *)
 let replaced o (n : Dom.node) (st : Style.t) ~cw =
-  if Dom.is_html n "img" || Dom.name n = "svg" || (Forms.kind n <> Forms.Not_control && not (Dom.is_html n "button")) then
+  if Dom.is_html n "img" || Dom.is_html n "iframe" || Dom.name n = "svg"
+     || (Forms.kind n <> Forms.Not_control && not (Dom.is_html n "button")) then
     match atomic o n st ~cw with
+    | Some (Box { w; h; nested = Some (_, b); _ }) when not st.border_box -> Some (w - 2 * b, h - 2 * b, None)
     | Some (Box { w; h; img; _ }) -> Some (w, h, img)
     | _ -> None
   else None
@@ -532,7 +554,7 @@ let atoms_of pieces =
   let add a = out := a :: !out in
   List.iter (function
       | P_atom a -> add a; prev_space := (a.kind = Break)
-      | P_space (w, st) -> add { kind = Box { w; h = 0; label = ""; frame = false; img = None; ctl = None }; st; font = Metrics.font st; link = None; bg = 0; dy = 0; owner = None }
+      | P_space (w, st) -> add { kind = Box { w; h = 0; label = ""; frame = false; img = None; ctl = None; nested = None }; st; font = Metrics.font st; link = None; bg = 0; dy = 0; owner = None }
       | P_float (n, st) -> add { kind = Float n; st; font = Metrics.font st; link = None; bg = 0; dy = 0; owner = None }
       | P_abs (n, st) -> add { kind = Abs n; st; font = Metrics.font st; link = None; bg = 0; dy = 0; owner = None }
       | P_block _ -> ()
@@ -898,6 +920,8 @@ and block o ?force_w ?force_h ?(valign = 0) ?legacy ~bfc (n : Dom.node) (st : St
   (match repl with
    | Some (_, _, Some src) when st.visible && not st.transparent && content_w > 0 && content_h > 0 ->
      emit o (Image { x = cx; y = cy; w = content_w; h = content_h; src; clip = None })
+   | Some _ when Dom.is_html n "iframe" && st.visible && content_w > 0 && content_h > 0 ->
+     emit o (Frame { x = cx; y = cy; w = content_w; h = content_h; node = n; clip = None })
    | _ -> ());
   (* a form control laid out as a block: its box for the painter and the
      clicks (a button element's content is laid out as any) *)
@@ -1115,10 +1139,13 @@ and inline_layout o ~bfc (container : Style.t) atoms ~x ~y ~w ~depth =
             emit o (Fill { x = !cx; y = ty - f.ascent - 1; w = aw; h = f.ascent + f.descent + 2; color = rgb a.bg });
           (match a.kind with
            | Word s -> emit o (Text { x = !cx; y = ty; s; color = st.color; font = f })
-           | Box { w = bw; h = bh; label; frame; img; ctl } ->
+           | Box { w = bw; h = bh; label; frame; img; ctl; nested } ->
              let by = max line_y (baseline - box_above a) in
              (match ctl with
               | Some _ when visible_color st.background && bw > 2 && bh > 2 && Forms.kind (Option.get ctl) <> Forms.Radio ->
+                emit o (Fill { x = !cx; y = by; w = bw; h = bh; color = rgb st.background })
+              | None when nested <> None && visible_color st.background && bw > 0 && bh > 0 ->
+                (* an iframe's own background, under its document's *)
                 emit o (Fill { x = !cx; y = by; w = bw; h = bh; color = rgb st.background })
               | _ -> ());
              (match ctl with
@@ -1126,6 +1153,10 @@ and inline_layout o ~bfc (container : Style.t) atoms ~x ~y ~w ~depth =
               | None -> ());
              (match img with
               | Some src when bw > 0 && bh > 0 -> emit o (Image { x = !cx; y = by; w = bw; h = bh; src; clip = None })
+              | _ -> ());
+             (match nested with
+              | Some (node, b) when bw > 2 * b && bh > 2 * b ->
+                emit o (Frame { x = !cx + b; y = by + b; w = bw - 2 * b; h = bh - 2 * b; node; clip = None })
               | _ -> ());
              if frame && bw > 0 && bh > 0 then begin
                let c = if ctl <> None then 0x767676 else 0xA0A8B0 in
@@ -1750,15 +1781,15 @@ let layout ?(image = fun _ -> None) ~width ~height (styles : Style.styles) (doc 
    | [] -> ());
   let bg_of n = match Option.bind n (Style.get styles) with
     | Some st when visible_color st.background -> Some (rgb st.background) | _ -> None in
-  let background =
-    match bg_of root with
-    | Some c -> c
-    | None -> (match bg_of (Dom.find (fun n -> Dom.is_html n "body") doc) with Some c -> c | None -> 0xFFFFFF) in
+  let canvas = match bg_of root with
+    | Some c -> Some c
+    | None -> bg_of (Dom.find (fun n -> Dom.is_html n "body") doc) in
+  let background = Option.value canvas ~default:0xFFFFFF in
   (* positioned boxes may reach below the flow *)
   let bottom = Dynarray.fold_left (fun m it -> match it with
       | Fill f -> max m (f.y + f.h) | Text t -> max m (t.y + t.font.descent)
-      | Image i -> max m (i.y + i.h) | Bg _ | Control _ | Gradient _ -> m) total o.items_ in
-  { items = Dynarray.to_array o.items_; links = Dynarray.to_array o.links_; height = max total bottom; background;
+      | Image i -> max m (i.y + i.h) | Frame f -> max m (f.y + f.h) | Bg _ | Control _ | Gradient _ -> m) total o.items_ in
+  { items = Dynarray.to_array o.items_; links = Dynarray.to_array o.links_; height = max total bottom; background; canvas;
     anchors = o.anchors_; unsized = o.unsized_; hits = Dynarray.to_array o.hits_;
     frags = Dynarray.to_array o.frags_ }
 
@@ -1786,6 +1817,9 @@ let dump p =
         Printf.bprintf b "gradient %d,%d %dx%d %.0fdeg %s\n" x y w h g.angle
           (String.concat " " (List.map (fun (c, p) -> Printf.sprintf "#%08x%s" c (match p with
                | Some (Style.Len (a, q)) -> Printf.sprintf "@%g+%g%%" a q | _ -> "")) g.stops))
+      | Frame { x; y; w; h; node; _ } ->
+        Printf.bprintf b "frame %d,%d %dx%d %s\n" x y w h
+          (match Dom.attr node "src" with Some u -> u | None -> if Dom.attr node "srcdoc" <> None then "srcdoc" else "about:blank")
       | Bg { x; y; w; h; layer; tint; _ } ->
         Printf.bprintf b "%s %d,%d %dx%d %s\n" (if tint = None then "bg" else "mask") x y w h
           (Option.value layer.image ~default:"")) p.items;

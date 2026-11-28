@@ -1,4 +1,3 @@
-fill 0,16 800x351 #ffffff
 text 0,31 serif 16 #000000 An
 text 24,31 serif 16 #000000 inline
 text 64,31 serif 16 #000000 svg

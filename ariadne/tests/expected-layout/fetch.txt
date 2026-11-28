@@ -1,4 +1,3 @@
-fill 0,21 800x246 #ffffff
 text 8,50 serif-bold 32 #000000 Fetch
 text 92,50 serif-bold 32 #000000 and
 text 152,50 serif-bold 32 #000000 XMLHttpRequest

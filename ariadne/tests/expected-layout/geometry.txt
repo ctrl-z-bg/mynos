@@ -1,4 +1,3 @@
-fill 0,21 800x2424 #ffffff
 text 8,50 serif-bold 32 #000000 Geometry
 text 23,109 serif 16 #0a141e A
 text 39,109 serif 16 #0a141e box:

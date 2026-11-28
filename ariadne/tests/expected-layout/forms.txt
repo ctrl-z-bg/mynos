@@ -1,4 +1,3 @@
-fill 0,21 800x383 #ffffff
 text 8,50 serif-bold 32 #000000 Forms
 text 8,94 serif 16 #000000 Name
 fill 50,79 175x21 #ffffff

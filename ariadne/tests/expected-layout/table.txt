@@ -1,4 +1,3 @@
-fill 0,21 800x182 #ffffff
 text 8,50 serif-bold 32 #000000 Processors
 text 11,97 serif-bold 16 #000000 Architecture
 text 101,97 serif-bold 16 #000000 Bits

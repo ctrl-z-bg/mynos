@@ -134,6 +134,7 @@ let () =
                 done
               done) (Fonts.glyphs font (List.hd (String.split_on_char '\n' sh.text)))
         | Layout.Control _ -> ()
+        | Layout.Frame _ -> ()   (* a frame's document: the window's (not drawn here) *)
         | Layout.Gradient { x; y; w = gw; h = gh; g = gr; clip } ->
           let cx0, cy0, cx1, cy1 = Option.value clip ~default:(min_int, min_int, max_int, max_int) in
           List.iter (fun (bx, by, bw, bh, c) ->

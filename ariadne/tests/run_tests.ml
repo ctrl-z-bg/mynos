@@ -232,7 +232,19 @@ let svg () =
   check "svg: a CSS rule's fill, through a symbol" (has (text "a") {|fill="#5a5a5a"|} && has (text "a") {|viewBox="0 0 10 10"|});
   check "svg: currentColor through <use>: the use's colour" (has (text "b") {|stroke="#ff0000"|});
   check "svg: black by default" (has (text "c") {|fill="#000000"|});
-  check "svg: CSS over a presentation attribute" (has (text "d") {|<path fill="#00ff00"|} && not (has (text "d") "0000ff"))
+  check "svg: CSS over a presentation attribute" (has (text "d") {|<path fill="#00ff00"|} && not (has (text "d") "0000ff"));
+  (* the canvas: the root's background, else the body's; none for a
+     document that sets neither (a frame's is transparent then) *)
+  let canvas html =
+    let doc = Html.parse html in
+    let sheets = List.concat_map (function
+        | Style.Inline_sheet (t, media) -> [ Style.parse_sheet ?media t ]
+        | Style.Linked _ -> []) (Style.sources doc) in
+    (Layout.layout ~width:400 ~height:100 (Style.compute ~width:400 ~height:100 sheets doc) doc).canvas in
+  check "canvas: the body's, the root's first, none"
+    (canvas "<style>body{background:#eef4fb}</style><p>x" = Some 0xeef4fb
+     && canvas "<style>html{background:red}body{background:#eef4fb}</style><p>x" = Some 0xff0000
+     && canvas "<p>x" = None)
 
 (* rule 3: a tree far deeper than any stack would allow a recursion *)
 let deep () =

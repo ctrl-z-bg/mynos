@@ -248,6 +248,29 @@ let eval s ~name code =
     Some r
   | exception e -> s.log ("script " ^ name ^ ": " ^ Printexc.to_string e); None
 
+(* a JavaScript string literal (JSON's escapes; the code is UTF-8; U+2028
+   and U+2029, line ends in older engines' strings, escaped) *)
+let js_string s =
+  let b = Buffer.create (String.length s + 2) and n = String.length s in
+  Buffer.add_char b '"';
+  let rec go i =
+    if i < n then begin
+      (match s.[i] with
+       | '"' -> Buffer.add_string b "\\\""
+       | '\\' -> Buffer.add_string b "\\\\"
+       | '\n' -> Buffer.add_string b "\\n"
+       | '\r' -> Buffer.add_string b "\\r"
+       | c when Char.code c < 0x20 -> Buffer.add_string b (Printf.sprintf "\\u%04x" (Char.code c))
+       | '\xe2' when i + 2 < n && s.[i + 1] = '\x80' && (s.[i + 2] = '\xa8' || s.[i + 2] = '\xa9') ->
+         Buffer.add_string b (if s.[i + 2] = '\xa8' then "\\u2028" else "\\u2029")
+       | c -> Buffer.add_char b c);
+      go (if s.[i] = '\xe2' && i + 2 < n && s.[i + 1] = '\x80' && (s.[i + 2] = '\xa8' || s.[i + 2] = '\xa9')
+          then i + 3 else i + 1)
+    end in
+  go 0;
+  Buffer.add_char b '"';
+  Buffer.contents b
+
 let refresh_pending s =
   match eval s ~name:"timers" "__pendingTimers()" with
   | Some r when r.ok -> s.pending <- Option.value (int_of_string_opt r.value) ~default:0
@@ -265,6 +288,12 @@ let scrolled_to s (x, y) =
 
 (* an event at a node (click, input, submit, change): whether its default
    action is still to happen (no preventDefault) *)
+(* a message another frame posted ([data]: JSON), as the message event;
+   [source]: "parent", "top", or "frame:" ^ the iframe's handle here *)
+let message s ~data ~origin ~source =
+  ignore (eval s ~name:"message" (Printf.sprintf "__message(%s, %s, %s)" (js_string data) (js_string origin) (js_string source)));
+  refresh_pending s
+
 let event s (n : Dom.node) typ =
   let h = Dom_api.handle s.dom n in
   let allowed =
@@ -316,7 +345,7 @@ let close s =
   Mutex.protect lock (fun () -> Hashtbl.remove sessions s.sid)
 
 (* the page's scripts run; [fetch] gives a script's text by its URL *)
-let run ~(log : string -> unit) ~url ~base ~width ~height ~(fetch : string -> string option)
+let run ?(framed = false) ~(log : string -> unit) ~url ~base ~width ~height ~(fetch : string -> string option)
     ?(cookies_get = fun _ -> "") ?(cookies_set = fun _ _ -> ()) ~(sheets : unit -> Style.sheet list) (doc : Dom.node) =
   let trace fmt = Printf.ksprintf log fmt in
   let t0 = Unix.gettimeofday () in
@@ -346,7 +375,7 @@ let run ~(log : string -> unit) ~url ~base ~width ~height ~(fetch : string -> st
       run_one ~name:"url.js" Js_prelude.url_polyfill;
       run_one ~name:"prelude.js" Js_prelude.source;
       let quote x = "\"" ^ String.concat "\\\"" (String.split_on_char '"' x) ^ "\"" in
-      run_one ~name:"init" (Printf.sprintf "__init(%s, %d, %d, %d)" (quote url) width height sid);
+      run_one ~name:"init" (Printf.sprintf "__init(%s, %d, %d, %d, %b)" (quote url) width height sid framed);
       (* a developer's probe (ARIADNE_DEBUG): /disk/ariadne-probe.js, run
          before the page's scripts (it may wrap the APIs they use) *)
       (if Sys.getenv_opt "ARIADNE_DEBUG" <> None then

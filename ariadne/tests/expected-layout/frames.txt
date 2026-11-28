@@ -1,0 +1,75 @@
+text 8,50 serif-bold 32 #000000 Iframes
+text 8,94 serif 16 #000000 A
+text 24,94 serif 16 #000000 test
+text 50,94 serif 16 #000000 page
+text 84,94 serif 16 #000000 in
+text 100,94 serif 16 #000000 a
+text 111,94 serif 16 #000000 frame
+text 152,94 serif 16 #000000 (src):
+frame 10,115 400x120 about:test/basic
+fill 8,113 404x1 #a0a8b0
+fill 8,236 404x1 #a0a8b0
+fill 8,113 1x124 #a0a8b0
+fill 411,113 1x124 #a0a8b0
+text 8,271 serif 16 #000000 A
+text 24,271 serif 16 #000000 srcdoc,
+text 74,271 serif 16 #000000 with
+text 106,271 serif 16 #000000 a
+text 117,271 serif 16 #000000 script
+text 157,271 serif 16 #000000 and
+text 184,271 serif 16 #000000 links
+text 219,271 serif 16 #000000 (one
+text 251,271 serif 16 #000000 goes
+text 284,271 serif 16 #000000 in
+text 300,271 serif 16 #000000 the
+text 324,271 serif 16 #000000 frame,
+text 369,271 serif 16 #000000 one
+text 396,271 serif 16 #000000 replaces
+text 452,271 serif 16 #000000 the
+text 476,271 serif 16 #000000 window):
+frame 10,292 420x90 srcdoc
+fill 8,290 424x1 #a0a8b0
+fill 8,383 424x1 #a0a8b0
+fill 8,290 1x94 #a0a8b0
+fill 431,290 1x94 #a0a8b0
+text 8,443 serif 16 #000000 Empty,
+text 58,443 serif 16 #000000 no
+text 78,443 serif 16 #000000 border,
+text 127,443 serif 16 #000000 200
+text 155,443 serif 16 #000000 x
+text 167,443 serif 16 #000000 40:
+text 191,443 serif 16 #000000 [
+fill 196,403 200x40 #ffddee
+frame 196,403 200x40 about:blank
+text 396,443 serif 16 #000000 ]
+text 8,477 serif 16 #000000 A
+text 24,477 serif 16 #000000 block,
+text 68,477 serif 16 #000000 the
+text 92,477 serif 16 #000000 line's
+text 129,477 serif 16 #000000 width,
+text 173,477 serif 16 #000000 60
+text 193,477 serif 16 #000000 high:
+frame 10,498 784x60 srcdoc
+fill 8,496 788x2 #767676
+fill 8,558 788x2 #767676
+fill 8,496 2x64 #767676
+fill 794,496 2x64 #767676
+text 8,608 serif 16 #000000 postMessage,
+text 99,608 serif 16 #000000 both
+text 131,608 serif 16 #000000 ways:
+frame 173,577 360x30 srcdoc
+fill 172,576 362x1 #a0a8b0
+fill 172,607 362x1 #a0a8b0
+fill 172,576 1x32 #a0a8b0
+fill 533,576 1x32 #a0a8b0
+text 8,642 serif 16 #000000 the
+text 32,642 serif 16 #000000 page:
+text 71,642 serif 16 #000000 no
+text 91,642 serif 16 #000000 answer
+text 140,642 serif 16 #000000 yet
+text 8,676 serif 16 #000000 A
+text 24,676 serif 16 #000000 frame
+text 65,676 serif 16 #000000 a
+text 76,676 serif 16 #000000 script
+text 116,676 serif 16 #000000 made:
+height 695

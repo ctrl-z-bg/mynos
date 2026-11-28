@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<title>Frames</title>
+<h1>Iframes</h1>
+<p>A test page in a frame (src):</p>
+<iframe id="a" src="about:test/basic" width="400" height="120"></iframe>
+<p>A srcdoc, with a script and links (one goes in the frame, one replaces the window):</p>
+<iframe id="b" srcdoc="<style>body{background:#eef4fb;font:14px sans-serif}</style><p id=s>its script: not run</p><p><a href='about:test/lists'>the lists, in this frame</a> | <a href='about:test/js' target='_top'>the js page, in the window</a></p><script>document.getElementById('s').textContent = 'its script ran, in ' + location.href</script>" style="width: 420px; height: 90px"></iframe>
+<p>Empty, no border, 200 x 40: [<iframe id="c" style="border: 0; width: 200px; height: 40px; background: #fde"></iframe>]</p>
+<p>A block, the line's width, 60 high:</p>
+<iframe id="d" srcdoc="<p style='margin:4px'>a block-level frame</p>" style="display: block; width: 100%; height: 60px"></iframe>
+<p>postMessage, both ways: <iframe id="g" style="width: 360px; height: 30px; border: 1px solid #999" srcdoc="<p id=m style='margin:4px;font:13px sans-serif'>the frame: waiting</p><script>addEventListener('message', e => { document.getElementById('m').textContent = 'the frame got ' + e.data.text + ' from ' + e.origin; e.source.postMessage({ back: e.data.text.toUpperCase() }, '*'); });</script>"></iframe></p>
+<p id="reply">the page: no answer yet</p>
+<p id="e">A frame a script made:</p>
+<script>
+const f = document.createElement("iframe");
+f.srcdoc = "<p style='margin:4px;color:#26a269'>made by a script</p>";
+f.style.height = "40px";
+f.onload = () => { document.getElementById("e").firstChild.textContent = "A frame a script made (its load event fired):"; };
+document.getElementById("e").appendChild(f);
+const g = document.getElementById("g");
+addEventListener("message", e => {
+  document.getElementById("reply").textContent = "the page: the frame answered " + e.data.back
+    + " (its source the frame's window: " + (e.source === g.contentWindow) + ")";
+});
+setTimeout(() => g.contentWindow.postMessage({ text: "hello" }, "*"), 500);
+</script>

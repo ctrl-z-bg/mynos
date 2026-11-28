@@ -1,4 +1,3 @@
-fill 0,21 800x182 #ffffff
 text 8,50 serif-bold 32 #000000 Pre
 text 8,93 mono 16 #000000 let rec fact n =
 text 8,111 mono 16 #000000   if n = 0 then 1

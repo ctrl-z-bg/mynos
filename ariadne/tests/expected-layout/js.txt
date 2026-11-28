@@ -1,4 +1,3 @@
-fill 0,21 800x178 #ffffff
 text 8,50 serif-bold 32 #000000 JavaScript
 text 164,50 serif-bold 32 #000000 (not
 text 227,50 serif-bold 32 #000000 run)

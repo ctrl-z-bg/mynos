@@ -1,4 +1,3 @@
-fill 0,21 800x458 #ffffff
 text 8,50 serif-bold 32 #000000 Gradients
 gradient 8,79 784x48 90deg #ff1a5fb4 #ffe01b24
 text 12,98 serif 16 #ffffff to

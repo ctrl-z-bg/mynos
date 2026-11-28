@@ -1,0 +1,9 @@
+title: Frames
+# Iframes
+A test page in a frame (src):
+A srcdoc, with a script and links (one goes in the frame, one replaces the window):
+Empty, no border, 200 x 40: []
+A block, the line's width, 60 high:
+postMessage, both ways:
+the page: no answer yet
+A frame a script made:

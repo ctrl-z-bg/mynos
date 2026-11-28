@@ -1,4 +1,3 @@
-fill 0,21 800x287 #ffffff
 text 8,50 serif-bold 32 #000000 SVG
 text 8,119 serif 16 #000000 Shapes:
 image 62,79 60x40 data:image/svg+xml (338 bytes)

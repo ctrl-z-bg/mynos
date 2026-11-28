@@ -1262,7 +1262,7 @@ colgroup, col { display: table-column }
 thead, tbody, tfoot { display: table-row-group } tr { display: table-row }
 td, th { display: table-cell }
 ruby { display: ruby } rt { display: ruby-text }
-html { color: canvastext; background: canvas }
+html { color: canvastext }
 body { margin: 8px }
 p, blockquote, figure, listing, plaintext, pre, xmp, dl, menu, ol, ul { margin-top: 1em; margin-bottom: 1em }
 blockquote, figure { margin-left: 40px; margin-right: 40px }
@@ -1300,6 +1300,7 @@ thead, tbody, tfoot, tr { vertical-align: middle }
 td, th { vertical-align: inherit }
 sub { vertical-align: sub } sup { vertical-align: super }
 img, svg, video, canvas, iframe, input, button, select, textarea { display: inline-block }
+iframe { border: 2px inset #767676 }
 input, button, select, textarea { overflow: hidden }
 input, button, select, textarea { font: 13.3333px sans-serif; color: fieldtext; letter-spacing: normal }
 input, select, textarea { background-color: field }
