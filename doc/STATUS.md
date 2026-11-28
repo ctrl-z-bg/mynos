@@ -2248,3 +2248,6 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   file I/O asks its services far less: 16 KB stdio buffers for files,
   the position kept locally, a block cache for read-only files (GNU ld:
   27 000 requests to link a hello world, now about 8 000).
+- **2026-11-28** — The MSX emulator compiled to native code inside MyNOS
+  on the Pi 400 (26 files, 31.7 s): MSX1 and MSX2 at 60 frames a second
+  (bytecode: under 10).

@@ -190,3 +190,11 @@ The expected result is a few seconds for a small program, which makes
 compiling a hot module in MyNOS usable. **Verdict:** feasible; what is
 slow is MyNOS's file I/O granularity, which C programs in general
 suffer from as well.
+
+**The MSX, compiled in MyNOS** (2026-11-28, the Pi 400, after libmynos's
+I/O changes): the emulator's 26 sources (packages/msx and packages/retro,
+the package's own list), with unix, threads and Mynos, compiled by
+`ocamlopt.opt`, assembled by `as` and linked by `ld` on the Pi itself,
+in 31.7 s (the program linked in /tmp, copied to /disk in 1.7 s). The
+MSX1 (Westen House) and the MSX2 run at their 60 frames a second, where
+the package's bytecode ran under 10.
