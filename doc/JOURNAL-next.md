@@ -1032,3 +1032,34 @@ clock is logged.
 
 **Lesson.** On a board whose firmware owns the clocks, what the
 firmware says the clock is and what it is are two things: measure it.
+
+## 2026-11-28 — OCaml's native code on AArch64: the GC's mark in the top byte
+
+**Symptom.** The first native OCaml programs for MyNOS on AArch64 (a
+cross `ocamlopt` 5.5.2 for aarch64-linux-musl, linked with libmynos:
+btq.4 taken up again for the Pi) ran, until their first minor
+collection: there they stopped for ever. `Gc.minor ()` alone was enough;
+the bytecode runtime, the same sources, never did.
+
+**Diagnosis.** gdb (QEMU's stub, gdb-multiarch in a container) stepping
+through the GC stopped in different places; the processors were idle.
+QEMU's `-d int` told: 900 000 prefetch aborts in a minute, all from EL0
+at `0x1000000040003804`, ESR 0x82000004 (a translation fault) — the
+return address into `camlM3.entry` with bit 60 set.
+
+**Cause.** OCaml 5's arm64 runtime marks the stack frames its GC has
+already scanned by setting bit 60 of their return addresses
+(`CODE_POINTER_MARK_BIT 60`, runtime/caml/stack.h), and returns
+through them: it counts on the top byte being ignored (TBI), as Linux
+has it for its programs. MyNOS's TCR_EL1 had TBI0 off: the return
+faulted, the kernel's handler found nothing to do, the instruction
+faulted again.
+
+**Fix.** TCR_EL1.TBI0 (bit 37) set at boot and on every processor
+(start.S). Under QEMU (TCG) native code then runs 17 to 50 times as fast
+as bytecode on small loops (integers, floats, allocation), the Spectrum's
+Z80 391 frames a second against 20, the MSX1 245 against 9.
+
+**Lesson.** A port's ABI is more than its system calls: the address
+space's conventions (here, the top byte) are part of what a compiler
+may rely on.

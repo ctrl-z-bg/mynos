@@ -34,9 +34,12 @@
 /* MAIR: 0 normal write-back, 1 device nGnRE, 2 normal non-cacheable */
 #define MAIR_VALUE    0x4404FF
 /* TCR: 48-bit halves (T0SZ, T1SZ 16), 4 KB granules, write-back walks,
-   inner shareable; IPS from the processor's physical address size */
+   inner shareable; IPS from the processor's physical address size; the
+   lower half's top byte ignored (TBI0), as Linux has it for its
+   programs: OCaml's native code marks the return addresses its GC has
+   scanned with bit 60 and returns through them */
 #define TCR_VALUE     (16 | (1 << 8) | (1 << 10) | (3 << 12) | (16 << 16) | \
-                       (1 << 24) | (1 << 26) | (3 << 28) | (2 << 30))
+                       (1 << 24) | (1 << 26) | (3 << 28) | (2 << 30) | (1 << 37))
 /* SCTLR: RES1 bits, MMU, caches; EL0 may use DC ZVA, CTR, WFI, WFE and
    cache maintenance (musl's string functions, the runtime) */
 #define SCTLR_VALUE   (0x30D00800 | (1 << 0) | (1 << 2) | (1 << 12) | (1 << 14) | \

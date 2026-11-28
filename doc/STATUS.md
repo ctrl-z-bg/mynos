@@ -2229,3 +2229,8 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   timer, logged at boot): 1.8 GHz from the start, though the firmware
   says 600 MHz; the bench's twentieth of the PC is not the clock, nor
   the caches, nor the interpreter's build (doc/JOURNAL-next.md).
+- **2026-11-28** — OCaml native code on AArch64 (btq.4 taken up again):
+  a cross `ocamlopt` 5.5.2 for aarch64-linux-musl links programs with
+  libmynos that run on MyNOS; the kernel now ignores the top byte of
+  user addresses (TBI0), which OCaml's GC uses. Under QEMU the Z80
+  emulators run 20 to 27 times as fast as in bytecode.
