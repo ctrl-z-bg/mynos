@@ -28,11 +28,13 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <mynos_fs.h>
 
 #define F_EOF 16
 #define F_ERR 32
@@ -71,6 +73,16 @@ struct mynos_file {
 
 size_t __stdio_write(FILE *, const unsigned char *, size_t);
 
+/* A file opened by fopen gets a buffer of FS_IOMAX (16 KB, the most one
+   Read or Write request carries) instead of musl's 1 KB: each refill or
+   flush is a request to the file's service, and a program reading or
+   writing in small pieces (GNU ld, as) made thousands. The buffer is in
+   the FILE's cookie (unused by FILEs on a descriptor), freed when it
+   closes; reads and writes smaller than it go through it. Terminals and
+   the standard streams keep musl's way. */
+#define FILE_BUF (FS_IOMAX + 8)          /* (musl keeps 8 bytes for ungetc) */
+#define BIG(f) ((f)->cookie != NULL)
+
 /* read: as musl's, which fills the caller's buffer and the FILE's in one
    readv; here one read, into the caller's buffer when it wants more than
    a byte (a second read could wait for a line that is not coming), else
@@ -81,6 +93,19 @@ size_t __stdio_read(FILE * ff, unsigned char * buf, size_t len)
   size_t first = len - !!f->buf_size;
   ssize_t cnt;
 
+  if (BIG(f) && len < f->buf_size) {   /* a file: its buffer refilled at once */
+    size_t n;
+    cnt = read(f->fd, f->buf, f->buf_size);
+    if (cnt <= 0) {
+      f->flags |= cnt ? F_ERR : F_EOF;
+      return 0;
+    }
+    n = (size_t)cnt < len ? (size_t)cnt : len;
+    memcpy(buf, f->buf, n);
+    f->rpos = f->buf + n;
+    f->rend = f->buf + cnt;
+    return n;
+  }
   if (first) {
     cnt = read(f->fd, buf, first);
     if (cnt <= 0) {
@@ -117,7 +142,8 @@ size_t __stdio_write(FILE * ff, const unsigned char * buf, size_t len)
   struct mynos_file * f = F(ff);
   size_t buffered = f->wpos - f->wbase;
   int bad = (buffered && write_all(f->fd, f->wbase, buffered) < 0);
-  if (!bad && len) bad = write_all(f->fd, buf, len) < 0;
+  int keep = BIG(f) && len < f->buf_size;   /* a file: small writes wait */
+  if (!bad && len && !keep) bad = write_all(f->fd, buf, len) < 0;
   if (bad) {
     f->wpos = f->wbase = f->wend = 0;
     f->flags |= F_ERR;
@@ -125,6 +151,10 @@ size_t __stdio_write(FILE * ff, const unsigned char * buf, size_t len)
   }
   f->wend = f->buf + f->buf_size;
   f->wpos = f->wbase = f->buf;
+  if (keep && len) {
+    memcpy(f->buf, buf, len);
+    f->wpos += len;
+  }
   return len;
 }
 
@@ -146,7 +176,10 @@ off_t __stdio_seek(FILE * f, off_t off, int whence)
 
 int __stdio_close(FILE * f)
 {
-  return close(F(f)->fd);
+  int r = close(F(f)->fd);
+  free(F(f)->cookie);                   /* fopen's buffer: fclose has flushed */
+  F(f)->cookie = NULL;
+  return r;
 }
 
 /* fopen: libmynos's open, then musl's fdopen */
@@ -164,7 +197,15 @@ FILE * fopen(const char * restrict name, const char * restrict mode)
   if (*mode == 'a') flags |= O_APPEND;
   if (strchr(mode, 'x')) flags |= O_EXCL;
   if ((fd = open(name, flags, 0666)) < 0) return 0;
-  if ((f = fdopen(fd, mode)) == NULL) close(fd);
+  if ((f = fdopen(fd, mode)) == NULL) {
+    close(fd);
+    return 0;
+  }
+  if (!isatty(fd)) {                    /* a file: a bigger buffer */
+    unsigned char * b = malloc(FILE_BUF);
+    if (b && setvbuf(f, (char *)b, _IOFBF, FILE_BUF) == 0) F(f)->cookie = b;
+    else free(b);
+  }
   return f;
 }
 

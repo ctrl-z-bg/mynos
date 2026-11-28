@@ -41,6 +41,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include <pthread.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
@@ -590,7 +591,39 @@ static int resolve(const char * path, char * name)
 /* open files: service and its descriptor; used = 0 for a free slot */
 /* each open file: its service, its descriptor there, and its path, made
    absolute (for mmap: pagerd opens it again) */
-static struct { int used, service, fd; char * path; } files[FD_MAX];
+/* An open file. Unless it appends, its position is kept here (pos) as
+   well as where its service has it (spos): a seek sends nothing, and the
+   service is told the position before a read or a write only when they
+   differ (a program that seeks before every small read, as GNU ld does,
+   sent a request each time, ftell's too). Reads up to a request's most
+   (stdio's refills) go through a block of the file kept here (cache: clen bytes from
+   offset coff), refilled with one request and forgotten on a write; a
+   file opened read only, in blocks (below). What another process writes
+   into the bytes kept meanwhile is not seen until they are read again. */
+static struct {
+  int used, service, fd;
+  char * path;
+  int track;                    /* not appending: pos, spos, the cache */
+  int ro;                       /* read only: the blocks below */
+  long long pos, spos, coff;
+  int clen;
+  char * cache;
+} files[FD_MAX];
+
+/* A file opened read only is read in aligned blocks of FS_IOMAX, the
+   last BLOCKS of them kept (the least recently used goes; a file's go
+   when it closes): a reader that jumps about (GNU ld in its archives)
+   asks its service for each block once. */
+#define BLOCKS 256                      /* 4 MB at most, taken as used */
+static struct block {
+  int slot, len;                        /* slot -1: free */
+  long long idx;
+  unsigned long used;
+  char * data;
+} blocks[BLOCKS];
+static unsigned long block_clock;
+static int blocks_ready;
+static pthread_mutex_t blocks_lock = PTHREAD_MUTEX_INITIALIZER;   /* (a process's threads) */
 
 static int file_slot(int fd)
 {
@@ -957,6 +990,11 @@ int open(const char * path, int flags, ...)
   files[slot].service = s;
   files[slot].fd = (int)fd;
   files[slot].path = NULL;
+  files[slot].track = !(flags & O_APPEND);
+  files[slot].ro = (flags & O_ACCMODE) == O_RDONLY;
+  files[slot].pos = files[slot].spos = files[slot].coff = 0;
+  files[slot].clen = 0;
+  files[slot].cache = NULL;
   if (path[0] == '/') files[slot].path = strdup(path);
   else {
     char cwd[512];
@@ -983,6 +1021,15 @@ int close(int fd)
   files[slot].used = 0;
   free(files[slot].path);
   files[slot].path = NULL;
+  free(files[slot].cache);
+  files[slot].cache = NULL;
+  files[slot].clen = 0;
+  if (files[slot].ro && blocks_ready) {
+    int b;
+    pthread_mutex_lock(&blocks_lock);
+    for (b = 0; b < BLOCKS; b++) if (blocks[b].slot == slot) blocks[b].slot = -1;
+    pthread_mutex_unlock(&blocks_lock);
+  }
   {
     wire_writer w;
     fs_start(&w, FS_CLOSE);
@@ -1012,6 +1059,106 @@ static ssize_t fs_read(int slot, char * buf, size_t count)
   return n;
 }
 
+/* the service told the position we have, if it has another */
+static int sync_pos(int slot)
+{
+  wire_writer w;
+  long long r;
+  if (files[slot].spos == files[slot].pos) return 0;
+  fs_start(&w, FS_SEEK);
+  wire_put_int(&w, files[slot].fd);
+  wire_put_int(&w, files[slot].pos);
+  wire_put_int(&w, SEEK_SET);
+  if ((r = fs_simple(files[slot].service, &w, 1)) < 0) return -1;
+  files[slot].spos = r;
+  return 0;
+}
+
+/* block idx of a read-only file: kept, or read (NULL: an error) */
+static struct block * file_block(int slot, long long idx)
+{
+  int b, victim = -1;
+  ssize_t n;
+  if (!blocks_ready) {
+    for (b = 0; b < BLOCKS; b++) blocks[b].slot = -1;
+    blocks_ready = 1;
+  }
+  for (b = 0; b < BLOCKS; b++)
+    if (blocks[b].slot == slot && blocks[b].idx == idx) {
+      blocks[b].used = ++block_clock;
+      return &blocks[b];
+    }
+  for (b = 0; b < BLOCKS; b++) {        /* a free one, else the oldest */
+    if (blocks[b].slot < 0) { victim = b; break; }
+    if (victim < 0 || blocks[b].used < blocks[victim].used) victim = b;
+  }
+  if (!blocks[victim].data && !(blocks[victim].data = malloc(FS_IOMAX))) return NULL;
+  blocks[victim].slot = -1;
+  files[slot].pos = idx * FS_IOMAX;     /* (the caller's put back after) */
+  if (sync_pos(slot) < 0) return NULL;
+  if ((n = fs_read(slot, blocks[victim].data, FS_IOMAX)) < 0) return NULL;
+  files[slot].spos += n;
+  blocks[victim].slot = slot;
+  blocks[victim].idx = idx;
+  blocks[victim].len = n;
+  blocks[victim].used = ++block_clock;
+  return &blocks[victim];
+}
+
+/* a read-only file's read: through its blocks */
+static ssize_t blocks_read(int slot, char * buf, size_t count)
+{
+  size_t done = 0;
+  while (done < count) {
+    long long pos = files[slot].pos, idx = pos / FS_IOMAX;
+    int off = (int)(pos - idx * FS_IOMAX), n;
+    struct block * k = file_block(slot, idx);
+    files[slot].pos = pos;
+    if (!k) return done ? (ssize_t)done : -1;
+    if (off >= k->len) break;           /* the end of the file */
+    n = k->len - off < (int)(count - done) ? k->len - off : (int)(count - done);
+    memcpy(buf + done, k->data + off, n);
+    files[slot].pos += n;
+    done += n;
+  }
+  return done;
+}
+
+/* a read at our position: from the cached block, or the service's */
+static ssize_t tracked_read(int slot, char * buf, size_t count)
+{
+  size_t done = 0;
+  while (done < count) {
+    long long end = files[slot].coff + files[slot].clen;
+    ssize_t n;
+    if (files[slot].clen && files[slot].pos >= files[slot].coff && files[slot].pos < end) {
+      n = end - files[slot].pos < (long long)(count - done) ? end - files[slot].pos : (long long)(count - done);
+      memcpy(buf + done, files[slot].cache + (files[slot].pos - files[slot].coff), n);
+      files[slot].pos += n;
+      done += n;
+      continue;
+    }
+    if (sync_pos(slot) < 0) return done ? (ssize_t)done : -1;
+    if (count - done <= FS_IOMAX &&     /* (stdio's refills are FS_IOMAX) */
+        (files[slot].cache || (files[slot].cache = malloc(FS_IOMAX)))) {
+      n = fs_read(slot, files[slot].cache, FS_IOMAX);   /* the block */
+      if (n < 0) return done ? (ssize_t)done : -1;
+      files[slot].spos += n;
+      if (n == 0) break;
+      files[slot].coff = files[slot].pos;
+      files[slot].clen = n;
+      continue;
+    }
+    n = fs_read(slot, buf + done, count - done);        /* a large read */
+    if (n < 0) return done ? (ssize_t)done : -1;
+    files[slot].spos += n;
+    files[slot].pos += n;
+    if (n == 0) break;
+    done += n;
+  }
+  return done;
+}
+
 ssize_t read(int fd, void * buf, size_t count)
 {
   size_t done = 0;
@@ -1025,6 +1172,14 @@ ssize_t read(int fd, void * buf, size_t count)
   if (CLOSED(fd, slot)) { errno = EBADF; return -1; }
   if (slot < 0) return result(sys3(NR_read, fd, (long)buf, count));
 
+  if (files[slot].track && files[slot].ro) {
+    ssize_t r;
+    pthread_mutex_lock(&blocks_lock);
+    r = blocks_read(slot, buf, count);
+    pthread_mutex_unlock(&blocks_lock);
+    return r;
+  }
+  if (files[slot].track) return tracked_read(slot, buf, count);
   /* like a Linux regular file: all that was asked, unless the file ends */
   while (done < count) {
     ssize_t n = fs_read(slot, (char *)buf + done, count - done);
@@ -1059,12 +1214,18 @@ ssize_t write(int fd, const void * buf, size_t count)
     return console_write(console_cache.port, buf, count);
   if (CLOSED(fd, slot)) { errno = EBADF; return -1; }
   if (slot < 0) return result(sys3(NR_write, fd, (long)buf, count));
+  if (files[slot].track) {
+    files[slot].clen = 0;               /* the cached block forgotten */
+    if (sync_pos(slot) < 0) return -1;
+  }
   while (done < count) {
     ssize_t n = fs_write(slot, (const char *)buf + done, count - done);
-    if (n < 0) return done ? (ssize_t)done : -1;
+    if (n < 0) break;
     if (n == 0) break;
     done += n;
   }
+  if (files[slot].track) files[slot].pos = files[slot].spos += done;
+  if (done == 0 && count) return -1;
   return done;
 }
 
@@ -1079,11 +1240,20 @@ off_t lseek(int fd, off_t offset, int whence)
 
   if (CLOSED(fd, slot)) { errno = EBADF; return -1; }
   if (slot < 0) return result(sys3(NR_lseek, fd, (long)offset, whence));
+  if (files[slot].track && (whence == SEEK_SET || whence == SEEK_CUR)) {
+    long long p = whence == SEEK_SET ? offset : files[slot].pos + offset;
+    if (p < 0) { errno = EINVAL; return -1; }
+    return files[slot].pos = p;         /* the service told before a read or a write */
+  }
   fs_start(&w, FS_SEEK);
   wire_put_int(&w, files[slot].fd);
   wire_put_int(&w, offset);
   wire_put_int(&w, whence);
-  return fs_simple(files[slot].service, &w, 1);
+  {
+    long long r = fs_simple(files[slot].service, &w, 1);
+    if (r >= 0 && files[slot].track) files[slot].pos = files[slot].spos = r;
+    return r;
+  }
 }
 
 int unlink(const char * path)

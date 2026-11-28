@@ -2241,3 +2241,10 @@ The old SourceForge site is archived in `doc/website/` (mynos-db2).
   emulators' benches: Spectrum 724 frames a second native (40
   bytecode), MSX1 410 (24); the real `zxspectrum` (threads, Mynos, emu/1)
   builds native and runs. Packages: not yet (btq.4).
+- **2026-11-28** — ocamlopt inside MyNOS (btq.4.1): GNU binutils (as,
+  ld) and the compiler run in MyNOS and compile, assemble and link a
+  program that runs (QEMU, Pi 400); libmynos has `system(3)`; the 64-bit
+  kernels take programs up to 256 MB (the RAM disk at 256 GB). libmynos's
+  file I/O asks its services far less: 16 KB stdio buffers for files,
+  the position kept locally, a block cache for read-only files (GNU ld:
+  27 000 requests to link a hello world, now about 8 000).

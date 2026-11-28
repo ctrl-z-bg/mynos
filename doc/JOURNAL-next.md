@@ -1062,3 +1062,50 @@ Z80 391 frames a second against 20, the MSX1 245 against 9.
 **Lesson.** A port's ABI is more than its system calls: the address
 space's conventions (here, the top byte) are part of what a compiler
 may rely on.
+
+## 2026-11-28 — GNU ld in MyNOS: 27 000 requests to link a hello world
+
+**Symptom.** With binutils and ocamlopt working inside MyNOS, linking a
+hello world took 18 s under QEMU (25 s writing to the FAT disk) and
+10–30 s on the Pi 400, slower on the board than in the emulator.
+
+**Diagnosis.** Not computing (the bytecode and the native compiler took
+the same time). Counters added for the occasion to libmynos's file
+functions (not kept) showed what ld asked of the file services: 13 392
+`lseek`s, 9 716 reads totalling 152 MB (its inputs are 15 MB), 3 603
+writes of about 350 bytes. A C test writing 2.7 MB in 100-byte `fwrite`s
+took 1.34 s to /tmp and 8.6 s to the disk.
+
+**Causes.** In MyNOS every read, write and seek of a file is a request
+to its service, an OCaml process, and on the Pi's SD card a command to a
+polled controller. Three things multiplied them:
+1. musl's `FILE` buffers are 1 KB, and libmynos's `__stdio_read` (made
+   for terminals) read into the caller's buffer when asked for more than
+   a byte: two requests per small `fread`.
+2. musl's `fseek` drops the buffer and calls `lseek`, `ftell` too: a
+   request each, and the next read refills from scratch.
+3. ld jumps about its archives (the symbol table, the members): each
+   jump was a seek and a buffer's refill.
+
+**Fix** (libmynos, every C program):
+- `fopen`'s files get 16 KB buffers (FS_IOMAX, a request's most),
+  freed on close; small reads fill them at once, small writes wait in
+  them. Terminals and the standard streams keep musl's way.
+- A file's position is kept in libmynos (unless it appends): a seek
+  sends nothing, the service is told the position only before a read or
+  a write, and only if its own differs.
+- A file opened read only is read in aligned 16 KB blocks, the last 256
+  kept per process (LRU, 4 MB at most, under a mutex: a process's
+  threads share them), dropped on close. Other files keep one block.
+
+ld now asks for 447 blocks (7.3 MB) and 3 729 seeks; the hello world
+links in 7.5 s under QEMU (13.3 s to the disk), the 2.7 MB test writes
+in 0.13 s. What is left is ld's output: small writes, each after a seek.
+Delaying writes in libmynos would remove them, but a `write` that
+returned could then be lost if the program died: not done; the output
+goes to /tmp and is copied.
+
+**Lesson.** On a system where a file is a service, the cost is the
+number of requests, not the bytes: what a Unix program's stdio assumes
+about system calls (cheap, a page cache behind them) has to be given
+back in the library.
